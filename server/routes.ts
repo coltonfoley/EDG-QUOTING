@@ -123,6 +123,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const lineItem = await storage.createLineItem(lineItemData);
       res.status(201).json(lineItem);
     } catch (error) {
+
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: "Invalid line item data", errors: error.errors });
       }

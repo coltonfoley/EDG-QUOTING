@@ -44,6 +44,10 @@ export const insertQuoteSchema = createInsertSchema(quotes).omit({
 
 export const insertLineItemSchema = createInsertSchema(lineItems).omit({
   id: true,
+}).extend({
+  quantity: z.union([z.string(), z.number()]).transform(val => typeof val === 'string' ? val : val.toString()),
+  unitPrice: z.union([z.string(), z.number()]).transform(val => typeof val === 'string' ? val : val.toString()),
+  markupValue: z.union([z.string(), z.number()]).transform(val => typeof val === 'string' ? val : val.toString()),
 });
 
 export type Customer = typeof customers.$inferSelect;
