@@ -22,6 +22,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/customers", async (req, res) => {
     try {
       const customerData = insertCustomerSchema.parse(req.body);
+      
+      // Check if customer already exists by email
+      const existingCustomer = await storage.getCustomerByEmail(customerData.email);
+      if (existingCustomer) {
+        return res.json(existingCustomer);
+      }
+      
       const customer = await storage.createCustomer(customerData);
       res.status(201).json(customer);
     } catch (error) {

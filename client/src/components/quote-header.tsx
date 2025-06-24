@@ -154,7 +154,12 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
                       <FormItem>
                         <FormLabel>Quote Number</FormLabel>
                         <FormControl>
-                          <Input {...field} readOnly />
+                          <Input 
+                            {...field} 
+                            readOnly 
+                            placeholder="Auto-generated on save"
+                            className="bg-gray-50"
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
