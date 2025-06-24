@@ -37,7 +37,7 @@ export default function QuoteBuilder() {
       const quoteData = {
         ...data,
         customerId: customer.id,
-        quoteNumber: data.quoteNumber || generateQuoteNumber(),
+        quoteNumber: generateQuoteNumber(),
       };
       delete quoteData.customerName;
       delete quoteData.customerEmail;
@@ -143,7 +143,7 @@ export default function QuoteBuilder() {
 
   const currentQuote = quote || {
     id: 0,
-    quoteNumber: generateQuoteNumber(),
+    quoteNumber: "",
     customerId: 0,
     projectName: "",
     projectAddress: "",

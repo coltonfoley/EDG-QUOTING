@@ -89,7 +89,7 @@ export class MemStorage implements IStorage {
   async getAllQuotes(): Promise<QuoteWithDetails[]> {
     const result: QuoteWithDetails[] = [];
     
-    for (const quote of this.quotes.values()) {
+    for (const quote of Array.from(this.quotes.values())) {
       const customer = this.customers.get(quote.customerId);
       if (customer) {
         const quoteLineItems = Array.from(this.lineItems.values()).filter(item => item.quoteId === quote.id);
@@ -107,8 +107,13 @@ export class MemStorage implements IStorage {
   async createQuote(insertQuote: InsertQuote): Promise<Quote> {
     const id = this.currentQuoteId++;
     const quote: Quote = { 
-      ...insertQuote, 
+      ...insertQuote,
       id,
+      status: insertQuote.status || "draft",
+      estimatedStartDate: insertQuote.estimatedStartDate || null,
+      notes: insertQuote.notes || null,
+      taxRate: insertQuote.taxRate || "0",
+      discount: insertQuote.discount || "0",
       createdAt: new Date(),
     };
     this.quotes.set(id, quote);
