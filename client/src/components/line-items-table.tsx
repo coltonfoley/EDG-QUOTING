@@ -83,13 +83,15 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
   });
 
   const handleAddItem = () => {
-    createLineItemMutation.mutate({
-      ...newItem,
-      quoteId,
-      quantity: parseFloat(newItem.quantity),
-      unitPrice: parseFloat(newItem.unitPrice),
-      markupValue: parseFloat(newItem.markupValue),
-    });
+    const itemData = {
+      description: newItem.description,
+      quantity: newItem.quantity,
+      unitPrice: newItem.unitPrice,
+      markupType: newItem.markupType,
+      markupValue: newItem.markupValue,
+    };
+
+    createLineItemMutation.mutate(itemData);
   };
 
   const handleUpdateItem = (item: LineItem, field: string, value: any) => {
