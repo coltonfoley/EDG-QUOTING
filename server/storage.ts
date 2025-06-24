@@ -1,4 +1,6 @@
 import { customers, quotes, lineItems, type Customer, type Quote, type LineItem, type InsertCustomer, type InsertQuote, type InsertLineItem, type QuoteWithDetails } from "@shared/schema";
+import { db } from "./db";
+import { eq } from "drizzle-orm";
 
 export interface IStorage {
   // Customer methods
@@ -170,4 +172,130 @@ export class MemStorage implements IStorage {
   }
 }
 
-export const storage = new MemStorage();
+export class DatabaseStorage implements IStorage {
+  async getCustomer(id: number): Promise<Customer | undefined> {
+    const [user] = await db.select().from(customers).where(eq(customers.id, id));
+    return user || undefined;
+  }
+
+  async getCustomerByEmail(email: string): Promise<Customer | undefined> {
+    const [user] = await db.select().from(customers).where(eq(customers.email, email));
+    return user || undefined;
+  }
+
+  async createCustomer(insertCustomer: InsertCustomer): Promise<Customer> {
+    const [customer] = await db
+      .insert(customers)
+      .values(insertCustomer)
+      .returning();
+    return customer;
+  }
+
+  async updateCustomer(id: number, customerData: Partial<InsertCustomer>): Promise<Customer | undefined> {
+    const [updated] = await db
+      .update(customers)
+      .set(customerData)
+      .where(eq(customers.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async getQuote(id: number): Promise<Quote | undefined> {
+    const [quote] = await db.select().from(quotes).where(eq(quotes.id, id));
+    return quote || undefined;
+  }
+
+  async getQuoteWithDetails(id: number): Promise<QuoteWithDetails | undefined> {
+    const [quote] = await db.select().from(quotes).where(eq(quotes.id, id));
+    if (!quote) return undefined;
+
+    const [customer] = await db.select().from(customers).where(eq(customers.id, quote.customerId));
+    if (!customer) return undefined;
+
+    const quoteLineItems = await db.select().from(lineItems).where(eq(lineItems.quoteId, id));
+
+    return {
+      ...quote,
+      customer,
+      lineItems: quoteLineItems,
+    };
+  }
+
+  async getAllQuotes(): Promise<QuoteWithDetails[]> {
+    const allQuotes = await db.select().from(quotes);
+    const result: QuoteWithDetails[] = [];
+
+    for (const quote of allQuotes) {
+      const [customer] = await db.select().from(customers).where(eq(customers.id, quote.customerId));
+      if (customer) {
+        const quoteLineItems = await db.select().from(lineItems).where(eq(lineItems.quoteId, quote.id));
+        result.push({
+          ...quote,
+          customer,
+          lineItems: quoteLineItems,
+        });
+      }
+    }
+
+    return result.sort((a, b) => new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime());
+  }
+
+  async createQuote(insertQuote: InsertQuote): Promise<Quote> {
+    const [quote] = await db
+      .insert(quotes)
+      .values(insertQuote)
+      .returning();
+    return quote;
+  }
+
+  async updateQuote(id: number, quoteData: Partial<InsertQuote>): Promise<Quote | undefined> {
+    const [updated] = await db
+      .update(quotes)
+      .set(quoteData)
+      .where(eq(quotes.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteQuote(id: number): Promise<boolean> {
+    // Delete associated line items first
+    await db.delete(lineItems).where(eq(lineItems.quoteId, id));
+    
+    // Then delete the quote
+    const result = await db.delete(quotes).where(eq(quotes.id, id));
+    return (result.rowCount || 0) > 0;
+  }
+
+  async getLineItemsByQuoteId(quoteId: number): Promise<LineItem[]> {
+    return await db.select().from(lineItems).where(eq(lineItems.quoteId, quoteId));
+  }
+
+  async createLineItem(insertLineItem: InsertLineItem): Promise<LineItem> {
+    const [lineItem] = await db
+      .insert(lineItems)
+      .values(insertLineItem)
+      .returning();
+    return lineItem;
+  }
+
+  async updateLineItem(id: number, lineItemData: Partial<InsertLineItem>): Promise<LineItem | undefined> {
+    const [updated] = await db
+      .update(lineItems)
+      .set(lineItemData)
+      .where(eq(lineItems.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteLineItem(id: number): Promise<boolean> {
+    const result = await db.delete(lineItems).where(eq(lineItems.id, id));
+    return (result.rowCount || 0) > 0;
+  }
+
+  async deleteLineItemsByQuoteId(quoteId: number): Promise<boolean> {
+    await db.delete(lineItems).where(eq(lineItems.quoteId, quoteId));
+    return true;
+  }
+}
+
+export const storage = new DatabaseStorage();
