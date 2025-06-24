@@ -88,7 +88,14 @@ The system uses a monorepo structure with shared TypeScript types between fronte
 
 Preferred communication style: Simple, everyday language.
 
+## Recent Changes
+
+- June 24, 2025: Added PostgreSQL database integration with Drizzle ORM
+- June 24, 2025: Implemented DatabaseStorage class replacing in-memory storage
+- June 24, 2025: Fixed quote number auto-generation system
+- June 24, 2025: Initial construction quoting application setup
+
 ## Changelog
 
-Changelog:
-- June 24, 2025. Initial setup
+- June 24, 2025: Database migration completed - all data now persists to PostgreSQL
+- June 24, 2025: Initial setup
