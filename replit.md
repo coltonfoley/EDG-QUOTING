@@ -94,6 +94,9 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+- June 24, 2025: Implemented editable PDF quote template with company branding and terms
+- June 24, 2025: Added client-side PDF generation with html2canvas and jsPDF
+- June 24, 2025: Created professional quote layout with company info and customizable terms
 - June 24, 2025: Added Product Catalog feature with reusable products and services
 - June 24, 2025: Integrated product selection into line items with "From Catalog" option
 - June 24, 2025: Added navigation menu with Quotes and Products sections

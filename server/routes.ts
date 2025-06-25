@@ -184,8 +184,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // PDF generation placeholder
-  app.get("/api/quotes/:id/pdf", async (req, res) => {
+  // PDF template route - now handled client-side
+  app.get("/api/quotes/:id/pdf-template", async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const quote = await storage.getQuoteWithDetails(id);
@@ -193,11 +193,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Quote not found" });
       }
 
-      // In a real implementation, this would generate a PDF
-      res.json({ 
-        message: "PDF generated successfully",
-        downloadUrl: `/api/quotes/${id}/download-pdf`
-      });
+      // Return quote data for PDF template
+      res.json(quote);
     } catch (error) {
       res.status(500).json({ message: "Internal server error" });
     }
