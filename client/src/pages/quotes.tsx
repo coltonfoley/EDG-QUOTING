@@ -1,17 +1,34 @@
+import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { AppHeader } from "@/components/app-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Plus, FileText, Users, DollarSign } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Plus, FileText, Users, DollarSign, Search } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import type { QuoteWithDetails } from "@shared/schema";
 
 export default function Quotes() {
+  const [searchTerm, setSearchTerm] = useState("");
+  
   const { data: quotes, isLoading } = useQuery<QuoteWithDetails[]>({
     queryKey: ["/api/quotes"],
   });
+
+  const filteredQuotes = useMemo(() => {
+    if (!quotes || !searchTerm.trim()) return quotes;
+    
+    const term = searchTerm.toLowerCase();
+    return quotes.filter(quote => 
+      quote.quoteNumber.toLowerCase().includes(term) ||
+      quote.customer.name.toLowerCase().includes(term) ||
+      quote.customer.email.toLowerCase().includes(term) ||
+      quote.projectName.toLowerCase().includes(term) ||
+      quote.projectAddress.toLowerCase().includes(term)
+    );
+  }, [quotes, searchTerm]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -66,17 +83,28 @@ export default function Quotes() {
       <AppHeader />
       
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex justify-between items-center mb-8">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-8 space-y-4 sm:space-y-0">
           <div>
             <h2 className="text-3xl font-bold text-edg-black">Project Quotes</h2>
             <p className="text-edg-grey mt-2">Manage your patio & shade project estimates</p>
           </div>
-          <Link href="/quotes/new">
-            <Button className="bg-edg-black hover:bg-edg-grey text-edg-white">
-              <Plus className="mr-2 h-4 w-4" />
-              New Quote
-            </Button>
-          </Link>
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center space-y-3 sm:space-y-0 sm:space-x-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-edg-grey h-4 w-4" />
+              <Input
+                placeholder="Search quotes, customers, projects..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10 w-full sm:w-80"
+              />
+            </div>
+            <Link href="/quotes/new">
+              <Button className="bg-edg-black hover:bg-edg-grey text-edg-white w-full sm:w-auto">
+                <Plus className="mr-2 h-4 w-4" />
+                New Quote
+              </Button>
+            </Link>
+          </div>
         </div>
 
         {/* Stats Cards */}

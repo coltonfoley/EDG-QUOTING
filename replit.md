@@ -94,6 +94,8 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+- June 25, 2025: Added search functionality to quotes page for finding quotes by number, customer, or project
+- June 25, 2025: Fixed button contrast issues - all action buttons now clearly visible with EDG branding
 - June 25, 2025: Updated branding to EDG Patio & Shade with official color scheme (Black/White/Teal)
 - June 25, 2025: Applied brand colors throughout application interface and PDF templates
 - June 25, 2025: Removed markup information from customer-facing PDF quotes for business privacy
