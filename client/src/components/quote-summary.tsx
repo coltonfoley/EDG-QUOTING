@@ -154,15 +154,15 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
             </div>
             <div className="border-t border-gray-200 pt-3">
               <div className="flex justify-between items-center">
-                <span className="text-lg font-semibold text-charcoal">Total:</span>
-                <span className="text-2xl font-bold text-construction-blue">
+                <span className="text-lg font-semibold text-edg-black">Total:</span>
+                <span className="text-2xl font-bold text-edg-black">
                   {formatCurrency(totals.total)}
                 </span>
               </div>
             </div>
             <div className="mt-3 p-3 bg-green-50 rounded-lg">
-              <div className="text-xs text-accent-grey">Profit Margin:</div>
-              <div className="text-lg font-semibold text-success-green">
+              <div className="text-xs text-edg-grey">Profit Margin:</div>
+              <div className="text-lg font-semibold text-edg-teal">
                 {totals.margin}%
               </div>
             </div>
@@ -174,7 +174,7 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
           <Button
             onClick={() => generatePDFMutation.mutate()}
             disabled={generatePDFMutation.isPending}
-            className="w-full bg-construction-blue hover:bg-blue-700 text-white"
+            className="w-full bg-edg-black hover:bg-edg-grey text-edg-white"
           >
             <FileText className="mr-2 h-4 w-4" />
             Generate PDF Quote
@@ -182,14 +182,14 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
           <Button
             onClick={() => sendToDocuSignMutation.mutate()}
             disabled={sendToDocuSignMutation.isPending}
-            className="w-full bg-sandy-brown hover:bg-orange-500 text-white"
+            className="w-full bg-edg-teal hover:bg-edg-dark-teal text-edg-black"
           >
             <FileSignature className="mr-2 h-4 w-4" />
             Send to DocuSign
           </Button>
           <Button
             variant="outline"
-            className="w-full border-construction-blue text-construction-blue hover:bg-blue-50"
+            className="w-full border-edg-teal text-edg-teal hover:bg-edg-light-teal hover:bg-opacity-10"
           >
             <Bookmark className="mr-2 h-4 w-4" />
             Save as Template
