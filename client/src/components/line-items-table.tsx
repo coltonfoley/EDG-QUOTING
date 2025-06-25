@@ -171,7 +171,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                         step="0.01"
                         value={item.quantity}
                         onChange={(e) => handleUpdateItem(item, "quantity", parseFloat(e.target.value) || 0)}
-                        className="w-20 text-center"
+                        className="w-28 text-center"
                       />
                     </td>
                     <td className="px-6 py-4 text-center">
@@ -180,7 +180,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                         step="0.01"
                         value={item.unitPrice}
                         onChange={(e) => handleUpdateItem(item, "unitPrice", parseFloat(e.target.value) || 0)}
-                        className="w-24 text-center"
+                        className="w-32 text-center"
                       />
                     </td>
                     <td className="px-6 py-4 text-center">
@@ -190,7 +190,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                           step="0.01"
                           value={item.markupValue}
                           onChange={(e) => handleUpdateItem(item, "markupValue", parseFloat(e.target.value) || 0)}
-                          className="w-16 text-center"
+                          className="w-20 text-center"
                         />
                         <Select
                           value={item.markupType}
@@ -239,7 +239,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                       step="0.01"
                       value={newItem.quantity}
                       onChange={(e) => setNewItem({ ...newItem, quantity: e.target.value })}
-                      className="w-20 text-center"
+                      className="w-28 text-center"
                     />
                   </td>
                   <td className="px-6 py-4 text-center">
@@ -248,7 +248,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                       step="0.01"
                       value={newItem.unitPrice}
                       onChange={(e) => setNewItem({ ...newItem, unitPrice: e.target.value })}
-                      className="w-24 text-center"
+                      className="w-32 text-center"
                     />
                   </td>
                   <td className="px-6 py-4 text-center">
@@ -258,7 +258,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                         step="0.01"
                         value={newItem.markupValue}
                         onChange={(e) => setNewItem({ ...newItem, markupValue: e.target.value })}
-                        className="w-16 text-center"
+                        className="w-20 text-center"
                       />
                       <Select
                         value={newItem.markupType}
