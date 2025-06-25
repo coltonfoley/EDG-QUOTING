@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,6 +9,7 @@ import { FileText, FileSignature, Bookmark } from "lucide-react";
 import { formatCurrency, calculateQuoteTotals } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { QuotePDFTemplate } from "./quote-pdf-template";
 import type { QuoteWithDetails } from "@shared/schema";
 
 interface QuoteSummaryProps {
@@ -16,6 +18,7 @@ interface QuoteSummaryProps {
 }
 
 export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
+  const [showPDFTemplate, setShowPDFTemplate] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -42,16 +45,16 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
 
   const generatePDFMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest("GET", `/api/quotes/${quote.id}/pdf`);
-      return response.json();
+      setShowPDFTemplate(true);
+      return Promise.resolve();
     },
     onSuccess: () => {
-      toast({ title: "PDF generated successfully" });
+      // PDF template dialog will handle the actual generation
     },
     onError: () => {
       toast({ 
         title: "Error", 
-        description: "Failed to generate PDF", 
+        description: "Failed to open PDF template", 
         variant: "destructive" 
       });
     },
@@ -193,6 +196,12 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
           </Button>
         </div>
       </div>
+
+      <QuotePDFTemplate
+        quote={quote}
+        isOpen={showPDFTemplate}
+        onClose={() => setShowPDFTemplate(false)}
+      />
     </div>
   );
 }
