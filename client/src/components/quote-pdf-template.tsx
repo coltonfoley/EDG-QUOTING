@@ -32,11 +32,11 @@ export function QuotePDFTemplate({ quote, isOpen, onClose }: QuotePDFTemplatePro
   const { toast } = useToast();
   const [isEditing, setIsEditing] = useState(false);
   const [companyInfo, setCompanyInfo] = useState<CompanyInfo>({
-    name: "ProBuild Construction",
-    address: "123 Construction Ave, Builder City, BC 12345",
+    name: "EDG Patio & Shade",
+    address: "123 Patio Drive, Shade City, SC 12345",
     phone: "(555) 123-4567",
-    email: "info@probuild.com",
-    license: "License #BC-12345",
+    email: "info@edgpatioandshade.com",
+    license: "License #SC-12345",
   });
 
   const [quoteTerms, setQuoteTerms] = useState({
@@ -117,7 +117,7 @@ export function QuotePDFTemplate({ quote, isOpen, onClose }: QuotePDFTemplatePro
               <Button
                 variant="outline"
                 onClick={() => setIsEditing(!isEditing)}
-                className="border-construction-blue text-construction-blue hover:bg-blue-50"
+                className="border-edg-teal text-edg-teal hover:bg-edg-light-teal hover:bg-opacity-10"
               >
                 <Edit3 className="mr-2 h-4 w-4" />
                 {isEditing ? "View" : "Edit"} Template
@@ -125,7 +125,7 @@ export function QuotePDFTemplate({ quote, isOpen, onClose }: QuotePDFTemplatePro
               <Button
                 onClick={handleDownload}
                 disabled={generatePDFMutation.isPending}
-                className="bg-construction-blue hover:bg-blue-700 text-white"
+                className="bg-edg-black hover:bg-edg-grey text-edg-white"
               >
                 <Download className="mr-2 h-4 w-4" />
                 Download PDF
@@ -229,9 +229,9 @@ export function QuotePDFTemplate({ quote, isOpen, onClose }: QuotePDFTemplatePro
         ) : (
           <div id="quote-pdf-content" className="bg-white p-8 text-black" style={{ minHeight: '297mm' }}>
             {/* Header */}
-            <div className="flex justify-between items-start mb-8 border-b-2 border-construction-blue pb-6">
+            <div className="flex justify-between items-start mb-8 border-b-2 border-edg-teal pb-6">
               <div>
-                <h1 className="text-3xl font-bold text-construction-blue mb-2">{companyInfo.name}</h1>
+                <h1 className="text-3xl font-bold text-edg-black mb-2">{companyInfo.name}</h1>
                 <div className="text-sm text-gray-600 space-y-1">
                   <div>{companyInfo.address}</div>
                   <div>Phone: {companyInfo.phone} | Email: {companyInfo.email}</div>
@@ -239,7 +239,7 @@ export function QuotePDFTemplate({ quote, isOpen, onClose }: QuotePDFTemplatePro
                 </div>
               </div>
               <div className="text-right">
-                <h2 className="text-2xl font-bold text-construction-blue mb-2">QUOTE</h2>
+                <h2 className="text-2xl font-bold text-edg-black mb-2">QUOTE</h2>
                 <div className="text-sm space-y-1">
                   <div><strong>Quote #:</strong> {quote.quoteNumber}</div>
                   <div><strong>Date:</strong> {new Date(quote.createdAt!).toLocaleDateString()}</div>
@@ -251,7 +251,7 @@ export function QuotePDFTemplate({ quote, isOpen, onClose }: QuotePDFTemplatePro
             {/* Customer & Project Info */}
             <div className="grid grid-cols-2 gap-8 mb-8">
               <div>
-                <h3 className="text-lg font-semibold text-construction-blue mb-3">Bill To:</h3>
+                <h3 className="text-lg font-semibold text-edg-black mb-3">Bill To:</h3>
                 <div className="space-y-1">
                   <div className="font-medium">{quote.customer.name}</div>
                   <div>{quote.customer.email}</div>
@@ -259,7 +259,7 @@ export function QuotePDFTemplate({ quote, isOpen, onClose }: QuotePDFTemplatePro
                 </div>
               </div>
               <div>
-                <h3 className="text-lg font-semibold text-construction-blue mb-3">Project Details:</h3>
+                <h3 className="text-lg font-semibold text-edg-black mb-3">Project Details:</h3>
                 <div className="space-y-1">
                   <div><strong>Project:</strong> {quote.projectName}</div>
                   <div><strong>Location:</strong> {quote.projectAddress}</div>
@@ -326,7 +326,7 @@ export function QuotePDFTemplate({ quote, isOpen, onClose }: QuotePDFTemplatePro
                     <span>{formatCurrency(totals.taxAmount)}</span>
                   </div>
                   <div className="border-t border-gray-300 pt-2">
-                    <div className="flex justify-between text-lg font-bold text-construction-blue">
+                    <div className="flex justify-between text-lg font-bold text-edg-black">
                       <span>Total:</span>
                       <span>{formatCurrency(totals.total)}</span>
                     </div>
@@ -339,13 +339,13 @@ export function QuotePDFTemplate({ quote, isOpen, onClose }: QuotePDFTemplatePro
             <div className="space-y-6">
               {quote.notes && (
                 <div>
-                  <h3 className="text-lg font-semibold text-construction-blue mb-3">Project Notes:</h3>
+                  <h3 className="text-lg font-semibold text-edg-black mb-3">Project Notes:</h3>
                   <p className="text-sm whitespace-pre-wrap">{quote.notes}</p>
                 </div>
               )}
 
               <div>
-                <h3 className="text-lg font-semibold text-construction-blue mb-3">Terms & Conditions:</h3>
+                <h3 className="text-lg font-semibold text-edg-black mb-3">Terms & Conditions:</h3>
                 <div className="text-sm space-y-2">
                   <div><strong>Payment Terms:</strong> {quoteTerms.paymentTerms}</div>
                   <div><strong>Warranty:</strong> {quoteTerms.warranty}</div>

@@ -12,21 +12,22 @@ export function AppHeader() {
         <div className="flex justify-between items-center h-16">
           <div className="flex items-center space-x-8">
             <div className="flex-shrink-0 flex items-center">
-              <HardHat className="text-construction-blue text-2xl mr-3 h-8 w-8" />
-              <h1 className="text-xl font-bold text-charcoal">ProBuild Estimator</h1>
+              <HardHat className="text-edg-teal text-2xl mr-3 h-8 w-8" />
+              <h1 className="text-xl font-bold text-edg-black">EDG Patio & Shade</h1>
+              <span className="text-sm text-edg-grey ml-2">Estimator</span>
             </div>
             <nav className="hidden md:flex space-x-6">
-              <Link href="/quotes" className={`text-sm font-medium transition-colors hover:text-construction-blue ${
+              <Link href="/quotes" className={`text-sm font-medium transition-colors hover:text-edg-teal ${
                 location.startsWith('/quotes') || location === '/' 
-                  ? 'text-construction-blue border-b-2 border-construction-blue pb-4' 
-                  : 'text-accent-grey'
+                  ? 'text-edg-teal border-b-2 border-edg-teal pb-4' 
+                  : 'text-edg-grey'
               }`}>
                 Quotes
               </Link>
-              <Link href="/products" className={`text-sm font-medium transition-colors hover:text-construction-blue ${
+              <Link href="/products" className={`text-sm font-medium transition-colors hover:text-edg-teal ${
                 location.startsWith('/products') 
-                  ? 'text-construction-blue border-b-2 border-construction-blue pb-4' 
-                  : 'text-accent-grey'
+                  ? 'text-edg-teal border-b-2 border-edg-teal pb-4' 
+                  : 'text-edg-grey'
               }`}>
                 Products
               </Link>
