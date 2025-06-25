@@ -112,10 +112,10 @@ export default function Quotes() {
           <Card>
             <CardContent className="p-6">
               <div className="flex items-center">
-                <FileText className="h-8 w-8 text-construction-blue" />
+                <FileText className="h-8 w-8 text-edg-teal" />
                 <div className="ml-4">
-                  <p className="text-sm font-medium text-accent-grey">Total Quotes</p>
-                  <p className="text-2xl font-bold text-charcoal">{totalQuotes}</p>
+                  <p className="text-sm font-medium text-edg-grey">Total Quotes</p>
+                  <p className="text-2xl font-bold text-edg-black">{totalQuotes}</p>
                 </div>
               </div>
             </CardContent>
@@ -124,10 +124,10 @@ export default function Quotes() {
           <Card>
             <CardContent className="p-6">
               <div className="flex items-center">
-                <DollarSign className="h-8 w-8 text-success-green" />
+                <DollarSign className="h-8 w-8 text-edg-teal" />
                 <div className="ml-4">
-                  <p className="text-sm font-medium text-accent-grey">Total Value</p>
-                  <p className="text-2xl font-bold text-charcoal">{formatCurrency(totalValue)}</p>
+                  <p className="text-sm font-medium text-edg-grey">Total Value</p>
+                  <p className="text-2xl font-bold text-edg-black">{formatCurrency(totalValue)}</p>
                 </div>
               </div>
             </CardContent>
@@ -136,10 +136,10 @@ export default function Quotes() {
           <Card>
             <CardContent className="p-6">
               <div className="flex items-center">
-                <Users className="h-8 w-8 text-sandy-brown" />
+                <Users className="h-8 w-8 text-edg-teal" />
                 <div className="ml-4">
-                  <p className="text-sm font-medium text-accent-grey">Active Customers</p>
-                  <p className="text-2xl font-bold text-charcoal">{new Set(quotes?.map(q => q.customer.id)).size || 0}</p>
+                  <p className="text-sm font-medium text-edg-grey">Active Customers</p>
+                  <p className="text-2xl font-bold text-edg-black">{new Set(quotes?.map(q => q.customer.id)).size || 0}</p>
                 </div>
               </div>
             </CardContent>
@@ -149,7 +149,23 @@ export default function Quotes() {
         {/* Quotes Table */}
         <Card>
           <CardHeader>
-            <CardTitle>Recent Quotes</CardTitle>
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center space-y-3 sm:space-y-0">
+              <CardTitle>Recent Quotes</CardTitle>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-edg-grey h-4 w-4" />
+                <Input
+                  placeholder="Search quotes..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10 w-full sm:w-64"
+                />
+              </div>
+            </div>
+            {searchTerm && (
+              <p className="text-sm text-edg-grey mt-2">
+                Found {filteredQuotes?.length || 0} quote{filteredQuotes?.length !== 1 ? 's' : ''} matching "{searchTerm}"
+              </p>
+            )}
           </CardHeader>
           <CardContent>
             {!quotes || quotes.length === 0 ? (
@@ -159,11 +175,25 @@ export default function Quotes() {
                 <p className="mt-1 text-sm text-gray-500">Get started by creating your first quote.</p>
                 <div className="mt-6">
                   <Link href="/quotes/new">
-                    <Button className="bg-construction-blue hover:bg-blue-700 text-white">
+                    <Button className="bg-edg-black hover:bg-edg-grey text-edg-white">
                       <Plus className="mr-2 h-4 w-4" />
                       New Quote
                     </Button>
                   </Link>
+                </div>
+              </div>
+            ) : filteredQuotes && filteredQuotes.length === 0 ? (
+              <div className="text-center py-12">
+                <Search className="mx-auto h-12 w-12 text-gray-400" />
+                <h3 className="mt-2 text-sm font-medium text-gray-900">No quotes found</h3>
+                <p className="mt-1 text-sm text-gray-500">Try adjusting your search terms.</p>
+                <div className="mt-6">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => setSearchTerm("")}
+                  >
+                    Clear Search
+                  </Button>
                 </div>
               </div>
             ) : (
@@ -171,28 +201,28 @@ export default function Quotes() {
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-accent-grey uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-edg-grey uppercase tracking-wider">
                         Quote #
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-accent-grey uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-edg-grey uppercase tracking-wider">
                         Customer
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-accent-grey uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-edg-grey uppercase tracking-wider">
                         Project
                       </th>
-                      <th className="px-6 py-3 text-center text-xs font-medium text-accent-grey uppercase tracking-wider">
+                      <th className="px-6 py-3 text-center text-xs font-medium text-edg-grey uppercase tracking-wider">
                         Status
                       </th>
-                      <th className="px-6 py-3 text-right text-xs font-medium text-accent-grey uppercase tracking-wider">
+                      <th className="px-6 py-3 text-right text-xs font-medium text-edg-grey uppercase tracking-wider">
                         Amount
                       </th>
-                      <th className="px-6 py-3 text-center text-xs font-medium text-accent-grey uppercase tracking-wider">
+                      <th className="px-6 py-3 text-center text-xs font-medium text-edg-grey uppercase tracking-wider">
                         Actions
                       </th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {quotes.map((quote) => {
+                    {(filteredQuotes || quotes).map((quote) => {
                       const total = quote.lineItems.reduce((sum, item) => {
                         const qty = parseFloat(item.quantity.toString());
                         const price = parseFloat(item.unitPrice.toString());
@@ -206,15 +236,15 @@ export default function Quotes() {
 
                       return (
                         <tr key={quote.id} className="hover:bg-gray-50">
-                          <td className="px-6 py-4 text-sm font-medium text-construction-blue">
+                          <td className="px-6 py-4 text-sm font-medium text-edg-teal">
                             <Link href={`/quotes/${quote.id}`} className="hover:underline">
                               {quote.quoteNumber}
                             </Link>
                           </td>
-                          <td className="px-6 py-4 text-sm text-charcoal">
+                          <td className="px-6 py-4 text-sm text-edg-black">
                             {quote.customer.name}
                           </td>
-                          <td className="px-6 py-4 text-sm text-charcoal">
+                          <td className="px-6 py-4 text-sm text-edg-black">
                             {quote.projectName}
                           </td>
                           <td className="px-6 py-4 text-center">
@@ -222,12 +252,12 @@ export default function Quotes() {
                               {quote.status.charAt(0).toUpperCase() + quote.status.slice(1)}
                             </Badge>
                           </td>
-                          <td className="px-6 py-4 text-sm font-medium text-charcoal text-right">
+                          <td className="px-6 py-4 text-sm font-medium text-edg-black text-right">
                             {formatCurrency(total)}
                           </td>
                           <td className="px-6 py-4 text-center text-sm">
                             <Link href={`/quotes/${quote.id}`}>
-                              <Button variant="ghost" size="sm" className="text-construction-blue hover:text-blue-700">
+                              <Button variant="ghost" size="sm" className="text-edg-teal hover:text-edg-dark-teal">
                                 Edit
                               </Button>
                             </Link>
