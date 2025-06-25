@@ -276,10 +276,9 @@ export function QuotePDFTemplate({ quote, isOpen, onClose }: QuotePDFTemplatePro
                 <thead>
                   <tr className="bg-gray-100">
                     <th className="border border-gray-300 px-4 py-3 text-left">Description</th>
-                    <th className="border border-gray-300 px-4 py-3 text-center">Qty</th>
-                    <th className="border border-gray-300 px-4 py-3 text-center">Unit Price</th>
-                    <th className="border border-gray-300 px-4 py-3 text-center">Markup</th>
-                    <th className="border border-gray-300 px-4 py-3 text-right">Total</th>
+                    <th className="border border-gray-300 px-4 py-3 text-center">Quantity</th>
+                    <th className="border border-gray-300 px-4 py-3 text-right">Rate</th>
+                    <th className="border border-gray-300 px-4 py-3 text-right">Amount</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -291,15 +290,13 @@ export function QuotePDFTemplate({ quote, isOpen, onClose }: QuotePDFTemplatePro
                     const total = item.markupType === 'percentage' 
                       ? baseTotal + (baseTotal * (markup / 100))
                       : baseTotal + markup;
+                    const rateWithMarkup = total / qty; // Final rate per unit including markup
 
                     return (
                       <tr key={index} className="border-b">
                         <td className="border border-gray-300 px-4 py-3">{item.description}</td>
                         <td className="border border-gray-300 px-4 py-3 text-center">{item.quantity}</td>
-                        <td className="border border-gray-300 px-4 py-3 text-center">{formatCurrency(price)}</td>
-                        <td className="border border-gray-300 px-4 py-3 text-center">
-                          {markup}{item.markupType === 'percentage' ? '%' : '$'}
-                        </td>
+                        <td className="border border-gray-300 px-4 py-3 text-right">{formatCurrency(rateWithMarkup)}</td>
                         <td className="border border-gray-300 px-4 py-3 text-right font-medium">
                           {formatCurrency(total)}
                         </td>
