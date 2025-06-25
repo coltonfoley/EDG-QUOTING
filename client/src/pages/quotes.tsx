@@ -68,11 +68,11 @@ export default function Quotes() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex justify-between items-center mb-8">
           <div>
-            <h2 className="text-3xl font-bold text-charcoal">Construction Quotes</h2>
-            <p className="text-accent-grey mt-2">Manage your project estimates and proposals</p>
+            <h2 className="text-3xl font-bold text-edg-black">Project Quotes</h2>
+            <p className="text-edg-grey mt-2">Manage your patio & shade project estimates</p>
           </div>
           <Link href="/quotes/new">
-            <Button className="bg-construction-blue hover:bg-blue-700 text-white">
+            <Button className="bg-edg-black hover:bg-edg-grey text-edg-white">
               <Plus className="mr-2 h-4 w-4" />
               New Quote
             </Button>

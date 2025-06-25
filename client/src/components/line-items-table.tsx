@@ -144,7 +144,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
               <DialogTrigger asChild>
                 <Button
                   variant="outline"
-                  className="border-construction-blue text-construction-blue hover:bg-blue-50"
+                  className="border-edg-teal text-edg-teal hover:bg-edg-light-teal hover:bg-opacity-10"
                 >
                   <Package className="mr-2 h-4 w-4" />
                   From Catalog
@@ -163,24 +163,24 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                   <div className="space-y-6">
                     {Object.entries(groupedProducts).map(([category, categoryProducts]) => (
                       <div key={category}>
-                        <h3 className="text-lg font-semibold text-charcoal mb-3">{category}</h3>
+                        <h3 className="text-lg font-semibold text-edg-black mb-3">{category}</h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                           {categoryProducts.map((product) => (
                             <div
                               key={product.id}
-                              className="p-4 border border-gray-200 rounded-lg hover:border-construction-blue cursor-pointer transition-colors"
+                              className="p-4 border border-gray-200 rounded-lg hover:border-edg-teal cursor-pointer transition-colors"
                               onClick={() => handleAddFromProduct(product)}
                             >
                               <div className="flex justify-between items-start mb-2">
-                                <h4 className="font-medium text-charcoal">{product.name}</h4>
-                                <span className="text-sm font-medium text-construction-blue">
+                                <h4 className="font-medium text-edg-black">{product.name}</h4>
+                                <span className="text-sm font-medium text-edg-teal">
                                   {formatCurrency(product.defaultUnitPrice)}
                                 </span>
                               </div>
                               {product.description && (
-                                <p className="text-sm text-accent-grey mb-2">{product.description}</p>
+                                <p className="text-sm text-edg-grey mb-2">{product.description}</p>
                               )}
-                              <div className="flex justify-between text-xs text-accent-grey">
+                              <div className="flex justify-between text-xs text-edg-grey">
                                 <span>Per {product.unit}</span>
                                 <span>Markup: {product.defaultMarkupValue}{product.defaultMarkupType === 'percentage' ? '%' : '$'}</span>
                               </div>
@@ -195,7 +195,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
             </Dialog>
             <Button
               onClick={() => setShowNewItemForm(true)}
-              className="bg-sandy-brown hover:bg-orange-500 text-white"
+              className="bg-edg-teal hover:bg-edg-dark-teal text-edg-black"
             >
               <Plus className="mr-2 h-4 w-4" />
               Custom Item

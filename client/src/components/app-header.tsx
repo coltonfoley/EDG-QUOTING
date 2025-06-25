@@ -34,15 +34,15 @@ export function AppHeader() {
             </nav>
           </div>
           <div className="flex items-center space-x-4">
-            <Button variant="ghost" size="icon" className="text-accent-grey hover:text-charcoal">
+            <Button variant="ghost" size="icon" className="text-edg-grey hover:text-edg-black">
               <Bell className="h-5 w-5" />
             </Button>
             <div className="flex items-center space-x-2">
               <Avatar className="h-8 w-8">
                 <AvatarImage src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-4.0.3&w=100&h=100&fit=crop&crop=face" alt="User avatar" />
-                <AvatarFallback>JS</AvatarFallback>
+                <AvatarFallback className="bg-edg-teal text-edg-black font-medium">EDG</AvatarFallback>
               </Avatar>
-              <span className="text-sm font-medium text-charcoal">John Smith</span>
+              <span className="text-sm font-medium text-edg-black">EDG Team</span>
             </div>
           </div>
         </div>
