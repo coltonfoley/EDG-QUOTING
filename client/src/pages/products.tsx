@@ -151,13 +151,13 @@ export default function Products() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex justify-between items-center mb-8">
           <div>
-            <h2 className="text-3xl font-bold text-charcoal">Product Catalog</h2>
-            <p className="text-accent-grey mt-2">Manage reusable products and services</p>
+            <h2 className="text-3xl font-bold text-edg-black">Product Catalog</h2>
+            <p className="text-edg-grey mt-2">Manage reusable products and services</p>
           </div>
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
               <Button 
-                className="bg-construction-blue hover:bg-blue-700 text-white"
+                className="bg-edg-black hover:bg-edg-grey text-edg-white"
                 onClick={() => {
                   setEditingProduct(null);
                   form.reset();
@@ -296,7 +296,7 @@ export default function Products() {
                     </Button>
                     <Button
                       type="submit"
-                      className="bg-construction-blue hover:bg-blue-700 text-white"
+                      className="bg-edg-black hover:bg-edg-grey text-edg-white"
                       disabled={createProductMutation.isPending || updateProductMutation.isPending}
                     >
                       {editingProduct ? "Update" : "Create"} Product
@@ -316,7 +316,7 @@ export default function Products() {
               <p className="text-gray-500 mb-6">Create your first product to start building a reusable catalog.</p>
               <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                 <DialogTrigger asChild>
-                  <Button className="bg-construction-blue hover:bg-blue-700 text-white">
+                  <Button className="bg-edg-black hover:bg-edg-grey text-edg-white">
                     <Plus className="mr-2 h-4 w-4" />
                     Create First Product
                   </Button>
@@ -340,7 +340,7 @@ export default function Products() {
                               variant="ghost"
                               size="sm"
                               onClick={() => handleEdit(product)}
-                              className="text-construction-blue hover:text-blue-700"
+                              className="text-edg-teal hover:text-edg-dark-teal"
                             >
                               <Edit className="h-4 w-4" />
                             </Button>
@@ -366,7 +366,7 @@ export default function Products() {
                           </div>
                           <div className="flex justify-between text-sm">
                             <span className="text-accent-grey">Default Markup:</span>
-                            <span className="font-medium text-success-green">
+                            <span className="font-medium text-edg-teal">
                               {product.defaultMarkupValue}{product.defaultMarkupType === 'percentage' ? '%' : ' $'}
                             </span>
                           </div>

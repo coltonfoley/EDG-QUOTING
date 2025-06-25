@@ -24,12 +24,14 @@
   --ring: hsl(210, 11%, 15%);
   --radius: 0.5rem;
   
-  /* Construction-specific colors */
-  --construction-blue: hsl(215, 55%, 39%);
-  --sandy-brown: hsl(32, 85%, 65%);
-  --success-green: hsl(134, 61%, 41%);
-  --charcoal: hsl(210, 11%, 15%);
-  --accent-grey: hsl(210, 13%, 50%);
+  /* EDG Patio & Shade Brand Colors */
+  --edg-black: hsl(0, 0%, 0%);
+  --edg-white: hsl(0, 0%, 100%);
+  --edg-teal: hsl(165, 100%, 63%);
+  --edg-dark-teal: hsl(165, 85%, 55%);
+  --edg-light-teal: hsl(165, 100%, 70%);
+  --edg-grey: hsl(0, 0%, 40%);
+  --edg-light-grey: hsl(0, 0%, 96%);
 }
 
 .dark {
@@ -66,43 +68,59 @@
 }
 
 @layer utilities {
-  .text-construction-blue {
-    color: var(--construction-blue);
+  .text-edg-black {
+    color: var(--edg-black);
   }
   
-  .bg-construction-blue {
-    background-color: var(--construction-blue);
+  .bg-edg-black {
+    background-color: var(--edg-black);
   }
   
-  .text-sandy-brown {
-    color: var(--sandy-brown);
+  .text-edg-white {
+    color: var(--edg-white);
   }
   
-  .bg-sandy-brown {
-    background-color: var(--sandy-brown);
+  .bg-edg-white {
+    background-color: var(--edg-white);
   }
   
-  .text-success-green {
-    color: var(--success-green);
+  .text-edg-teal {
+    color: var(--edg-teal);
   }
   
-  .bg-success-green {
-    background-color: var(--success-green);
+  .bg-edg-teal {
+    background-color: var(--edg-teal);
   }
   
-  .text-charcoal {
-    color: var(--charcoal);
+  .text-edg-dark-teal {
+    color: var(--edg-dark-teal);
   }
   
-  .bg-charcoal {
-    background-color: var(--charcoal);
+  .bg-edg-dark-teal {
+    background-color: var(--edg-dark-teal);
   }
   
-  .text-accent-grey {
-    color: var(--accent-grey);
+  .text-edg-light-teal {
+    color: var(--edg-light-teal);
   }
   
-  .bg-accent-grey {
-    background-color: var(--accent-grey);
+  .bg-edg-light-teal {
+    background-color: var(--edg-light-teal);
+  }
+  
+  .text-edg-grey {
+    color: var(--edg-grey);
+  }
+  
+  .bg-edg-grey {
+    background-color: var(--edg-grey);
+  }
+  
+  .text-edg-light-grey {
+    color: var(--edg-light-grey);
+  }
+  
+  .bg-edg-light-grey {
+    background-color: var(--edg-light-grey);
   }
 }
