@@ -23,9 +23,22 @@ export const quotes = pgTable("quotes", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const products = pgTable("products", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description"),
+  category: text("category"),
+  defaultUnitPrice: decimal("default_unit_price", { precision: 10, scale: 2 }).notNull(),
+  defaultMarkupType: text("default_markup_type").notNull().default("percentage"),
+  defaultMarkupValue: decimal("default_markup_value", { precision: 10, scale: 2 }).notNull().default("25"),
+  unit: text("unit").default("each"), // each, sq ft, linear ft, cubic yard, etc.
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const lineItems = pgTable("line_items", {
   id: serial("id").primaryKey(),
   quoteId: integer("quote_id").notNull(),
+  productId: integer("product_id"), // optional reference to product catalog
   description: text("description").notNull(),
   quantity: decimal("quantity", { precision: 10, scale: 2 }).notNull(),
   unitPrice: decimal("unit_price", { precision: 10, scale: 2 }).notNull(),
@@ -42,6 +55,14 @@ export const insertQuoteSchema = createInsertSchema(quotes).omit({
   createdAt: true,
 });
 
+export const insertProductSchema = createInsertSchema(products).omit({
+  id: true,
+  createdAt: true,
+}).extend({
+  defaultUnitPrice: z.union([z.string(), z.number()]).transform(val => typeof val === 'string' ? val : val.toString()),
+  defaultMarkupValue: z.union([z.string(), z.number()]).transform(val => typeof val === 'string' ? val : val.toString()),
+});
+
 export const insertLineItemSchema = createInsertSchema(lineItems).omit({
   id: true,
 }).extend({
@@ -55,6 +76,9 @@ export type InsertCustomer = z.infer<typeof insertCustomerSchema>;
 
 export type Quote = typeof quotes.$inferSelect;
 export type InsertQuote = z.infer<typeof insertQuoteSchema>;
+
+export type Product = typeof products.$inferSelect;
+export type InsertProduct = z.infer<typeof insertProductSchema>;
 
 export type LineItem = typeof lineItems.$inferSelect;
 export type InsertLineItem = z.infer<typeof insertLineItemSchema>;
