@@ -209,22 +209,22 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-accent-grey uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-edg-grey uppercase tracking-wider">
                   Description
                 </th>
-                <th className="px-6 py-3 text-center text-xs font-medium text-accent-grey uppercase tracking-wider">
+                <th className="px-6 py-3 text-center text-xs font-medium text-edg-grey uppercase tracking-wider">
                   Qty
                 </th>
-                <th className="px-6 py-3 text-center text-xs font-medium text-accent-grey uppercase tracking-wider">
+                <th className="px-6 py-3 text-center text-xs font-medium text-edg-grey uppercase tracking-wider">
                   Unit Price
                 </th>
-                <th className="px-6 py-3 text-center text-xs font-medium text-accent-grey uppercase tracking-wider">
+                <th className="px-6 py-3 text-center text-xs font-medium text-edg-grey uppercase tracking-wider">
                   Markup
                 </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-accent-grey uppercase tracking-wider">
+                <th className="px-6 py-3 text-right text-xs font-medium text-edg-grey uppercase tracking-wider">
                   Total
                 </th>
-                <th className="px-6 py-3 text-center text-xs font-medium text-accent-grey uppercase tracking-wider">
+                <th className="px-6 py-3 text-center text-xs font-medium text-edg-grey uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
@@ -244,7 +244,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                       <Input
                         value={item.description}
                         onChange={(e) => handleUpdateItem(item, "description", e.target.value)}
-                        className="border-none bg-transparent focus:ring-2 focus:ring-construction-blue focus:border-transparent"
+                        className="border-none bg-transparent focus:ring-2 focus:ring-edg-teal focus:border-transparent"
                       />
                     </td>
                     <td className="px-6 py-4 text-center">
@@ -288,15 +288,15 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                         </Select>
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-right text-sm font-medium text-charcoal">
+                    <td className="px-6 py-4 text-right text-sm font-medium text-edg-black">
                       {formatCurrency(total)}
                     </td>
                     <td className="px-6 py-4 text-center">
                       <Button
-                        variant="ghost"
+                        variant="outline"
                         size="sm"
                         onClick={() => handleDeleteItem(item.id)}
-                        className="text-red-600 hover:text-red-800"
+                        className="border-red-300 text-red-600 hover:bg-red-50 hover:border-red-400 hover:text-red-700"
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -356,7 +356,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                       </Select>
                     </div>
                   </td>
-                  <td className="px-6 py-4 text-right text-sm font-medium text-charcoal">
+                  <td className="px-6 py-4 text-right text-sm font-medium text-edg-black">
                     {formatCurrency(
                       calculateLineItemTotal(
                         newItem.quantity,
@@ -371,7 +371,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                       size="sm"
                       onClick={handleAddItem}
                       disabled={!newItem.description || createLineItemMutation.isPending}
-                      className="bg-construction-blue hover:bg-blue-700 text-white"
+                      className="bg-edg-black hover:bg-edg-grey text-edg-white"
                     >
                       Save
                     </Button>

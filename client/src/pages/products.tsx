@@ -361,11 +361,11 @@ export default function Products() {
                         )}
                         <div className="space-y-2">
                           <div className="flex justify-between text-sm">
-                            <span className="text-accent-grey">Unit Price:</span>
+                            <span className="text-edg-grey">Unit Price:</span>
                             <span className="font-medium">{formatCurrency(product.defaultUnitPrice)} per {product.unit}</span>
                           </div>
                           <div className="flex justify-between text-sm">
-                            <span className="text-accent-grey">Default Markup:</span>
+                            <span className="text-edg-grey">Default Markup:</span>
                             <span className="font-medium text-edg-teal">
                               {product.defaultMarkupValue}{product.defaultMarkupType === 'percentage' ? '%' : ' $'}
                             </span>
