@@ -1,4 +1,4 @@
-import { customers, quotes, lineItems, type Customer, type Quote, type LineItem, type InsertCustomer, type InsertQuote, type InsertLineItem, type QuoteWithDetails } from "@shared/schema";
+import { customers, quotes, lineItems, products, type Customer, type Quote, type LineItem, type Product, type InsertCustomer, type InsertQuote, type InsertLineItem, type InsertProduct, type QuoteWithDetails } from "@shared/schema";
 import { db } from "./db";
 import { eq } from "drizzle-orm";
 
@@ -16,6 +16,13 @@ export interface IStorage {
   createQuote(quote: InsertQuote): Promise<Quote>;
   updateQuote(id: number, quote: Partial<InsertQuote>): Promise<Quote | undefined>;
   deleteQuote(id: number): Promise<boolean>;
+
+  // Product methods
+  getAllProducts(): Promise<Product[]>;
+  getProduct(id: number): Promise<Product | undefined>;
+  createProduct(product: InsertProduct): Promise<Product>;
+  updateProduct(id: number, product: Partial<InsertProduct>): Promise<Product | undefined>;
+  deleteProduct(id: number): Promise<boolean>;
 
   // Line item methods
   getLineItemsByQuoteId(quoteId: number): Promise<LineItem[]>;
@@ -295,6 +302,38 @@ export class DatabaseStorage implements IStorage {
   async deleteLineItemsByQuoteId(quoteId: number): Promise<boolean> {
     await db.delete(lineItems).where(eq(lineItems.quoteId, quoteId));
     return true;
+  }
+
+  // Product methods
+  async getAllProducts(): Promise<Product[]> {
+    return await db.select().from(products).orderBy(products.category, products.name);
+  }
+
+  async getProduct(id: number): Promise<Product | undefined> {
+    const [product] = await db.select().from(products).where(eq(products.id, id));
+    return product || undefined;
+  }
+
+  async createProduct(insertProduct: InsertProduct): Promise<Product> {
+    const [product] = await db
+      .insert(products)
+      .values(insertProduct)
+      .returning();
+    return product;
+  }
+
+  async updateProduct(id: number, productData: Partial<InsertProduct>): Promise<Product | undefined> {
+    const [updated] = await db
+      .update(products)
+      .set(productData)
+      .where(eq(products.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteProduct(id: number): Promise<boolean> {
+    const result = await db.delete(products).where(eq(products.id, id));
+    return (result.rowCount || 0) > 0;
   }
 }
 

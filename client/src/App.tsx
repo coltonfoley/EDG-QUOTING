@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
 import Quotes from "@/pages/quotes";
 import QuoteBuilder from "@/pages/quote-builder";
+import Products from "@/pages/products";
 
 function Router() {
   return (
@@ -14,6 +15,7 @@ function Router() {
       <Route path="/quotes" component={Quotes} />
       <Route path="/quotes/new" component={QuoteBuilder} />
       <Route path="/quotes/:id" component={QuoteBuilder} />
+      <Route path="/products" component={Products} />
       <Route component={NotFound} />
     </Switch>
   );

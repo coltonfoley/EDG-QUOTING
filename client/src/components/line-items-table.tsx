@@ -1,14 +1,15 @@
 import { useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Trash2, Edit, Plus } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Trash2, Edit, Plus, Package } from "lucide-react";
 import { formatCurrency, calculateLineItemTotal } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import type { LineItem } from "@shared/schema";
+import type { LineItem, Product } from "@shared/schema";
 
 interface LineItemsTableProps {
   quoteId: number;
@@ -25,9 +26,14 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
     markupValue: "0",
   });
   const [showNewItemForm, setShowNewItemForm] = useState(false);
+  const [showProductDialog, setShowProductDialog] = useState(false);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  const { data: products } = useQuery<Product[]>({
+    queryKey: ["/api/products"],
+  });
 
   const createLineItemMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -107,18 +113,94 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
     }
   };
 
+  const handleAddFromProduct = (product: Product) => {
+    setNewItem({
+      description: product.name,
+      quantity: "1",
+      unitPrice: product.defaultUnitPrice,
+      markupType: product.defaultMarkupType as "percentage" | "dollar",
+      markupValue: product.defaultMarkupValue,
+    });
+    setShowProductDialog(false);
+    setShowNewItemForm(true);
+  };
+
+  const groupedProducts = products?.reduce((groups, product) => {
+    const category = product.category || "Uncategorized";
+    if (!groups[category]) {
+      groups[category] = [];
+    }
+    groups[category].push(product);
+    return groups;
+  }, {} as Record<string, Product[]>) || {};
+
   return (
     <Card className="mb-6">
       <CardHeader className="border-b border-gray-200">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
           <CardTitle>Line Items</CardTitle>
-          <Button
-            onClick={() => setShowNewItemForm(true)}
-            className="mt-3 sm:mt-0 bg-sandy-brown hover:bg-orange-500 text-white"
-          >
-            <Plus className="mr-2 h-4 w-4" />
-            Add Line Item
-          </Button>
+          <div className="mt-3 sm:mt-0 flex space-x-2">
+            <Dialog open={showProductDialog} onOpenChange={setShowProductDialog}>
+              <DialogTrigger asChild>
+                <Button
+                  variant="outline"
+                  className="border-construction-blue text-construction-blue hover:bg-blue-50"
+                >
+                  <Package className="mr-2 h-4 w-4" />
+                  From Catalog
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>Select Product from Catalog</DialogTitle>
+                </DialogHeader>
+                {!products || products.length === 0 ? (
+                  <div className="text-center py-8">
+                    <Package className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+                    <p className="text-gray-500">No products in catalog. Create products first.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    {Object.entries(groupedProducts).map(([category, categoryProducts]) => (
+                      <div key={category}>
+                        <h3 className="text-lg font-semibold text-charcoal mb-3">{category}</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          {categoryProducts.map((product) => (
+                            <div
+                              key={product.id}
+                              className="p-4 border border-gray-200 rounded-lg hover:border-construction-blue cursor-pointer transition-colors"
+                              onClick={() => handleAddFromProduct(product)}
+                            >
+                              <div className="flex justify-between items-start mb-2">
+                                <h4 className="font-medium text-charcoal">{product.name}</h4>
+                                <span className="text-sm font-medium text-construction-blue">
+                                  {formatCurrency(product.defaultUnitPrice)}
+                                </span>
+                              </div>
+                              {product.description && (
+                                <p className="text-sm text-accent-grey mb-2">{product.description}</p>
+                              )}
+                              <div className="flex justify-between text-xs text-accent-grey">
+                                <span>Per {product.unit}</span>
+                                <span>Markup: {product.defaultMarkupValue}{product.defaultMarkupType === 'percentage' ? '%' : '$'}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </DialogContent>
+            </Dialog>
+            <Button
+              onClick={() => setShowNewItemForm(true)}
+              className="bg-sandy-brown hover:bg-orange-500 text-white"
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Custom Item
+            </Button>
+          </div>
         </div>
       </CardHeader>
 
