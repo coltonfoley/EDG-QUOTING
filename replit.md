@@ -22,23 +22,27 @@ ProBuild Estimator is a full-stack web application designed for construction con
 - **Database Connection**: Neon Database serverless PostgreSQL
 
 ### Database Schema
-The system uses three main entities:
+The system uses four main entities:
 1. **Customers**: Store client contact information
 2. **Quotes**: Project estimates with metadata (status, dates, totals)
-3. **Line Items**: Individual cost items within quotes with markup calculations
+3. **Products**: Reusable catalog of materials, services, and labor with default pricing
+4. **Line Items**: Individual cost items within quotes with markup calculations
 
 ## Key Components
 
 ### Data Models
 - **Customer Management**: Name, email, phone storage
 - **Quote Management**: Project details, status tracking (draft/sent/approved/rejected), tax and discount handling
+- **Product Catalog**: Reusable products with categories, default pricing, units, and markup settings
 - **Line Item System**: Flexible markup system supporting both percentage and fixed dollar markups
 
 ### User Interface Components
 - **Quote Builder**: Form-based quote creation with customer and project details
-- **Line Items Table**: Dynamic table for adding/editing quote line items
+- **Line Items Table**: Dynamic table for adding/editing quote line items with product catalog integration
+- **Product Catalog**: Full CRUD interface for managing reusable products and services
 - **Quote Summary**: Financial calculations and status management
 - **Dashboard**: Overview of all quotes with filtering and status indicators
+- **Navigation**: Professional header with active page indicators
 
 ### Business Logic
 - **Quote Number Generation**: Automatic unique quote numbering
@@ -90,6 +94,10 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+- June 24, 2025: Added Product Catalog feature with reusable products and services
+- June 24, 2025: Integrated product selection into line items with "From Catalog" option
+- June 24, 2025: Added navigation menu with Quotes and Products sections
+- June 24, 2025: Fixed line item column widths for better number visibility
 - June 24, 2025: Added PostgreSQL database integration with Drizzle ORM
 - June 24, 2025: Implemented DatabaseStorage class replacing in-memory storage
 - June 24, 2025: Fixed quote number auto-generation system

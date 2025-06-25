@@ -16,23 +16,19 @@ export function AppHeader() {
               <h1 className="text-xl font-bold text-charcoal">ProBuild Estimator</h1>
             </div>
             <nav className="hidden md:flex space-x-6">
-              <Link href="/quotes">
-                <a className={`text-sm font-medium transition-colors hover:text-construction-blue ${
-                  location.startsWith('/quotes') || location === '/' 
-                    ? 'text-construction-blue border-b-2 border-construction-blue pb-4' 
-                    : 'text-accent-grey'
-                }`}>
-                  Quotes
-                </a>
+              <Link href="/quotes" className={`text-sm font-medium transition-colors hover:text-construction-blue ${
+                location.startsWith('/quotes') || location === '/' 
+                  ? 'text-construction-blue border-b-2 border-construction-blue pb-4' 
+                  : 'text-accent-grey'
+              }`}>
+                Quotes
               </Link>
-              <Link href="/products">
-                <a className={`text-sm font-medium transition-colors hover:text-construction-blue ${
-                  location.startsWith('/products') 
-                    ? 'text-construction-blue border-b-2 border-construction-blue pb-4' 
-                    : 'text-accent-grey'
-                }`}>
-                  Products
-                </a>
+              <Link href="/products" className={`text-sm font-medium transition-colors hover:text-construction-blue ${
+                location.startsWith('/products') 
+                  ? 'text-construction-blue border-b-2 border-construction-blue pb-4' 
+                  : 'text-accent-grey'
+              }`}>
+                Products
               </Link>
             </nav>
           </div>
