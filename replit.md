@@ -1,8 +1,8 @@
-# ProBuild Estimator - Construction Quote Management System
+# EDG Patio & Shade Estimator - Construction Quote Management System
 
 ## Overview
 
-ProBuild Estimator is a full-stack web application designed for construction contractors to create, manage, and track project quotes. The system features a React frontend with shadcn/ui components and an Express.js backend with PostgreSQL database storage via Drizzle ORM.
+EDG Patio & Shade Estimator is a full-stack web application designed for EDG Patio & Shade to create, manage, and track project quotes. The system features a React frontend with shadcn/ui components and an Express.js backend with PostgreSQL database storage via Drizzle ORM.
 
 ## System Architecture
 
@@ -94,6 +94,9 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+- June 25, 2025: Updated branding to EDG Patio & Shade with official color scheme (Black/White/Teal)
+- June 25, 2025: Applied brand colors throughout application interface and PDF templates
+- June 25, 2025: Removed markup information from customer-facing PDF quotes for business privacy
 - June 24, 2025: Implemented editable PDF quote template with company branding and terms
 - June 24, 2025: Added client-side PDF generation with html2canvas and jsPDF
 - June 24, 2025: Created professional quote layout with company info and customizable terms
