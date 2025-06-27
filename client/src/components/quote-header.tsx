@@ -14,6 +14,7 @@ const quoteFormSchema = insertQuoteSchema.extend({
   customerName: z.string().min(1, "Customer name is required"),
   customerEmail: z.string().email("Valid email is required"),
   customerPhone: z.string().min(1, "Phone number is required"),
+  customerCompany: z.string().optional(),
 }).omit({ customerId: true });
 
 type QuoteFormData = z.infer<typeof quoteFormSchema>;
@@ -136,6 +137,19 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
                         <FormLabel>Phone</FormLabel>
                         <FormControl>
                           <Input type="tel" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="customerCompany"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Company (Optional)</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Company name" {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
