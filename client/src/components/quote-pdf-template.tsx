@@ -26,6 +26,10 @@ interface CompanyInfo {
   email: string;
   license: string;
   logo?: string;
+  customerName: string;
+  customerCompany: string;
+  customerEmail: string;
+  customerPhone: string;
 }
 
 export function QuotePDFTemplate({ quote, isOpen, onClose }: QuotePDFTemplateProps) {
