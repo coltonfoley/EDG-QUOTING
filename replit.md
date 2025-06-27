@@ -95,6 +95,9 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+- June 27, 2025: Added company field to customer schema for business client tracking
+- June 27, 2025: Updated quote forms, tables, and PDFs to display company information
+- June 27, 2025: Enhanced search to include company names in quote filtering
 - June 27, 2025: Implemented DocuSign OAuth integration for secure account connection and quote sending
 - June 27, 2025: Added DocuSign connection management with connect/disconnect functionality  
 - June 27, 2025: Created DocuSign setup modal and connection status checking
