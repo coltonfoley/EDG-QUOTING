@@ -253,9 +253,12 @@ export function QuotePDFTemplate({ quote, isOpen, onClose }: QuotePDFTemplatePro
               <div>
                 <h3 className="text-lg font-semibold text-edg-black mb-3">Bill To:</h3>
                 <div className="space-y-1">
-                  <div className="font-medium">{quote.customer.name}</div>
-                  <div>{quote.customer.email}</div>
-                  <div>{quote.customer.phone}</div>
+                  <div className="font-medium">{customerInfo.name}</div>
+                  {customerInfo.company && (
+                    <div className="font-medium text-edg-grey">{customerInfo.company}</div>
+                  )}
+                  <div>{customerInfo.email}</div>
+                  {customerInfo.phone && <div>{customerInfo.phone}</div>}
                 </div>
               </div>
               <div>
