@@ -30,6 +30,7 @@ export default function QuoteBuilder() {
         name: data.customerName,
         email: data.customerEmail,
         phone: data.customerPhone,
+        company: data.customerCompany || null,
       });
       const customer = await customerResponse.json();
 
@@ -42,6 +43,7 @@ export default function QuoteBuilder() {
       delete quoteData.customerName;
       delete quoteData.customerEmail;
       delete quoteData.customerPhone;
+      delete quoteData.customerCompany;
 
       const quoteResponse = await apiRequest("POST", "/api/quotes", quoteData);
       return quoteResponse.json();
@@ -76,6 +78,7 @@ export default function QuoteBuilder() {
       delete quoteData.customerName;
       delete quoteData.customerEmail;
       delete quoteData.customerPhone;
+      delete quoteData.customerCompany;
 
       const response = await apiRequest("PUT", `/api/quotes/${quoteId}`, quoteData);
       return response.json();
