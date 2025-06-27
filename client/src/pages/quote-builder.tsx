@@ -67,6 +67,7 @@ export default function QuoteBuilder() {
           name: data.customerName,
           email: data.customerEmail,
           phone: data.customerPhone,
+          company: data.customerCompany || null,
         });
       }
 
@@ -106,6 +107,7 @@ export default function QuoteBuilder() {
       customerName: quote.customer.name,
       customerEmail: quote.customer.email,
       customerPhone: quote.customer.phone,
+      customerCompany: quote.customer.company || "",
     });
   };
 
