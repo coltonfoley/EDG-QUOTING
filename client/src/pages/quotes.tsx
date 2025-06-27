@@ -43,6 +43,7 @@ export default function Quotes() {
       quote.quoteNumber.toLowerCase().includes(term) ||
       quote.customer.name.toLowerCase().includes(term) ||
       quote.customer.email.toLowerCase().includes(term) ||
+      (quote.customer.company && quote.customer.company.toLowerCase().includes(term)) ||
       quote.projectName.toLowerCase().includes(term) ||
       quote.projectAddress.toLowerCase().includes(term)
     );
@@ -267,7 +268,12 @@ export default function Quotes() {
                             </Link>
                           </td>
                           <td className="px-6 py-4 text-sm text-edg-black">
-                            {quote.customer.name}
+                            <div>
+                              <div className="font-medium">{quote.customer.name}</div>
+                              {quote.customer.company && (
+                                <div className="text-xs text-edg-grey">{quote.customer.company}</div>
+                              )}
+                            </div>
                           </td>
                           <td className="px-6 py-4 text-sm text-edg-black">
                             {quote.projectName}
