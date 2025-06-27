@@ -72,6 +72,7 @@ The system uses four main entities:
 - **Neon Database**: Serverless PostgreSQL provider
 - **Express.js**: Web application framework
 - **Zod**: Runtime type validation
+- **DocuSign eSignature SDK**: Electronic signature integration for sending quotes
 
 ### Development Tools
 - **TypeScript**: Type safety across the stack
@@ -94,6 +95,9 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+- June 27, 2025: Implemented DocuSign OAuth integration for secure account connection and quote sending
+- June 27, 2025: Added DocuSign connection management with connect/disconnect functionality  
+- June 27, 2025: Created DocuSign setup modal and connection status checking
 - June 25, 2025: Added search functionality to quotes page for finding quotes by number, customer, or project
 - June 25, 2025: Fixed button contrast issues - all action buttons now clearly visible with EDG branding
 - June 25, 2025: Updated branding to EDG Patio & Shade with official color scheme (Black/White/Teal)
