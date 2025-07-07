@@ -41,6 +41,10 @@ export function QuotePDFTemplate({ quote, isOpen, onClose }: QuotePDFTemplatePro
     phone: "(555) 123-4567",
     email: "info@edgpatioandshade.com",
     license: "License #SC-12345",
+    customerName: quote.customer.name,
+    customerCompany: quote.customer.company || "",
+    customerEmail: quote.customer.email,
+    customerPhone: quote.customer.phone,
   });
 
   const [quoteTerms, setQuoteTerms] = useState({
@@ -191,6 +195,51 @@ export function QuotePDFTemplate({ quote, isOpen, onClose }: QuotePDFTemplatePro
 
             <Card>
               <CardContent className="p-4">
+                <h3 className="text-lg font-semibold mb-4">Customer Information</h3>
+                <div className="space-y-3">
+                  <div>
+                    <Label htmlFor="customerName" className="text-sm font-medium">Customer Name</Label>
+                    <Input
+                      id="customerName"
+                      value={companyInfo.customerName}
+                      onChange={(e) => setCompanyInfo({...companyInfo, customerName: e.target.value})}
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="customerCompany" className="text-sm font-medium">Company (Optional)</Label>
+                    <Input
+                      id="customerCompany"
+                      value={companyInfo.customerCompany || ""}
+                      onChange={(e) => setCompanyInfo({...companyInfo, customerCompany: e.target.value})}
+                      className="mt-1"
+                      placeholder="Company name"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="customerEmail" className="text-sm font-medium">Customer Email</Label>
+                    <Input
+                      id="customerEmail"
+                      value={companyInfo.customerEmail}
+                      onChange={(e) => setCompanyInfo({...companyInfo, customerEmail: e.target.value})}
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="customerPhone" className="text-sm font-medium">Customer Phone</Label>
+                    <Input
+                      id="customerPhone"
+                      value={companyInfo.customerPhone}
+                      onChange={(e) => setCompanyInfo({...companyInfo, customerPhone: e.target.value})}
+                      className="mt-1"
+                    />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="p-4">
                 <h3 className="text-lg font-semibold mb-4">Quote Terms</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
@@ -257,12 +306,12 @@ export function QuotePDFTemplate({ quote, isOpen, onClose }: QuotePDFTemplatePro
               <div>
                 <h3 className="text-lg font-semibold text-edg-black mb-3">Bill To:</h3>
                 <div className="space-y-1">
-                  <div className="font-medium">{customerInfo.name}</div>
-                  {customerInfo.company && (
-                    <div className="font-medium text-edg-grey">{customerInfo.company}</div>
+                  <div className="font-medium">{companyInfo.customerName}</div>
+                  {companyInfo.customerCompany && (
+                    <div className="font-medium text-edg-grey">{companyInfo.customerCompany}</div>
                   )}
-                  <div>{customerInfo.email}</div>
-                  {customerInfo.phone && <div>{customerInfo.phone}</div>}
+                  <div>{companyInfo.customerEmail}</div>
+                  {companyInfo.customerPhone && <div>{companyInfo.customerPhone}</div>}
                 </div>
               </div>
               <div>
