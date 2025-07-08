@@ -40,6 +40,7 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
       customerName: quote?.customer?.name || "",
       customerEmail: quote?.customer?.email || "",
       customerPhone: quote?.customer?.phone || "",
+      customerCompany: quote?.customer?.company || "",
     },
   });
 
