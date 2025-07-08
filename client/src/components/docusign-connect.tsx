@@ -22,7 +22,7 @@ export function DocuSignConnect({ onConnectionChange }: DocuSignConnectProps) {
 
   const connectMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest("GET", "/api/docusign/auth-url", {});
+      const response = await apiRequest("GET", "/api/docusign/auth-url");
       const data = await response.json();
       
       // Open DocuSign auth in new window

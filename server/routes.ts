@@ -178,7 +178,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // DocuSign integration placeholder
+  // DocuSign integration routes
+  app.get("/api/docusign/status", async (req, res) => {
+    try {
+      // Check if DocuSign is connected (placeholder implementation)
+      // In a real implementation, this would check stored tokens/credentials
+      res.json({ 
+        connected: false,
+        accountId: null,
+        userName: null 
+      });
+    } catch (error) {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.get("/api/docusign/auth-url", async (req, res) => {
+    try {
+      // In a real implementation, this would generate the actual DocuSign OAuth URL
+      // For now, we'll return a placeholder URL that shows the integration needs setup
+      res.json({ 
+        authUrl: `data:text/html,<html><body><h1>DocuSign Setup Required</h1><p>To enable DocuSign integration, please configure your DocuSign API credentials in the application settings.</p><script>setTimeout(() => window.close(), 3000);</script></body></html>`,
+        message: "DocuSign integration requires API credentials to be configured"
+      });
+    } catch (error) {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.post("/api/docusign/disconnect", async (req, res) => {
+    try {
+      // In a real implementation, this would revoke tokens and clear stored credentials
+      res.json({ 
+        message: "DocuSign disconnected successfully",
+        connected: false
+      });
+    } catch (error) {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
   app.post("/api/quotes/:id/send-to-docusign", async (req, res) => {
     try {
       const id = parseInt(req.params.id);
