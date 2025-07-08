@@ -87,11 +87,11 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
             <Button 
               type="submit" 
               form="quote-form" 
-              className="bg-construction-blue hover:bg-blue-700 text-white"
+              className="bg-edg-black hover:bg-edg-grey text-edg-white"
               disabled={isLoading}
             >
               <Save className="mr-2 h-4 w-4" />
-              Save Draft
+              {isLoading ? "Saving..." : "Save Quote"}
             </Button>
           </div>
         </div>

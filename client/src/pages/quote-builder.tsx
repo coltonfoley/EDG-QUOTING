@@ -4,10 +4,12 @@ import { AppHeader } from "@/components/app-header";
 import { QuoteHeader } from "@/components/quote-header";
 import { LineItemsTable } from "@/components/line-items-table";
 import { QuoteSummary } from "@/components/quote-summary";
+import { Button } from "@/components/ui/button";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { generateQuoteNumber } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Save } from "lucide-react";
 import type { QuoteWithDetails } from "@shared/schema";
 
 export default function QuoteBuilder() {
@@ -184,7 +186,35 @@ export default function QuoteBuilder() {
               quote={currentQuote}
               onUpdateQuote={handleUpdateQuote}
             />
+
+            {/* Additional Save Button at Bottom */}
+            <div className="flex justify-end mt-8 pb-8">
+              <Button 
+                type="submit" 
+                form="quote-form" 
+                className="bg-edg-black hover:bg-edg-grey text-edg-white px-8 py-3 text-lg"
+                disabled={createQuoteMutation.isPending || updateQuoteMutation.isPending}
+              >
+                <Save className="mr-2 h-5 w-5" />
+                {isNewQuote ? "Save New Quote" : "Save Changes"}
+              </Button>
+            </div>
           </>
+        )}
+
+        {/* Save Button for New Quotes (when no line items yet) */}
+        {isNewQuote && currentQuote.id === 0 && (
+          <div className="flex justify-center mt-8">
+            <Button 
+              type="submit" 
+              form="quote-form" 
+              className="bg-edg-black hover:bg-edg-grey text-edg-white px-8 py-3 text-lg"
+              disabled={createQuoteMutation.isPending}
+            >
+              <Save className="mr-2 h-5 w-5" />
+              Create Quote
+            </Button>
+          </div>
         )}
       </div>
     </div>
