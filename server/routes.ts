@@ -179,6 +179,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // DocuSign integration routes
+  app.get("/api/docusign/redirect-info", async (req, res) => {
+    try {
+      const host = req.get('host');
+      const protocol = host?.includes('replit.dev') ? 'https' : req.protocol;
+      const baseUrl = `${protocol}://${host}`;
+      const redirectUri = `${baseUrl}/api/docusign/callback`;
+      
+      res.json({ 
+        redirectUri,
+        instructions: "Add this URL to your DocuSign app's redirect URIs in the developer console"
+      });
+    } catch (error) {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
   app.get("/api/docusign/status", async (req, res) => {
     try {
       const token = await storage.getDocusignToken();
@@ -202,7 +218,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/docusign/auth-url", async (req, res) => {
     try {
-      const baseUrl = `${req.protocol}://${req.get('host')}`;
+      // Use the actual host from the request, which will be the Replit URL
+      const host = req.get('host');
+      const protocol = host?.includes('replit.dev') ? 'https' : req.protocol;
+      const baseUrl = `${protocol}://${host}`;
       const redirectUri = `${baseUrl}/api/docusign/callback`;
       
       const authUrl = `https://account-d.docusign.com/oauth/auth?` + 
@@ -224,7 +243,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).send('Authorization code missing');
       }
 
-      const baseUrl = `${req.protocol}://${req.get('host')}`;
+      // Use the actual host from the request, which will be the Replit URL
+      const host = req.get('host');
+      const protocol = host?.includes('replit.dev') ? 'https' : req.protocol;
+      const baseUrl = `${protocol}://${host}`;
       const redirectUri = `${baseUrl}/api/docusign/callback`;
 
       // Exchange authorization code for access token
