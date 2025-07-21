@@ -181,13 +181,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // DocuSign integration routes
   app.get("/api/docusign/status", async (req, res) => {
     try {
-      // Check if DocuSign is connected (placeholder implementation)
-      // In a real implementation, this would check stored tokens/credentials
-      res.json({ 
-        connected: false,
-        accountId: null,
-        userName: null 
-      });
+      const token = await storage.getDocusignToken();
+      if (token && new Date() < token.expiresAt) {
+        res.json({ 
+          connected: true,
+          accountId: token.accountId,
+          userName: token.userName 
+        });
+      } else {
+        res.json({ 
+          connected: false,
+          accountId: null,
+          userName: null 
+        });
+      }
     } catch (error) {
       res.status(500).json({ message: "Internal server error" });
     }
@@ -195,20 +202,110 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/docusign/auth-url", async (req, res) => {
     try {
-      // In a real implementation, this would generate the actual DocuSign OAuth URL
-      // For now, we'll return a placeholder URL that shows the integration needs setup
-      res.json({ 
-        authUrl: `data:text/html,<html><body><h1>DocuSign Setup Required</h1><p>To enable DocuSign integration, please configure your DocuSign API credentials in the application settings.</p><script>setTimeout(() => window.close(), 3000);</script></body></html>`,
-        message: "DocuSign integration requires API credentials to be configured"
-      });
+      const baseUrl = `${req.protocol}://${req.get('host')}`;
+      const redirectUri = `${baseUrl}/api/docusign/callback`;
+      
+      const authUrl = `https://account-d.docusign.com/oauth/auth?` + 
+        `response_type=code&` +
+        `scope=signature%20impersonation&` +
+        `client_id=${process.env.DOCUSIGN_INTEGRATION_KEY}&` +
+        `redirect_uri=${encodeURIComponent(redirectUri)}`;
+      
+      res.json({ authUrl });
     } catch (error) {
       res.status(500).json({ message: "Internal server error" });
     }
   });
 
+  app.get("/api/docusign/callback", async (req, res) => {
+    try {
+      const { code } = req.query;
+      if (!code) {
+        return res.status(400).send('Authorization code missing');
+      }
+
+      const baseUrl = `${req.protocol}://${req.get('host')}`;
+      const redirectUri = `${baseUrl}/api/docusign/callback`;
+
+      // Exchange authorization code for access token
+      const tokenResponse = await fetch('https://account-d.docusign.com/oauth/token', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Authorization': `Basic ${Buffer.from(`${process.env.DOCUSIGN_INTEGRATION_KEY}:${process.env.DOCUSIGN_SECRET_KEY}`).toString('base64')}`
+        },
+        body: new URLSearchParams({
+          grant_type: 'authorization_code',
+          code: code as string,
+          redirect_uri: redirectUri
+        })
+      });
+
+      if (!tokenResponse.ok) {
+        throw new Error('Failed to exchange authorization code');
+      }
+
+      const tokenData = await tokenResponse.json();
+
+      // Get user info
+      const userInfoResponse = await fetch('https://account-d.docusign.com/oauth/userinfo', {
+        headers: {
+          'Authorization': `Bearer ${tokenData.access_token}`
+        }
+      });
+
+      if (!userInfoResponse.ok) {
+        throw new Error('Failed to get user info');
+      }
+
+      const userInfo = await userInfoResponse.json();
+      
+      // Store tokens in database
+      await storage.createDocusignToken({
+        accessToken: tokenData.access_token,
+        refreshToken: tokenData.refresh_token,
+        accountId: userInfo.accounts[0]?.accountId || '',
+        userName: userInfo.name || userInfo.email,
+        expiresAt: new Date(Date.now() + (tokenData.expires_in * 1000))
+      });
+
+      // Close the popup window
+      res.send(`
+        <html>
+          <body>
+            <h2>DocuSign Connected Successfully!</h2>
+            <p>You can now close this window.</p>
+            <script>
+              setTimeout(() => {
+                window.close();
+              }, 2000);
+            </script>
+          </body>
+        </html>
+      `);
+    } catch (error) {
+      console.error('DocuSign callback error:', error);
+      res.status(500).send(`
+        <html>
+          <body>
+            <h2>DocuSign Connection Failed</h2>
+            <p>There was an error connecting to DocuSign. Please try again.</p>
+            <script>
+              setTimeout(() => {
+                window.close();
+              }, 3000);
+            </script>
+          </body>
+        </html>
+      `);
+    }
+  });
+
   app.post("/api/docusign/disconnect", async (req, res) => {
     try {
-      // In a real implementation, this would revoke tokens and clear stored credentials
+      // Clear stored tokens from database
+      await storage.deleteDocusignToken();
+      
       res.json({ 
         message: "DocuSign disconnected successfully",
         connected: false
