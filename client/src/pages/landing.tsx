@@ -4,7 +4,7 @@ import { Building2, ClipboardList, FileText, Users } from "lucide-react";
 
 export default function Landing() {
   const handleLogin = () => {
-    window.location.href = "/api/login";
+    window.location.href = "/auth";
   };
 
   return (
