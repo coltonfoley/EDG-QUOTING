@@ -1,4 +1,4 @@
-import { customers, quotes, lineItems, products, docusignTokens, type Customer, type Quote, type LineItem, type Product, type DocusignToken, type InsertCustomer, type InsertQuote, type InsertLineItem, type InsertProduct, type InsertDocusignToken, type QuoteWithDetails } from "@shared/schema";
+import { customers, quotes, lineItems, products, type Customer, type Quote, type LineItem, type Product, type InsertCustomer, type InsertQuote, type InsertLineItem, type InsertProduct, type QuoteWithDetails } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc } from "drizzle-orm";
 
@@ -31,10 +31,7 @@ export interface IStorage {
   deleteLineItem(id: number): Promise<boolean>;
   deleteLineItemsByQuoteId(quoteId: number): Promise<boolean>;
 
-  // DocuSign token methods
-  getDocusignToken(): Promise<DocusignToken | undefined>;
-  createDocusignToken(token: InsertDocusignToken): Promise<DocusignToken>;
-  deleteDocusignToken(): Promise<boolean>;
+
 }
 
 export class MemStorage implements IStorage {
@@ -183,18 +180,7 @@ export class MemStorage implements IStorage {
     return true;
   }
 
-  // DocuSign token methods (placeholder for MemStorage)
-  async getDocusignToken(): Promise<DocusignToken | undefined> {
-    return undefined;
-  }
 
-  async createDocusignToken(insertToken: InsertDocusignToken): Promise<DocusignToken> {
-    throw new Error("DocuSign tokens not supported in MemStorage");
-  }
-
-  async deleteDocusignToken(): Promise<boolean> {
-    return true;
-  }
 }
 
 export class DatabaseStorage implements IStorage {
@@ -354,27 +340,7 @@ export class DatabaseStorage implements IStorage {
     return (result.rowCount || 0) > 0;
   }
 
-  // DocuSign token methods
-  async getDocusignToken(): Promise<DocusignToken | undefined> {
-    const [token] = await db.select().from(docusignTokens).orderBy(desc(docusignTokens.createdAt)).limit(1);
-    return token || undefined;
-  }
 
-  async createDocusignToken(insertToken: InsertDocusignToken): Promise<DocusignToken> {
-    // First, delete any existing tokens to ensure only one active token
-    await db.delete(docusignTokens);
-    
-    const [token] = await db
-      .insert(docusignTokens)
-      .values(insertToken)
-      .returning();
-    return token;
-  }
-
-  async deleteDocusignToken(): Promise<boolean> {
-    const result = await db.delete(docusignTokens);
-    return (result.rowCount || 0) > 0;
-  }
 }
 
 export const storage = new DatabaseStorage();
