@@ -36,7 +36,7 @@ export function AppHeader() {
                   ? 'text-edg-teal border-b-2 border-edg-teal pb-4' 
                   : 'text-edg-grey'
               }`}>
-                Dashboard
+                Home
               </Link>
               <Link href="/quotes" className={`text-sm font-medium transition-colors hover:text-edg-teal ${
                 location.startsWith('/quotes')
