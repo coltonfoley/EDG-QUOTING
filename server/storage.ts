@@ -1,4 +1,4 @@
-import { customers, quotes, lineItems, products, users, type Customer, type Quote, type LineItem, type Product, type InsertCustomer, type InsertQuote, type InsertLineItem, type InsertProduct, type QuoteWithDetails, type User, type UpsertUser } from "@shared/schema";
+import { customers, quotes, lineItems, products, users, type Customer, type Quote, type LineItem, type Product, type User, type InsertCustomer, type InsertQuote, type InsertLineItem, type InsertProduct, type InsertUser, type QuoteWithDetails } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc } from "drizzle-orm";
 
@@ -31,10 +31,13 @@ export interface IStorage {
   deleteLineItem(id: number): Promise<boolean>;
   deleteLineItemsByQuoteId(quoteId: number): Promise<boolean>;
 
-  // User methods for authentication
-  // (IMPORTANT) these user operations are mandatory for Replit Auth.
-  getUser(id: string): Promise<User | undefined>;
-  upsertUser(user: UpsertUser): Promise<User>;
+  // User authentication methods
+  getUser(id: number): Promise<User | undefined>;
+  getUserByUsername(username: string): Promise<User | undefined>;
+  createUser(user: InsertUser): Promise<User>;
+  
+  // Session store for authentication
+  sessionStore: any;
 }
 
 export class MemStorage implements IStorage {
@@ -343,27 +346,33 @@ export class DatabaseStorage implements IStorage {
     return (result.rowCount || 0) > 0;
   }
 
-  // User methods for authentication
-  // (IMPORTANT) these user operations are mandatory for Replit Auth.
-  async getUser(id: string): Promise<User | undefined> {
+  // User authentication methods
+  async getUser(id: number): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.id, id));
     return user || undefined;
   }
 
-  async upsertUser(userData: UpsertUser): Promise<User> {
+  async getUserByUsername(username: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.username, username));
+    return user || undefined;
+  }
+
+  async createUser(insertUser: InsertUser): Promise<User> {
     const [user] = await db
       .insert(users)
-      .values(userData)
-      .onConflictDoUpdate({
-        target: users.id,
-        set: {
-          ...userData,
-          updatedAt: new Date(),
-        },
-      })
+      .values(insertUser)
       .returning();
     return user;
   }
+
+  sessionStore = (() => {
+    const pgStore = require('connect-pg-simple')(require('express-session'));
+    return new pgStore({
+      conString: process.env.DATABASE_URL,
+      createTableIfMissing: false,
+      tableName: "sessions",
+    });
+  })()
 }
 
 export const storage = new DatabaseStorage();
