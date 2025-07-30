@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertCustomerSchema, insertQuoteSchema, insertLineItemSchema, insertProductSchema } from "@shared/schema";
+import { insertCustomerSchema, insertQuoteSchema, insertLineItemSchema, insertProductSchema, insertContractTemplateSchema } from "@shared/schema";
 import { z } from "zod";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 
@@ -362,6 +362,147 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error deleting user:", error);
       res.status(500).json({ message: "Failed to delete user" });
+    }
+  });
+
+  // Contract Template routes
+  app.get('/api/contract-templates', isAuthenticated, async (req, res) => {
+    try {
+      const templates = await storage.getAllContractTemplates();
+      res.json(templates);
+    } catch (error) {
+      console.error("Error fetching contract templates:", error);
+      res.status(500).json({ message: "Failed to fetch contract templates" });
+    }
+  });
+
+  app.get('/api/contract-templates/:id', isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const template = await storage.getContractTemplate(id);
+      if (!template) {
+        return res.status(404).json({ message: "Contract template not found" });
+      }
+      res.json(template);
+    } catch (error) {
+      console.error("Error fetching contract template:", error);
+      res.status(500).json({ message: "Failed to fetch contract template" });
+    }
+  });
+
+  app.post('/api/contract-templates', isAuthenticated, async (req, res) => {
+    try {
+      const currentUser = await storage.getUser(req.user.id);
+      if (currentUser?.role !== 'admin') {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+
+      const validatedData = insertContractTemplateSchema.parse(req.body);
+      const template = await storage.createContractTemplate(validatedData);
+      res.status(201).json(template);
+    } catch (error) {
+      console.error("Error creating contract template:", error);
+      res.status(500).json({ message: "Failed to create contract template" });
+    }
+  });
+
+  app.put('/api/contract-templates/:id', isAuthenticated, async (req, res) => {
+    try {
+      const currentUser = await storage.getUser(req.user.id);
+      if (currentUser?.role !== 'admin') {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+
+      const id = parseInt(req.params.id);
+      const validatedData = insertContractTemplateSchema.partial().parse(req.body);
+      const template = await storage.updateContractTemplate(id, validatedData);
+      
+      if (!template) {
+        return res.status(404).json({ message: "Contract template not found" });
+      }
+      
+      res.json(template);
+    } catch (error) {
+      console.error("Error updating contract template:", error);
+      res.status(500).json({ message: "Failed to update contract template" });
+    }
+  });
+
+  app.delete('/api/contract-templates/:id', isAuthenticated, async (req, res) => {
+    try {
+      const currentUser = await storage.getUser(req.user.id);
+      if (currentUser?.role !== 'admin') {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+
+      const id = parseInt(req.params.id);
+      const success = await storage.deleteContractTemplate(id);
+      
+      if (!success) {
+        return res.status(404).json({ message: "Contract template not found" });
+      }
+      
+      res.json({ message: "Contract template deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting contract template:", error);
+      res.status(500).json({ message: "Failed to delete contract template" });
+    }
+  });
+
+  // Quote signature routes
+  app.post('/api/quotes/:id/sign-issuer', isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const { signature } = req.body;
+      
+      if (!signature) {
+        return res.status(400).json({ message: "Signature name required" });
+      }
+
+      const quote = await storage.updateQuote(id, {
+        issuerSignature: signature,
+        issuerSignatureDate: new Date(),
+        signatureStatus: 'issuer_signed'
+      });
+
+      if (!quote) {
+        return res.status(404).json({ message: "Quote not found" });
+      }
+
+      res.json(quote);
+    } catch (error) {
+      console.error("Error signing quote as issuer:", error);
+      res.status(500).json({ message: "Failed to sign quote" });
+    }
+  });
+
+  app.post('/api/quotes/:id/sign-customer', async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const { signature } = req.body;
+      
+      if (!signature) {
+        return res.status(400).json({ message: "Signature name required" });
+      }
+
+      // Get current quote to check issuer signature status
+      const currentQuote = await storage.getQuote(id);
+      if (!currentQuote) {
+        return res.status(404).json({ message: "Quote not found" });
+      }
+
+      const newSignatureStatus = currentQuote.issuerSignature ? 'fully_signed' : 'customer_signed';
+
+      const quote = await storage.updateQuote(id, {
+        customerSignature: signature,
+        customerSignatureDate: new Date(),
+        signatureStatus: newSignatureStatus
+      });
+
+      res.json(quote);
+    } catch (error) {
+      console.error("Error signing quote as customer:", error);
+      res.status(500).json({ message: "Failed to sign quote" });
     }
   });
 

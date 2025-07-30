@@ -47,7 +47,26 @@ export const quotes = pgTable("quotes", {
   taxRate: decimal("tax_rate", { precision: 5, scale: 2 }).default("0"),
   discount: decimal("discount", { precision: 5, scale: 2 }).default("0"),
   status: text("status").notNull().default("draft"), // draft, sent, approved, rejected
+  // Contract and signature fields
+  contractTemplateId: integer("contract_template_id"), // reference to contract template
+  customContractTerms: text("custom_contract_terms"), // custom contract text for this quote
+  issuerSignature: text("issuer_signature"), // issuer signature (name)
+  issuerSignatureDate: timestamp("issuer_signature_date"),
+  customerSignature: text("customer_signature"), // customer signature (name)
+  customerSignatureDate: timestamp("customer_signature_date"),
+  signatureStatus: text("signature_status").notNull().default("pending"), // pending, issuer_signed, customer_signed, fully_signed
   createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Contract templates for reusable contract terms
+export const contractTemplates = pgTable("contract_templates", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  title: text("title").notNull().default("Service Agreement"),
+  terms: text("terms").notNull(),
+  isDefault: boolean("is_default").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 export const products = pgTable("products", {
@@ -100,21 +119,30 @@ export const insertLineItemSchema = createInsertSchema(lineItems).omit({
   markupValue: z.union([z.string(), z.number()]).transform(val => typeof val === 'string' ? val : val.toString()),
 });
 
+export const insertContractTemplateSchema = createInsertSchema(contractTemplates).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 
 
 export type Customer = typeof customers.$inferSelect;
 export type Quote = typeof quotes.$inferSelect;
 export type Product = typeof products.$inferSelect;
 export type LineItem = typeof lineItems.$inferSelect;
+export type ContractTemplate = typeof contractTemplates.$inferSelect;
 
 export type InsertCustomer = z.infer<typeof insertCustomerSchema>;
 export type InsertQuote = z.infer<typeof insertQuoteSchema>;
 export type InsertProduct = z.infer<typeof insertProductSchema>;
 export type InsertLineItem = z.infer<typeof insertLineItemSchema>;
+export type InsertContractTemplate = z.infer<typeof insertContractTemplateSchema>;
 
 export type QuoteWithDetails = Quote & {
   customer: Customer;
   lineItems: LineItem[];
+  contractTemplate?: ContractTemplate;
 };
 
 export const insertUserSchema = createInsertSchema(users).omit({

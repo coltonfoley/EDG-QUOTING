@@ -400,14 +400,80 @@ export function QuotePDFTemplate({ quote, isOpen, onClose }: QuotePDFTemplatePro
                 </div>
               )}
 
-              <div>
-                <h3 className="text-lg font-semibold text-edg-black mb-3">Terms & Conditions:</h3>
-                <div className="text-sm space-y-2">
-                  <div><strong>Payment Terms:</strong> {quoteTerms.paymentTerms}</div>
-                  <div><strong>Warranty:</strong> {quoteTerms.warranty}</div>
-                  <div><strong>Additional Notes:</strong> {quoteTerms.additionalNotes}</div>
+              {/* Contract Terms Section */}
+              {(quote.contractTemplate || quote.customContractTerms) ? (
+                <div className="space-y-4">
+                  <h3 className="text-xl font-bold text-edg-black border-b-2 border-edg-teal pb-2">
+                    {quote.contractTemplate?.title || 'Contract Terms'}
+                  </h3>
+                  <div className="text-sm text-gray-800 leading-relaxed whitespace-pre-line">
+                    {quote.customContractTerms || quote.contractTemplate?.terms}
+                  </div>
+                  
+                  {/* Signature Section */}
+                  <div className="mt-8 space-y-6 border-t border-gray-300 pt-6">
+                    <h4 className="text-lg font-semibold text-edg-black">Agreement Signatures</h4>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                      {/* Issuer Signature */}
+                      <div className="space-y-3">
+                        <h5 className="font-semibold text-edg-black">EDG Patio & Shade (Issuer)</h5>
+                        <div className="border-b-2 border-gray-400 pb-2 min-h-[40px] flex items-end">
+                          {quote.issuerSignature && (
+                            <span className="italic text-gray-700 text-lg">{quote.issuerSignature}</span>
+                          )}
+                        </div>
+                        <div className="text-xs text-gray-600">
+                          <div>Authorized Signature</div>
+                          {quote.issuerSignatureDate && (
+                            <div>Date: {new Date(quote.issuerSignatureDate).toLocaleDateString()}</div>
+                          )}
+                        </div>
+                      </div>
+                      
+                      {/* Customer Signature */}
+                      <div className="space-y-3">
+                        <h5 className="font-semibold text-edg-black">Customer Acceptance</h5>
+                        <div className="border-b-2 border-gray-400 pb-2 min-h-[40px] flex items-end">
+                          {quote.customerSignature && (
+                            <span className="italic text-gray-700 text-lg">{quote.customerSignature}</span>
+                          )}
+                        </div>
+                        <div className="text-xs text-gray-600">
+                          <div>Customer Signature</div>
+                          {quote.customerSignatureDate && (
+                            <div>Date: {new Date(quote.customerSignatureDate).toLocaleDateString()}</div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Signature Status */}
+                    <div className="text-center p-3 bg-gray-50 rounded">
+                      <div className="text-sm">
+                        <span className="font-medium">Document Status: </span>
+                        <span className={`capitalize font-semibold ${
+                          quote.signatureStatus === 'fully_signed' ? 'text-green-600' :
+                          quote.signatureStatus === 'pending' ? 'text-yellow-600' :
+                          'text-blue-600'
+                        }`}>
+                          {quote.signatureStatus?.replace('_', ' ')}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-              </div>
+              ) : (
+                // Legacy Terms & Conditions for quotes without contracts
+                <div>
+                  <h3 className="text-lg font-semibold text-edg-black mb-3">Terms & Conditions:</h3>
+                  <div className="text-sm space-y-2">
+                    <div><strong>Payment Terms:</strong> {quoteTerms.paymentTerms}</div>
+                    <div><strong>Warranty:</strong> {quoteTerms.warranty}</div>
+                    <div><strong>Additional Notes:</strong> {quoteTerms.additionalNotes}</div>
+                  </div>
+                </div>
+              )}
 
               <div className="border-t border-gray-300 pt-6 text-center text-sm text-gray-600">
                 <p>Thank you for considering {companyInfo.name} for your construction project.</p>
