@@ -190,6 +190,21 @@ export class MemStorage implements IStorage {
 }
 
 export class DatabaseStorage implements IStorage {
+  sessionStore: any;
+
+  constructor() {
+    // Import session store with dynamic import to work with ES modules
+    import('connect-pg-simple').then(({ default: connectPg }) => {
+      import('express-session').then(({ default: session }) => {
+        const PostgresSessionStore = connectPg(session);
+        this.sessionStore = new PostgresSessionStore({
+          conString: process.env.DATABASE_URL,
+          createTableIfMissing: false,
+          tableName: "sessions",
+        });
+      });
+    });
+  }
   async getCustomer(id: number): Promise<Customer | undefined> {
     const [user] = await db.select().from(customers).where(eq(customers.id, id));
     return user || undefined;
@@ -365,14 +380,7 @@ export class DatabaseStorage implements IStorage {
     return user;
   }
 
-  sessionStore = (() => {
-    const pgStore = require('connect-pg-simple')(require('express-session'));
-    return new pgStore({
-      conString: process.env.DATABASE_URL,
-      createTableIfMissing: false,
-      tableName: "sessions",
-    });
-  })()
+  sessionStore: any
 }
 
 export const storage = new DatabaseStorage();

@@ -1,10 +1,24 @@
-import { HardHat, Bell } from "lucide-react";
+import { HardHat, Bell, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { 
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Link, useLocation } from "wouter";
+import { useAuth } from "@/hooks/useAuth";
 
 export function AppHeader() {
   const [location] = useLocation();
+  const { user, logoutMutation } = useAuth();
+
+  const handleLogout = () => {
+    logoutMutation.mutate();
+  };
   
   return (
     <header className="bg-white shadow-sm border-b border-gray-200">
@@ -37,13 +51,40 @@ export function AppHeader() {
             <Button variant="ghost" size="icon" className="text-edg-grey hover:text-edg-black">
               <Bell className="h-5 w-5" />
             </Button>
-            <div className="flex items-center space-x-2">
-              <Avatar className="h-8 w-8">
-                <AvatarImage src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-4.0.3&w=100&h=100&fit=crop&crop=face" alt="User avatar" />
-                <AvatarFallback className="bg-edg-teal text-edg-black font-medium">EDG</AvatarFallback>
-              </Avatar>
-              <span className="text-sm font-medium text-edg-black">EDG Team</span>
-            </div>
+            
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" className="flex items-center space-x-2 hover:bg-gray-50">
+                  <Avatar className="h-8 w-8">
+                    <AvatarFallback className="bg-edg-teal text-edg-black font-medium text-xs">
+                      {user?.firstName?.[0]}{user?.lastName?.[0] || user?.username?.[0]}
+                    </AvatarFallback>
+                  </Avatar>
+                  <span className="text-sm font-medium text-edg-black">
+                    {user?.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : user?.username}
+                  </span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel>
+                  <div className="flex flex-col space-y-1">
+                    <p className="text-sm font-medium leading-none">
+                      {user?.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : user?.username}
+                    </p>
+                    {user?.email && (
+                      <p className="text-xs leading-none text-gray-600">
+                        {user.email}
+                      </p>
+                    )}
+                  </div>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={handleLogout} className="text-red-600">
+                  <LogOut className="mr-2 h-4 w-4" />
+                  <span>Log out</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       </div>
