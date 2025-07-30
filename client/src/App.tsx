@@ -3,19 +3,31 @@ import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { useAuth } from "@/hooks/useAuth";
 import NotFound from "@/pages/not-found";
 import Quotes from "@/pages/quotes";
 import QuoteBuilder from "@/pages/quote-builder";
 import Products from "@/pages/products";
+import Landing from "@/pages/landing";
+import Home from "@/pages/home";
 
 function Router() {
+  const { isAuthenticated, isLoading } = useAuth();
+
   return (
     <Switch>
-      <Route path="/" component={Quotes} />
-      <Route path="/quotes" component={Quotes} />
-      <Route path="/quotes/new" component={QuoteBuilder} />
-      <Route path="/quotes/:id" component={QuoteBuilder} />
-      <Route path="/products" component={Products} />
+      {isLoading || !isAuthenticated ? (
+        <Route path="/" component={Landing} />
+      ) : (
+        <>
+          <Route path="/" component={Home} />
+          <Route path="/quotes" component={Quotes} />
+          <Route path="/quote-builder" component={QuoteBuilder} />
+          <Route path="/quotes/new" component={QuoteBuilder} />
+          <Route path="/quotes/:id" component={QuoteBuilder} />
+          <Route path="/products" component={Products} />
+        </>
+      )}
       <Route component={NotFound} />
     </Switch>
   );

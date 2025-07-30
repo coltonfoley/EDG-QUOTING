@@ -3,10 +3,26 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertCustomerSchema, insertQuoteSchema, insertLineItemSchema, insertProductSchema } from "@shared/schema";
 import { z } from "zod";
+import { setupAuth, isAuthenticated } from "./replitAuth";
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Customer routes
-  app.get("/api/customers/:id", async (req, res) => {
+  // Auth middleware
+  await setupAuth(app);
+
+  // Auth routes
+  app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      res.json(user);
+    } catch (error) {
+      console.error("Error fetching user:", error);
+      res.status(500).json({ message: "Failed to fetch user" });
+    }
+  });
+
+  // Customer routes (protected)
+  app.get("/api/customers/:id", isAuthenticated, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const customer = await storage.getCustomer(id);
@@ -19,7 +35,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/customers", async (req, res) => {
+  app.post("/api/customers", isAuthenticated, async (req, res) => {
     try {
       const customerData = insertCustomerSchema.parse(req.body);
       
@@ -39,7 +55,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/customers/:id", async (req, res) => {
+  app.put("/api/customers/:id", isAuthenticated, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const customerData = insertCustomerSchema.partial().parse(req.body);
@@ -56,8 +72,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Quote routes
-  app.get("/api/quotes", async (req, res) => {
+  // Quote routes (protected)
+  app.get("/api/quotes", isAuthenticated, async (req, res) => {
     try {
       const quotes = await storage.getAllQuotes();
       res.json(quotes);
@@ -66,7 +82,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/quotes/:id", async (req, res) => {
+  app.get("/api/quotes/:id", isAuthenticated, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const quote = await storage.getQuoteWithDetails(id);
@@ -79,7 +95,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/quotes", async (req, res) => {
+  app.post("/api/quotes", isAuthenticated, async (req, res) => {
     try {
       const quoteData = insertQuoteSchema.parse(req.body);
       const quote = await storage.createQuote(quoteData);
@@ -92,7 +108,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/quotes/:id", async (req, res) => {
+  app.put("/api/quotes/:id", isAuthenticated, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const quoteData = insertQuoteSchema.partial().parse(req.body);
@@ -109,7 +125,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/quotes/:id", async (req, res) => {
+  app.delete("/api/quotes/:id", isAuthenticated, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const deleted = await storage.deleteQuote(id);
@@ -122,8 +138,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Line item routes
-  app.get("/api/quotes/:quoteId/line-items", async (req, res) => {
+  // Line item routes (protected)
+  app.get("/api/quotes/:quoteId/line-items", isAuthenticated, async (req, res) => {
     try {
       const quoteId = parseInt(req.params.quoteId);
       const lineItems = await storage.getLineItemsByQuoteId(quoteId);
@@ -133,7 +149,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/quotes/:quoteId/line-items", async (req, res) => {
+  app.post("/api/quotes/:quoteId/line-items", isAuthenticated, async (req, res) => {
     try {
       const quoteId = parseInt(req.params.quoteId);
       const lineItemData = insertLineItemSchema.parse({ ...req.body, quoteId });
@@ -148,7 +164,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/line-items/:id", async (req, res) => {
+  app.put("/api/line-items/:id", isAuthenticated, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const lineItemData = insertLineItemSchema.partial().parse(req.body);
@@ -165,7 +181,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/line-items/:id", async (req, res) => {
+  app.delete("/api/line-items/:id", isAuthenticated, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const deleted = await storage.deleteLineItem(id);
@@ -179,7 +195,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // PDF template route - now handled client-side
-  app.get("/api/quotes/:id/pdf-template", async (req, res) => {
+  app.get("/api/quotes/:id/pdf-template", isAuthenticated, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const quote = await storage.getQuoteWithDetails(id);
@@ -194,8 +210,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Product catalog routes
-  app.get("/api/products", async (req, res) => {
+  // Product catalog routes (protected)
+  app.get("/api/products", isAuthenticated, async (req, res) => {
     try {
       const products = await storage.getAllProducts();
       res.json(products);
@@ -204,7 +220,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/products/:id", async (req, res) => {
+  app.get("/api/products/:id", isAuthenticated, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const product = await storage.getProduct(id);
@@ -217,7 +233,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/products", async (req, res) => {
+  app.post("/api/products", isAuthenticated, async (req, res) => {
     try {
       const productData = insertProductSchema.parse(req.body);
       const product = await storage.createProduct(productData);
@@ -230,7 +246,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/products/:id", async (req, res) => {
+  app.put("/api/products/:id", isAuthenticated, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const productData = insertProductSchema.partial().parse(req.body);
@@ -247,7 +263,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/products/:id", async (req, res) => {
+  app.delete("/api/products/:id", isAuthenticated, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const deleted = await storage.deleteProduct(id);
