@@ -52,6 +52,15 @@ export function AppHeader() {
               }`}>
                 Products
               </Link>
+              {user?.role === 'admin' && (
+                <Link href="/admin" className={`text-sm font-medium transition-colors hover:text-edg-teal ${
+                  location.startsWith('/admin') 
+                    ? 'text-edg-teal border-b-2 border-edg-teal pb-4' 
+                    : 'text-edg-grey'
+                }`}>
+                  Admin
+                </Link>
+              )}
             </nav>
           </div>
           <div className="flex items-center space-x-4">
