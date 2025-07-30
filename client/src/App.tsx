@@ -15,12 +15,17 @@ import AuthPage from "@/pages/auth-page";
 function Router() {
   const { isAuthenticated, isLoading } = useAuth();
 
+  if (isLoading) {
+    return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+  }
+
   return (
     <Switch>
-      {isLoading || !isAuthenticated ? (
+      {!isAuthenticated ? (
         <>
           <Route path="/" component={Landing} />
           <Route path="/auth" component={AuthPage} />
+          <Route component={Landing} />
         </>
       ) : (
         <>
@@ -30,9 +35,9 @@ function Router() {
           <Route path="/quotes/new" component={QuoteBuilder} />
           <Route path="/quotes/:id" component={QuoteBuilder} />
           <Route path="/products" component={Products} />
+          <Route component={Home} />
         </>
       )}
-      <Route component={NotFound} />
     </Switch>
   );
 }
