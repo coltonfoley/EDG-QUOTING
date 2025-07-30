@@ -315,6 +315,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.put('/api/admin/users/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const currentUser = await storage.getUser(req.user.id);
+      if (currentUser?.role !== 'admin') {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+
+      const userId = parseInt(req.params.id);
+      const updateData = req.body;
+
+      // If updating username, check for conflicts
+      if (updateData.username) {
+        const existingUser = await storage.getUserByUsername(updateData.username);
+        if (existingUser && existingUser.id !== userId) {
+          return res.status(400).json({ message: "Username already exists" });
+        }
+      }
+
+      const updatedUser = await storage.updateUser(userId, updateData);
+      if (!updatedUser) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      res.json(updatedUser);
+    } catch (error) {
+      console.error("Error updating user:", error);
+      res.status(500).json({ message: "Failed to update user" });
+    }
+  });
+
   app.delete('/api/admin/users/:id', isAuthenticated, async (req: any, res) => {
     try {
       const currentUser = await storage.getUser(req.user.id);
