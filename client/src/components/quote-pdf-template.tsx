@@ -71,13 +71,16 @@ export function QuotePDFTemplate({ quote, isOpen, onClose }: QuotePDFTemplatePro
       if (!element) throw new Error('PDF content not found');
 
       const canvas = await html2canvas(element, {
-        scale: 2,
+        scale: 1, // Reduced from 2 to 1 for smaller file size
         useCORS: true,
         allowTaint: true,
         backgroundColor: '#ffffff',
+        windowWidth: 1200, // Fixed width for consistency
+        windowHeight: element.scrollHeight,
       });
 
-      const imgData = canvas.toDataURL('image/png');
+      // Convert to JPEG with compression for smaller file size
+      const imgData = canvas.toDataURL('image/jpeg', 0.85); // 85% quality
       const pdf = new jsPDF('p', 'mm', 'a4');
       const imgWidth = 210;
       const pageHeight = 295;
@@ -86,13 +89,13 @@ export function QuotePDFTemplate({ quote, isOpen, onClose }: QuotePDFTemplatePro
 
       let position = 0;
 
-      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+      pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
       heightLeft -= pageHeight;
 
       while (heightLeft >= 0) {
         position = heightLeft - imgHeight;
         pdf.addPage();
-        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+        pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
         heightLeft -= pageHeight;
       }
 
