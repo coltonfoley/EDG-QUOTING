@@ -95,6 +95,7 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+- July 30, 2025: Fixed homepage duplication issue by correcting router configuration - removed conflicting catch-all route
 - July 30, 2025: Completely removed DocuSign integration functionality per user request
 - June 27, 2025: Added company field to customer schema for business client tracking
 - June 27, 2025: Updated quote forms, tables, and PDFs to display company information
