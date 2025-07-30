@@ -322,13 +322,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Admin access required" });
       }
 
-      const userId = parseInt(req.params.id);
+      const userId = req.params.id; // Don't parse as int, keep as string/number as needed
       const updateData = req.body;
 
       // If updating username, check for conflicts
       if (updateData.username) {
         const existingUser = await storage.getUserByUsername(updateData.username);
-        if (existingUser && existingUser.id !== userId) {
+        if (existingUser && existingUser.id.toString() !== userId.toString()) {
           return res.status(400).json({ message: "Username already exists" });
         }
       }
@@ -352,8 +352,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Admin access required" });
       }
 
-      const userId = parseInt(req.params.id);
-      if (userId === req.user.id) {
+      const userId = req.params.id; // Don't parse as int, keep as string/number as needed
+      if (userId.toString() === req.user.id.toString()) {
         return res.status(400).json({ message: "Cannot delete your own account" });
       }
 
