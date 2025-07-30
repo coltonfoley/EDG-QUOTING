@@ -14,7 +14,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
-import { UserPlus, Shield, User as UserIcon, Trash2 } from "lucide-react";
+import { UserPlus, Shield, User as UserIcon, Trash2, Edit } from "lucide-react";
 import { z } from "zod";
 import type { User } from "@shared/schema";
 
@@ -27,13 +27,25 @@ const createUserSchema = z.object({
   role: z.enum(["user", "admin"]),
 });
 
+const editUserSchema = z.object({
+  username: z.string().min(3, "Username must be at least 3 characters"),
+  email: z.string().email("Invalid email address").optional().or(z.literal("")),
+  firstName: z.string().optional(),
+  lastName: z.string().optional(),
+  role: z.enum(["user", "admin"]),
+  password: z.string().min(6, "Password must be at least 6 characters").optional().or(z.literal("")),
+});
+
 type CreateUserData = z.infer<typeof createUserSchema>;
+type EditUserData = z.infer<typeof editUserSchema>;
 
 export default function AdminPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [showEditDialog, setShowEditDialog] = useState(false);
 
   // Check if user is admin
   if (!user || user.role !== "admin") {
@@ -69,6 +81,18 @@ export default function AdminPage() {
     },
   });
 
+  const editUserForm = useForm<EditUserData>({
+    resolver: zodResolver(editUserSchema),
+    defaultValues: {
+      username: "",
+      email: "",
+      firstName: "",
+      lastName: "",
+      role: "user",
+      password: "",
+    },
+  });
+
   const createUserMutation = useMutation({
     mutationFn: async (data: CreateUserData) => {
       const response = await apiRequest("POST", "/api/admin/users", data);
@@ -79,6 +103,31 @@ export default function AdminPage() {
       toast({ title: "User created successfully" });
       setShowCreateDialog(false);
       createUserForm.reset();
+    },
+    onError: (error: Error) => {
+      toast({ 
+        title: "Error", 
+        description: error.message, 
+        variant: "destructive" 
+      });
+    },
+  });
+
+  const editUserMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: EditUserData }) => {
+      // Filter out empty password
+      const updateData = { ...data };
+      if (!updateData.password || updateData.password === "") {
+        delete updateData.password;
+      }
+      const response = await apiRequest("PUT", `/api/admin/users/${id}`, updateData);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+      toast({ title: "User updated successfully" });
+      setShowEditDialog(false);
+      setEditingUser(null);
     },
     onError: (error: Error) => {
       toast({ 
@@ -113,6 +162,25 @@ export default function AdminPage() {
 
   const handleCreateUser = (data: CreateUserData) => {
     createUserMutation.mutate(data);
+  };
+
+  const handleEditUser = (data: EditUserData) => {
+    if (editingUser) {
+      editUserMutation.mutate({ id: editingUser.id, data });
+    }
+  };
+
+  const openEditDialog = (userToEdit: User) => {
+    setEditingUser(userToEdit);
+    editUserForm.reset({
+      username: userToEdit.username,
+      email: userToEdit.email || "",
+      firstName: userToEdit.firstName || "",
+      lastName: userToEdit.lastName || "",
+      role: userToEdit.role,
+      password: "",
+    });
+    setShowEditDialog(true);
   };
 
   const handleDeleteUser = (userId: number) => {
@@ -317,15 +385,25 @@ export default function AdminPage() {
                         {user.createdAt ? new Date(user.createdAt).toLocaleDateString() : '—'}
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDeleteUser(user.id)}
-                          disabled={user.id === user.id}
-                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        <div className="flex gap-1 justify-end">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => openEditDialog(user)}
+                            className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDeleteUser(user.id)}
+                            disabled={user.id === user.id}
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -334,6 +412,132 @@ export default function AdminPage() {
             )}
           </CardContent>
         </Card>
+
+        {/* Edit User Dialog */}
+        <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Edit User Account</DialogTitle>
+            </DialogHeader>
+            <Form {...editUserForm}>
+              <form onSubmit={editUserForm.handleSubmit(handleEditUser)} className="space-y-4">
+                <FormField
+                  control={editUserForm.control}
+                  name="username"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Username</FormLabel>
+                      <FormControl>
+                        <Input {...field} placeholder="Enter username" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={editUserForm.control}
+                    name="firstName"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>First Name</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="Optional" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={editUserForm.control}
+                    name="lastName"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Last Name</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="Optional" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <FormField
+                  control={editUserForm.control}
+                  name="email"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Email</FormLabel>
+                      <FormControl>
+                        <Input {...field} type="email" placeholder="Optional" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={editUserForm.control}
+                  name="role"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Role</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select role" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="user">User</SelectItem>
+                          <SelectItem value="admin">Admin</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={editUserForm.control}
+                  name="password"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>New Password (Optional)</FormLabel>
+                      <FormControl>
+                        <Input {...field} type="password" placeholder="Leave blank to keep current password" />
+                      </FormControl>
+                      <FormMessage />
+                      <p className="text-sm text-gray-500">
+                        Only enter a password if you want to change it
+                      </p>
+                    </FormItem>
+                  )}
+                />
+
+                <div className="flex justify-end gap-2 pt-4">
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    onClick={() => setShowEditDialog(false)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button 
+                    type="submit" 
+                    disabled={editUserMutation.isPending}
+                    className="bg-edg-black hover:bg-edg-grey text-white"
+                  >
+                    {editUserMutation.isPending ? "Updating..." : "Update User"}
+                  </Button>
+                </div>
+              </form>
+            </Form>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );
