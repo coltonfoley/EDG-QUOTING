@@ -47,15 +47,7 @@ export const lineItems = pgTable("line_items", {
   markupValue: decimal("markup_value", { precision: 10, scale: 2 }).notNull(),
 });
 
-export const docusignTokens = pgTable("docusign_tokens", {
-  id: serial("id").primaryKey(),
-  accessToken: text("access_token").notNull(),
-  refreshToken: text("refresh_token").notNull(),
-  accountId: text("account_id").notNull(),
-  userName: text("user_name").notNull(),
-  expiresAt: timestamp("expires_at").notNull(),
-  createdAt: timestamp("created_at").defaultNow(),
-});
+
 
 export const insertCustomerSchema = createInsertSchema(customers).omit({
   id: true,
@@ -82,22 +74,17 @@ export const insertLineItemSchema = createInsertSchema(lineItems).omit({
   markupValue: z.union([z.string(), z.number()]).transform(val => typeof val === 'string' ? val : val.toString()),
 });
 
-export const insertDocusignTokenSchema = createInsertSchema(docusignTokens).omit({
-  id: true,
-  createdAt: true,
-});
+
 
 export type Customer = typeof customers.$inferSelect;
 export type Quote = typeof quotes.$inferSelect;
 export type Product = typeof products.$inferSelect;
 export type LineItem = typeof lineItems.$inferSelect;
-export type DocusignToken = typeof docusignTokens.$inferSelect;
 
 export type InsertCustomer = z.infer<typeof insertCustomerSchema>;
 export type InsertQuote = z.infer<typeof insertQuoteSchema>;
 export type InsertProduct = z.infer<typeof insertProductSchema>;
 export type InsertLineItem = z.infer<typeof insertLineItemSchema>;
-export type InsertDocusignToken = z.infer<typeof insertDocusignTokenSchema>;
 export type InsertQuote = z.infer<typeof insertQuoteSchema>;
 
 export type Product = typeof products.$inferSelect;
