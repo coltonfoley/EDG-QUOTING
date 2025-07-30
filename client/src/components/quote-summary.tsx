@@ -1,15 +1,18 @@
 import { useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { FileText, Bookmark } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { FileText, Bookmark, Plus, Eye } from "lucide-react";
 import { formatCurrency, calculateQuoteTotals } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { QuotePDFTemplate } from "./quote-pdf-template";
-import type { QuoteWithDetails } from "@shared/schema";
+import type { QuoteWithDetails, ContractTemplate } from "@shared/schema";
+import { apiRequest } from "@/lib/queryClient";
 
 interface QuoteSummaryProps {
   quote: QuoteWithDetails;
@@ -38,6 +41,11 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
     },
   });
 
+  // Fetch available contract templates
+  const { data: contractTemplates = [] } = useQuery<ContractTemplate[]>({
+    queryKey: ["/api/contract-templates"],
+  });
+
   const signIssuerMutation = useMutation({
     mutationFn: async ({ signature }: { signature: string }) => {
       const response = await fetch(`/api/quotes/${quote.id}/sign-issuer`, {
@@ -60,6 +68,24 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
       toast({ 
         title: "Error", 
         description: "Failed to sign quote", 
+        variant: "destructive" 
+      });
+    },
+  });
+
+  const updateContractMutation = useMutation({
+    mutationFn: async (data: { contractTemplateId?: number | null; customContractTerms?: string | null }) => {
+      const response = await apiRequest("PUT", `/api/quotes/${quote.id}`, data);
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Contract updated successfully" });
+      queryClient.invalidateQueries({ queryKey: [`/api/quotes/${quote.id}`] });
+    },
+    onError: () => {
+      toast({ 
+        title: "Error", 
+        description: "Failed to update contract", 
         variant: "destructive" 
       });
     },
@@ -96,6 +122,96 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
                 className="mt-1"
               />
             </div>
+            {/* Contract Selection */}
+            <div className="space-y-4 p-4 bg-gray-50 rounded-lg border">
+              <div className="flex items-center justify-between">
+                <Label className="text-sm font-medium">Contract Template</Label>
+                {(quote.contractTemplate || quote.customContractTerms) && (
+                  <span className="text-xs text-green-600 font-medium">✓ Contract Added</span>
+                )}
+              </div>
+              
+              <div className="space-y-3">
+                <Select
+                  value={quote.contractTemplateId?.toString() || ""}
+                  onValueChange={(value) => {
+                    if (value === "custom") {
+                      // Clear template, keep custom terms
+                      updateContractMutation.mutate({ 
+                        contractTemplateId: null,
+                        customContractTerms: quote.customContractTerms || "" 
+                      });
+                    } else if (value === "none") {
+                      // Clear both template and custom terms
+                      updateContractMutation.mutate({ 
+                        contractTemplateId: null,
+                        customContractTerms: null 
+                      });
+                    } else {
+                      // Set template, clear custom terms
+                      updateContractMutation.mutate({ 
+                        contractTemplateId: parseInt(value),
+                        customContractTerms: null 
+                      });
+                    }
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a contract template" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No Contract</SelectItem>
+                    {contractTemplates.map((template) => (
+                      <SelectItem key={template.id} value={template.id.toString()}>
+                        {template.name} {template.isDefault && "(Default)"}
+                      </SelectItem>
+                    ))}
+                    <SelectItem value="custom">Custom Contract Terms</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                {/* Preview selected template */}
+                {quote.contractTemplate && (
+                  <Dialog>
+                    <DialogTrigger asChild>
+                      <Button variant="outline" size="sm" className="w-full">
+                        <Eye className="mr-2 h-4 w-4" />
+                        Preview: {quote.contractTemplate.name}
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="max-w-4xl">
+                      <DialogHeader>
+                        <DialogTitle>{quote.contractTemplate.title}</DialogTitle>
+                      </DialogHeader>
+                      <div className="max-h-96 overflow-y-auto">
+                        <pre className="whitespace-pre-wrap text-sm">{quote.contractTemplate.terms}</pre>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+                )}
+
+                {/* Custom contract terms input */}
+                {(!quote.contractTemplateId || quote.customContractTerms !== null) && (
+                  <div>
+                    <Label htmlFor="customContractTerms" className="text-sm">Custom Contract Terms</Label>
+                    <Textarea
+                      id="customContractTerms"
+                      rows={6}
+                      value={quote.customContractTerms || ""}
+                      onChange={(e) => {
+                        updateContractMutation.mutate({
+                          contractTemplateId: null,
+                          customContractTerms: e.target.value
+                        });
+                      }}
+                      placeholder="Enter custom contract terms and conditions..."
+                      className="mt-1 text-sm"
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="taxRate">Tax Rate (%)</Label>
