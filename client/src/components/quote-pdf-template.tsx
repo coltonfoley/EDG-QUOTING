@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
-import { Download, Edit3, Save } from "lucide-react";
+import { Download, Edit3, Save, Loader2 } from "lucide-react";
 import { formatCurrency, calculateQuoteTotals } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import type { QuoteWithDetails } from "@shared/schema";
@@ -42,7 +42,7 @@ export function QuotePDFTemplate({ quote, isOpen, onClose }: QuotePDFTemplatePro
     email: "info@edgpatioandshade.com",
     license: "License #SC-12345",
     customerName: quote.customer.name,
-    customerCompany: quote.customer.company || "",
+    customerCompany: quote.customer.company ?? "",
     customerEmail: quote.customer.email,
     customerPhone: quote.customer.phone,
   });
@@ -61,8 +61,8 @@ export function QuotePDFTemplate({ quote, isOpen, onClose }: QuotePDFTemplatePro
       markupType: item.markupType,
       markupValue: item.markupValue,
     })),
-    quote.taxRate,
-    quote.discount
+    quote.taxRate ?? 0,
+    quote.discount ?? 0
   );
 
   const generatePDFMutation = useMutation({
