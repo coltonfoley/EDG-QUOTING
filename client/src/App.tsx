@@ -37,7 +37,7 @@ function Router() {
           <Route path="/quotes/:id" component={QuoteBuilder} />
           <Route path="/products" component={Products} />
           <Route path="/admin" component={AdminPage} />
-          <Route component={Home} />
+          <Route component={NotFound} />
         </>
       )}
     </Switch>
