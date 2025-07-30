@@ -67,70 +67,161 @@ export function QuotePDFTemplate({ quote, isOpen, onClose }: QuotePDFTemplatePro
 
   const generatePDFMutation = useMutation({
     mutationFn: async () => {
+      // Use browser's native print which respects CSS page breaks
+      const printWindow = window.open('', '_blank');
+      if (!printWindow) throw new Error('Could not open print window');
+
       const element = document.getElementById('quote-pdf-content');
       if (!element) throw new Error('PDF content not found');
 
-      // Add print styles temporarily
-      const printStyles = document.createElement('style');
-      printStyles.textContent = `
-        @media print {
-          .page-break-before { page-break-before: always; }
-          .page-break-after { page-break-after: always; }
-          .page-break-avoid { page-break-inside: avoid; }
-          .no-break { break-inside: avoid; }
-        }
-        .signature-section { 
-          break-inside: avoid; 
-          min-height: 300px;
-          page-break-inside: avoid;
-        }
-        .contract-terms {
-          break-inside: auto;
-          page-break-inside: auto;
-        }
-      `;
-      document.head.appendChild(printStyles);
-
-      const canvas = await html2canvas(element, {
-        scale: 1,
-        useCORS: true,
-        allowTaint: true,
-        backgroundColor: '#ffffff',
-        windowWidth: 1200,
-        windowHeight: element.scrollHeight,
-        onclone: (clonedDoc) => {
-          // Ensure styles are applied to cloned document
-          const clonedStyles = clonedDoc.createElement('style');
-          clonedStyles.textContent = printStyles.textContent;
-          clonedDoc.head.appendChild(clonedStyles);
-        }
-      });
-
-      // Remove temporary styles
-      document.head.removeChild(printStyles);
-
-      // Better page splitting algorithm
-      const imgData = canvas.toDataURL('image/jpeg', 0.85);
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      const imgWidth = 210;
-      const pageHeight = 295;
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      // Create a complete HTML document for printing
+      printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Quote-${quote.quoteNumber}</title>
+          <style>
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body { 
+              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+              font-size: 14px;
+              line-height: 1.4;
+              color: #000;
+              background: white;
+            }
+            
+            /* Print-specific styles */
+            @media print {
+              @page { 
+                size: A4; 
+                margin: 20mm; 
+              }
+              .page-break-before { page-break-before: always; }
+              .page-break-after { page-break-after: always; }
+              .page-break-avoid { page-break-inside: avoid; }
+              .no-break { break-inside: avoid; }
+              .signature-section { 
+                break-inside: avoid; 
+                min-height: 200px;
+                page-break-inside: avoid;
+              }
+              .contract-terms {
+                break-inside: auto;
+                page-break-inside: auto;
+              }
+            }
+            
+            /* Copy all Tailwind-style classes used in the component */
+            .text-3xl { font-size: 1.875rem; font-weight: bold; }
+            .text-2xl { font-size: 1.5rem; font-weight: bold; }
+            .text-xl { font-size: 1.25rem; font-weight: bold; }
+            .text-lg { font-size: 1.125rem; font-weight: 600; }
+            .text-sm { font-size: 0.875rem; }
+            .text-xs { font-size: 0.75rem; }
+            .font-bold { font-weight: bold; }
+            .font-semibold { font-weight: 600; }
+            .font-medium { font-weight: 500; }
+            .italic { font-style: italic; }
+            .text-center { text-align: center; }
+            .text-right { text-align: right; }
+            .text-left { text-align: left; }
+            .whitespace-pre-wrap { white-space: pre-wrap; }
+            .whitespace-pre-line { white-space: pre-line; }
+            .leading-relaxed { line-height: 1.625; }
+            .capitalize { text-transform: capitalize; }
+            
+            /* Layout classes */
+            .flex { display: flex; }
+            .grid { display: grid; }
+            .grid-cols-1 { grid-template-columns: repeat(1, minmax(0, 1fr)); }
+            .grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            .justify-between { justify-content: space-between; }
+            .justify-end { justify-content: flex-end; }
+            .items-start { align-items: flex-start; }
+            .items-end { align-items: flex-end; }
+            .items-center { align-items: center; }
+            
+            /* Spacing */
+            .mb-2 { margin-bottom: 0.5rem; }
+            .mb-3 { margin-bottom: 0.75rem; }
+            .mb-4 { margin-bottom: 1rem; }
+            .mb-6 { margin-bottom: 1.5rem; }
+            .mb-8 { margin-bottom: 2rem; }
+            .mt-8 { margin-top: 2rem; }
+            .pt-2 { padding-top: 0.5rem; }
+            .pt-6 { padding-top: 1.5rem; }
+            .pb-2 { padding-bottom: 0.5rem; }
+            .pb-6 { padding-bottom: 1.5rem; }
+            .px-4 { padding-left: 1rem; padding-right: 1rem; }
+            .py-3 { padding-top: 0.75rem; padding-bottom: 0.75rem; }
+            .p-3 { padding: 0.75rem; }
+            .space-y-1 > * + * { margin-top: 0.25rem; }
+            .space-y-2 > * + * { margin-top: 0.5rem; }
+            .space-y-3 > * + * { margin-top: 0.75rem; }
+            .space-y-4 > * + * { margin-top: 1rem; }
+            .space-y-6 > * + * { margin-top: 1.5rem; }
+            .gap-8 { gap: 2rem; }
+            
+            /* Colors */
+            .text-gray-600 { color: #4b5563; }
+            .text-gray-700 { color: #374151; }
+            .text-gray-800 { color: #1f2937; }
+            .text-red-600 { color: #dc2626; }
+            .text-green-600 { color: #16a34a; }
+            .text-yellow-600 { color: #ca8a04; }
+            .text-blue-600 { color: #2563eb; }
+            .bg-gray-50 { background-color: #f9fafb; }
+            .bg-gray-100 { background-color: #f3f4f6; }
+            
+            /* EDG Brand Colors */
+            .text-edg-black { color: #000000; }
+            .text-edg-grey { color: #6b7280; }
+            .border-edg-teal { border-color: #14b8a6; }
+            
+            /* Borders */
+            .border { border-width: 1px; border-style: solid; border-color: #d1d5db; }
+            .border-b { border-bottom-width: 1px; border-bottom-style: solid; border-color: #d1d5db; }
+            .border-b-2 { border-bottom-width: 2px; border-bottom-style: solid; }
+            .border-t { border-top-width: 1px; border-top-style: solid; border-color: #d1d5db; }
+            .border-gray-300 { border-color: #d1d5db; }
+            .border-gray-400 { border-color: #9ca3af; }
+            .rounded { border-radius: 0.25rem; }
+            
+            /* Table styles */
+            .border-collapse { border-collapse: collapse; }
+            .w-full { width: 100%; }
+            .w-80 { width: 20rem; }
+            .min-h-[40px] { min-height: 40px; }
+            
+            /* Custom table styling for better PDF output */
+            table { width: 100%; border-collapse: collapse; margin-bottom: 1rem; }
+            th, td { border: 1px solid #d1d5db; padding: 0.75rem; }
+            th { background-color: #f3f4f6; font-weight: 600; }
+            tr.border-b td { border-bottom: 1px solid #d1d5db; }
+            
+            @media (min-width: 768px) {
+              .md\\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            }
+          </style>
+        </head>
+        <body>
+          ${element.outerHTML}
+          <script>
+            window.onload = function() {
+              window.print();
+              setTimeout(function() {
+                window.close();
+              }, 1000);
+            };
+          </script>
+        </body>
+        </html>
+      `);
       
-      // Calculate pages needed
-      const totalPages = Math.ceil(imgHeight / pageHeight);
-      
-      for (let i = 0; i < totalPages; i++) {
-        if (i > 0) pdf.addPage();
-        
-        const yPosition = -(i * pageHeight);
-        pdf.addImage(imgData, 'JPEG', 0, yPosition, imgWidth, imgHeight);
-      }
-
-      pdf.save(`Quote-${quote.quoteNumber}.pdf`);
+      printWindow.document.close();
     },
     onSuccess: () => {
-      toast({ title: "PDF downloaded successfully" });
-      onClose();
+      toast({ title: "Print dialog opened - save as PDF to download" });
     },
     onError: () => {
       toast({ 
@@ -165,8 +256,17 @@ export function QuotePDFTemplate({ quote, isOpen, onClose }: QuotePDFTemplatePro
                 disabled={generatePDFMutation.isPending}
                 className="bg-edg-black hover:bg-edg-grey text-edg-white"
               >
-                <Download className="mr-2 h-4 w-4" />
-                Download PDF
+                {generatePDFMutation.isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Opening Print Dialog...
+                  </>
+                ) : (
+                  <>
+                    <Download className="mr-2 h-4 w-4" />
+                    Print / Save as PDF
+                  </>
+                )}
               </Button>
             </div>
           </div>
