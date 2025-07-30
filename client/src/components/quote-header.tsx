@@ -185,9 +185,9 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
                     name="projectName"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Project Name</FormLabel>
+                        <FormLabel>Project Name (Optional)</FormLabel>
                         <FormControl>
-                          <Input {...field} />
+                          <Input placeholder="Enter project name" {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -198,9 +198,9 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
                     name="projectAddress"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Project Address</FormLabel>
+                        <FormLabel>Project Address (Optional)</FormLabel>
                         <FormControl>
-                          <Textarea rows={2} {...field} />
+                          <Textarea rows={2} placeholder="Enter project address" {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
