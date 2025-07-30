@@ -1,4 +1,4 @@
-import { customers, quotes, lineItems, products, users, type Customer, type Quote, type LineItem, type Product, type User, type InsertCustomer, type InsertQuote, type InsertLineItem, type InsertProduct, type InsertUser, type QuoteWithDetails } from "@shared/schema";
+import { customers, quotes, lineItems, products, users, contractTemplates, type Customer, type Quote, type LineItem, type Product, type User, type ContractTemplate, type InsertCustomer, type InsertQuote, type InsertLineItem, type InsertProduct, type InsertUser, type InsertContractTemplate, type QuoteWithDetails } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc } from "drizzle-orm";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
@@ -48,6 +48,14 @@ export interface IStorage {
   updateUser(id: any, user: Partial<InsertUser>): Promise<User | undefined>;
   getAllUsers(): Promise<User[]>;
   deleteUser(id: any): Promise<void>;
+
+  // Contract template methods
+  getAllContractTemplates(): Promise<ContractTemplate[]>;
+  getContractTemplate(id: number): Promise<ContractTemplate | undefined>;
+  createContractTemplate(template: InsertContractTemplate): Promise<ContractTemplate>;
+  updateContractTemplate(id: number, template: Partial<InsertContractTemplate>): Promise<ContractTemplate | undefined>;
+  deleteContractTemplate(id: number): Promise<boolean>;
+  getDefaultContractTemplate(): Promise<ContractTemplate | undefined>;
   
   // Session store for authentication
   sessionStore: any;
@@ -259,10 +267,17 @@ export class DatabaseStorage implements IStorage {
 
     const quoteLineItems = await db.select().from(lineItems).where(eq(lineItems.quoteId, id));
 
+    // Get contract template if referenced
+    let contractTemplate: ContractTemplate | undefined;
+    if (quote.contractTemplateId) {
+      [contractTemplate] = await db.select().from(contractTemplates).where(eq(contractTemplates.id, quote.contractTemplateId));
+    }
+
     return {
       ...quote,
       customer,
       lineItems: quoteLineItems,
+      contractTemplate,
     };
   }
 
@@ -274,10 +289,18 @@ export class DatabaseStorage implements IStorage {
       const [customer] = await db.select().from(customers).where(eq(customers.id, quote.customerId));
       if (customer) {
         const quoteLineItems = await db.select().from(lineItems).where(eq(lineItems.quoteId, quote.id));
+        
+        // Get contract template if referenced
+        let contractTemplate: ContractTemplate | undefined;
+        if (quote.contractTemplateId) {
+          [contractTemplate] = await db.select().from(contractTemplates).where(eq(contractTemplates.id, quote.contractTemplateId));
+        }
+        
         result.push({
           ...quote,
           customer,
           lineItems: quoteLineItems,
+          contractTemplate,
         });
       }
     }
@@ -416,6 +439,43 @@ export class DatabaseStorage implements IStorage {
 
   async deleteUser(id: any): Promise<void> {
     await db.delete(users).where(eq(users.id, id));
+  }
+
+  // Contract template methods
+  async getAllContractTemplates(): Promise<ContractTemplate[]> {
+    return await db.select().from(contractTemplates).orderBy(contractTemplates.name);
+  }
+
+  async getContractTemplate(id: number): Promise<ContractTemplate | undefined> {
+    const [template] = await db.select().from(contractTemplates).where(eq(contractTemplates.id, id));
+    return template || undefined;
+  }
+
+  async createContractTemplate(insertTemplate: InsertContractTemplate): Promise<ContractTemplate> {
+    const [template] = await db
+      .insert(contractTemplates)
+      .values(insertTemplate)
+      .returning();
+    return template;
+  }
+
+  async updateContractTemplate(id: number, templateData: Partial<InsertContractTemplate>): Promise<ContractTemplate | undefined> {
+    const [updated] = await db
+      .update(contractTemplates)
+      .set(templateData)
+      .where(eq(contractTemplates.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteContractTemplate(id: number): Promise<boolean> {
+    const result = await db.delete(contractTemplates).where(eq(contractTemplates.id, id));
+    return (result.rowCount || 0) > 0;
+  }
+
+  async getDefaultContractTemplate(): Promise<ContractTemplate | undefined> {
+    const [template] = await db.select().from(contractTemplates).where(eq(contractTemplates.isDefault, true));
+    return template || undefined;
   }
 
   sessionStore: any

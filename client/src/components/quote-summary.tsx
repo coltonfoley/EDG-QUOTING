@@ -19,6 +19,7 @@ interface QuoteSummaryProps {
 export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
   const [showPDFTemplate, setShowPDFTemplate] = useState(false);
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const generatePDFMutation = useMutation({
     mutationFn: async () => {
@@ -32,6 +33,33 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
       toast({ 
         title: "Error", 
         description: "Failed to open PDF template", 
+        variant: "destructive" 
+      });
+    },
+  });
+
+  const signIssuerMutation = useMutation({
+    mutationFn: async ({ signature }: { signature: string }) => {
+      const response = await fetch(`/api/quotes/${quote.id}/sign-issuer`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ signature }),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to sign quote');
+      }
+      
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Quote signed successfully" });
+      queryClient.invalidateQueries({ queryKey: ['/api/quotes', quote.id] });
+    },
+    onError: () => {
+      toast({ 
+        title: "Error", 
+        description: "Failed to sign quote", 
         variant: "destructive" 
       });
     },
@@ -156,6 +184,51 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
             <FileText className="mr-2 h-4 w-4" />
             Generate PDF Quote
           </Button>
+          {/* Signature Status */}
+          <div className="p-3 bg-gray-50 rounded">
+            <div className="text-sm text-center">
+              <span className="font-medium">Signature Status: </span>
+              <span className={`capitalize ${
+                quote.signatureStatus === 'fully_signed' ? 'text-green-600 font-semibold' :
+                quote.signatureStatus === 'pending' ? 'text-yellow-600' :
+                'text-blue-600'
+              }`}>
+                {quote.signatureStatus?.replace('_', ' ')}
+              </span>
+            </div>
+            {quote.issuerSignature && (
+              <div className="text-xs text-gray-600 mt-1">
+                Issuer: {quote.issuerSignature} {quote.issuerSignatureDate && 
+                  `(${new Date(quote.issuerSignatureDate).toLocaleDateString()})`
+                }
+              </div>
+            )}
+            {quote.customerSignature && (
+              <div className="text-xs text-gray-600">
+                Customer: {quote.customerSignature} {quote.customerSignatureDate && 
+                  `(${new Date(quote.customerSignatureDate).toLocaleDateString()})`
+                }
+              </div>
+            )}
+          </div>
+
+          {/* Signature Actions */}
+          {!quote.issuerSignature && (
+            <Button
+              onClick={() => {
+                const signature = prompt("Enter your name to sign as EDG Patio & Shade:");
+                if (signature) {
+                  signIssuerMutation.mutate({ signature });
+                }
+              }}
+              disabled={signIssuerMutation.isPending}
+              className="w-full bg-edg-teal hover:bg-edg-teal/90 text-white"
+            >
+              <FileText className="mr-2 h-4 w-4" />
+              Sign as Issuer
+            </Button>
+          )}
+
           <Button
             variant="outline"
             className="w-full border-edg-teal text-edg-teal hover:bg-edg-light-teal hover:bg-opacity-10"
