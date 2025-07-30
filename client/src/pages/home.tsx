@@ -2,7 +2,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Building2, ClipboardList, FileText, Users } from "lucide-react";
 import { Link } from "wouter";
-import AppHeader from "@/components/app-header";
+import { AppHeader } from "@/components/app-header";
 
 export default function Home() {
   return (
