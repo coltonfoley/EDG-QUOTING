@@ -81,7 +81,12 @@ export function QuotePDFTemplate({ quote, isOpen, onClose }: QuotePDFTemplatePro
         }
         .signature-section { 
           break-inside: avoid; 
-          min-height: 200px;
+          min-height: 300px;
+          page-break-inside: avoid;
+        }
+        .contract-terms {
+          break-inside: auto;
+          page-break-inside: auto;
         }
       `;
       document.head.appendChild(printStyles);
@@ -426,18 +431,18 @@ export function QuotePDFTemplate({ quote, isOpen, onClose }: QuotePDFTemplatePro
                 </div>
               )}
 
-              {/* Contract Terms Section */}
+              {/* Contract Terms Section - Start on new page */}
               {(quote.contractTemplate || quote.customContractTerms) ? (
-                <div className="space-y-4">
+                <div className="space-y-4 page-break-before">
                   <h3 className="text-xl font-bold text-edg-black border-b-2 border-edg-teal pb-2">
                     {quote.contractTemplate?.title || 'Contract Terms'}
                   </h3>
-                  <div className="text-sm text-gray-800 leading-relaxed whitespace-pre-line" style={{ lineHeight: '1.6' }}>
+                  <div className="text-sm text-gray-800 leading-relaxed whitespace-pre-line contract-terms" style={{ lineHeight: '1.6' }}>
                     {quote.customContractTerms || quote.contractTemplate?.terms}
                   </div>
                   
-                  {/* Signature Section */}
-                  <div className="mt-8 space-y-6 border-t border-gray-300 pt-6 signature-section">
+                  {/* Signature Section - Start on new page */}
+                  <div className="mt-8 space-y-6 border-t border-gray-300 pt-6 signature-section page-break-before">
                     <h4 className="text-lg font-semibold text-edg-black">Agreement Signatures</h4>
                     
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -490,8 +495,8 @@ export function QuotePDFTemplate({ quote, isOpen, onClose }: QuotePDFTemplatePro
                   </div>
                 </div>
               ) : (
-                // Legacy Terms & Conditions for quotes without contracts
-                <div>
+                // Legacy Terms & Conditions for quotes without contracts  
+                <div className="page-break-before">
                   <h3 className="text-lg font-semibold text-edg-black mb-3">Terms & Conditions:</h3>
                   <div className="text-sm space-y-2">
                     <div><strong>Payment Terms:</strong> {quoteTerms.paymentTerms}</div>
