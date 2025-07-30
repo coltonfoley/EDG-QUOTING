@@ -392,8 +392,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/contract-templates', isAuthenticated, async (req, res) => {
     try {
+      console.log("User from session:", req.user.id, "type:", typeof req.user.id);
       const currentUser = await storage.getUser(req.user.id);
+      console.log("Current user from DB:", currentUser);
+      
       if (currentUser?.role !== 'admin') {
+        console.log("Admin check failed. User role:", currentUser?.role);
         return res.status(403).json({ message: "Admin access required" });
       }
 
