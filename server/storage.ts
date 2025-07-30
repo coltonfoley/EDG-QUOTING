@@ -42,12 +42,12 @@ export interface IStorage {
   deleteLineItemsByQuoteId(quoteId: number): Promise<boolean>;
 
   // User authentication methods
-  getUser(id: number): Promise<User | undefined>;
+  getUser(id: any): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
-  updateUser(id: number, user: Partial<InsertUser>): Promise<User | undefined>;
+  updateUser(id: any, user: Partial<InsertUser>): Promise<User | undefined>;
   getAllUsers(): Promise<User[]>;
-  deleteUser(id: number): Promise<void>;
+  deleteUser(id: any): Promise<void>;
   
   // Session store for authentication
   sessionStore: any;
@@ -375,7 +375,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   // User authentication methods
-  async getUser(id: number): Promise<User | undefined> {
+  async getUser(id: any): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.id, id));
     return user || undefined;
   }
@@ -396,7 +396,7 @@ export class DatabaseStorage implements IStorage {
     return user;
   }
 
-  async updateUser(id: number, userData: Partial<InsertUser>): Promise<User | undefined> {
+  async updateUser(id: any, userData: Partial<InsertUser>): Promise<User | undefined> {
     // If updating password, hash it
     if (userData.password) {
       userData.password = await hashPassword(userData.password);
@@ -414,7 +414,7 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(users).orderBy(desc(users.createdAt));
   }
 
-  async deleteUser(id: number): Promise<void> {
+  async deleteUser(id: any): Promise<void> {
     await db.delete(users).where(eq(users.id, id));
   }
 
