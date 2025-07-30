@@ -31,8 +31,15 @@ export function AppHeader() {
               <span className="text-sm text-edg-grey ml-2">Estimator</span>
             </div>
             <nav className="hidden md:flex space-x-6">
+              <Link href="/" className={`text-sm font-medium transition-colors hover:text-edg-teal ${
+                location === '/' 
+                  ? 'text-edg-teal border-b-2 border-edg-teal pb-4' 
+                  : 'text-edg-grey'
+              }`}>
+                Dashboard
+              </Link>
               <Link href="/quotes" className={`text-sm font-medium transition-colors hover:text-edg-teal ${
-                location.startsWith('/quotes') || location === '/' 
+                location.startsWith('/quotes')
                   ? 'text-edg-teal border-b-2 border-edg-teal pb-4' 
                   : 'text-edg-grey'
               }`}>
