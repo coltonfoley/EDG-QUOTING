@@ -81,6 +81,7 @@ export function AuthProvider({ children }: { children: ReactNode }): React.JSX.E
     },
     onSuccess: () => {
       queryClient.setQueryData(["/api/user"], null);
+      window.location.href = "/";
       toast({
         title: "Logged out",
         description: "Successfully logged out.",

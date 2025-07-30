@@ -5,10 +5,10 @@ import { Building2, ClipboardList, FileText, Users, LogOut } from "lucide-react"
 import { Link } from "wouter";
 
 export default function Home() {
-  const { user } = useAuth();
+  const { user, logoutMutation } = useAuth();
 
   const handleLogout = () => {
-    window.location.href = "/api/logout";
+    logoutMutation.mutate();
   };
 
   return (
@@ -22,15 +22,11 @@ export default function Home() {
           <div className="flex items-center gap-4">
             {user && (
               <div className="flex items-center gap-3">
-                {user.profileImageUrl && (
-                  <img 
-                    src={user.profileImageUrl} 
-                    alt={user.firstName || 'User'} 
-                    className="h-8 w-8 rounded-full object-cover"
-                  />
-                )}
+                <div className="h-8 w-8 rounded-full bg-teal-600 flex items-center justify-center text-white text-sm font-medium">
+                  {user.firstName?.[0] || user.username?.[0] || 'U'}
+                </div>
                 <span className="text-slate-700">
-                  {user.firstName || user.email}
+                  {user.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : user.username}
                 </span>
               </div>
             )}
