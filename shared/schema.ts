@@ -85,13 +85,6 @@ export type InsertCustomer = z.infer<typeof insertCustomerSchema>;
 export type InsertQuote = z.infer<typeof insertQuoteSchema>;
 export type InsertProduct = z.infer<typeof insertProductSchema>;
 export type InsertLineItem = z.infer<typeof insertLineItemSchema>;
-export type InsertQuote = z.infer<typeof insertQuoteSchema>;
-
-export type Product = typeof products.$inferSelect;
-export type InsertProduct = z.infer<typeof insertProductSchema>;
-
-export type LineItem = typeof lineItems.$inferSelect;
-export type InsertLineItem = z.infer<typeof insertLineItemSchema>;
 
 export type QuoteWithDetails = Quote & {
   customer: Customer;

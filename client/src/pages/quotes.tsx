@@ -99,13 +99,7 @@ export default function Quotes() {
                 className="pl-10 w-full sm:w-80"
               />
             </div>
-            <Button
-              variant="outline"
-              onClick={() => setShowDocuSignSetup(true)}
-              className="border-edg-teal text-edg-teal hover:bg-edg-light-teal hover:bg-opacity-10"
-            >
-              DocuSign Setup
-            </Button>
+
             <Link href="/quotes/new">
               <Button className="bg-edg-black hover:bg-edg-grey text-edg-white w-full sm:w-auto">
                 <Plus className="mr-2 h-4 w-4" />
