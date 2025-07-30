@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { AppHeader } from "@/components/app-header";
@@ -6,16 +6,52 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { useToast } from "@/hooks/use-toast";
 import { Plus, FileText, Users, DollarSign, Search } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
+import { isUnauthorizedError } from "@/lib/authUtils";
+import { useAuth } from "@/hooks/useAuth";
 import type { QuoteWithDetails } from "@shared/schema";
 
 export default function Quotes() {
   const [searchTerm, setSearchTerm] = useState("");
+  const { toast } = useToast();
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
   
-  const { data: quotes, isLoading } = useQuery<QuoteWithDetails[]>({
+  const { data: quotes, isLoading, error } = useQuery<QuoteWithDetails[]>({
     queryKey: ["/api/quotes"],
+    enabled: isAuthenticated,
   });
+
+  // Redirect to login if not authenticated
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      toast({
+        title: "Unauthorized",
+        description: "You are logged out. Logging in again...",
+        variant: "destructive",
+      });
+      setTimeout(() => {
+        window.location.href = "/api/login";
+      }, 500);
+      return;
+    }
+  }, [isAuthenticated, authLoading, toast]);
+
+  // Handle unauthorized errors
+  useEffect(() => {
+    if (error && isUnauthorizedError(error as Error)) {
+      toast({
+        title: "Unauthorized",
+        description: "You are logged out. Logging in again...",
+        variant: "destructive",
+      });
+      setTimeout(() => {
+        window.location.href = "/api/login";
+      }, 500);
+      return;
+    }
+  }, [error, toast]);
 
   const filteredQuotes = useMemo(() => {
     if (!quotes || !searchTerm.trim()) return quotes;
