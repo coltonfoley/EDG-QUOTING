@@ -24,9 +24,9 @@ function Router() {
     <Switch>
       {!isAuthenticated ? (
         <>
-          <Route path="/" component={Landing} />
+          <Route path="/" component={AuthPage} />
           <Route path="/auth" component={AuthPage} />
-          <Route component={Landing} />
+          <Route component={AuthPage} />
         </>
       ) : (
         <>
