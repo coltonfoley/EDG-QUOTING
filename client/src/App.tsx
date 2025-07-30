@@ -11,6 +11,7 @@ import Products from "@/pages/products";
 import Landing from "@/pages/landing";
 import Home from "@/pages/home";
 import AuthPage from "@/pages/auth-page";
+import AdminPage from "@/pages/admin";
 
 function Router() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -35,6 +36,7 @@ function Router() {
           <Route path="/quotes/new" component={QuoteBuilder} />
           <Route path="/quotes/:id" component={QuoteBuilder} />
           <Route path="/products" component={Products} />
+          <Route path="/admin" component={AdminPage} />
           <Route component={Home} />
         </>
       )}
