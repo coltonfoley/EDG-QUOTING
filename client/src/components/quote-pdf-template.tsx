@@ -70,33 +70,51 @@ export function QuotePDFTemplate({ quote, isOpen, onClose }: QuotePDFTemplatePro
       const element = document.getElementById('quote-pdf-content');
       if (!element) throw new Error('PDF content not found');
 
+      // Add print styles temporarily
+      const printStyles = document.createElement('style');
+      printStyles.textContent = `
+        @media print {
+          .page-break-before { page-break-before: always; }
+          .page-break-after { page-break-after: always; }
+          .page-break-avoid { page-break-inside: avoid; }
+          .no-break { break-inside: avoid; }
+        }
+      `;
+      document.head.appendChild(printStyles);
+
       const canvas = await html2canvas(element, {
-        scale: 1, // Reduced from 2 to 1 for smaller file size
+        scale: 1,
         useCORS: true,
         allowTaint: true,
         backgroundColor: '#ffffff',
-        windowWidth: 1200, // Fixed width for consistency
+        windowWidth: 1200,
         windowHeight: element.scrollHeight,
+        onclone: (clonedDoc) => {
+          // Ensure styles are applied to cloned document
+          const clonedStyles = clonedDoc.createElement('style');
+          clonedStyles.textContent = printStyles.textContent;
+          clonedDoc.head.appendChild(clonedStyles);
+        }
       });
 
-      // Convert to JPEG with compression for smaller file size
-      const imgData = canvas.toDataURL('image/jpeg', 0.85); // 85% quality
+      // Remove temporary styles
+      document.head.removeChild(printStyles);
+
+      // Better page splitting algorithm
+      const imgData = canvas.toDataURL('image/jpeg', 0.85);
       const pdf = new jsPDF('p', 'mm', 'a4');
       const imgWidth = 210;
       const pageHeight = 295;
       const imgHeight = (canvas.height * imgWidth) / canvas.width;
-      let heightLeft = imgHeight;
-
-      let position = 0;
-
-      pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
-      heightLeft -= pageHeight;
-
-      while (heightLeft >= 0) {
-        position = heightLeft - imgHeight;
-        pdf.addPage();
-        pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
-        heightLeft -= pageHeight;
+      
+      // Calculate pages needed
+      const totalPages = Math.ceil(imgHeight / pageHeight);
+      
+      for (let i = 0; i < totalPages; i++) {
+        if (i > 0) pdf.addPage();
+        
+        const yPosition = -(i * pageHeight);
+        pdf.addImage(imgData, 'JPEG', 0, yPosition, imgWidth, imgHeight);
       }
 
       pdf.save(`Quote-${quote.quoteNumber}.pdf`);
@@ -330,7 +348,8 @@ export function QuotePDFTemplate({ quote, isOpen, onClose }: QuotePDFTemplatePro
             </div>
 
             {/* Line Items Table */}
-            <div className="mb-8">
+            <div className="mb-8 page-break-avoid">
+              <h3 className="text-lg font-semibold text-edg-black mb-4">Project Line Items</h3>
               <table className="w-full border-collapse border border-gray-300">
                 <thead>
                   <tr className="bg-gray-100">
@@ -366,8 +385,8 @@ export function QuotePDFTemplate({ quote, isOpen, onClose }: QuotePDFTemplatePro
               </table>
             </div>
 
-            {/* Totals */}
-            <div className="flex justify-end mb-8">
+            {/* Totals - Avoid breaking this section */}
+            <div className="flex justify-end mb-8 no-break">
               <div className="w-80">
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
@@ -405,7 +424,7 @@ export function QuotePDFTemplate({ quote, isOpen, onClose }: QuotePDFTemplatePro
 
               {/* Contract Terms Section */}
               {(quote.contractTemplate || quote.customContractTerms) ? (
-                <div className="space-y-4">
+                <div className="space-y-4 page-break-before">
                   <h3 className="text-xl font-bold text-edg-black border-b-2 border-edg-teal pb-2">
                     {quote.contractTemplate?.title || 'Contract Terms'}
                   </h3>
@@ -414,7 +433,7 @@ export function QuotePDFTemplate({ quote, isOpen, onClose }: QuotePDFTemplatePro
                   </div>
                   
                   {/* Signature Section */}
-                  <div className="mt-8 space-y-6 border-t border-gray-300 pt-6">
+                  <div className="mt-8 space-y-6 border-t border-gray-300 pt-6 no-break">
                     <h4 className="text-lg font-semibold text-edg-black">Agreement Signatures</h4>
                     
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -468,7 +487,7 @@ export function QuotePDFTemplate({ quote, isOpen, onClose }: QuotePDFTemplatePro
                 </div>
               ) : (
                 // Legacy Terms & Conditions for quotes without contracts
-                <div>
+                <div className="page-break-before">
                   <h3 className="text-lg font-semibold text-edg-black mb-3">Terms & Conditions:</h3>
                   <div className="text-sm space-y-2">
                     <div><strong>Payment Terms:</strong> {quoteTerms.paymentTerms}</div>
