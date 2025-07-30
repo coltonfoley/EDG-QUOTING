@@ -35,9 +35,9 @@ export default function AuthPage() {
   // Redirect if already logged in
   useEffect(() => {
     if (!isLoading && user) {
-      window.location.href = "/";
+      navigate("/");
     }
-  }, [user, isLoading]);
+  }, [user, isLoading, navigate]);
 
   const loginForm = useForm<LoginData>({
     resolver: zodResolver(loginSchema),

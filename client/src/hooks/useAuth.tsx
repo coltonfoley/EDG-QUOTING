@@ -44,6 +44,8 @@ export function AuthProvider({ children }: { children: ReactNode }): React.JSX.E
         title: "Welcome back!",
         description: "Successfully logged in.",
       });
+      // Redirect to homepage after successful login
+      window.location.href = "/";
     },
     onError: (error: Error) => {
       toast({
@@ -65,6 +67,8 @@ export function AuthProvider({ children }: { children: ReactNode }): React.JSX.E
         title: "Account created!",
         description: "Successfully registered and logged in.",
       });
+      // Redirect to homepage after successful registration
+      window.location.href = "/";
     },
     onError: (error: Error) => {
       toast({
