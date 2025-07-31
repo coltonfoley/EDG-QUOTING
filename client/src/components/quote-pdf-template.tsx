@@ -75,6 +75,35 @@ export function QuotePDFTemplate({ quote, isOpen, onClose }: QuotePDFTemplatePro
       const element = document.getElementById('quote-pdf-content');
       if (!element) throw new Error('PDF content not found');
 
+      // Convert logo to base64 for embedding in PDF
+      let logoDataUrl = '';
+      try {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        const img = new Image();
+        
+        await new Promise((resolve, reject) => {
+          img.onload = () => {
+            canvas.width = img.width;
+            canvas.height = img.height;
+            ctx?.drawImage(img, 0, 0);
+            logoDataUrl = canvas.toDataURL('image/png');
+            resolve(logoDataUrl);
+          };
+          img.onerror = reject;
+          img.src = logoPath;
+        });
+      } catch (error) {
+        console.warn('Failed to load logo for PDF:', error);
+      }
+
+      // Create a clone of the element and replace logo src with base64
+      const elementClone = element.cloneNode(true) as HTMLElement;
+      const logoImg = elementClone.querySelector('img[alt="EDG Patio & Shade"]');
+      if (logoImg && logoDataUrl) {
+        (logoImg as HTMLImageElement).src = logoDataUrl;
+      }
+
       // Create a complete HTML document for printing
       printWindow.document.write(`
         <!DOCTYPE html>
@@ -141,6 +170,7 @@ export function QuotePDFTemplate({ quote, isOpen, onClose }: QuotePDFTemplatePro
             .items-start { align-items: flex-start; }
             .items-end { align-items: flex-end; }
             .items-center { align-items: center; }
+            .space-x-4 > * + * { margin-left: 1rem; }
             
             /* Spacing */
             .mb-2 { margin-bottom: 0.5rem; }
@@ -206,7 +236,7 @@ export function QuotePDFTemplate({ quote, isOpen, onClose }: QuotePDFTemplatePro
           </style>
         </head>
         <body>
-          ${element.outerHTML}
+          ${elementClone.outerHTML}
           <script>
             window.onload = function() {
               window.print();
