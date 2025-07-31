@@ -114,17 +114,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put("/api/quotes/:id", isAuthenticated, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
+      console.log("Updating quote ID:", id, "with data:", req.body);
+      
       const quoteData = insertQuoteSchema.partial().parse(req.body);
+      console.log("Parsed quote data:", quoteData);
+      
       const quote = await storage.updateQuote(id, quoteData);
+      console.log("Update result:", quote);
+      
       if (!quote) {
         return res.status(404).json({ message: "Quote not found" });
       }
       res.json(quote);
     } catch (error) {
+      console.error("Quote update error:", error);
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: "Invalid quote data", errors: error.errors });
       }
-      res.status(500).json({ message: "Internal server error" });
+      res.status(500).json({ message: "Internal server error", error: error.message });
     }
   });
 
