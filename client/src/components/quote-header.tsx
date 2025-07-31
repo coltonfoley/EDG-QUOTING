@@ -37,9 +37,9 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
     resolver: zodResolver(quoteFormSchema),
     defaultValues: {
       quoteNumber: quote?.quoteNumber || "",
-      projectName: quote?.projectName || "",
-      projectAddress: quote?.projectAddress || "",
-      estimatedStartDate: quote?.estimatedStartDate || "",
+      projectName: quote?.projectName ?? "",
+      projectAddress: quote?.projectAddress ?? "",
+      estimatedStartDate: quote?.estimatedStartDate ?? "",
       notes: quote?.notes || "",
       taxRate: quote?.taxRate || "8.5",
       discount: quote?.discount || "0",
@@ -62,10 +62,11 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
       queryClient.invalidateQueries({ queryKey: [`/api/quotes/${quote?.id}`] });
       queryClient.invalidateQueries({ queryKey: ["/api/quotes"] });
     },
-    onError: () => {
+    onError: (error: Error) => {
+      console.error("Status update error:", error);
       toast({ 
         title: "Error", 
-        description: "Failed to update quote status", 
+        description: `Failed to update quote status: ${error.message}`, 
         variant: "destructive" 
       });
     },
