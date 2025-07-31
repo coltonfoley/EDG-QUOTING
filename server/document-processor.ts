@@ -19,40 +19,46 @@ async function convertPdfToImage(pdfBuffer: Buffer): Promise<{ base64: string; m
     // Create temporary directory for PDF processing
     const tempDir = path.join(process.cwd(), 'temp');
     if (!fs.existsSync(tempDir)) {
-      fs.mkdirSync(tempDir);
+      fs.mkdirSync(tempDir, { recursive: true });
     }
 
-    // Write PDF to temporary file
-    const tempPdfPath = path.join(tempDir, `temp_${Date.now()}.pdf`);
+    // Write PDF to temporary file with unique name
+    const timestamp = Date.now();
+    const tempPdfPath = path.join(tempDir, `temp_${timestamp}.pdf`);
     fs.writeFileSync(tempPdfPath, pdfBuffer);
 
-    // Initialize pdf2pic converter
+    // Initialize pdf2pic converter with different approach
     const convert = pdf2pic.fromPath(tempPdfPath, {
-      density: 150,
-      saveFilename: "converted",
+      density: 100,
+      saveFilename: `converted_${timestamp}`,
       savePath: tempDir,
       format: "jpg",
-      width: 2000,
-      height: 2000
+      width: 1500,
+      height: 1500
     });
 
-    // Convert first page only
-    const result = await convert(1, { responseType: "buffer" });
+    // Convert first page only and get result
+    const result = await convert(1);
     
-    if (!result.buffer) {
-      throw new Error("No buffer returned from PDF conversion");
+    // Check if we got a file path result
+    if (result && result.path) {
+      // Read the converted image file
+      const imageBuffer = fs.readFileSync(result.path);
+      const base64 = imageBuffer.toString('base64');
+      
+      // Clean up temporary files
+      fs.unlinkSync(tempPdfPath);
+      fs.unlinkSync(result.path);
+
+      return {
+        base64,
+        mimeType: 'image/jpeg'
+      };
+    } else {
+      throw new Error("PDF conversion failed - no output generated");
     }
-
-    const base64 = result.buffer.toString('base64');
-
-    // Clean up temporary PDF file
-    fs.unlinkSync(tempPdfPath);
-
-    return {
-      base64,
-      mimeType: 'image/jpeg'
-    };
   } catch (error) {
+    console.error("PDF conversion error:", error);
     throw new Error(`Failed to convert PDF to image: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 }
@@ -66,16 +72,20 @@ export async function processManufacturerDocument(
 
   // Handle PDF conversion to image
   if (mimeType === 'application/pdf') {
-    const converted = await convertPdfToImage(fileBuffer);
-    base64Image = converted.base64;
-    finalMimeType = converted.mimeType;
+    try {
+      const converted = await convertPdfToImage(fileBuffer);
+      base64Image = converted.base64;
+      finalMimeType = converted.mimeType;
+    } catch (error) {
+      throw new Error('PDF processing is not available. Please convert your PDF to an image (PNG/JPG) and try again.');
+    }
   } else {
     base64Image = fileBuffer.toString('base64');
     finalMimeType = mimeType;
   }
   try {
     const response = await openai.chat.completions.create({
-      model: "gpt-4o",
+      model: "gpt-4o-mini",
       messages: [
         {
           role: "system",
@@ -146,16 +156,20 @@ export async function analyzeDocumentStructure(fileBuffer: Buffer, mimeType: str
 
   // Handle PDF conversion to image
   if (mimeType === 'application/pdf') {
-    const converted = await convertPdfToImage(fileBuffer);
-    base64Image = converted.base64;
-    finalMimeType = converted.mimeType;
+    try {
+      const converted = await convertPdfToImage(fileBuffer);
+      base64Image = converted.base64;
+      finalMimeType = converted.mimeType;
+    } catch (error) {
+      throw new Error('PDF processing is not available. Please convert your PDF to an image (PNG/JPG) and try again.');
+    }
   } else {
     base64Image = fileBuffer.toString('base64');
     finalMimeType = mimeType;
   }
   try {
     const response = await openai.chat.completions.create({
-      model: "gpt-4o",
+      model: "gpt-4o-mini",
       messages: [
         {
           role: "user",
