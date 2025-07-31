@@ -4,6 +4,34 @@ import { storage } from "./storage";
 import { insertCustomerSchema, insertQuoteSchema, insertLineItemSchema, insertProductSchema, insertContractTemplateSchema } from "@shared/schema";
 import { z } from "zod";
 import { setupAuth, isAuthenticated } from "./replitAuth";
+import multer from "multer";
+import * as XLSX from "xlsx";
+import { parsePDF } from "./pdf-parser";
+import { extractProductsFromImage, extractProductsFromText } from "./openai";
+import type { ExtractedProduct } from "./openai";
+
+// Configure multer for file uploads
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    const allowedMimes = [
+      'application/pdf',
+      'application/vnd.ms-excel',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'image/jpeg',
+      'image/jpg',
+      'image/png'
+    ];
+    if (allowedMimes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid file type'));
+    }
+  },
+});
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
@@ -362,6 +390,120 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error deleting user:", error);
       res.status(500).json({ message: "Failed to delete user" });
+    }
+  });
+
+  // Price list upload endpoint
+  app.post('/api/admin/upload-price-list', isAuthenticated, upload.single('file'), async (req: any, res) => {
+    try {
+      const currentUser = await storage.getUser(req.user.id);
+      if (currentUser?.role !== 'admin') {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+
+      if (!req.file) {
+        return res.status(400).json({ message: "No file uploaded" });
+      }
+
+      const file = req.file;
+      let extractedProducts: ExtractedProduct[] = [];
+      const errors: string[] = [];
+
+      // Process based on file type
+      if (file.mimetype === 'application/pdf') {
+        // Process PDF
+        try {
+          const pdfData = await parsePDF(file.buffer);
+          extractedProducts = await extractProductsFromText(pdfData.text);
+        } catch (error) {
+          console.error("PDF processing error:", error);
+          errors.push("Failed to process PDF content");
+        }
+      } else if (file.mimetype.includes('excel') || file.mimetype.includes('spreadsheet')) {
+        // Process Excel
+        try {
+          const workbook = XLSX.read(file.buffer, { type: 'buffer' });
+          const sheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[sheetName];
+          const jsonData = XLSX.utils.sheet_to_json(worksheet);
+          
+          // Map Excel data to our product format
+          extractedProducts = jsonData.map((row: any) => ({
+            sku: row.SKU || row.sku || row['Product Code'] || row['Item #'] || undefined,
+            name: row.Name || row.name || row['Product Name'] || row['Description'] || '',
+            unit: row.Unit || row.unit || row['UOM'] || row['Unit of Measure'] || 'each',
+            price: parseFloat(row.Price || row.price || row['Unit Price'] || row['Cost'] || '0'),
+            description: row.Description || row.description || row['Notes'] || undefined,
+          })).filter((p: ExtractedProduct) => p.name && p.price > 0);
+        } catch (error) {
+          console.error("Excel processing error:", error);
+          errors.push("Failed to process Excel file");
+        }
+      } else if (file.mimetype.startsWith('image/')) {
+        // Process Image with OpenAI Vision
+        try {
+          const base64Image = file.buffer.toString('base64');
+          extractedProducts = await extractProductsFromImage(base64Image);
+        } catch (error) {
+          console.error("Image processing error:", error);
+          errors.push("Failed to process image with AI");
+        }
+      }
+
+      // Process extracted products
+      let created = 0;
+      let updated = 0;
+      let skipped = 0;
+
+      for (const extractedProduct of extractedProducts) {
+        try {
+          // Check if product with SKU already exists
+          let existingProduct = null;
+          if (extractedProduct.sku) {
+            const allProducts = await storage.getAllProducts();
+            existingProduct = allProducts.find(p => 
+              p.name.toLowerCase().includes(extractedProduct.sku!.toLowerCase()) ||
+              (p.description && p.description.toLowerCase().includes(extractedProduct.sku!.toLowerCase()))
+            );
+          }
+
+          if (existingProduct) {
+            // Update existing product
+            await storage.updateProduct(existingProduct.id, {
+              defaultUnitPrice: extractedProduct.price.toString(),
+              unit: extractedProduct.unit || existingProduct.unit,
+            });
+            updated++;
+          } else {
+            // Create new product
+            await storage.createProduct({
+              name: extractedProduct.sku ? `${extractedProduct.name} (${extractedProduct.sku})` : extractedProduct.name,
+              description: extractedProduct.description || '',
+              category: 'Imported',
+              defaultUnitPrice: extractedProduct.price.toString(),
+              defaultMarkupType: 'percentage',
+              defaultMarkupValue: '25',
+              unit: extractedProduct.unit || 'each',
+            });
+            created++;
+          }
+        } catch (error) {
+          console.error(`Error processing product ${extractedProduct.name}:`, error);
+          errors.push(`Failed to process: ${extractedProduct.name}`);
+          skipped++;
+        }
+      }
+
+      res.json({
+        created,
+        updated,
+        skipped,
+        errors,
+        total: extractedProducts.length,
+      });
+    } catch (error) {
+      console.error("Price list upload error:", error);
+      res.status(500).json({ message: "Failed to process price list" });
     }
   });
 
