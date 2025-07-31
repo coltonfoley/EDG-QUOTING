@@ -28,6 +28,8 @@ export async function extractProductsFromImage(base64Image: string): Promise<Ext
           role: "system",
           content: `You are a data extraction expert. Extract product information from price lists and catalogs.
           
+          IMPORTANT: Limit your response to the FIRST 100 products to avoid truncation.
+          
           For each product found, return JSON objects with these exact fields:
           - "sku": product code/SKU (string or null)
           - "name": product name (string)
@@ -39,7 +41,8 @@ export async function extractProductsFromImage(base64Image: string): Promise<Ext
           {"products": [{"sku": "ABC123", "name": "Product Name", "unit": "each", "price": 25.99, "description": "Details"}]}
           
           Only include products with valid names and prices > 0.
-          Ensure the JSON is properly formatted and complete.`,
+          Focus on complete product entries with clear pricing.
+          Keep product names concise to save space.`,
         },
         {
           role: "user",
@@ -116,9 +119,11 @@ export async function extractProductsFromText(text: string): Promise<ExtractedPr
           role: "system",
           content: `You are a data extraction expert. Extract product information from price list text.
           
+          IMPORTANT: Limit your response to the FIRST 100 products to avoid truncation.
+          
           For each product found, return JSON objects with these exact fields:
           - "sku": product code/SKU (string or null)
-          - "name": product name (string)
+          - "name": product name (string)  
           - "unit": unit of measurement like "each", "sq ft", "linear ft" (string)
           - "price": price as number (not string)
           - "description": additional details (string or null)
@@ -127,7 +132,8 @@ export async function extractProductsFromText(text: string): Promise<ExtractedPr
           {"products": [{"sku": "ABC123", "name": "Product Name", "unit": "each", "price": 25.99, "description": "Details"}]}
           
           Only include products with valid names and prices > 0.
-          Ensure the JSON is properly formatted and complete.`,
+          Focus on complete product entries with clear pricing.
+          Keep product names concise to save space.`,
         },
         {
           role: "user",
@@ -153,17 +159,40 @@ export async function extractProductsFromText(text: string): Promise<ExtractedPr
       console.error("JSON parsing failed:", jsonError);
       console.error("Raw content:", content);
       
-      // Try to extract valid JSON from partial response
+      // Try to extract products from truncated response
       try {
-        // Look for the products array in the content
-        const productsMatch = content.match(/"products"\s*:\s*\[(.*?)\]/s);
-        if (productsMatch) {
-          const productsStr = `{"products": [${productsMatch[1]}]}`;
-          parsedContent = JSON.parse(productsStr);
-        } else {
-          console.error("Could not extract products array from response");
+        console.log("Attempting to parse truncated response...");
+        
+        // Find the start of the products array
+        const productsStart = content.indexOf('"products": [');
+        if (productsStart === -1) {
+          console.error("No products array found in response");
           return [];
         }
+
+        // Extract everything after the products array start
+        let productsContent = content.substring(productsStart + 13); // Skip '"products": ['
+        
+        // Remove the incomplete final product by finding the last complete one
+        const lastCompleteProduct = productsContent.lastIndexOf('}, {');
+        if (lastCompleteProduct !== -1) {
+          // Keep everything up to and including the closing brace of the last complete product
+          productsContent = productsContent.substring(0, lastCompleteProduct + 1);
+        } else {
+          // If no multiple products, try to find at least one complete product
+          const firstProductEnd = productsContent.indexOf('}');
+          if (firstProductEnd !== -1) {
+            productsContent = productsContent.substring(0, firstProductEnd + 1);
+          } else {
+            console.error("No complete products found in truncated response");
+            return [];
+          }
+        }
+
+        // Reconstruct valid JSON
+        const fixedJson = `{"products": [${productsContent}]}`;
+        parsedContent = JSON.parse(fixedJson);
+        console.log(`Successfully recovered ${parsedContent.products?.length || 0} products from truncated response`);
       } catch (fallbackError) {
         console.error("Fallback parsing also failed:", fallbackError);
         return [];
