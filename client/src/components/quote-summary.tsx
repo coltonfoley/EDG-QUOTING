@@ -22,7 +22,6 @@ interface QuoteSummaryProps {
 export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
   const [showPDFTemplate, setShowPDFTemplate] = useState(false);
   const [issuerSignatureInput, setIssuerSignatureInput] = useState("");
-  const [customerSignatureInput, setCustomerSignatureInput] = useState("");
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -75,43 +74,10 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
     },
   });
 
-  const signCustomerMutation = useMutation({
-    mutationFn: async ({ signature }: { signature: string }) => {
-      const response = await fetch(`/api/quotes/${quote.id}/sign-customer`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ signature }),
-      });
-      
-      if (!response.ok) {
-        throw new Error('Failed to sign quote');
-      }
-      
-      return response.json();
-    },
-    onSuccess: () => {
-      toast({ title: "Customer signature saved successfully" });
-      queryClient.invalidateQueries({ queryKey: ['/api/quotes', quote.id] });
-    },
-    onError: () => {
-      toast({ 
-        title: "Error", 
-        description: "Failed to save customer signature", 
-        variant: "destructive" 
-      });
-    },
-  });
-
   // Simple save functions - no auto-save, manual button click only
   const handleSaveIssuerSignature = () => {
     if (issuerSignatureInput.trim()) {
       signIssuerMutation.mutate({ signature: issuerSignatureInput.trim() });
-    }
-  };
-
-  const handleSaveCustomerSignature = () => {
-    if (customerSignatureInput.trim()) {
-      signCustomerMutation.mutate({ signature: customerSignatureInput.trim() });
     }
   };
 
@@ -394,35 +360,6 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
                   className="bg-edg-teal hover:bg-edg-teal/90 text-white"
                 >
                   {signIssuerMutation.isPending ? "Saving..." : "Sign"}
-                </Button>
-              </div>
-            </div>
-          )}
-
-          {/* Customer Signature Input */}
-          {!quote.customerSignature && (
-            <div className="space-y-3">
-              <Label htmlFor="customerSignature" className="text-sm font-medium">Customer Signature</Label>
-              <div className="flex gap-2">
-                <Input
-                  id="customerSignature"
-                  placeholder="Customer name to sign..."
-                  value={customerSignatureInput}
-                  onChange={(e) => setCustomerSignatureInput(e.target.value)}
-                  disabled={signCustomerMutation.isPending}
-                  className="flex-1"
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && customerSignatureInput.trim()) {
-                      handleSaveCustomerSignature();
-                    }
-                  }}
-                />
-                <Button
-                  onClick={handleSaveCustomerSignature}
-                  disabled={!customerSignatureInput.trim() || signCustomerMutation.isPending}
-                  className="bg-edg-teal hover:bg-edg-teal/90 text-white"
-                >
-                  {signCustomerMutation.isPending ? "Saving..." : "Sign"}
                 </Button>
               </div>
             </div>
