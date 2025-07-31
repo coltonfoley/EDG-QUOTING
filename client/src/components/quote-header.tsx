@@ -63,10 +63,9 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
       queryClient.invalidateQueries({ queryKey: ["/api/quotes"] });
     },
     onError: (error: Error) => {
-      console.error("Status update error:", error);
       toast({ 
         title: "Error", 
-        description: `Failed to update quote status: ${error.message}`, 
+        description: "Failed to update quote status", 
         variant: "destructive" 
       });
     },
