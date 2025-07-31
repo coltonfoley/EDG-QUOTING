@@ -291,9 +291,22 @@ export default function Quotes() {
                             {quote.projectName}
                           </td>
                           <td className="px-6 py-4 text-center">
-                            <Badge className={getStatusColor(quote.status)}>
-                              {quote.status.charAt(0).toUpperCase() + quote.status.slice(1)}
-                            </Badge>
+                            <div className="space-y-1">
+                              <Badge className={getStatusColor(quote.status)}>
+                                {quote.status.charAt(0).toUpperCase() + quote.status.slice(1)}
+                              </Badge>
+                              <div className="text-xs">
+                                <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                  quote.signatureStatus === 'signed' ? 'bg-green-100 text-green-800' :
+                                  quote.signatureStatus === 'unsigned' ? 'bg-red-100 text-red-800' :
+                                  'bg-gray-100 text-gray-800'
+                                }`}>
+                                  {quote.signatureStatus === 'signed' ? 'Signed by EDG' : 
+                                   quote.signatureStatus === 'unsigned' ? 'Unsigned' : 
+                                   quote.signatureStatus?.replace('_', ' ')}
+                                </span>
+                              </div>
+                            </div>
                           </td>
                           <td className="px-6 py-4 text-sm font-medium text-edg-black text-right">
                             {formatCurrency(total)}
