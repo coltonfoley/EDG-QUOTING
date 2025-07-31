@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { AppHeader } from "@/components/app-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,7 +8,9 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Package, Edit, Trash2 } from "lucide-react";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { Plus, Package, Edit, Trash2, Search, Grid, List, Filter, X } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -23,6 +25,9 @@ type ProductFormData = z.infer<typeof productFormSchema>;
 export default function Products() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState<string>("all");
+  const [viewMode, setViewMode] = useState<"grid" | "table">("table");
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -117,14 +122,38 @@ export default function Products() {
     }
   };
 
-  const groupedProducts = products?.reduce((groups, product) => {
-    const category = product.category || "Uncategorized";
-    if (!groups[category]) {
-      groups[category] = [];
-    }
-    groups[category].push(product);
-    return groups;
-  }, {} as Record<string, Product[]>) || {};
+  // Get unique categories and filter/search products
+  const categories = useMemo(() => {
+    if (!products) return [];
+    const uniqueCategories = Array.from(new Set(products.map(p => p.category || "Uncategorized")));
+    return uniqueCategories.sort();
+  }, [products]);
+
+  const filteredProducts = useMemo(() => {
+    if (!products) return [];
+    
+    return products.filter(product => {
+      const matchesSearch = searchTerm === "" || 
+        product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (product.description || "").toLowerCase().includes(searchTerm.toLowerCase());
+      
+      const matchesCategory = selectedCategory === "all" || 
+        (product.category || "Uncategorized") === selectedCategory;
+      
+      return matchesSearch && matchesCategory;
+    });
+  }, [products, searchTerm, selectedCategory]);
+
+  const groupedProducts = useMemo(() => {
+    return filteredProducts.reduce((groups, product) => {
+      const category = product.category || "Uncategorized";
+      if (!groups[category]) {
+        groups[category] = [];
+      }
+      groups[category].push(product);
+      return groups;
+    }, {} as Record<string, Product[]>);
+  }, [filteredProducts]);
 
   if (isLoading) {
     return (
@@ -149,10 +178,10 @@ export default function Products() {
       <AppHeader />
       
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex justify-between items-center mb-8">
+        <div className="flex justify-between items-center mb-6">
           <div>
             <h2 className="text-3xl font-bold text-edg-black">Product Catalog</h2>
-            <p className="text-edg-grey mt-2">Manage reusable products and services</p>
+            <p className="text-edg-grey mt-2">Manage reusable products and services • {filteredProducts.length} products</p>
           </div>
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
@@ -196,7 +225,7 @@ export default function Products() {
                         <FormItem>
                           <FormLabel>Category</FormLabel>
                           <FormControl>
-                            <Input {...field} placeholder="e.g. Concrete, Framing, Electrical" />
+                            <Input {...field} value={field.value || ""} placeholder="e.g. Concrete, Framing, Electrical" />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -210,7 +239,7 @@ export default function Products() {
                       <FormItem>
                         <FormLabel>Description</FormLabel>
                         <FormControl>
-                          <Textarea {...field} rows={3} />
+                          <Textarea {...field} value={field.value || ""} rows={3} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -236,7 +265,7 @@ export default function Products() {
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Unit</FormLabel>
-                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <Select onValueChange={field.onChange} value={field.value || ""}>
                             <FormControl>
                               <SelectTrigger>
                                 <SelectValue />
@@ -308,6 +337,73 @@ export default function Products() {
           </Dialog>
         </div>
 
+        {/* Search and Filters */}
+        <div className="flex flex-col sm:flex-row gap-4 mb-6">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+            <Input
+              placeholder="Search products..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+          
+          <div className="flex gap-2">
+            <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+              <SelectTrigger className="w-48">
+                <Filter className="h-4 w-4 mr-2" />
+                <SelectValue placeholder="All Categories" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Categories</SelectItem>
+                {categories.map(category => (
+                  <SelectItem key={category} value={category}>
+                    {category}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <div className="flex border rounded-md">
+              <Button
+                variant={viewMode === "table" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setViewMode("table")}
+                className="rounded-r-none"
+              >
+                <List className="h-4 w-4" />
+              </Button>
+              <Button
+                variant={viewMode === "grid" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setViewMode("grid")}
+                className="rounded-l-none"
+              >
+                <Grid className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        {/* Active Filters */}
+        {(searchTerm || selectedCategory !== "all") && (
+          <div className="flex gap-2 mb-4">
+            {searchTerm && (
+              <Badge variant="secondary" className="flex items-center gap-1">
+                Search: "{searchTerm}"
+                <X className="h-3 w-3 cursor-pointer" onClick={() => setSearchTerm("")} />
+              </Badge>
+            )}
+            {selectedCategory !== "all" && (
+              <Badge variant="secondary" className="flex items-center gap-1">
+                Category: {selectedCategory}
+                <X className="h-3 w-3 cursor-pointer" onClick={() => setSelectedCategory("all")} />
+              </Badge>
+            )}
+          </div>
+        )}
+
         {!products || products.length === 0 ? (
           <Card>
             <CardContent className="p-12 text-center">
@@ -324,11 +420,37 @@ export default function Products() {
               </Dialog>
             </CardContent>
           </Card>
+        ) : filteredProducts.length === 0 ? (
+          <Card>
+            <CardContent className="p-12 text-center">
+              <Package className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No products found</h3>
+              <p className="text-gray-500 mb-6">Try adjusting your search or filter criteria.</p>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setSearchTerm("");
+                  setSelectedCategory("all");
+                }}
+              >
+                Clear Filters
+              </Button>
+            </CardContent>
+          </Card>
+        ) : viewMode === "table" ? (
+          <ProductTable 
+            products={filteredProducts} 
+            onEdit={handleEdit} 
+            onDelete={handleDelete} 
+          />
         ) : (
           <div className="space-y-8">
             {Object.entries(groupedProducts).map(([category, categoryProducts]) => (
               <div key={category}>
-                <h3 className="text-xl font-semibold text-charcoal mb-4">{category}</h3>
+                <h3 className="text-xl font-semibold text-charcoal mb-4 flex items-center gap-2">
+                  {category}
+                  <Badge variant="outline">{categoryProducts.length}</Badge>
+                </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {categoryProducts.map((product) => (
                     <Card key={product.id} className="hover:shadow-md transition-shadow">
@@ -381,5 +503,80 @@ export default function Products() {
         )}
       </div>
     </div>
+  );
+}
+
+interface ProductTableProps {
+  products: Product[];
+  onEdit: (product: Product) => void;
+  onDelete: (id: number) => void;
+}
+
+function ProductTable({ products, onEdit, onDelete }: ProductTableProps) {
+  return (
+    <Card>
+      <CardContent className="p-0">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-[300px]">Product Name</TableHead>
+              <TableHead>Category</TableHead>
+              <TableHead>Unit</TableHead>
+              <TableHead className="text-right">Unit Price</TableHead>
+              <TableHead className="text-right">Markup</TableHead>
+              <TableHead className="w-[100px]">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {products.map((product) => (
+              <TableRow key={product.id} className="hover:bg-gray-50">
+                <TableCell>
+                  <div>
+                    <div className="font-medium">{product.name}</div>
+                    {product.description && (
+                      <div className="text-sm text-gray-500 truncate max-w-xs">
+                        {product.description}
+                      </div>
+                    )}
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <Badge variant="outline">{product.category || "Uncategorized"}</Badge>
+                </TableCell>
+                <TableCell className="text-sm text-gray-600">{product.unit}</TableCell>
+                <TableCell className="text-right font-medium">
+                  {formatCurrency(product.defaultUnitPrice)}
+                </TableCell>
+                <TableCell className="text-right">
+                  <span className="text-edg-teal font-medium">
+                    {product.defaultMarkupValue}{product.defaultMarkupType === 'percentage' ? '%' : '$'}
+                  </span>
+                </TableCell>
+                <TableCell>
+                  <div className="flex gap-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => onEdit(product)}
+                      className="text-edg-teal hover:text-edg-dark-teal h-8 w-8 p-0"
+                    >
+                      <Edit className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => onDelete(product.id)}
+                      className="text-red-600 hover:text-red-800 h-8 w-8 p-0"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
   );
 }

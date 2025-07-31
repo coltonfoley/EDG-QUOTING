@@ -95,6 +95,8 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+- July 31, 2025: Redesigned Products page UI for better scalability with hundreds of products - added search bar, category filters, table/grid view toggle, and compact table layout
+- July 31, 2025: Completed mass product adjustment feature with ProductBulkEditor component for bulk category, markup, and unit updates
 - July 31, 2025: Enhanced Price List Uploader with robust error handling - fixed JSON parsing issues, increased token limits, and improved AI extraction reliability
 - July 31, 2025: Fixed quote status update synchronization - status dropdown changes now sync with form state to prevent reversion on save
 - July 30, 2025: Fixed PDF generation blank page issue by converting logo to base64 format for cross-window compatibility
