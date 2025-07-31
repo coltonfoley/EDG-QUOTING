@@ -7,7 +7,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Save, Clock } from "lucide-react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
 import { z } from "zod";
 
 const quoteFormSchema = insertQuoteSchema.extend({
@@ -26,6 +30,9 @@ interface QuoteHeaderProps {
 }
 
 export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  
   const form = useForm<QuoteFormData>({
     resolver: zodResolver(quoteFormSchema),
     defaultValues: {
@@ -41,6 +48,26 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
       customerEmail: quote?.customer?.email || "",
       customerPhone: quote?.customer?.phone || "",
       customerCompany: quote?.customer?.company || "",
+    },
+  });
+
+  const updateStatusMutation = useMutation({
+    mutationFn: async ({ status }: { status: string }) => {
+      if (!quote?.id) throw new Error("No quote ID");
+      const response = await apiRequest('PUT', `/api/quotes/${quote.id}`, { status });
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Quote status updated successfully" });
+      queryClient.invalidateQueries({ queryKey: [`/api/quotes/${quote?.id}`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/quotes"] });
+    },
+    onError: () => {
+      toast({ 
+        title: "Error", 
+        description: "Failed to update quote status", 
+        variant: "destructive" 
+      });
     },
   });
 
@@ -79,10 +106,26 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
           </div>
           <div className="mt-4 lg:mt-0 flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3">
             {quote && (
-              <Badge className={getStatusColor(quote.status)}>
-                <Clock className="mr-1 h-3 w-3" />
-                {quote.status.charAt(0).toUpperCase() + quote.status.slice(1)}
-              </Badge>
+              <div className="flex items-center space-x-2">
+                <span className="text-sm font-medium text-gray-700">Status:</span>
+                <Select
+                  value={quote.status}
+                  onValueChange={(value) => {
+                    updateStatusMutation.mutate({ status: value });
+                  }}
+                  disabled={updateStatusMutation.isPending}
+                >
+                  <SelectTrigger className="w-32">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="draft">Draft</SelectItem>
+                    <SelectItem value="sent">Sent</SelectItem>
+                    <SelectItem value="approved">Approved</SelectItem>
+                    <SelectItem value="rejected">Rejected</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             )}
             <Button 
               type="submit" 
