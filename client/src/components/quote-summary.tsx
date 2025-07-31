@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,8 @@ interface QuoteSummaryProps {
 
 export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
   const [showPDFTemplate, setShowPDFTemplate] = useState(false);
+  const [issuerSignatureInput, setIssuerSignatureInput] = useState(quote.issuerSignature || "");
+  const [customerSignatureInput, setCustomerSignatureInput] = useState(quote.customerSignature || "");
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -73,6 +75,55 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
     },
   });
 
+  const signCustomerMutation = useMutation({
+    mutationFn: async ({ signature }: { signature: string }) => {
+      const response = await fetch(`/api/quotes/${quote.id}/sign-customer`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ signature }),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to sign quote');
+      }
+      
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Customer signature saved successfully" });
+      queryClient.invalidateQueries({ queryKey: ['/api/quotes', quote.id] });
+    },
+    onError: () => {
+      toast({ 
+        title: "Error", 
+        description: "Failed to save customer signature", 
+        variant: "destructive" 
+      });
+    },
+  });
+
+  // Auto-save issuer signature after user stops typing for 1 second
+  useEffect(() => {
+    if (issuerSignatureInput && issuerSignatureInput !== quote.issuerSignature && issuerSignatureInput.trim().length > 0) {
+      const timeoutId = setTimeout(() => {
+        signIssuerMutation.mutate({ signature: issuerSignatureInput.trim() });
+      }, 1000);
+
+      return () => clearTimeout(timeoutId);
+    }
+  }, [issuerSignatureInput, quote.issuerSignature, signIssuerMutation]);
+
+  // Auto-save customer signature after user stops typing for 1 second
+  useEffect(() => {
+    if (customerSignatureInput && customerSignatureInput !== quote.customerSignature && customerSignatureInput.trim().length > 0) {
+      const timeoutId = setTimeout(() => {
+        signCustomerMutation.mutate({ signature: customerSignatureInput.trim() });
+      }, 1000);
+
+      return () => clearTimeout(timeoutId);
+    }
+  }, [customerSignatureInput, quote.customerSignature, signCustomerMutation]);
+
   const updateContractMutation = useMutation({
     mutationFn: async (data: { contractTemplateId?: number | null; customContractTerms?: string | null }) => {
       const response = await apiRequest("PUT", `/api/quotes/${quote.id}`, data);
@@ -98,8 +149,8 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
       markupType: item.markupType,
       markupValue: item.markupValue,
     })),
-    quote.taxRate,
-    quote.discount
+    quote.taxRate ?? 0,
+    quote.discount ?? 0
   );
 
   return (
@@ -116,7 +167,7 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
               <Textarea
                 id="notes"
                 rows={4}
-                value={quote.notes || ""}
+                value={quote.notes ?? ""}
                 onChange={(e) => onUpdateQuote("notes", e.target.value)}
                 placeholder="Add project notes, terms, or special conditions..."
                 className="mt-1"
@@ -197,7 +248,7 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
                     <Textarea
                       id="customContractTerms"
                       rows={6}
-                      value={quote.customContractTerms || ""}
+                      value={quote.customContractTerms ?? ""}
                       onChange={(e) => {
                         updateContractMutation.mutate({
                           contractTemplateId: null,
@@ -330,19 +381,44 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
 
           {/* Signature Actions */}
           {!quote.issuerSignature && (
-            <Button
-              onClick={() => {
-                const signature = prompt("Enter your name to sign as EDG Patio & Shade:");
-                if (signature) {
-                  signIssuerMutation.mutate({ signature });
-                }
-              }}
-              disabled={signIssuerMutation.isPending}
-              className="w-full bg-edg-teal hover:bg-edg-teal/90 text-white"
-            >
-              <FileText className="mr-2 h-4 w-4" />
-              Sign as Issuer
-            </Button>
+            <div className="space-y-2">
+              <Label htmlFor="issuerSignature" className="text-sm font-medium">Sign as EDG Patio & Shade</Label>
+              <Input
+                id="issuerSignature"
+                placeholder="Enter your name to sign..."
+                value={issuerSignatureInput}
+                onChange={(e) => setIssuerSignatureInput(e.target.value)}
+                disabled={signIssuerMutation.isPending}
+                className="w-full"
+              />
+              {signIssuerMutation.isPending && (
+                <p className="text-xs text-gray-500">Saving signature...</p>
+              )}
+              {issuerSignatureInput.trim() && !signIssuerMutation.isPending && (
+                <p className="text-xs text-green-600">✓ Will auto-save in 1 second</p>
+              )}
+            </div>
+          )}
+
+          {/* Customer Signature Input */}
+          {!quote.customerSignature && (
+            <div className="space-y-2">
+              <Label htmlFor="customerSignature" className="text-sm font-medium">Customer Signature</Label>
+              <Input
+                id="customerSignature"
+                placeholder="Customer name to sign..."
+                value={customerSignatureInput}
+                onChange={(e) => setCustomerSignatureInput(e.target.value)}
+                disabled={signCustomerMutation.isPending}
+                className="w-full"
+              />
+              {signCustomerMutation.isPending && (
+                <p className="text-xs text-gray-500">Saving customer signature...</p>
+              )}
+              {customerSignatureInput.trim() && !signCustomerMutation.isPending && (
+                <p className="text-xs text-green-600">✓ Will auto-save in 1 second</p>
+              )}
+            </div>
           )}
 
           <Button
