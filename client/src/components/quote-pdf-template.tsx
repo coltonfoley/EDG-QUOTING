@@ -584,11 +584,13 @@ export function QuotePDFTemplate({ quote, isOpen, onClose }: QuotePDFTemplatePro
                       <div className="text-sm">
                         <span className="font-medium">Document Status: </span>
                         <span className={`capitalize font-semibold ${
-                          quote.signatureStatus === 'fully_signed' ? 'text-green-600' :
-                          quote.signatureStatus === 'pending' ? 'text-yellow-600' :
+                          quote.signatureStatus === 'signed' ? 'text-green-600' :
+                          quote.signatureStatus === 'unsigned' ? 'text-red-600' :
                           'text-blue-600'
                         }`}>
-                          {quote.signatureStatus?.replace('_', ' ')}
+                          {quote.signatureStatus === 'signed' ? 'Signed by EDG' : 
+                           quote.signatureStatus === 'unsigned' ? 'Unsigned' : 
+                           quote.signatureStatus?.replace('_', ' ')}
                         </span>
                       </div>
                     </div>
