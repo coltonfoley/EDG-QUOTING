@@ -74,6 +74,24 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
     },
   });
 
+  const updateStatusMutation = useMutation({
+    mutationFn: async ({ status }: { status: string }) => {
+      const response = await apiRequest('PUT', `/api/quotes/${quote.id}`, { status });
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Quote status updated successfully" });
+      queryClient.invalidateQueries({ queryKey: ['/api/quotes', quote.id] });
+    },
+    onError: () => {
+      toast({ 
+        title: "Error", 
+        description: "Failed to update quote status", 
+        variant: "destructive" 
+      });
+    },
+  });
+
   // Simple save functions - no auto-save, manual button click only
   const handleSaveIssuerSignature = () => {
     if (issuerSignatureInput.trim()) {
@@ -308,6 +326,29 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
             <FileText className="mr-2 h-4 w-4" />
             Generate PDF Quote
           </Button>
+          {/* Workflow Status */}
+          <div className="p-3 bg-gray-50 rounded space-y-3">
+            <div>
+              <Label htmlFor="workflowStatus" className="text-sm font-medium">Workflow Status</Label>
+              <Select
+                value={quote.status}
+                onValueChange={(value) => {
+                  updateStatusMutation.mutate({ status: value });
+                }}
+              >
+                <SelectTrigger className="w-full mt-1">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="draft">Draft</SelectItem>
+                  <SelectItem value="sent">Sent</SelectItem>
+                  <SelectItem value="approved">Approved</SelectItem>
+                  <SelectItem value="rejected">Rejected</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
           {/* Signature Status */}
           <div className="p-3 bg-gray-50 rounded">
             <div className="text-sm text-center">
