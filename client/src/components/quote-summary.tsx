@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -21,8 +21,8 @@ interface QuoteSummaryProps {
 
 export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
   const [showPDFTemplate, setShowPDFTemplate] = useState(false);
-  const [issuerSignatureInput, setIssuerSignatureInput] = useState(quote.issuerSignature || "");
-  const [customerSignatureInput, setCustomerSignatureInput] = useState(quote.customerSignature || "");
+  const [issuerSignatureInput, setIssuerSignatureInput] = useState("");
+  const [customerSignatureInput, setCustomerSignatureInput] = useState("");
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -102,27 +102,18 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
     },
   });
 
-  // Auto-save issuer signature after user stops typing for 1 second
-  useEffect(() => {
-    if (issuerSignatureInput && issuerSignatureInput !== quote.issuerSignature && issuerSignatureInput.trim().length > 0) {
-      const timeoutId = setTimeout(() => {
-        signIssuerMutation.mutate({ signature: issuerSignatureInput.trim() });
-      }, 1000);
-
-      return () => clearTimeout(timeoutId);
+  // Simple save functions - no auto-save, manual button click only
+  const handleSaveIssuerSignature = () => {
+    if (issuerSignatureInput.trim()) {
+      signIssuerMutation.mutate({ signature: issuerSignatureInput.trim() });
     }
-  }, [issuerSignatureInput, quote.issuerSignature, signIssuerMutation]);
+  };
 
-  // Auto-save customer signature after user stops typing for 1 second
-  useEffect(() => {
-    if (customerSignatureInput && customerSignatureInput !== quote.customerSignature && customerSignatureInput.trim().length > 0) {
-      const timeoutId = setTimeout(() => {
-        signCustomerMutation.mutate({ signature: customerSignatureInput.trim() });
-      }, 1000);
-
-      return () => clearTimeout(timeoutId);
+  const handleSaveCustomerSignature = () => {
+    if (customerSignatureInput.trim()) {
+      signCustomerMutation.mutate({ signature: customerSignatureInput.trim() });
     }
-  }, [customerSignatureInput, quote.customerSignature, signCustomerMutation]);
+  };
 
   const updateContractMutation = useMutation({
     mutationFn: async (data: { contractTemplateId?: number | null; customContractTerms?: string | null }) => {
@@ -381,43 +372,59 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
 
           {/* Signature Actions */}
           {!quote.issuerSignature && (
-            <div className="space-y-2">
+            <div className="space-y-3">
               <Label htmlFor="issuerSignature" className="text-sm font-medium">Sign as EDG Patio & Shade</Label>
-              <Input
-                id="issuerSignature"
-                placeholder="Enter your name to sign..."
-                value={issuerSignatureInput}
-                onChange={(e) => setIssuerSignatureInput(e.target.value)}
-                disabled={signIssuerMutation.isPending}
-                className="w-full"
-              />
-              {signIssuerMutation.isPending && (
-                <p className="text-xs text-gray-500">Saving signature...</p>
-              )}
-              {issuerSignatureInput.trim() && !signIssuerMutation.isPending && (
-                <p className="text-xs text-green-600">✓ Will auto-save in 1 second</p>
-              )}
+              <div className="flex gap-2">
+                <Input
+                  id="issuerSignature"
+                  placeholder="Enter your name to sign..."
+                  value={issuerSignatureInput}
+                  onChange={(e) => setIssuerSignatureInput(e.target.value)}
+                  disabled={signIssuerMutation.isPending}
+                  className="flex-1"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && issuerSignatureInput.trim()) {
+                      handleSaveIssuerSignature();
+                    }
+                  }}
+                />
+                <Button
+                  onClick={handleSaveIssuerSignature}
+                  disabled={!issuerSignatureInput.trim() || signIssuerMutation.isPending}
+                  className="bg-edg-teal hover:bg-edg-teal/90 text-white"
+                >
+                  {signIssuerMutation.isPending ? "Saving..." : "Sign"}
+                </Button>
+              </div>
             </div>
           )}
 
           {/* Customer Signature Input */}
           {!quote.customerSignature && (
-            <div className="space-y-2">
+            <div className="space-y-3">
               <Label htmlFor="customerSignature" className="text-sm font-medium">Customer Signature</Label>
-              <Input
-                id="customerSignature"
-                placeholder="Customer name to sign..."
-                value={customerSignatureInput}
-                onChange={(e) => setCustomerSignatureInput(e.target.value)}
-                disabled={signCustomerMutation.isPending}
-                className="w-full"
-              />
-              {signCustomerMutation.isPending && (
-                <p className="text-xs text-gray-500">Saving customer signature...</p>
-              )}
-              {customerSignatureInput.trim() && !signCustomerMutation.isPending && (
-                <p className="text-xs text-green-600">✓ Will auto-save in 1 second</p>
-              )}
+              <div className="flex gap-2">
+                <Input
+                  id="customerSignature"
+                  placeholder="Customer name to sign..."
+                  value={customerSignatureInput}
+                  onChange={(e) => setCustomerSignatureInput(e.target.value)}
+                  disabled={signCustomerMutation.isPending}
+                  className="flex-1"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && customerSignatureInput.trim()) {
+                      handleSaveCustomerSignature();
+                    }
+                  }}
+                />
+                <Button
+                  onClick={handleSaveCustomerSignature}
+                  disabled={!customerSignatureInput.trim() || signCustomerMutation.isPending}
+                  className="bg-edg-teal hover:bg-edg-teal/90 text-white"
+                >
+                  {signCustomerMutation.isPending ? "Saving..." : "Sign"}
+                </Button>
+              </div>
             </div>
           )}
 
