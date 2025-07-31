@@ -6,11 +6,11 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 // Schema for extracted product data
 const ExtractedProductSchema = z.object({
-  sku: z.string().optional(),
+  sku: z.string().nullable().optional(),
   name: z.string(),
-  unit: z.string().optional(),
+  unit: z.string().nullable().optional(),
   price: z.number(),
-  description: z.string().optional(),
+  description: z.string().nullable().optional(),
 });
 
 const ExtractedProductsSchema = z.object({
@@ -31,11 +31,11 @@ export async function extractProductsFromImage(base64Image: string): Promise<Ext
           IMPORTANT: Limit your response to the FIRST 100 products to avoid truncation.
           
           For each product found, return JSON objects with these exact fields:
-          - "sku": product code/SKU (string or null)
-          - "name": product name (string)
-          - "unit": unit of measurement like "each", "sq ft", "linear ft" (string)
-          - "price": price as number (not string)
-          - "description": additional details (string or null)
+          - "sku": product code/SKU (string, or null if not found)
+          - "name": product name (string, required)
+          - "unit": unit of measurement (string like "each", or null if not specified)
+          - "price": price as number (not string, required)
+          - "description": additional details (string, or null if not found)
           
           Return valid JSON in this exact format:
           {"products": [{"sku": "ABC123", "name": "Product Name", "unit": "each", "price": 25.99, "description": "Details"}]}
@@ -122,11 +122,11 @@ export async function extractProductsFromText(text: string): Promise<ExtractedPr
           IMPORTANT: Limit your response to the FIRST 100 products to avoid truncation.
           
           For each product found, return JSON objects with these exact fields:
-          - "sku": product code/SKU (string or null)
-          - "name": product name (string)  
-          - "unit": unit of measurement like "each", "sq ft", "linear ft" (string)
-          - "price": price as number (not string)
-          - "description": additional details (string or null)
+          - "sku": product code/SKU (string, or null if not found)
+          - "name": product name (string, required)
+          - "unit": unit of measurement (string like "each", or null if not specified)
+          - "price": price as number (not string, required)
+          - "description": additional details (string, or null if not found)
           
           Return valid JSON in this exact format:
           {"products": [{"sku": "ABC123", "name": "Product Name", "unit": "each", "price": 25.99, "description": "Details"}]}
