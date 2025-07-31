@@ -242,7 +242,7 @@ export function QuotePDFTemplate({ quote, isOpen, onClose }: QuotePDFTemplatePro
         <DialogHeader>
           <div className="flex justify-between items-center">
             <DialogTitle>Quote PDF Template</DialogTitle>
-            <div className="flex space-x-2">
+            <div className="flex space-x-4">
               <Button
                 variant="outline"
                 onClick={() => setIsEditing(!isEditing)}
