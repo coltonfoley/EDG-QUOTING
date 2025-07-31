@@ -249,7 +249,10 @@ export default function Quotes() {
                         Project
                       </th>
                       <th className="px-6 py-3 text-center text-xs font-medium text-edg-grey uppercase tracking-wider">
-                        Status
+                        Workflow
+                      </th>
+                      <th className="px-6 py-3 text-center text-xs font-medium text-edg-grey uppercase tracking-wider">
+                        Signature
                       </th>
                       <th className="px-6 py-3 text-right text-xs font-medium text-edg-grey uppercase tracking-wider">
                         Amount
@@ -291,22 +294,20 @@ export default function Quotes() {
                             {quote.projectName}
                           </td>
                           <td className="px-6 py-4 text-center">
-                            <div className="space-y-1">
-                              <Badge className={getStatusColor(quote.status)}>
-                                {quote.status.charAt(0).toUpperCase() + quote.status.slice(1)}
-                              </Badge>
-                              <div className="text-xs">
-                                <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                  quote.signatureStatus === 'signed' ? 'bg-green-100 text-green-800' :
-                                  quote.signatureStatus === 'unsigned' ? 'bg-red-100 text-red-800' :
-                                  'bg-gray-100 text-gray-800'
-                                }`}>
-                                  {quote.signatureStatus === 'signed' ? 'Signed by EDG' : 
-                                   quote.signatureStatus === 'unsigned' ? 'Unsigned' : 
-                                   quote.signatureStatus?.replace('_', ' ')}
-                                </span>
-                              </div>
-                            </div>
+                            <Badge className={getStatusColor(quote.status)}>
+                              {quote.status.charAt(0).toUpperCase() + quote.status.slice(1)}
+                            </Badge>
+                          </td>
+                          <td className="px-6 py-4 text-center">
+                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                              quote.signatureStatus === 'signed' ? 'bg-green-100 text-green-800' :
+                              quote.signatureStatus === 'unsigned' ? 'bg-red-100 text-red-800' :
+                              'bg-gray-100 text-gray-800'
+                            }`}>
+                              {quote.signatureStatus === 'signed' ? 'Signed by EDG' : 
+                               quote.signatureStatus === 'unsigned' ? 'Unsigned' : 
+                               quote.signatureStatus?.replace('_', ' ')}
+                            </span>
                           </td>
                           <td className="px-6 py-4 text-sm font-medium text-edg-black text-right">
                             {formatCurrency(total)}
