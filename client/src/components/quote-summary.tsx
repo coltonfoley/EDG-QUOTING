@@ -313,11 +313,13 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
             <div className="text-sm text-center">
               <span className="font-medium">Signature Status: </span>
               <span className={`capitalize ${
-                quote.signatureStatus === 'fully_signed' ? 'text-green-600 font-semibold' :
-                quote.signatureStatus === 'pending' ? 'text-yellow-600' :
+                quote.signatureStatus === 'signed' ? 'text-green-600 font-semibold' :
+                quote.signatureStatus === 'unsigned' ? 'text-red-600' :
                 'text-blue-600'
               }`}>
-                {quote.signatureStatus?.replace('_', ' ')}
+                {quote.signatureStatus === 'signed' ? 'Signed by EDG' : 
+                 quote.signatureStatus === 'unsigned' ? 'Unsigned' : 
+                 quote.signatureStatus?.replace('_', ' ')}
               </span>
             </div>
             {quote.issuerSignature && (

@@ -462,7 +462,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const quote = await storage.updateQuote(id, {
         issuerSignature: signature,
         issuerSignatureDate: new Date(),
-        signatureStatus: 'issuer_signed'
+        signatureStatus: 'signed'
       });
 
       if (!quote) {
