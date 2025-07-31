@@ -57,7 +57,9 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
       const response = await apiRequest('PUT', `/api/quotes/${quote.id}`, { status });
       return response.json();
     },
-    onSuccess: () => {
+    onSuccess: (updatedQuote, variables) => {
+      // Update form state to match the new status
+      form.setValue("status", variables.status);
       toast({ title: "Quote status updated successfully" });
       queryClient.invalidateQueries({ queryKey: [`/api/quotes/${quote?.id}`] });
       queryClient.invalidateQueries({ queryKey: ["/api/quotes"] });
