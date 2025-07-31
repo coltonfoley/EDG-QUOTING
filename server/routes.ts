@@ -4,8 +4,6 @@ import { storage } from "./storage";
 import { insertCustomerSchema, insertQuoteSchema, insertLineItemSchema, insertProductSchema, insertContractTemplateSchema } from "@shared/schema";
 import { z } from "zod";
 import { setupAuth, isAuthenticated } from "./replitAuth";
-import { processManufacturerDocument, analyzeDocumentStructure } from "./document-processor";
-import multer from "multer";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
@@ -394,9 +392,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/contract-templates', isAuthenticated, async (req, res) => {
     try {
-      if (!req.user?.id) {
-        return res.status(401).json({ message: "Authentication required" });
-      }
       const currentUser = await storage.getUser(req.user.id);
       if (currentUser?.role !== 'admin') {
         return res.status(403).json({ message: "Admin access required" });
@@ -413,9 +408,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.put('/api/contract-templates/:id', isAuthenticated, async (req, res) => {
     try {
-      if (!req.user?.id) {
-        return res.status(401).json({ message: "Authentication required" });
-      }
       const currentUser = await storage.getUser(req.user.id);
       if (currentUser?.role !== 'admin') {
         return res.status(403).json({ message: "Admin access required" });
@@ -438,9 +430,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.delete('/api/contract-templates/:id', isAuthenticated, async (req, res) => {
     try {
-      if (!req.user?.id) {
-        return res.status(401).json({ message: "Authentication required" });
-      }
       const currentUser = await storage.getUser(req.user.id);
       if (currentUser?.role !== 'admin') {
         return res.status(403).json({ message: "Admin access required" });
@@ -514,89 +503,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error signing quote as customer:", error);
       res.status(500).json({ message: "Failed to sign quote" });
-    }
-  });
-
-  // Document processing routes
-  const upload = multer({
-    storage: multer.memoryStorage(),
-    limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
-    fileFilter: (req, file, cb) => {
-      const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'];
-      if (allowedTypes.includes(file.mimetype)) {
-        cb(null, true);
-      } else {
-        cb(new Error('Only image files and PDFs are allowed'));
-      }
-    }
-  });
-
-  // Analyze document structure endpoint
-  app.post('/api/documents/analyze', isAuthenticated, upload.single('document'), async (req, res) => {
-    try {
-      if (!req.file) {
-        return res.status(400).json({ message: "No file uploaded" });
-      }
-
-      const analysis = await analyzeDocumentStructure(req.file.buffer, req.file.mimetype);
-      
-      res.json({ analysis });
-    } catch (error) {
-      console.error("Error analyzing document:", error);
-      res.status(500).json({ message: error instanceof Error ? error.message : "Failed to analyze document" });
-    }
-  });
-
-  // Process document and extract products
-  app.post('/api/documents/process', isAuthenticated, upload.single('document'), async (req, res) => {
-    try {
-      if (!req.file) {
-        return res.status(400).json({ message: "No file uploaded" });
-      }
-
-      const result = await processManufacturerDocument(req.file.buffer, req.file.mimetype);
-      
-      res.json(result);
-    } catch (error) {
-      console.error("Error processing document:", error);
-      res.status(500).json({ message: error instanceof Error ? error.message : "Failed to process document" });
-    }
-  });
-
-  // Create products from processed document
-  app.post('/api/documents/create-products', isAuthenticated, async (req, res) => {
-    try {
-      const { products } = req.body;
-      
-      if (!Array.isArray(products) || products.length === 0) {
-        return res.status(400).json({ message: "No products provided" });
-      }
-
-      const createdProducts = [];
-      const errors = [];
-
-      for (const productData of products) {
-        try {
-          const validatedProduct = insertProductSchema.parse(productData);
-          const product = await storage.createProduct(validatedProduct);
-          createdProducts.push(product);
-        } catch (error) {
-          errors.push({ 
-            product: productData.name || "Unknown", 
-            error: error instanceof Error ? error.message : "Unknown error"
-          });
-        }
-      }
-
-      res.json({
-        success: true,
-        created: createdProducts.length,
-        errors: errors,
-        products: createdProducts
-      });
-    } catch (error) {
-      console.error("Error creating products:", error);
-      res.status(500).json({ message: "Failed to create products" });
     }
   });
 

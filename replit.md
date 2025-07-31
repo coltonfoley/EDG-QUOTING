@@ -95,7 +95,6 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
-- July 31, 2025: Added PDF-to-image conversion for AI document processing - now supports both PDF and image uploads for manufacturer catalog analysis
 - July 31, 2025: Fixed quote status update synchronization - status dropdown changes now sync with form state to prevent reversion on save
 - July 30, 2025: Fixed PDF generation blank page issue by converting logo to base64 format for cross-window compatibility
 - July 30, 2025: Successfully integrated EDG company logo across all application interfaces (landing page, app header, PDF templates)

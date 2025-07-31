@@ -1,7 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { AppHeader } from "@/components/app-header";
-import { DocumentUpload } from "@/components/document-upload";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -9,8 +8,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Package, Edit, Trash2, FileUp } from "lucide-react";
+import { Plus, Package, Edit, Trash2 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -146,44 +144,16 @@ export default function Products() {
     );
   }
 
-  const handleProductsCreated = (newProducts: Product[]) => {
-    toast({
-      title: "Products Created!",
-      description: `Successfully created ${newProducts.length} products from the document.`
-    });
-  };
-
   return (
     <div className="min-h-screen bg-gray-50">
       <AppHeader />
       
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="mb-8">
-          <h2 className="text-3xl font-bold text-edg-black">Product Catalog</h2>
-          <p className="text-edg-grey mt-2">Manage reusable products and services</p>
-        </div>
-
-        <Tabs defaultValue="catalog" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="catalog" className="flex items-center space-x-2">
-              <Package className="h-4 w-4" />
-              <span>Product Catalog</span>
-            </TabsTrigger>
-            <TabsTrigger value="upload" className="flex items-center space-x-2">
-              <FileUp className="h-4 w-4" />
-              <span>AI Document Processing</span>
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="upload" className="space-y-6">
-            <DocumentUpload onProductsCreated={handleProductsCreated} />
-          </TabsContent>
-
-          <TabsContent value="catalog" className="space-y-6">
-            <div className="flex justify-between items-center">
-              <div className="text-lg font-semibold">
-                {products?.length || 0} Products
-              </div>
+        <div className="flex justify-between items-center mb-8">
+          <div>
+            <h2 className="text-3xl font-bold text-edg-black">Product Catalog</h2>
+            <p className="text-edg-grey mt-2">Manage reusable products and services</p>
+          </div>
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
               <Button 
@@ -213,7 +183,7 @@ export default function Products() {
                         <FormItem>
                           <FormLabel>Product Name</FormLabel>
                           <FormControl>
-                            <Input {...field} value={field.value || ""} />
+                            <Input {...field} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -226,7 +196,7 @@ export default function Products() {
                         <FormItem>
                           <FormLabel>Category</FormLabel>
                           <FormControl>
-                            <Input {...field} value={field.value || ""} placeholder="e.g. Concrete, Framing, Electrical" />
+                            <Input {...field} placeholder="e.g. Concrete, Framing, Electrical" />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -240,7 +210,7 @@ export default function Products() {
                       <FormItem>
                         <FormLabel>Description</FormLabel>
                         <FormControl>
-                          <Textarea {...field} value={field.value || ""} rows={3} />
+                          <Textarea {...field} rows={3} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -266,7 +236,7 @@ export default function Products() {
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Unit</FormLabel>
-                          <Select onValueChange={field.onChange} defaultValue={field.value || "each"}>
+                          <Select onValueChange={field.onChange} defaultValue={field.value}>
                             <FormControl>
                               <SelectTrigger>
                                 <SelectValue />
@@ -409,8 +379,6 @@ export default function Products() {
             ))}
           </div>
         )}
-          </TabsContent>
-        </Tabs>
       </div>
     </div>
   );
