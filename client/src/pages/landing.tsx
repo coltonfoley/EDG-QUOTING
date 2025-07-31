@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Building2, ClipboardList, FileText, Users } from "lucide-react";
+import { ClipboardList, FileText, Users } from "lucide-react";
+import logoPath from "@assets/my-logo.png_1753970984943.jpg";
 
 export default function Landing() {
   const handleLogin = () => {
@@ -12,8 +13,7 @@ export default function Landing() {
       <div className="container mx-auto px-4 py-16">
         <div className="text-center mb-16">
           <div className="flex items-center justify-center mb-8">
-            <Building2 className="h-12 w-12 text-teal-600 mr-3" />
-            <h1 className="text-4xl font-bold text-slate-900">EDG Patio & Shade</h1>
+            <img src={logoPath} alt="EDG Patio & Shade" className="h-16 mr-6" />
           </div>
           <h2 className="text-2xl text-slate-700 mb-4">Quote Management System</h2>
           <p className="text-lg text-slate-600 max-w-2xl mx-auto mb-8">

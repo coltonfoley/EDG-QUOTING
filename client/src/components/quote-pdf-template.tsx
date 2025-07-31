@@ -12,6 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import type { QuoteWithDetails } from "@shared/schema";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
+import logoPath from "@assets/my-logo.png_1753970984943.jpg";
 
 interface QuotePDFTemplateProps {
   quote: QuoteWithDetails;
@@ -413,12 +414,15 @@ export function QuotePDFTemplate({ quote, isOpen, onClose }: QuotePDFTemplatePro
           <div id="quote-pdf-content" className="bg-white p-8 text-black" style={{ minHeight: '297mm' }}>
             {/* Header */}
             <div className="flex justify-between items-start mb-8 border-b-2 border-edg-teal pb-6">
-              <div>
-                <h1 className="text-3xl font-bold text-edg-black mb-2">{companyInfo.name}</h1>
-                <div className="text-sm text-gray-600 space-y-1">
-                  <div>{companyInfo.address}</div>
-                  <div>Phone: {companyInfo.phone} | Email: {companyInfo.email}</div>
-                  <div>{companyInfo.license}</div>
+              <div className="flex items-start space-x-4">
+                <img src={logoPath} alt="EDG Patio & Shade" className="h-12 mt-1" />
+                <div>
+                  <h1 className="text-3xl font-bold text-edg-black mb-2">{companyInfo.name}</h1>
+                  <div className="text-sm text-gray-600 space-y-1">
+                    <div>{companyInfo.address}</div>
+                    <div>Phone: {companyInfo.phone} | Email: {companyInfo.email}</div>
+                    <div>{companyInfo.license}</div>
+                  </div>
                 </div>
               </div>
               <div className="text-right">
