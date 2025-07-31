@@ -13,10 +13,10 @@ export default function Home() {
     queryKey: ['/api/quotes'],
   });
 
-  // Get recent quotes (last 5, sorted by creation/update date)
+  // Get recent quotes (last 5, sorted by creation date)
   const recentQuotes = quotes?.slice().sort((a, b) => {
-    const dateA = new Date(a.updatedAt || a.createdAt);
-    const dateB = new Date(b.updatedAt || b.createdAt);
+    const dateA = new Date(a.createdAt);
+    const dateB = new Date(b.createdAt);
     return dateB.getTime() - dateA.getTime();
   }).slice(0, 5) || [];
 
@@ -135,7 +135,7 @@ export default function Home() {
                             Quote {quote.quoteNumber}
                           </div>
                           <div className="text-xs text-edg-grey">
-                            {quote.customer.name} • {formatDate(quote.updatedAt || quote.createdAt)}
+                            {quote.customer.name} • {formatDate(quote.createdAt)}
                           </div>
                         </div>
                       </div>
@@ -148,7 +148,7 @@ export default function Home() {
                             const itemTotal = item.quantity * item.unitPrice;
                             const markupAmount = item.markupType === 'percentage' 
                               ? itemTotal * (item.markupValue / 100)
-                              : item.markupValue;
+                              : Number(item.markupValue);
                             return sum + itemTotal + markupAmount;
                           }, 0))}
                         </div>

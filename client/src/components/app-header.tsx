@@ -1,6 +1,7 @@
-import { HardHat, Bell, LogOut } from "lucide-react";
+import { Bell, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import logoPath from "@assets/my-logo.png_1753970984943.jpg";
 import { 
   DropdownMenu,
   DropdownMenuContent,
@@ -26,9 +27,8 @@ export function AppHeader() {
         <div className="flex justify-between items-center h-16">
           <div className="flex items-center space-x-8">
             <div className="flex-shrink-0 flex items-center">
-              <HardHat className="text-edg-teal text-2xl mr-3 h-8 w-8" />
-              <h1 className="text-xl font-bold text-edg-black">EDG Patio & Shade</h1>
-              <span className="text-sm text-edg-grey ml-2">Estimator</span>
+              <img src={logoPath} alt="EDG Patio & Shade" className="h-8 mr-3" />
+              <span className="text-sm text-edg-grey">Estimator</span>
             </div>
             <nav className="hidden md:flex space-x-6">
               <Link href="/" className={`text-sm font-medium transition-colors hover:text-edg-teal ${
