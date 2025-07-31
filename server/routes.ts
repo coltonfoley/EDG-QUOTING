@@ -538,8 +538,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "No file uploaded" });
       }
 
-      const base64 = req.file.buffer.toString('base64');
-      const analysis = await analyzeDocumentStructure(base64, req.file.mimetype);
+      const analysis = await analyzeDocumentStructure(req.file.buffer, req.file.mimetype);
       
       res.json({ analysis });
     } catch (error) {
@@ -555,8 +554,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "No file uploaded" });
       }
 
-      const base64 = req.file.buffer.toString('base64');
-      const result = await processManufacturerDocument(base64, req.file.mimetype);
+      const result = await processManufacturerDocument(req.file.buffer, req.file.mimetype);
       
       res.json(result);
     } catch (error) {
