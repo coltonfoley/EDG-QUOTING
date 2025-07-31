@@ -1,6 +1,6 @@
 import { customers, quotes, lineItems, products, users, contractTemplates, type Customer, type Quote, type LineItem, type Product, type User, type ContractTemplate, type InsertCustomer, type InsertQuote, type InsertLineItem, type InsertProduct, type InsertUser, type InsertContractTemplate, type QuoteWithDetails } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, inArray } from "drizzle-orm";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 
@@ -33,6 +33,7 @@ export interface IStorage {
   createProduct(product: InsertProduct): Promise<Product>;
   updateProduct(id: number, product: Partial<InsertProduct>): Promise<Product | undefined>;
   deleteProduct(id: number): Promise<boolean>;
+  bulkUpdateProducts(productIds: number[], updates: Partial<InsertProduct>): Promise<number>;
 
   // Line item methods
   getLineItemsByQuoteId(quoteId: number): Promise<LineItem[]>;
@@ -395,6 +396,15 @@ export class DatabaseStorage implements IStorage {
   async deleteProduct(id: number): Promise<boolean> {
     const result = await db.delete(products).where(eq(products.id, id));
     return (result.rowCount || 0) > 0;
+  }
+
+  async bulkUpdateProducts(productIds: number[], updates: Partial<InsertProduct>): Promise<number> {
+    const result = await db
+      .update(products)
+      .set(updates)
+      .where(inArray(products.id, productIds))
+      .returning();
+    return result.length;
   }
 
   // User authentication methods

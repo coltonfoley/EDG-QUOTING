@@ -511,6 +511,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Bulk update products endpoint
+  app.post('/api/admin/bulk-update-products', isAuthenticated, async (req, res) => {
+    try {
+      const currentUser = await storage.getUser(req.user.id);
+      if (currentUser?.role !== 'admin') {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+
+      const { productIds, updates } = req.body;
+      
+      if (!Array.isArray(productIds) || productIds.length === 0) {
+        return res.status(400).json({ message: "Product IDs array is required" });
+      }
+
+      if (!updates || typeof updates !== 'object') {
+        return res.status(400).json({ message: "Updates object is required" });
+      }
+
+      const updatedCount = await storage.bulkUpdateProducts(productIds, updates);
+      
+      res.json({
+        message: `Successfully updated ${updatedCount} products`,
+        updatedCount
+      });
+    } catch (error) {
+      console.error("Bulk update error:", error);
+      res.status(500).json({ message: "Failed to bulk update products" });
+    }
+  });
+
   // Contract Template routes
   app.get('/api/contract-templates', isAuthenticated, async (req, res) => {
     try {

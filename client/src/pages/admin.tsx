@@ -14,9 +14,9 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
-import { UserPlus, Shield, User as UserIcon, Trash2, Edit, Upload, FileSpreadsheet, AlertCircle, CheckCircle } from "lucide-react";
+import { UserPlus, Shield, User as UserIcon, Trash2, Edit, Upload, FileSpreadsheet, AlertCircle, CheckCircle, Package, Settings } from "lucide-react";
 import { z } from "zod";
-import type { User } from "@shared/schema";
+import type { User, Product } from "@shared/schema";
 
 const createUserSchema = z.object({
   username: z.string().min(3, "Username must be at least 3 characters"),
@@ -38,6 +38,15 @@ const editUserSchema = z.object({
 
 type CreateUserData = z.infer<typeof createUserSchema>;
 type EditUserData = z.infer<typeof editUserSchema>;
+
+const bulkUpdateSchema = z.object({
+  category: z.string().optional(),
+  defaultMarkupType: z.enum(["percentage", "dollar"]).optional(),
+  defaultMarkupValue: z.string().optional(),
+  unit: z.string().optional(),
+});
+
+type BulkUpdateData = z.infer<typeof bulkUpdateSchema>;
 
 export default function AdminPage() {
   const { user } = useAuth();
@@ -550,6 +559,19 @@ export default function AdminPage() {
             <PriceListUploader />
           </CardContent>
         </Card>
+
+        {/* Product Management Section */}
+        <Card className="mt-8">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Package className="h-5 w-5" />
+              Product Management
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ProductBulkEditor />
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
@@ -693,6 +715,263 @@ function PriceListUploader() {
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+function ProductBulkEditor() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [selectedProducts, setSelectedProducts] = useState<number[]>([]);
+  const [showBulkEditForm, setShowBulkEditForm] = useState(false);
+
+  // Fetch all products
+  const { data: products = [], isLoading } = useQuery<Product[]>({
+    queryKey: ["/api/products"],
+  });
+
+  // Filter imported products
+  const importedProducts = products.filter(p => p.category === "Imported");
+
+  const bulkUpdateForm = useForm<BulkUpdateData>({
+    resolver: zodResolver(bulkUpdateSchema),
+    defaultValues: {
+      category: "",
+      defaultMarkupType: "percentage",
+      defaultMarkupValue: "",
+      unit: "",
+    },
+  });
+
+  const bulkUpdateMutation = useMutation({
+    mutationFn: async (data: BulkUpdateData) => {
+      // Remove empty fields
+      const updates = Object.fromEntries(
+        Object.entries(data).filter(([_, value]) => value && value !== "")
+      );
+      
+      return await apiRequest("POST", "/api/admin/bulk-update-products", {
+        productIds: selectedProducts,
+        updates,
+      });
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "Products updated successfully",
+        description: `Updated ${data.updatedCount} products`,
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/products"] });
+      setSelectedProducts([]);
+      setShowBulkEditForm(false);
+      bulkUpdateForm.reset();
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Update failed",
+        description: error.message || "Failed to update products",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedProducts(importedProducts.map(p => p.id));
+    } else {
+      setSelectedProducts([]);
+    }
+  };
+
+  const handleSelectProduct = (productId: number, checked: boolean) => {
+    if (checked) {
+      setSelectedProducts([...selectedProducts, productId]);
+    } else {
+      setSelectedProducts(selectedProducts.filter(id => id !== productId));
+    }
+  };
+
+  const handleBulkUpdate = (data: BulkUpdateData) => {
+    bulkUpdateMutation.mutate(data);
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-8">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-edg-teal"></div>
+        <span className="ml-2 text-gray-600">Loading products...</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-lg font-semibold">Imported Products</h3>
+          <p className="text-sm text-gray-600">
+            {importedProducts.length} products available for bulk editing
+          </p>
+        </div>
+        
+        {selectedProducts.length > 0 && (
+          <Button
+            onClick={() => setShowBulkEditForm(true)}
+            className="bg-edg-teal hover:bg-edg-teal/90 text-white"
+          >
+            <Settings className="h-4 w-4 mr-2" />
+            Edit {selectedProducts.length} Products
+          </Button>
+        )}
+      </div>
+
+      {importedProducts.length === 0 ? (
+        <div className="text-center py-8 text-gray-500">
+          <Package className="h-16 w-16 mx-auto mb-4 text-gray-300" />
+          <p>No imported products found.</p>
+          <p className="text-sm">Use the Price List Uploader above to import products.</p>
+        </div>
+      ) : (
+        <div className="border rounded-lg overflow-hidden">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-12">
+                  <input
+                    type="checkbox"
+                    checked={selectedProducts.length === importedProducts.length}
+                    onChange={(e) => handleSelectAll(e.target.checked)}
+                    className="rounded border-gray-300"
+                  />
+                </TableHead>
+                <TableHead>Product Name</TableHead>
+                <TableHead>Category</TableHead>
+                <TableHead>Unit</TableHead>
+                <TableHead>Price</TableHead>
+                <TableHead>Markup</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {importedProducts.map((product) => (
+                <TableRow key={product.id}>
+                  <TableCell>
+                    <input
+                      type="checkbox"
+                      checked={selectedProducts.includes(product.id)}
+                      onChange={(e) => handleSelectProduct(product.id, e.target.checked)}
+                      className="rounded border-gray-300"
+                    />
+                  </TableCell>
+                  <TableCell className="font-medium">{product.name}</TableCell>
+                  <TableCell>{product.category}</TableCell>
+                  <TableCell>{product.unit}</TableCell>
+                  <TableCell>${product.defaultUnitPrice}</TableCell>
+                  <TableCell>
+                    {product.defaultMarkupValue}% ({product.defaultMarkupType})
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+
+      {/* Bulk Edit Dialog */}
+      <Dialog open={showBulkEditForm} onOpenChange={setShowBulkEditForm}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Bulk Edit Products</DialogTitle>
+            <p className="text-sm text-gray-600">
+              Update {selectedProducts.length} selected products. Leave fields blank to keep current values.
+            </p>
+          </DialogHeader>
+          <Form {...bulkUpdateForm}>
+            <form onSubmit={bulkUpdateForm.handleSubmit(handleBulkUpdate)} className="space-y-4">
+              <FormField
+                control={bulkUpdateForm.control}
+                name="category"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Category</FormLabel>
+                    <FormControl>
+                      <Input {...field} placeholder="Leave blank to keep current" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={bulkUpdateForm.control}
+                  name="defaultMarkupType"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Markup Type</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select type" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="percentage">Percentage</SelectItem>
+                          <SelectItem value="dollar">Dollar Amount</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={bulkUpdateForm.control}
+                  name="defaultMarkupValue"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Markup Value</FormLabel>
+                      <FormControl>
+                        <Input {...field} placeholder="e.g., 25" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <FormField
+                control={bulkUpdateForm.control}
+                name="unit"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Unit</FormLabel>
+                    <FormControl>
+                      <Input {...field} placeholder="e.g., each, sq ft, linear ft" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="flex justify-end gap-2 pt-4">
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={() => setShowBulkEditForm(false)}
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  type="submit" 
+                  disabled={bulkUpdateMutation.isPending}
+                  className="bg-edg-teal hover:bg-edg-teal/90 text-white"
+                >
+                  {bulkUpdateMutation.isPending ? "Updating..." : "Update Products"}
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
