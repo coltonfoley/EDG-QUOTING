@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Plus, Edit, Trash2, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { AppHeader } from "@/components/app-header";
 import type { ContractTemplate, InsertContractTemplate } from "@shared/schema";
 
 export default function ContractsPage() {
@@ -109,7 +110,9 @@ export default function ContractsPage() {
   }
 
   return (
-    <div className="container mx-auto py-8">
+    <>
+      <AppHeader />
+      <div className="container mx-auto py-8">
       <div className="flex justify-between items-center mb-8">
         <div>
           <h1 className="text-3xl font-bold">Contract Templates</h1>
@@ -340,6 +343,7 @@ export default function ContractsPage() {
           </CardContent>
         </Card>
       )}
-    </div>
+      </div>
+    </>
   );
 }
