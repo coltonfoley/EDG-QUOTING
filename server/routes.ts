@@ -412,12 +412,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Process based on file type
       if (file.mimetype === 'application/pdf') {
         // Process PDF
-        try {
-          const pdfData = await parsePDF(file.buffer);
+        const pdfData = await parsePDF(file.buffer);
+        if (pdfData.text.trim()) {
           extractedProducts = await extractProductsFromText(pdfData.text);
-        } catch (error) {
-          console.error("PDF processing error:", error);
-          errors.push("Failed to process PDF content");
+          if (extractedProducts.length === 0) {
+            errors.push("No products found in PDF content");
+          }
+        } else {
+          errors.push("Failed to extract text from PDF");
         }
       } else if (file.mimetype.includes('excel') || file.mimetype.includes('spreadsheet')) {
         // Process Excel
@@ -435,18 +437,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
             price: parseFloat(row.Price || row.price || row['Unit Price'] || row['Cost'] || '0'),
             description: row.Description || row.description || row['Notes'] || undefined,
           })).filter((p: ExtractedProduct) => p.name && p.price > 0);
+          
+          if (extractedProducts.length === 0) {
+            errors.push("No valid products found in Excel file");
+          }
         } catch (error) {
           console.error("Excel processing error:", error);
           errors.push("Failed to process Excel file");
         }
       } else if (file.mimetype.startsWith('image/')) {
         // Process Image with OpenAI Vision
-        try {
-          const base64Image = file.buffer.toString('base64');
-          extractedProducts = await extractProductsFromImage(base64Image);
-        } catch (error) {
-          console.error("Image processing error:", error);
-          errors.push("Failed to process image with AI");
+        const base64Image = file.buffer.toString('base64');
+        extractedProducts = await extractProductsFromImage(base64Image);
+        if (extractedProducts.length === 0) {
+          errors.push("No products found in image - try a higher quality image with clear text");
         }
       }
 
