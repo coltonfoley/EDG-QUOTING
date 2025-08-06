@@ -22,6 +22,8 @@ interface QuoteSummaryProps {
 export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
   const [showPDFTemplate, setShowPDFTemplate] = useState(false);
   const [issuerSignatureInput, setIssuerSignatureInput] = useState("");
+  const [localTaxRate, setLocalTaxRate] = useState<string>("");
+  const [localDiscount, setLocalDiscount] = useState<string>("");
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -229,8 +231,14 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
                   id="taxRate"
                   type="number"
                   step="0.1"
-                  value={quote.taxRate}
-                  onChange={(e) => onUpdateQuote("taxRate", e.target.value)}
+                  value={localTaxRate || quote.taxRate}
+                  onChange={(e) => setLocalTaxRate(e.target.value)}
+                  onBlur={(e) => {
+                    if (localTaxRate !== "" && localTaxRate !== quote.taxRate) {
+                      onUpdateQuote("taxRate", localTaxRate);
+                    }
+                    setLocalTaxRate("");
+                  }}
                   className="mt-1"
                 />
               </div>
@@ -240,8 +248,14 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
                   id="discount"
                   type="number"
                   step="0.1"
-                  value={quote.discount}
-                  onChange={(e) => onUpdateQuote("discount", e.target.value)}
+                  value={localDiscount || quote.discount}
+                  onChange={(e) => setLocalDiscount(e.target.value)}
+                  onBlur={(e) => {
+                    if (localDiscount !== "" && localDiscount !== quote.discount) {
+                      onUpdateQuote("discount", localDiscount);
+                    }
+                    setLocalDiscount("");
+                  }}
                   className="mt-1"
                 />
               </div>
