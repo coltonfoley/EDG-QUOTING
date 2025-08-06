@@ -19,7 +19,7 @@ const quoteFormSchema = insertQuoteSchema.extend({
   customerEmail: z.string().email("Valid email is required"),
   customerPhone: z.string().min(1, "Phone number is required"),
   customerCompany: z.string().optional(),
-}).omit({ customerId: true });
+}).omit({ customerId: true, taxRate: true, discount: true });
 
 type QuoteFormData = z.infer<typeof quoteFormSchema>;
 
@@ -41,8 +41,6 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
       projectAddress: quote?.projectAddress ?? "",
       estimatedStartDate: quote?.estimatedStartDate ?? "",
       notes: quote?.notes || "",
-      taxRate: quote?.taxRate || "8.5",
-      discount: quote?.discount || "0",
       status: quote?.status || "draft",
       customerName: quote?.customer?.name || "",
       customerEmail: quote?.customer?.email || "",
