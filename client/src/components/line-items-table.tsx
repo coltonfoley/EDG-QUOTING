@@ -19,6 +19,7 @@ interface LineItemsTableProps {
 
 export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
   const [editingItem, setEditingItem] = useState<number | null>(null);
+  const [editingValues, setEditingValues] = useState<Record<number, Partial<LineItem>>>({});
   const [newItem, setNewItem] = useState({
     description: "",
     quantity: "1",
@@ -66,10 +67,16 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
       const response = await apiRequest("PUT", `/api/line-items/${id}`, data);
       return response.json();
     },
-    onSuccess: () => {
+    onSuccess: (_, { id }) => {
       queryClient.invalidateQueries({ queryKey: ["/api/quotes"] });
       queryClient.invalidateQueries({ queryKey: [`/api/quotes/${quoteId}`] });
       setEditingItem(null);
+      // Clear the editing value after successful update
+      setEditingValues(prev => {
+        const newValues = { ...prev };
+        delete newValues[id];
+        return newValues;
+      });
       toast({ title: "Line item updated successfully" });
     },
     onError: () => {
@@ -103,11 +110,28 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
     createLineItemMutation.mutate(itemData);
   };
 
+  const updateEditingValue = (itemId: number, field: string, value: any) => {
+    setEditingValues(prev => ({
+      ...prev,
+      [itemId]: {
+        ...prev[itemId],
+        [field]: value
+      }
+    }));
+  };
+
   const handleUpdateItem = (item: LineItem, field: string, value: any) => {
     updateLineItemMutation.mutate({
       id: item.id,
       data: { [field]: value },
     });
+  };
+
+  const handleBlurUpdate = (item: LineItem, field: string) => {
+    const editingValue = editingValues[item.id]?.[field];
+    if (editingValue !== undefined && editingValue !== item[field]) {
+      handleUpdateItem(item, field, editingValue);
+    }
   };
 
   const handleDeleteItem = (id: number) => {
@@ -336,19 +360,34 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {lineItems.map((item) => {
+                // Use editing values if available, otherwise use item values
+                const currentQuantity = editingValues[item.id]?.quantity !== undefined 
+                  ? (editingValues[item.id].quantity === '' ? 0 : parseFloat(editingValues[item.id].quantity as string) || 0)
+                  : item.quantity;
+                const currentUnitPrice = editingValues[item.id]?.unitPrice !== undefined 
+                  ? (editingValues[item.id].unitPrice === '' ? 0 : parseFloat(editingValues[item.id].unitPrice as string) || 0)
+                  : item.unitPrice;
+                const currentMarkupValue = editingValues[item.id]?.markupValue !== undefined 
+                  ? (editingValues[item.id].markupValue === '' ? 0 : parseFloat(editingValues[item.id].markupValue as string) || 0)
+                  : item.markupValue;
+                const currentMarkupType = editingValues[item.id]?.markupType !== undefined 
+                  ? editingValues[item.id].markupType as "percentage" | "dollar"
+                  : item.markupType;
+                
                 const total = calculateLineItemTotal(
-                  item.quantity,
-                  item.unitPrice,
-                  item.markupType,
-                  item.markupValue
+                  currentQuantity,
+                  currentUnitPrice,
+                  currentMarkupType,
+                  currentMarkupValue
                 );
 
                 return (
                   <tr key={item.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 max-w-xs">
                       <Input
-                        value={item.description}
-                        onChange={(e) => handleUpdateItem(item, "description", e.target.value)}
+                        value={editingValues[item.id]?.description !== undefined ? editingValues[item.id].description : item.description}
+                        onChange={(e) => updateEditingValue(item.id, "description", e.target.value)}
+                        onBlur={() => handleBlurUpdate(item, "description")}
                         className="border-none bg-transparent focus:ring-2 focus:ring-edg-teal focus:border-transparent"
                       />
                     </td>
@@ -357,13 +396,12 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                         type="number"
                         step="1"
                         min="0"
-                        value={item.quantity}
-                        onChange={(e) => {
-                          const value = e.target.value;
-                          if (value === '' || value === '-') {
-                            handleUpdateItem(item, "quantity", 0);
-                          } else {
-                            const numValue = parseFloat(value);
+                        value={editingValues[item.id]?.quantity !== undefined ? editingValues[item.id].quantity : item.quantity}
+                        onChange={(e) => updateEditingValue(item.id, "quantity", e.target.value)}
+                        onBlur={() => {
+                          const value = editingValues[item.id]?.quantity;
+                          if (value !== undefined) {
+                            const numValue = value === '' ? 0 : parseFloat(value as string);
                             if (!isNaN(numValue)) {
                               handleUpdateItem(item, "quantity", numValue);
                             }
@@ -377,13 +415,12 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                         type="number"
                         step="0.01"
                         min="0"
-                        value={item.unitPrice}
-                        onChange={(e) => {
-                          const value = e.target.value;
-                          if (value === '' || value === '-') {
-                            handleUpdateItem(item, "unitPrice", 0);
-                          } else {
-                            const numValue = parseFloat(value);
+                        value={editingValues[item.id]?.unitPrice !== undefined ? editingValues[item.id].unitPrice : item.unitPrice}
+                        onChange={(e) => updateEditingValue(item.id, "unitPrice", e.target.value)}
+                        onBlur={() => {
+                          const value = editingValues[item.id]?.unitPrice;
+                          if (value !== undefined) {
+                            const numValue = value === '' ? 0 : parseFloat(value as string);
                             if (!isNaN(numValue)) {
                               handleUpdateItem(item, "unitPrice", numValue);
                             }
@@ -398,13 +435,12 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                           type="number"
                           step="0.01"
                           min="0"
-                          value={item.markupValue}
-                          onChange={(e) => {
-                            const value = e.target.value;
-                            if (value === '' || value === '-') {
-                              handleUpdateItem(item, "markupValue", 0);
-                            } else {
-                              const numValue = parseFloat(value);
+                          value={editingValues[item.id]?.markupValue !== undefined ? editingValues[item.id].markupValue : item.markupValue}
+                          onChange={(e) => updateEditingValue(item.id, "markupValue", e.target.value)}
+                          onBlur={() => {
+                            const value = editingValues[item.id]?.markupValue;
+                            if (value !== undefined) {
+                              const numValue = value === '' ? 0 : parseFloat(value as string);
                               if (!isNaN(numValue)) {
                                 handleUpdateItem(item, "markupValue", numValue);
                               }
