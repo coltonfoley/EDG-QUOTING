@@ -102,8 +102,12 @@ export const insertQuoteSchema = createInsertSchema(quotes).omit({
   id: true,
   createdAt: true,
 }).extend({
-  taxRate: z.union([z.string(), z.number()]).transform(val => typeof val === 'string' ? val : val.toString()),
-  discount: z.union([z.string(), z.number()]).transform(val => typeof val === 'string' ? val : val.toString()),
+  taxRate: z.union([z.string(), z.number(), z.null()]).transform(val => val === null ? "0" : (typeof val === 'string' ? val : val.toString())),
+  discount: z.union([z.string(), z.number(), z.null()]).transform(val => val === null ? "0" : (typeof val === 'string' ? val : val.toString())),
+  projectName: z.union([z.string(), z.null()]).transform(val => val === null ? "" : val),
+  projectAddress: z.union([z.string(), z.null()]).transform(val => val === null ? "" : val),
+  estimatedStartDate: z.union([z.string(), z.null()]).transform(val => val === null ? "" : val),
+  notes: z.union([z.string(), z.null()]).transform(val => val === null ? "" : val),
 });
 
 export const insertProductSchema = createInsertSchema(products).omit({
