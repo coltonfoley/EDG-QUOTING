@@ -355,7 +355,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                     <td className="px-6 py-4 text-center">
                       <Input
                         type="number"
-                        step="0.01"
+                        step="1"
                         value={item.quantity}
                         onChange={(e) => handleUpdateItem(item, "quantity", parseFloat(e.target.value) || 0)}
                         className="w-28 text-center"
@@ -423,7 +423,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                   <td className="px-6 py-4 text-center">
                     <Input
                       type="number"
-                      step="0.01"
+                      step="1"
                       value={newItem.quantity}
                       onChange={(e) => setNewItem({ ...newItem, quantity: e.target.value })}
                       className="w-28 text-center"
