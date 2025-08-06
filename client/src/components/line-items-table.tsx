@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Trash2, Edit, Plus, Package, Search, Filter, X } from "lucide-react";
-import { formatCurrency, calculateLineItemTotal } from "@/lib/utils";
+import { formatCurrency, calculateLineItemTotal, calculateLineItemMargin } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { LineItem, Product } from "@shared/schema";
@@ -351,6 +351,9 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                   Markup
                 </th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-edg-grey uppercase tracking-wider">
+                  Margin
+                </th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-edg-grey uppercase tracking-wider">
                   Total
                 </th>
                 <th className="px-6 py-3 text-center text-xs font-medium text-edg-grey uppercase tracking-wider">
@@ -375,6 +378,13 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                   : item.markupType;
                 
                 const total = calculateLineItemTotal(
+                  currentQuantity,
+                  currentUnitPrice,
+                  currentMarkupType,
+                  currentMarkupValue
+                );
+                
+                const margin = calculateLineItemMargin(
                   currentQuantity,
                   currentUnitPrice,
                   currentMarkupType,
@@ -462,6 +472,9 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                         </Select>
                       </div>
                     </td>
+                    <td className="px-6 py-4 text-right text-sm font-medium text-success-green">
+                      {formatCurrency(margin)}
+                    </td>
                     <td className="px-6 py-4 text-right text-sm font-medium text-edg-black">
                       {formatCurrency(total)}
                     </td>
@@ -535,6 +548,16 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                         </SelectContent>
                       </Select>
                     </div>
+                  </td>
+                  <td className="px-6 py-4 text-right text-sm font-medium text-success-green">
+                    {formatCurrency(
+                      calculateLineItemMargin(
+                        newItem.quantity,
+                        newItem.unitPrice,
+                        newItem.markupType,
+                        newItem.markupValue
+                      )
+                    )}
                   </td>
                   <td className="px-6 py-4 text-right text-sm font-medium text-edg-black">
                     {formatCurrency(

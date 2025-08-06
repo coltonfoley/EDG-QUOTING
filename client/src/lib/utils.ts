@@ -32,6 +32,25 @@ export function calculateLineItemTotal(
   }
 }
 
+export function calculateLineItemMargin(
+  quantity: number | string,
+  unitPrice: number | string,
+  markupType: string,
+  markupValue: number | string
+): number {
+  const qty = typeof quantity === 'string' ? parseFloat(quantity) : quantity;
+  const price = typeof unitPrice === 'string' ? parseFloat(unitPrice) : unitPrice;
+  const markup = typeof markupValue === 'string' ? parseFloat(markupValue) : markupValue;
+
+  const baseTotal = qty * price;
+  
+  if (markupType === 'percentage') {
+    return baseTotal * (markup / 100);
+  } else {
+    return markup;
+  }
+}
+
 export function calculateQuoteTotals(lineItems: any[], taxRate: number | string = 0, discount: number | string = 0) {
   const tax = typeof taxRate === 'string' ? parseFloat(taxRate) : taxRate;
   const disc = typeof discount === 'string' ? parseFloat(discount) : discount;
