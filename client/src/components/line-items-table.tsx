@@ -1,11 +1,12 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Trash2, Edit, Plus, Package } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Trash2, Edit, Plus, Package, Search, Filter, X } from "lucide-react";
 import { formatCurrency, calculateLineItemTotal } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -27,6 +28,8 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
   });
   const [showNewItemForm, setShowNewItemForm] = useState(false);
   const [showProductDialog, setShowProductDialog] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState<string>("all");
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -123,16 +126,44 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
     });
     setShowProductDialog(false);
     setShowNewItemForm(true);
+    // Reset search when product is selected
+    setSearchTerm("");
+    setSelectedCategory("all");
   };
 
-  const groupedProducts = products?.reduce((groups, product) => {
-    const category = product.category || "Uncategorized";
-    if (!groups[category]) {
-      groups[category] = [];
-    }
-    groups[category].push(product);
-    return groups;
-  }, {} as Record<string, Product[]>) || {};
+  // Get unique categories for filtering
+  const categories = useMemo(() => {
+    if (!products) return [];
+    const uniqueCategories = Array.from(new Set(products.map(p => p.category || "Uncategorized")));
+    return uniqueCategories.sort();
+  }, [products]);
+
+  // Filter products based on search and category
+  const filteredProducts = useMemo(() => {
+    if (!products) return [];
+    
+    return products.filter(product => {
+      const matchesSearch = searchTerm === "" || 
+        product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (product.description || "").toLowerCase().includes(searchTerm.toLowerCase());
+      
+      const matchesCategory = selectedCategory === "all" || 
+        (product.category || "Uncategorized") === selectedCategory;
+      
+      return matchesSearch && matchesCategory;
+    });
+  }, [products, searchTerm, selectedCategory]);
+
+  const groupedProducts = useMemo(() => {
+    return filteredProducts.reduce((groups, product) => {
+      const category = product.category || "Uncategorized";
+      if (!groups[category]) {
+        groups[category] = [];
+      }
+      groups[category].push(product);
+      return groups;
+    }, {} as Record<string, Product[]>);
+  }, [filteredProducts]);
 
   return (
     <Card className="mb-6">
@@ -150,45 +181,119 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                   From Catalog
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+              <DialogContent className="max-w-4xl max-h-[80vh] overflow-hidden flex flex-col">
                 <DialogHeader>
                   <DialogTitle>Select Product from Catalog</DialogTitle>
                 </DialogHeader>
+                
                 {!products || products.length === 0 ? (
                   <div className="text-center py-8">
                     <Package className="mx-auto h-12 w-12 text-gray-400 mb-4" />
                     <p className="text-gray-500">No products in catalog. Create products first.</p>
                   </div>
                 ) : (
-                  <div className="space-y-6">
-                    {Object.entries(groupedProducts).map(([category, categoryProducts]) => (
-                      <div key={category}>
-                        <h3 className="text-lg font-semibold text-edg-black mb-3">{category}</h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                          {categoryProducts.map((product) => (
-                            <div
-                              key={product.id}
-                              className="p-4 border border-gray-200 rounded-lg hover:border-edg-teal cursor-pointer transition-colors"
-                              onClick={() => handleAddFromProduct(product)}
-                            >
-                              <div className="flex justify-between items-start mb-2">
-                                <h4 className="font-medium text-edg-black">{product.name}</h4>
-                                <span className="text-sm font-medium text-edg-teal">
-                                  {formatCurrency(product.defaultUnitPrice)}
-                                </span>
-                              </div>
-                              {product.description && (
-                                <p className="text-sm text-edg-grey mb-2">{product.description}</p>
-                              )}
-                              <div className="flex justify-between text-xs text-edg-grey">
-                                <span>Per {product.unit}</span>
-                                <span>Markup: {product.defaultMarkupValue}{product.defaultMarkupType === 'percentage' ? '%' : '$'}</span>
+                  <div className="flex flex-col flex-1 min-h-0">
+                    {/* Search and Filters */}
+                    <div className="flex flex-col sm:flex-row gap-4 pb-4 border-b">
+                      <div className="relative flex-1">
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                        <Input
+                          placeholder="Search products..."
+                          value={searchTerm}
+                          onChange={(e) => setSearchTerm(e.target.value)}
+                          className="pl-10"
+                        />
+                      </div>
+                      
+                      <div className="flex gap-2">
+                        <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                          <SelectTrigger className="w-48">
+                            <Filter className="h-4 w-4 mr-2" />
+                            <SelectValue placeholder="All Categories" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">All Categories</SelectItem>
+                            {categories.map(category => (
+                              <SelectItem key={category} value={category}>
+                                {category}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
+                    {/* Active Filters */}
+                    {(searchTerm || selectedCategory !== "all") && (
+                      <div className="flex gap-2 py-2">
+                        {searchTerm && (
+                          <Badge variant="secondary" className="flex items-center gap-1">
+                            Search: "{searchTerm}"
+                            <X className="h-3 w-3 cursor-pointer" onClick={() => setSearchTerm("")} />
+                          </Badge>
+                        )}
+                        {selectedCategory !== "all" && (
+                          <Badge variant="secondary" className="flex items-center gap-1">
+                            Category: {selectedCategory}
+                            <X className="h-3 w-3 cursor-pointer" onClick={() => setSelectedCategory("all")} />
+                          </Badge>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Product Results */}
+                    <div className="flex-1 overflow-y-auto">
+                      {filteredProducts.length === 0 ? (
+                        <div className="text-center py-8">
+                          <Package className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+                          <h3 className="text-lg font-medium text-gray-900 mb-2">No products found</h3>
+                          <p className="text-gray-500 mb-4">Try adjusting your search or filter criteria.</p>
+                          <Button
+                            variant="outline"
+                            onClick={() => {
+                              setSearchTerm("");
+                              setSelectedCategory("all");
+                            }}
+                          >
+                            Clear Filters
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="space-y-6 py-4">
+                          {Object.entries(groupedProducts).map(([category, categoryProducts]) => (
+                            <div key={category}>
+                              <h3 className="text-lg font-semibold text-edg-black mb-3 flex items-center gap-2">
+                                {category}
+                                <Badge variant="outline">{categoryProducts.length}</Badge>
+                              </h3>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                {categoryProducts.map((product) => (
+                                  <div
+                                    key={product.id}
+                                    className="p-4 border border-gray-200 rounded-lg hover:border-edg-teal cursor-pointer transition-colors"
+                                    onClick={() => handleAddFromProduct(product)}
+                                  >
+                                    <div className="flex justify-between items-start mb-2">
+                                      <h4 className="font-medium text-edg-black">{product.name}</h4>
+                                      <span className="text-sm font-medium text-edg-teal">
+                                        {formatCurrency(product.defaultUnitPrice)}
+                                      </span>
+                                    </div>
+                                    {product.description && (
+                                      <p className="text-sm text-edg-grey mb-2">{product.description}</p>
+                                    )}
+                                    <div className="flex justify-between text-xs text-edg-grey">
+                                      <span>Per {product.unit}</span>
+                                      <span>Markup: {product.defaultMarkupValue}{product.defaultMarkupType === 'percentage' ? '%' : '$'}</span>
+                                    </div>
+                                  </div>
+                                ))}
                               </div>
                             </div>
                           ))}
                         </div>
-                      </div>
-                    ))}
+                      )}
+                    </div>
                   </div>
                 )}
               </DialogContent>
