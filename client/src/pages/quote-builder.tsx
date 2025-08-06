@@ -106,8 +106,8 @@ export default function QuoteBuilder() {
   const handleUpdateQuote = (field: string, value: any) => {
     if (!quote || !quoteId) return;
     
+    // Only send the specific field being updated, not the entire quote object
     updateQuoteMutation.mutate({
-      ...quote,
       [field]: value,
       customerName: quote.customer.name,
       customerEmail: quote.customer.email,
