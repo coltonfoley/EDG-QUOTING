@@ -232,7 +232,7 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
                       <FormItem>
                         <FormLabel>Project Name (Optional)</FormLabel>
                         <FormControl>
-                          <Input placeholder="Enter project name" {...field} />
+                          <Input placeholder="Enter project name" {...field} value={field.value || ""} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -245,7 +245,7 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
                       <FormItem>
                         <FormLabel>Project Address (Optional)</FormLabel>
                         <FormControl>
-                          <Textarea rows={2} placeholder="Enter project address" {...field} />
+                          <Textarea rows={2} placeholder="Enter project address" {...field} value={field.value || ""} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -258,7 +258,7 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
                       <FormItem>
                         <FormLabel>Estimated Start Date</FormLabel>
                         <FormControl>
-                          <Input type="date" {...field} />
+                          <Input type="date" {...field} value={field.value || ""} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>

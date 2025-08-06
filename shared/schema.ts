@@ -101,6 +101,9 @@ export const insertCustomerSchema = createInsertSchema(customers).omit({
 export const insertQuoteSchema = createInsertSchema(quotes).omit({
   id: true,
   createdAt: true,
+}).extend({
+  taxRate: z.union([z.string(), z.number()]).transform(val => typeof val === 'string' ? val : val.toString()),
+  discount: z.union([z.string(), z.number()]).transform(val => typeof val === 'string' ? val : val.toString()),
 });
 
 export const insertProductSchema = createInsertSchema(products).omit({
