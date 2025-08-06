@@ -356,8 +356,19 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                       <Input
                         type="number"
                         step="1"
+                        min="0"
                         value={item.quantity}
-                        onChange={(e) => handleUpdateItem(item, "quantity", parseFloat(e.target.value) || 0)}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          if (value === '' || value === '-') {
+                            handleUpdateItem(item, "quantity", 0);
+                          } else {
+                            const numValue = parseFloat(value);
+                            if (!isNaN(numValue)) {
+                              handleUpdateItem(item, "quantity", numValue);
+                            }
+                          }
+                        }}
                         className="w-28 text-center"
                       />
                     </td>
@@ -365,8 +376,19 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                       <Input
                         type="number"
                         step="0.01"
+                        min="0"
                         value={item.unitPrice}
-                        onChange={(e) => handleUpdateItem(item, "unitPrice", parseFloat(e.target.value) || 0)}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          if (value === '' || value === '-') {
+                            handleUpdateItem(item, "unitPrice", 0);
+                          } else {
+                            const numValue = parseFloat(value);
+                            if (!isNaN(numValue)) {
+                              handleUpdateItem(item, "unitPrice", numValue);
+                            }
+                          }
+                        }}
                         className="w-32 text-center"
                       />
                     </td>
@@ -375,8 +397,19 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                         <Input
                           type="number"
                           step="0.01"
+                          min="0"
                           value={item.markupValue}
-                          onChange={(e) => handleUpdateItem(item, "markupValue", parseFloat(e.target.value) || 0)}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            if (value === '' || value === '-') {
+                              handleUpdateItem(item, "markupValue", 0);
+                            } else {
+                              const numValue = parseFloat(value);
+                              if (!isNaN(numValue)) {
+                                handleUpdateItem(item, "markupValue", numValue);
+                              }
+                            }
+                          }}
                           className="w-20 text-center"
                         />
                         <Select
@@ -424,18 +457,22 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                     <Input
                       type="number"
                       step="1"
+                      min="0"
                       value={newItem.quantity}
                       onChange={(e) => setNewItem({ ...newItem, quantity: e.target.value })}
                       className="w-28 text-center"
+                      placeholder="1"
                     />
                   </td>
                   <td className="px-6 py-4 text-center">
                     <Input
                       type="number"
                       step="0.01"
+                      min="0"
                       value={newItem.unitPrice}
                       onChange={(e) => setNewItem({ ...newItem, unitPrice: e.target.value })}
                       className="w-32 text-center"
+                      placeholder="0.00"
                     />
                   </td>
                   <td className="px-6 py-4 text-center">
@@ -443,9 +480,11 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                       <Input
                         type="number"
                         step="0.01"
+                        min="0"
                         value={newItem.markupValue}
                         onChange={(e) => setNewItem({ ...newItem, markupValue: e.target.value })}
                         className="w-20 text-center"
+                        placeholder="0"
                       />
                       <Select
                         value={newItem.markupType}
