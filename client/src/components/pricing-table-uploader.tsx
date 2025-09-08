@@ -26,6 +26,7 @@ export function PricingTableUploader({ productId, onUploadComplete }: PricingTab
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<PricingData[]>([]);
   const [errors, setErrors] = useState<string[]>([]);
+  const [skippedCount, setSkippedCount] = useState<number>(0);
   const [isProcessing, setIsProcessing] = useState(false);
 
   const { toast } = useToast();
@@ -58,9 +59,10 @@ export function PricingTableUploader({ productId, onUploadComplete }: PricingTab
     },
   });
 
-  const validatePricingData = (data: any[]): { valid: PricingData[]; errors: string[] } => {
+  const validatePricingData = (data: any[]): { valid: PricingData[]; errors: string[]; skipped: number } => {
     const valid: PricingData[] = [];
     const errors: string[] = [];
+    let skipped = 0;
 
     data.forEach((row, index) => {
       const rowNum = index + 1;
@@ -90,6 +92,14 @@ export function PricingTableUploader({ productId, onUploadComplete }: PricingTab
           errors.push(`Row ${rowNum}: Missing '${column.names[0]}' column`);
           return;
         }
+      }
+
+      // Check if price indicates "not available" - skip these rows
+      const priceStr = String(values.price || '').trim().toLowerCase();
+      if (priceStr === 'n/a' || priceStr === 'na' || priceStr === '' || 
+          priceStr === 'null' || priceStr === 'undefined' || priceStr === '-') {
+        skipped++;
+        return; // Skip this row - not an error, just not manufacturable
       }
 
       // Validate numeric values
@@ -144,7 +154,7 @@ export function PricingTableUploader({ productId, onUploadComplete }: PricingTab
       });
     });
 
-    return { valid, errors };
+    return { valid, errors, skipped };
   };
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -155,6 +165,7 @@ export function PricingTableUploader({ productId, onUploadComplete }: PricingTab
     setIsProcessing(true);
     setErrors([]);
     setPreview([]);
+    setSkippedCount(0);
 
     try {
       const buffer = await selectedFile.arrayBuffer();
@@ -168,11 +179,13 @@ export function PricingTableUploader({ productId, onUploadComplete }: PricingTab
         return;
       }
 
-      const { valid, errors } = validatePricingData(jsonData);
+      const { valid, errors, skipped } = validatePricingData(jsonData);
       
       if (errors.length > 0) {
         setErrors(errors);
       }
+      
+      setSkippedCount(skipped);
       
       if (valid.length > 0) {
         setPreview(valid.slice(0, 10)); // Show first 10 rows for preview
@@ -211,7 +224,7 @@ export function PricingTableUploader({ productId, onUploadComplete }: PricingTab
           Bulk Upload Pricing Table
         </CardTitle>
         <CardDescription>
-          Upload an Excel or CSV file with Length, Width, and Price columns to quickly populate the pricing table.
+          Upload an Excel or CSV file with banded pricing data to quickly populate the pricing table. N/A entries will be skipped automatically.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -221,7 +234,7 @@ export function PricingTableUploader({ productId, onUploadComplete }: PricingTab
             <div className="space-y-2">
               <h3 className="text-lg font-medium">Choose a file to upload</h3>
               <p className="text-sm text-gray-500">
-                Excel (.xlsx, .xls) or CSV files with Length, Width, Price columns
+                Excel (.xlsx, .xls) or CSV files with LengthMin, LengthMax, WidthMin, WidthMax, Price columns
               </p>
             </div>
             <Input
@@ -248,6 +261,8 @@ export function PricingTableUploader({ productId, onUploadComplete }: PricingTab
             <AlertDescription>
               <strong>Expected format:</strong> Your file should have columns: "LengthMin", "LengthMax", "WidthMin", "WidthMax", and "Price". 
               Each row represents a size band (e.g., Length 12.0-12.5 × Width 8.0-8.5 = $2,500).
+              <br />
+              <strong>N/A values:</strong> Use "N/A" or leave empty for non-manufacturable size combinations - these will be skipped automatically.
             </AlertDescription>
           </Alert>
 
@@ -269,13 +284,23 @@ export function PricingTableUploader({ productId, onUploadComplete }: PricingTab
             </Alert>
           )}
 
+          {/* Skipped Info */}
+          {skippedCount > 0 && (
+            <Alert className="border-yellow-200 bg-yellow-50">
+              <AlertCircle className="h-4 w-4 text-yellow-600" />
+              <AlertDescription className="text-yellow-800">
+                Skipped {skippedCount} row(s) with N/A or empty prices (non-manufacturable sizes).
+              </AlertDescription>
+            </Alert>
+          )}
+
           {/* Preview */}
           {preview.length > 0 && (
             <div className="space-y-2">
               <Alert>
                 <CheckCircle className="h-4 w-4" />
                 <AlertDescription>
-                  Preview of valid entries (showing first 10 of {preview.length}):
+                  Found {preview.length} valid entries {skippedCount > 0 && `(${skippedCount} skipped)`} - showing first 10:
                 </AlertDescription>
               </Alert>
               
