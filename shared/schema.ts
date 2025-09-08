@@ -55,6 +55,11 @@ export const quotes = pgTable("quotes", {
   customerSignature: text("customer_signature"), // customer signature (name)
   customerSignatureDate: timestamp("customer_signature_date"),
   signatureStatus: text("signature_status").notNull().default("unsigned"), // unsigned, signed
+  // DocuSign integration fields
+  docusignEnvelopeId: text("docusign_envelope_id"), // DocuSign envelope ID
+  docusignStatus: text("docusign_status"), // created, sent, delivered, signed, completed, declined, voided
+  docusignSentDate: timestamp("docusign_sent_date"), // when envelope was sent to customer
+  docusignViewUrl: text("docusign_view_url"), // URL for customer to view/sign document
   createdAt: timestamp("created_at").defaultNow(),
 });
 
