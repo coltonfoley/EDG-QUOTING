@@ -95,7 +95,7 @@ export async function extractProductsFromImage(base64Image: string): Promise<Ext
         },
       ],
       response_format: { type: "json_object" },
-      max_tokens: 8000, // Increased token limit
+      max_completion_tokens: 8000, // Increased token limit
       temperature: 0, // More deterministic output
     });
 
@@ -115,7 +115,7 @@ export async function extractProductsFromImage(base64Image: string): Promise<Ext
       
       // Try to extract valid JSON from partial response
       try {
-        const productsMatch = content.match(/"products"\s*:\s*\[(.*?)\]/s);
+        const productsMatch = content.match(/"products"\s*:\s*\[(.*?)\]/);
         if (productsMatch) {
           const productsStr = `{"products": [${productsMatch[1]}]}`;
           parsedContent = JSON.parse(productsStr);
@@ -175,7 +175,7 @@ export async function extractProductsFromText(text: string): Promise<ExtractedPr
         },
       ],
       response_format: { type: "json_object" },
-      max_tokens: 8000, // Increased token limit
+      max_completion_tokens: 8000, // Increased token limit
       temperature: 0, // More deterministic output
     });
 
@@ -315,7 +315,7 @@ export async function extractQuoteDataFromText(text: string): Promise<ExtractedQ
         },
       ],
       response_format: { type: "json_object" },
-      max_tokens: 4000,
+      max_completion_tokens: 4000,
       temperature: 0, // More deterministic output
     });
 
