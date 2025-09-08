@@ -41,6 +41,7 @@ export interface IStorage {
   createPricingTable(pricingTable: InsertPricingTable): Promise<PricingTable>;
   updatePricingTable(id: number, pricingTable: Partial<InsertPricingTable>): Promise<PricingTable | undefined>;
   deletePricingTable(id: number): Promise<boolean>;
+  deletePricingTablesByProductId(productId: number): Promise<boolean>;
   calculateConfigurableProductPrice(productId: number, length: number, width: number): Promise<number | null>;
 
   // Product accessories methods  
@@ -558,6 +559,11 @@ export class DatabaseStorage implements IStorage {
   async deletePricingTable(id: number): Promise<boolean> {
     const result = await db.delete(pricingTables).where(eq(pricingTables.id, id));
     return (result.rowCount || 0) > 0;
+  }
+
+  async deletePricingTablesByProductId(productId: number): Promise<boolean> {
+    const result = await db.delete(pricingTables).where(eq(pricingTables.productId, productId));
+    return true; // Always return true since this is for cleanup before bulk upload
   }
 
   async calculateConfigurableProductPrice(productId: number, length: number, width: number): Promise<number | null> {
