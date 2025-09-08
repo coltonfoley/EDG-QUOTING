@@ -464,10 +464,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Validate pricing data format
       for (const item of pricingData) {
-        if (!item.length || !item.width || !item.price || 
-            item.length <= 0 || item.width <= 0 || item.price <= 0) {
+        if (!item.lengthMin || !item.lengthMax || !item.widthMin || !item.widthMax || !item.price || 
+            item.lengthMin <= 0 || item.lengthMax <= 0 || item.widthMin <= 0 || item.widthMax <= 0 || item.price <= 0) {
           return res.status(400).json({ 
-            message: "Each pricing entry must have valid length, width, and price values" 
+            message: "Each pricing entry must have valid lengthMin, lengthMax, widthMin, widthMax, and price values" 
+          });
+        }
+        
+        // Validate that min values are less than max values
+        if (item.lengthMin >= item.lengthMax || item.widthMin >= item.widthMax) {
+          return res.status(400).json({ 
+            message: "Min values must be less than max values for each dimension" 
           });
         }
       }
@@ -479,9 +486,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       for (const item of pricingData) {
         const pricingTable = await storage.createPricingTable({
           productId,
-          length: parseFloat(item.length),
-          width: parseFloat(item.width),
-          price: parseFloat(item.price)
+          lengthMin: parseFloat(item.lengthMin),
+          lengthMax: parseFloat(item.lengthMax),
+          widthMin: parseFloat(item.widthMin),
+          widthMax: parseFloat(item.widthMax),
+          basePrice: parseFloat(item.price)
         });
         results.push(pricingTable);
       }
