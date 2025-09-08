@@ -9,6 +9,7 @@ import * as XLSX from "xlsx";
 import { parsePDF } from "./pdf-parser";
 import { extractProductsFromImage, extractProductsFromText, extractQuoteDataFromText } from "./openai";
 import type { ExtractedProduct } from "./openai";
+import DocuSignService from "./docusign";
 
 // Configure multer for file uploads
 const upload = multer({
@@ -919,6 +920,180 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error signing quote as customer:", error);
       res.status(500).json({ message: "Failed to sign quote" });
+    }
+  });
+
+  // DocuSign Integration Routes
+  app.post('/api/quotes/:id/send-to-docusign', isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const { returnUrl } = req.body;
+      
+      // Get the quote with details
+      const quote = await storage.getQuote(id);
+      if (!quote) {
+        return res.status(404).json({ message: "Quote not found" });
+      }
+
+      // Validate that quote has required customer email
+      if (!quote.customer?.email) {
+        return res.status(400).json({ message: "Customer email is required for DocuSign" });
+      }
+
+      // Check if already sent to DocuSign
+      if (quote.docusignEnvelopeId) {
+        return res.status(400).json({ 
+          message: "Quote already sent to DocuSign", 
+          envelopeId: quote.docusignEnvelopeId 
+        });
+      }
+
+      // Initialize DocuSign service
+      const docusignService = new DocuSignService();
+      
+      // For this implementation, we need the PDF content
+      // In a real implementation, you'd generate the PDF here or get it from storage
+      const pdfBase64 = ""; // TODO: Generate PDF and convert to base64
+      
+      if (!pdfBase64) {
+        return res.status(400).json({ 
+          message: "PDF generation not implemented. Please generate PDF first." 
+        });
+      }
+
+      // Create DocuSign envelope
+      const envelope = await docusignService.createAndSendEnvelope(
+        pdfBase64,
+        {
+          email: quote.customer.email,
+          name: quote.customer.name,
+          recipientId: '1',
+        },
+        `Quote ${quote.quoteNumber} - EDG Patio & Shade`,
+        quote.quoteNumber
+      );
+
+      // Get signing URL
+      const signingUrl = await docusignService.getRecipientSigningUrl(
+        envelope.envelopeId,
+        {
+          email: quote.customer.email,
+          name: quote.customer.name,
+          recipientId: '1',
+        },
+        returnUrl || `${req.protocol}://${req.get('host')}/quotes/${id}`
+      );
+
+      // Update quote with DocuSign information
+      const updatedQuote = await storage.updateQuote(id, {
+        docusignEnvelopeId: envelope.envelopeId,
+        docusignStatus: envelope.status,
+        docusignSentDate: new Date(),
+        docusignViewUrl: signingUrl,
+        status: 'sent' // Update quote status to sent
+      });
+
+      res.json({
+        envelopeId: envelope.envelopeId,
+        status: envelope.status,
+        signingUrl: signingUrl,
+        quote: updatedQuote
+      });
+
+    } catch (error: any) {
+      console.error("Error sending quote to DocuSign:", error);
+      res.status(500).json({ 
+        message: "Failed to send quote to DocuSign",
+        error: error.message 
+      });
+    }
+  });
+
+  // Get DocuSign status for a quote
+  app.get('/api/quotes/:id/docusign-status', isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const quote = await storage.getQuote(id);
+      
+      if (!quote) {
+        return res.status(404).json({ message: "Quote not found" });
+      }
+
+      if (!quote.docusignEnvelopeId) {
+        return res.status(400).json({ message: "Quote not sent to DocuSign" });
+      }
+
+      const docusignService = new DocuSignService();
+      const envelopeStatus = await docusignService.getEnvelopeStatus(quote.docusignEnvelopeId);
+      const recipients = await docusignService.getEnvelopeRecipients(quote.docusignEnvelopeId);
+
+      res.json({
+        envelopeId: quote.docusignEnvelopeId,
+        status: envelopeStatus.status,
+        statusDateTime: envelopeStatus.statusDateTime,
+        recipients: recipients,
+        currentStatus: quote.docusignStatus
+      });
+
+    } catch (error: any) {
+      console.error("Error getting DocuSign status:", error);
+      res.status(500).json({ 
+        message: "Failed to get DocuSign status",
+        error: error.message 
+      });
+    }
+  });
+
+  // DocuSign webhook handler
+  app.post('/api/docusign/webhook', async (req, res) => {
+    try {
+      const { event, data } = req.body;
+      
+      // Validate webhook (in production, verify signature)
+      if (!event || !data) {
+        return res.status(400).json({ message: "Invalid webhook payload" });
+      }
+
+      const envelopeId = data.envelopeId;
+      const newStatus = data.envelopeSummary?.status;
+      
+      if (!envelopeId) {
+        return res.status(400).json({ message: "Missing envelope ID" });
+      }
+
+      // Find quote by DocuSign envelope ID
+      const quotes = await storage.getAllQuotes();
+      const quote = quotes.find(q => q.docusignEnvelopeId === envelopeId);
+      
+      if (!quote) {
+        console.log(`Webhook received for unknown envelope: ${envelopeId}`);
+        return res.status(200).json({ message: "Envelope not found, ignoring" });
+      }
+
+      // Update quote status based on DocuSign status
+      let updatedFields: any = {
+        docusignStatus: newStatus
+      };
+
+      if (newStatus === 'completed') {
+        updatedFields.status = 'approved';
+        updatedFields.customerSignature = `Signed via DocuSign`;
+        updatedFields.customerSignatureDate = new Date();
+        updatedFields.signatureStatus = quote.issuerSignature ? 'fully_signed' : 'customer_signed';
+      } else if (newStatus === 'declined') {
+        updatedFields.status = 'rejected';
+      }
+
+      await storage.updateQuote(quote.id, updatedFields);
+
+      res.status(200).json({ message: "Webhook processed successfully" });
+
+    } catch (error: any) {
+      console.error("Error processing DocuSign webhook:", error);
+      res.status(500).json({ 
+        message: "Failed to process webhook",
+        error: error.message 
+      });
     }
   });
 
