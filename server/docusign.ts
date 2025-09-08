@@ -97,9 +97,8 @@ export class DocuSignService {
       return this.accessToken;
     }
 
-    // Get new token using JWT authentication
-    const jwtToken = await this.generateJWTToken();
-    const tokenResponse = await this.requestAccessToken(jwtToken);
+    // Get new token using client credentials flow
+    const tokenResponse = await this.requestAccessTokenWithClientCredentials();
     
     this.accessToken = tokenResponse.access_token;
     this.tokenExpiry = new Date(Date.now() + tokenResponse.expires_in * 1000);
@@ -108,35 +107,30 @@ export class DocuSignService {
   }
 
   /**
-   * Generate JWT token for authentication
+   * Request access token using client credentials flow
    */
-  private async generateJWTToken(): Promise<string> {
-    // For production, you'd implement proper JWT signing here
-    // For now, we'll use the simpler Authorization Code Grant flow
-    throw new Error('JWT authentication not implemented. Please use Authorization Code Grant flow.');
-  }
-
-  /**
-   * Request access token using JWT
-   */
-  private async requestAccessToken(jwtToken: string): Promise<DocuSignTokenResponse> {
+  private async requestAccessTokenWithClientCredentials(): Promise<DocuSignTokenResponse> {
     const authUrl = this.config.baseUrl.includes('demo') 
       ? 'https://account-d.docusign.com/oauth/token'
       : 'https://account.docusign.com/oauth/token';
+
+    const credentials = Buffer.from(`${this.config.integrationKey}:${this.config.secretKey}`).toString('base64');
 
     const response = await fetch(authUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
+        'Authorization': `Basic ${credentials}`,
       },
       body: new URLSearchParams({
-        grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
-        assertion: jwtToken,
+        grant_type: 'client_credentials',
+        scope: 'signature impersonation',
       }),
     });
 
     if (!response.ok) {
-      throw new Error(`Failed to get access token: ${response.statusText}`);
+      const errorText = await response.text();
+      throw new Error(`Failed to get access token: ${response.status} ${response.statusText} - ${errorText}`);
     }
 
     return response.json() as Promise<DocuSignTokenResponse>;
