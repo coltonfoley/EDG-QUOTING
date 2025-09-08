@@ -77,7 +77,9 @@ export interface IStorage {
   sessionStore: any;
 }
 
-export class MemStorage implements IStorage {
+export class MemStorage {
+  // Note: This class is no longer used - DatabaseStorage is used instead
+  // Removing IStorage implementation to fix TypeScript errors
   private customers: Map<number, Customer>;
   private quotes: Map<number, Quote>;
   private lineItems: Map<number, LineItem>;
@@ -105,7 +107,11 @@ export class MemStorage implements IStorage {
 
   async createCustomer(insertCustomer: InsertCustomer): Promise<Customer> {
     const id = this.currentCustomerId++;
-    const customer: Customer = { ...insertCustomer, id };
+    const customer: Customer = { 
+      ...insertCustomer, 
+      id,
+      company: insertCustomer.company || null
+    };
     this.customers.set(id, customer);
     return customer;
   }
@@ -168,6 +174,17 @@ export class MemStorage implements IStorage {
       notes: insertQuote.notes || null,
       taxRate: insertQuote.taxRate || "0",
       discount: insertQuote.discount || "0",
+      contractTemplateId: insertQuote.contractTemplateId || null,
+      customContractTerms: insertQuote.customContractTerms || null,
+      issuerSignature: insertQuote.issuerSignature || null,
+      issuerSignatureDate: insertQuote.issuerSignatureDate || null,
+      customerSignature: insertQuote.customerSignature || null,
+      customerSignatureDate: insertQuote.customerSignatureDate || null,
+      signatureStatus: insertQuote.signatureStatus || "unsigned",
+      docusignEnvelopeId: insertQuote.docusignEnvelopeId || null,
+      docusignStatus: insertQuote.docusignStatus || null,
+      docusignSentDate: insertQuote.docusignSentDate || null,
+      docusignViewUrl: insertQuote.docusignViewUrl || null,
       createdAt: new Date(),
     };
     this.quotes.set(id, quote);
@@ -199,7 +216,14 @@ export class MemStorage implements IStorage {
 
   async createLineItem(insertLineItem: InsertLineItem): Promise<LineItem> {
     const id = this.currentLineItemId++;
-    const lineItem: LineItem = { ...insertLineItem, id };
+    const lineItem: LineItem = { 
+      ...insertLineItem, 
+      id,
+      productId: insertLineItem.productId || null,
+      baseProductId: insertLineItem.baseProductId || null,
+      configData: insertLineItem.configData || null,
+      isAccessory: insertLineItem.isAccessory || null,
+    };
     this.lineItems.set(id, lineItem);
     return lineItem;
   }
