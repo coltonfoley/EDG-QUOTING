@@ -1,0 +1,537 @@
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Separator } from "@/components/ui/separator";
+import { Badge } from "@/components/ui/badge";
+import { Loader2, Upload, FileText, Edit3, Check, X } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+import type { Quote } from "@shared/schema";
+
+interface ExtractedLineItem {
+  description: string;
+  quantity: number;
+  price: number;
+  total: number;
+  unit?: string | null;
+}
+
+interface ExtractedCustomer {
+  name: string;
+  email?: string | null;
+  phone?: string | null;
+  company?: string | null;
+  address?: string | null;
+}
+
+interface ExtractedQuote {
+  customer: ExtractedCustomer;
+  quoteNumber?: string | null;
+  date?: string | null;
+  projectDescription?: string | null;
+  lineItems: ExtractedLineItem[];
+  subtotal?: number | null;
+  taxRate?: number | null;
+  taxAmount?: number | null;
+  discountAmount?: number | null;
+  total?: number | null;
+  notes?: string | null;
+  terms?: string | null;
+}
+
+interface QuoteImporterProps {
+  onImportComplete?: () => void;
+  onClose?: () => void;
+}
+
+export function QuoteImporter({ onImportComplete, onClose }: QuoteImporterProps) {
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [extractedData, setExtractedData] = useState<ExtractedQuote | null>(null);
+  const [editedData, setEditedData] = useState<ExtractedQuote | null>(null);
+  const [activeTab, setActiveTab] = useState("upload");
+  const [importType, setImportType] = useState<"new" | "existing">("new");
+  const [selectedQuoteId, setSelectedQuoteId] = useState<string>("");
+
+  const { toast } = useToast();
+
+  // Fetch existing quotes for "add to existing" option
+  const { data: quotes } = useQuery<Quote[]>({
+    queryKey: ["/api/quotes"],
+    enabled: importType === "existing",
+  });
+
+  // PDF processing mutation
+  const processPdfMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const formData = new FormData();
+      formData.append("pdf", file);
+      
+      const response = await apiRequest("POST", "/api/quotes/import-pdf", formData);
+      return response.json();
+    },
+    onSuccess: (data) => {
+      if (data.success && data.data) {
+        setExtractedData(data.data);
+        setEditedData(data.data);
+        setActiveTab("preview");
+        toast({
+          title: "PDF Processed",
+          description: "Quote data extracted successfully. Please review and edit as needed.",
+        });
+      } else {
+        toast({
+          title: "Extraction Failed",
+          description: data.message || "Failed to extract quote data from PDF",
+          variant: "destructive",
+        });
+      }
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Processing Failed",
+        description: error.message || "Failed to process PDF file",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Import quote mutation
+  const importMutation = useMutation({
+    mutationFn: async (data: ExtractedQuote) => {
+      if (importType === "new") {
+        // Create new quote with extracted data
+        const customerResponse = await apiRequest("POST", "/api/customers", data.customer);
+        const customer = await customerResponse.json();
+        
+        const quoteData = {
+          customerId: customer.id,
+          projectDescription: data.projectDescription || "",
+          status: "draft" as const,
+          validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days
+          taxRate: data.taxRate || 0,
+          discountAmount: data.discountAmount || 0,
+          notes: data.notes || "",
+        };
+        
+        const quoteResponse = await apiRequest("POST", "/api/quotes", quoteData);
+        const quote = await quoteResponse.json();
+        
+        // Add line items
+        for (const item of data.lineItems) {
+          await apiRequest("POST", `/api/quotes/${quote.id}/line-items`, {
+            description: item.description,
+            quantity: item.quantity,
+            rate: item.price,
+            unit: item.unit || "each",
+            markupType: "none",
+            markupValue: 0,
+          });
+        }
+        
+        return { quote, customer };
+      } else {
+        // Add line items to existing quote
+        if (!selectedQuoteId) {
+          throw new Error("Please select a quote to add items to");
+        }
+        
+        for (const item of data.lineItems) {
+          await apiRequest("POST", `/api/quotes/${selectedQuoteId}/line-items`, {
+            description: item.description,
+            quantity: item.quantity,
+            rate: item.price,
+            unit: item.unit || "each",
+            markupType: "none",
+            markupValue: 0,
+          });
+        }
+        
+        return { quoteId: selectedQuoteId };
+      }
+    },
+    onSuccess: (result) => {
+      toast({
+        title: "Import Successful",
+        description: importType === "new" 
+          ? `Created new quote ${result.quote?.quoteNumber}`
+          : `Added ${editedData?.lineItems.length} items to quote`,
+      });
+      onImportComplete?.();
+      onClose?.();
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Import Failed",
+        description: error.message || "Failed to import quote data",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file && file.type === "application/pdf") {
+      setSelectedFile(file);
+    } else {
+      toast({
+        title: "Invalid File",
+        description: "Please select a PDF file",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleProcessPdf = () => {
+    if (selectedFile) {
+      processPdfMutation.mutate(selectedFile);
+    }
+  };
+
+  const handleImport = () => {
+    if (editedData) {
+      importMutation.mutate(editedData);
+    }
+  };
+
+  const updateCustomerField = (field: keyof ExtractedCustomer, value: string) => {
+    if (!editedData) return;
+    setEditedData({
+      ...editedData,
+      customer: {
+        ...editedData.customer,
+        [field]: value,
+      },
+    });
+  };
+
+  const updateLineItem = (index: number, field: keyof ExtractedLineItem, value: string | number) => {
+    if (!editedData) return;
+    const updatedLineItems = [...editedData.lineItems];
+    updatedLineItems[index] = {
+      ...updatedLineItems[index],
+      [field]: value,
+    };
+    
+    // Recalculate total if quantity or price changed
+    if (field === "quantity" || field === "price") {
+      updatedLineItems[index].total = updatedLineItems[index].quantity * updatedLineItems[index].price;
+    }
+    
+    setEditedData({
+      ...editedData,
+      lineItems: updatedLineItems,
+    });
+  };
+
+  const removeLineItem = (index: number) => {
+    if (!editedData) return;
+    const updatedLineItems = editedData.lineItems.filter((_, i) => i !== index);
+    setEditedData({
+      ...editedData,
+      lineItems: updatedLineItems,
+    });
+  };
+
+  return (
+    <Card className="w-full max-w-4xl mx-auto">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <FileText className="h-5 w-5" />
+          PDF Quote Importer
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="upload">Upload PDF</TabsTrigger>
+            <TabsTrigger value="preview" disabled={!extractedData}>
+              Preview & Edit
+            </TabsTrigger>
+            <TabsTrigger value="import" disabled={!editedData}>
+              Import Options
+            </TabsTrigger>
+          </TabsList>
+
+          {/* Upload Tab */}
+          <TabsContent value="upload" className="space-y-4">
+            <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
+              <Upload className="h-12 w-12 mx-auto mb-4 text-gray-400" />
+              <div className="space-y-2">
+                <Label htmlFor="pdf-upload" className="text-lg font-medium cursor-pointer">
+                  Select PDF Quote to Import
+                </Label>
+                <p className="text-sm text-gray-500">
+                  Upload a PDF quote from external configurators or contractors
+                </p>
+                <Input
+                  id="pdf-upload"
+                  type="file"
+                  accept=".pdf"
+                  onChange={handleFileSelect}
+                  className="max-w-sm mx-auto"
+                />
+              </div>
+            </div>
+
+            {selectedFile && (
+              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                <div className="flex items-center gap-2">
+                  <FileText className="h-4 w-4" />
+                  <span className="font-medium">{selectedFile.name}</span>
+                  <Badge variant="secondary">
+                    {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
+                  </Badge>
+                </div>
+                <Button
+                  onClick={handleProcessPdf}
+                  disabled={processPdfMutation.isPending}
+                >
+                  {processPdfMutation.isPending ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Processing...
+                    </>
+                  ) : (
+                    "Process PDF"
+                  )}
+                </Button>
+              </div>
+            )}
+          </TabsContent>
+
+          {/* Preview & Edit Tab */}
+          <TabsContent value="preview" className="space-y-6">
+            {editedData && (
+              <>
+                {/* Customer Information */}
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2">
+                    <Edit3 className="h-4 w-4" />
+                    <h3 className="text-lg font-semibold">Customer Information</h3>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="customer-name">Customer Name</Label>
+                      <Input
+                        id="customer-name"
+                        value={editedData.customer.name}
+                        onChange={(e) => updateCustomerField("name", e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="customer-email">Email</Label>
+                      <Input
+                        id="customer-email"
+                        value={editedData.customer.email || ""}
+                        onChange={(e) => updateCustomerField("email", e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="customer-phone">Phone</Label>
+                      <Input
+                        id="customer-phone"
+                        value={editedData.customer.phone || ""}
+                        onChange={(e) => updateCustomerField("phone", e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="customer-company">Company</Label>
+                      <Input
+                        id="customer-company"
+                        value={editedData.customer.company || ""}
+                        onChange={(e) => updateCustomerField("company", e.target.value)}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <Separator />
+
+                {/* Project Details */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold">Project Details</h3>
+                  <div>
+                    <Label htmlFor="project-description">Project Description</Label>
+                    <Textarea
+                      id="project-description"
+                      value={editedData.projectDescription || ""}
+                      onChange={(e) =>
+                        setEditedData({
+                          ...editedData,
+                          projectDescription: e.target.value,
+                        })
+                      }
+                      rows={3}
+                    />
+                  </div>
+                </div>
+
+                <Separator />
+
+                {/* Line Items */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold">Line Items</h3>
+                  <div className="space-y-2">
+                    {editedData.lineItems.map((item, index) => (
+                      <div key={index} className="p-4 border rounded-lg">
+                        <div className="grid grid-cols-5 gap-4 items-end">
+                          <div className="col-span-2">
+                            <Label>Description</Label>
+                            <Input
+                              value={item.description}
+                              onChange={(e) =>
+                                updateLineItem(index, "description", e.target.value)
+                              }
+                            />
+                          </div>
+                          <div>
+                            <Label>Quantity</Label>
+                            <Input
+                              type="number"
+                              value={item.quantity}
+                              onChange={(e) =>
+                                updateLineItem(index, "quantity", parseFloat(e.target.value) || 0)
+                              }
+                            />
+                          </div>
+                          <div>
+                            <Label>Price</Label>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              value={item.price}
+                              onChange={(e) =>
+                                updateLineItem(index, "price", parseFloat(e.target.value) || 0)
+                              }
+                            />
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className="flex-1">
+                              <Label>Total</Label>
+                              <div className="text-lg font-semibold">
+                                ${item.total.toFixed(2)}
+                              </div>
+                            </div>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => removeLineItem(index)}
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex justify-end">
+                  <Button onClick={() => setActiveTab("import")}>
+                    Continue to Import
+                  </Button>
+                </div>
+              </>
+            )}
+          </TabsContent>
+
+          {/* Import Options Tab */}
+          <TabsContent value="import" className="space-y-6">
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold">Import Options</h3>
+              
+              <div className="space-y-4">
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="radio"
+                    id="new-quote"
+                    value="new"
+                    checked={importType === "new"}
+                    onChange={(e) => setImportType(e.target.value as "new" | "existing")}
+                  />
+                  <Label htmlFor="new-quote">Create New Quote</Label>
+                </div>
+                
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="radio"
+                    id="existing-quote"
+                    value="existing"
+                    checked={importType === "existing"}
+                    onChange={(e) => setImportType(e.target.value as "new" | "existing")}
+                  />
+                  <Label htmlFor="existing-quote">Add to Existing Quote</Label>
+                </div>
+              </div>
+
+              {importType === "existing" && (
+                <div>
+                  <Label htmlFor="quote-select">Select Quote</Label>
+                  <Select value={selectedQuoteId} onValueChange={setSelectedQuoteId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Choose a quote to add items to" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {quotes?.map((quote) => (
+                        <SelectItem key={quote.id} value={quote.id.toString()}>
+                          {quote.quoteNumber} - {quote.projectName || 'Untitled Project'}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+            </div>
+
+            <Separator />
+
+            {/* Summary */}
+            <div className="space-y-2">
+              <h4 className="font-semibold">Import Summary</h4>
+              <p className="text-sm text-gray-600">
+                {importType === "new" 
+                  ? `Creating new quote for ${editedData?.customer.name}`
+                  : `Adding ${editedData?.lineItems.length} line items to selected quote`
+                }
+              </p>
+              <p className="text-sm text-gray-600">
+                Total Items: {editedData?.lineItems.length}
+              </p>
+              <p className="text-sm text-gray-600">
+                Total Value: ${editedData?.lineItems.reduce((sum, item) => sum + item.total, 0).toFixed(2)}
+              </p>
+            </div>
+
+            <div className="flex justify-between">
+              <Button variant="outline" onClick={() => setActiveTab("preview")}>
+                Back to Edit
+              </Button>
+              <Button
+                onClick={handleImport}
+                disabled={importMutation.isPending || (importType === "existing" && !selectedQuoteId)}
+              >
+                {importMutation.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Importing...
+                  </>
+                ) : (
+                  <>
+                    <Check className="h-4 w-4 mr-2" />
+                    Import Quote
+                  </>
+                )}
+              </Button>
+            </div>
+          </TabsContent>
+        </Tabs>
+      </CardContent>
+    </Card>
+  );
+}
