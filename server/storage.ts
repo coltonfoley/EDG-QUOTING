@@ -567,7 +567,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async calculateConfigurableProductPrice(productId: number, length: number, width: number): Promise<number | null> {
-    // Find the closest pricing table entry for the given dimensions
+    // Find the pricing band that contains the given dimensions
     const pricingTablesForProduct = await db
       .select()
       .from(pricingTables)
@@ -577,22 +577,32 @@ export class DatabaseStorage implements IStorage {
       return null;
     }
 
-    // Simple strategy: find exact match first, then closest dimensions
-    let exactMatch = pricingTablesForProduct.find(
-      table => parseFloat(table.length) === length && parseFloat(table.width) === width
-    );
+    // Find band that contains the requested dimensions
+    const matchingBand = pricingTablesForProduct.find(table => {
+      const lengthMin = parseFloat(table.lengthMin);
+      const lengthMax = parseFloat(table.lengthMax);
+      const widthMin = parseFloat(table.widthMin);
+      const widthMax = parseFloat(table.widthMax);
+      
+      return length >= lengthMin && length <= lengthMax && 
+             width >= widthMin && width <= widthMax;
+    });
 
-    if (exactMatch) {
-      return parseFloat(exactMatch.basePrice);
+    if (matchingBand) {
+      return parseFloat(matchingBand.basePrice);
     }
 
-    // Find closest match by calculating distance
+    // If no exact band match, find the closest band (for dimensions slightly outside ranges)
     let closestTable = pricingTablesForProduct[0];
     let minDistance = Infinity;
 
     for (const table of pricingTablesForProduct) {
-      const lengthDiff = Math.abs(parseFloat(table.length) - length);
-      const widthDiff = Math.abs(parseFloat(table.width) - width);
+      // Calculate distance to band center
+      const lengthCenter = (parseFloat(table.lengthMin) + parseFloat(table.lengthMax)) / 2;
+      const widthCenter = (parseFloat(table.widthMin) + parseFloat(table.widthMax)) / 2;
+      
+      const lengthDiff = Math.abs(lengthCenter - length);
+      const widthDiff = Math.abs(widthCenter - width);
       const distance = Math.sqrt(lengthDiff * lengthDiff + widthDiff * widthDiff);
 
       if (distance < minDistance) {
