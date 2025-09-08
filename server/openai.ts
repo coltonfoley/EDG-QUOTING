@@ -19,6 +19,40 @@ const ExtractedProductsSchema = z.object({
 
 export type ExtractedProduct = z.infer<typeof ExtractedProductSchema>;
 
+// Schema for extracted quote data
+const ExtractedLineItemSchema = z.object({
+  description: z.string(),
+  quantity: z.number(),
+  price: z.number(),
+  total: z.number(),
+  unit: z.string().nullable().optional(),
+});
+
+const ExtractedCustomerSchema = z.object({
+  name: z.string(),
+  email: z.string().nullable().optional(),
+  phone: z.string().nullable().optional(),
+  company: z.string().nullable().optional(),
+  address: z.string().nullable().optional(),
+});
+
+const ExtractedQuoteSchema = z.object({
+  customer: ExtractedCustomerSchema,
+  quoteNumber: z.string().nullable().optional(),
+  date: z.string().nullable().optional(),
+  projectDescription: z.string().nullable().optional(),
+  lineItems: z.array(ExtractedLineItemSchema),
+  subtotal: z.number().nullable().optional(),
+  taxRate: z.number().nullable().optional(),
+  taxAmount: z.number().nullable().optional(),
+  discountAmount: z.number().nullable().optional(),
+  total: z.number().nullable().optional(),
+  notes: z.string().nullable().optional(),
+  terms: z.string().nullable().optional(),
+});
+
+export type ExtractedQuote = z.infer<typeof ExtractedQuoteSchema>;
+
 export async function extractProductsFromImage(base64Image: string): Promise<ExtractedProduct[]> {
   try {
     const response = await openai.chat.completions.create({
@@ -205,5 +239,107 @@ export async function extractProductsFromText(text: string): Promise<ExtractedPr
   } catch (error) {
     console.error("Error extracting products from text:", error);
     return []; // Return empty array instead of throwing
+  }
+}
+
+export async function extractQuoteDataFromText(text: string): Promise<ExtractedQuote | null> {
+  try {
+    // Truncate text if too long to prevent token limit issues
+    const maxTextLength = 20000; // Reasonable limit for GPT-5
+    const truncatedText = text.length > maxTextLength 
+      ? text.substring(0, maxTextLength) + "\n... (truncated)"
+      : text;
+
+    const response = await openai.chat.completions.create({
+      model: "gpt-5", // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
+      messages: [
+        {
+          role: "system",
+          content: `You are a data extraction expert specializing in construction quotes and estimates. Extract complete quote information from text.
+          
+          Extract the following information and return as JSON:
+          
+          1. Customer Information:
+             - name (string, required)
+             - email (string or null)
+             - phone (string or null)
+             - company (string or null)
+             - address (string or null)
+          
+          2. Quote Details:
+             - quoteNumber (string or null)
+             - date (string or null)
+             - projectDescription (string or null)
+             - notes (string or null)
+             - terms (string or null)
+          
+          3. Line Items (array of objects):
+             - description (string, required)
+             - quantity (number, required)
+             - price (number per unit, required)
+             - total (number, required)
+             - unit (string or null, e.g., "each", "sqft", "linear ft")
+          
+          4. Financial Summary:
+             - subtotal (number or null)
+             - taxRate (number or null, as decimal like 0.08 for 8%)
+             - taxAmount (number or null)
+             - discountAmount (number or null)
+             - total (number or null)
+          
+          Return valid JSON in this exact format:
+          {
+            "customer": {"name": "John Doe", "email": "john@example.com", "phone": "555-1234", "company": "ABC Corp", "address": "123 Main St"},
+            "quoteNumber": "Q-2024-001",
+            "date": "2024-01-15",
+            "projectDescription": "Patio construction",
+            "lineItems": [
+              {"description": "Materials", "quantity": 1, "price": 500.00, "total": 500.00, "unit": "each"}
+            ],
+            "subtotal": 500.00,
+            "taxRate": 0.08,
+            "taxAmount": 40.00,
+            "discountAmount": null,
+            "total": 540.00,
+            "notes": "Additional notes",
+            "terms": "Payment terms"
+          }
+          
+          If information is missing or unclear, use null for optional fields.
+          Ensure all numbers are valid and line item totals match quantity × price.
+          Focus on accuracy and completeness.`,
+        },
+        {
+          role: "user",
+          content: `Extract quote information from this document:\n\n${truncatedText}`,
+        },
+      ],
+      response_format: { type: "json_object" },
+      max_tokens: 4000,
+      temperature: 0, // More deterministic output
+    });
+
+    const content = response.choices[0].message.content;
+    if (!content) {
+      console.error("Empty response from OpenAI for quote extraction");
+      return null;
+    }
+
+    // Parse and validate JSON
+    let parsedContent;
+    try {
+      parsedContent = JSON.parse(content);
+    } catch (jsonError) {
+      console.error("JSON parsing failed for quote extraction:", jsonError);
+      console.error("Raw content:", content);
+      return null;
+    }
+
+    // Validate and parse with schema
+    const extracted = ExtractedQuoteSchema.parse(parsedContent);
+    return extracted;
+  } catch (error) {
+    console.error("Error extracting quote data from text:", error);
+    return null;
   }
 }
