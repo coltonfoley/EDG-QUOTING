@@ -10,13 +10,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Package, Edit, Trash2, Search, Grid, List, Filter, X } from "lucide-react";
+import { Plus, Package, Edit, Trash2, Search, Grid, List, Filter, X, Settings } from "lucide-react";
+import { DimensionalPricingManager } from "@/components/dimensional-pricing-manager";
 import { formatCurrency } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { insertProductSchema, type Product } from "@shared/schema";
+import { insertProductSchema, type Product, type ProductWithDetails } from "@shared/schema";
 import { z } from "zod";
 
 const productFormSchema = insertProductSchema;
@@ -28,6 +29,8 @@ export default function Products() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [viewMode, setViewMode] = useState<"grid" | "table">("table");
+  const [showPricingManager, setShowPricingManager] = useState(false);
+  const [managingPricingProduct, setManagingPricingProduct] = useState<Product | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -41,6 +44,8 @@ export default function Products() {
       name: "",
       description: "",
       category: "",
+      productType: "simple",
+      requiresDimensions: false,
       defaultUnitPrice: "0",
       defaultMarkupType: "percentage",
       defaultMarkupValue: "25",
@@ -108,6 +113,8 @@ export default function Products() {
       name: product.name,
       description: product.description || "",
       category: product.category || "",
+      productType: product.productType || "simple",
+      requiresDimensions: product.requiresDimensions || false,
       defaultUnitPrice: product.defaultUnitPrice,
       defaultMarkupType: product.defaultMarkupType,
       defaultMarkupValue: product.defaultMarkupValue,
@@ -120,6 +127,11 @@ export default function Products() {
     if (confirm("Are you sure you want to delete this product?")) {
       deleteProductMutation.mutate(id);
     }
+  };
+
+  const handleManagePricing = (product: Product) => {
+    setManagingPricingProduct(product);
+    setShowPricingManager(true);
   };
 
   // Get unique categories and filter/search products
@@ -245,20 +257,57 @@ export default function Products() {
                       </FormItem>
                     )}
                   />
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="defaultUnitPrice"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Unit Price</FormLabel>
+                  
+                  {/* Product Type Selection */}
+                  <FormField
+                    control={form.control}
+                    name="productType"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Product Type</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value || "simple"}>
                           <FormControl>
-                            <Input type="number" step="0.01" {...field} />
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
                           </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                          <SelectContent>
+                            <SelectItem value="simple">Simple Product</SelectItem>
+                            <SelectItem value="configurable">Configurable Product (Dimensional Pricing)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* Conditional message for configurable products */}
+                  {form.watch("productType") === "configurable" && (
+                    <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
+                      <p className="text-sm text-blue-800">
+                        <strong>Configurable Product:</strong> This product will use dimensional pricing tables (length × width) instead of a fixed unit price. 
+                        You can set up pricing tables after creating the product.
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {/* Only show unit price for simple products */}
+                    {form.watch("productType") !== "configurable" && (
+                      <FormField
+                        control={form.control}
+                        name="defaultUnitPrice"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Unit Price</FormLabel>
+                            <FormControl>
+                              <Input type="number" step="0.01" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    )}
                     <FormField
                       control={form.control}
                       name="unit"
@@ -441,7 +490,8 @@ export default function Products() {
           <ProductTable 
             products={filteredProducts} 
             onEdit={handleEdit} 
-            onDelete={handleDelete} 
+            onDelete={handleDelete}
+            onManagePricing={handleManagePricing}
           />
         ) : (
           <div className="space-y-8">
@@ -456,21 +506,39 @@ export default function Products() {
                     <Card key={product.id} className="hover:shadow-md transition-shadow">
                       <CardHeader className="pb-3">
                         <div className="flex justify-between items-start">
-                          <CardTitle className="text-lg">{product.name}</CardTitle>
+                          <div>
+                            <CardTitle className="text-lg">{product.name}</CardTitle>
+                            <Badge variant={product.productType === "configurable" ? "default" : "secondary"} className="mt-1">
+                              {product.productType === "configurable" ? "Configurable" : "Simple"}
+                            </Badge>
+                          </div>
                           <div className="flex space-x-1">
                             <Button
                               variant="ghost"
                               size="sm"
                               onClick={() => handleEdit(product)}
                               className="text-edg-teal hover:text-edg-dark-teal"
+                              title="Edit Product"
                             >
                               <Edit className="h-4 w-4" />
                             </Button>
+                            {product.productType === "configurable" && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleManagePricing(product)}
+                                className="text-blue-600 hover:text-blue-800"
+                                title="Manage Pricing Tables"
+                              >
+                                <Settings className="h-4 w-4" />
+                              </Button>
+                            )}
                             <Button
                               variant="ghost"
                               size="sm"
                               onClick={() => handleDelete(product.id)}
                               className="text-red-600 hover:text-red-800"
+                              title="Delete Product"
                             >
                               <Trash2 className="h-4 w-4" />
                             </Button>
@@ -484,7 +552,13 @@ export default function Products() {
                         <div className="space-y-2">
                           <div className="flex justify-between text-sm">
                             <span className="text-edg-grey">Unit Price:</span>
-                            <span className="font-medium">{formatCurrency(product.defaultUnitPrice)} per {product.unit}</span>
+                            <span className="font-medium">
+                              {product.productType === "configurable" ? (
+                                <span className="text-gray-500">Dimensional Pricing</span>
+                              ) : (
+                                `${formatCurrency(product.defaultUnitPrice)} per ${product.unit}`
+                              )}
+                            </span>
                           </div>
                           <div className="flex justify-between text-sm">
                             <span className="text-edg-grey">Default Markup:</span>
@@ -502,6 +576,23 @@ export default function Products() {
           </div>
         )}
       </div>
+
+      {/* Dimensional Pricing Manager Dialog */}
+      <Dialog open={showPricingManager} onOpenChange={setShowPricingManager}>
+        <DialogContent className="max-w-5xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              Manage Pricing Tables - {managingPricingProduct?.name}
+            </DialogTitle>
+          </DialogHeader>
+          {managingPricingProduct && (
+            <DimensionalPricingManager
+              productId={managingPricingProduct.id}
+              productName={managingPricingProduct.name}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -510,9 +601,10 @@ interface ProductTableProps {
   products: Product[];
   onEdit: (product: Product) => void;
   onDelete: (id: number) => void;
+  onManagePricing: (product: Product) => void;
 }
 
-function ProductTable({ products, onEdit, onDelete }: ProductTableProps) {
+function ProductTable({ products, onEdit, onDelete, onManagePricing }: ProductTableProps) {
   return (
     <Card>
       <CardContent className="p-0">
@@ -521,10 +613,11 @@ function ProductTable({ products, onEdit, onDelete }: ProductTableProps) {
             <TableRow>
               <TableHead className="w-[300px]">Product Name</TableHead>
               <TableHead>Category</TableHead>
+              <TableHead>Type</TableHead>
               <TableHead>Unit</TableHead>
               <TableHead className="text-right">Unit Price</TableHead>
               <TableHead className="text-right">Markup</TableHead>
-              <TableHead className="w-[100px]">Actions</TableHead>
+              <TableHead className="w-[130px]">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -543,9 +636,18 @@ function ProductTable({ products, onEdit, onDelete }: ProductTableProps) {
                 <TableCell>
                   <Badge variant="outline">{product.category || "Uncategorized"}</Badge>
                 </TableCell>
+                <TableCell>
+                  <Badge variant={product.productType === "configurable" ? "default" : "secondary"}>
+                    {product.productType === "configurable" ? "Configurable" : "Simple"}
+                  </Badge>
+                </TableCell>
                 <TableCell className="text-sm text-gray-600">{product.unit}</TableCell>
                 <TableCell className="text-right font-medium">
-                  {formatCurrency(product.defaultUnitPrice)}
+                  {product.productType === "configurable" ? (
+                    <span className="text-sm text-gray-500">Dimensional</span>
+                  ) : (
+                    formatCurrency(product.defaultUnitPrice)
+                  )}
                 </TableCell>
                 <TableCell className="text-right">
                   <span className="text-edg-teal font-medium">
@@ -559,14 +661,27 @@ function ProductTable({ products, onEdit, onDelete }: ProductTableProps) {
                       size="sm"
                       onClick={() => onEdit(product)}
                       className="text-edg-teal hover:text-edg-dark-teal h-8 w-8 p-0"
+                      title="Edit Product"
                     >
                       <Edit className="h-4 w-4" />
                     </Button>
+                    {product.productType === "configurable" && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => onManagePricing(product)}
+                        className="text-blue-600 hover:text-blue-800 h-8 w-8 p-0"
+                        title="Manage Pricing Tables"
+                      >
+                        <Settings className="h-4 w-4" />
+                      </Button>
+                    )}
                     <Button
                       variant="ghost"
                       size="sm"
                       onClick={() => onDelete(product.id)}
                       className="text-red-600 hover:text-red-800 h-8 w-8 p-0"
+                      title="Delete Product"
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
