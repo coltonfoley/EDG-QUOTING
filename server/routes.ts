@@ -128,13 +128,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/quotes", isAuthenticated, async (req, res) => {
     try {
+      console.log("Quote creation request body:", JSON.stringify(req.body, null, 2));
       const quoteData = insertQuoteSchema.parse(req.body);
       const quote = await storage.createQuote(quoteData);
       res.status(201).json(quote);
     } catch (error) {
       if (error instanceof z.ZodError) {
+        console.error("Quote validation errors:", JSON.stringify(error.errors, null, 2));
         return res.status(400).json({ message: "Invalid quote data", errors: error.errors });
       }
+      console.error("Quote creation error:", error);
       res.status(500).json({ message: "Internal server error" });
     }
   });
