@@ -96,7 +96,7 @@ export async function extractProductsFromImage(base64Image: string): Promise<Ext
       ],
       response_format: { type: "json_object" },
       max_completion_tokens: 8000, // Increased token limit
-      temperature: 0, // More deterministic output
+      // GPT-5 only supports default temperature (1), so we remove this parameter
     });
 
     const content = response.choices[0].message.content;
@@ -176,7 +176,7 @@ export async function extractProductsFromText(text: string): Promise<ExtractedPr
       ],
       response_format: { type: "json_object" },
       max_completion_tokens: 8000, // Increased token limit
-      temperature: 0, // More deterministic output
+      // GPT-5 only supports default temperature (1), so we remove this parameter
     });
 
     const content = response.choices[0].message.content;
@@ -316,7 +316,7 @@ export async function extractQuoteDataFromText(text: string): Promise<ExtractedQ
       ],
       response_format: { type: "json_object" },
       max_completion_tokens: 4000,
-      temperature: 0, // More deterministic output
+      // GPT-5 only supports default temperature (1), so we remove this parameter
     });
 
     const content = response.choices[0].message.content;
