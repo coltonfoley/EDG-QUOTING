@@ -119,12 +119,12 @@ export function QuoteImporter({ onImportComplete, onClose }: QuoteImporterProps)
         
         const quoteData = {
           customerId: customer.id,
-          projectDescription: data.projectDescription || "",
+          projectName: data.projectDescription || "Imported Project",
           status: "draft" as const,
-          validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days
-          taxRate: data.taxRate || 0,
-          discountAmount: data.discountAmount || 0,
+          taxRate: (data.taxRate || 0).toString(),
+          discount: (data.discountAmount || 0).toString(),
           notes: data.notes || "",
+          quoteNumber: data.quoteNumber || `QT-${Date.now()}`,
         };
         
         const quoteResponse = await apiRequest("POST", "/api/quotes", quoteData);
