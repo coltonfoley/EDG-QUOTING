@@ -479,8 +479,8 @@ export function QuoteImporter({ onImportComplete, onClose }: QuoteImporterProps)
               </div>
 
               {importType === "existing" && (
-                <div>
-                  <Label htmlFor="quote-select">Select Quote</Label>
+                <div className="space-y-3">
+                  <Label htmlFor="quote-select">Select Quote to Add Items To</Label>
                   <Select value={selectedQuoteId} onValueChange={setSelectedQuoteId}>
                     <SelectTrigger>
                       <SelectValue placeholder="Choose a quote to add items to" />
@@ -488,11 +488,60 @@ export function QuoteImporter({ onImportComplete, onClose }: QuoteImporterProps)
                     <SelectContent>
                       {quotes?.map((quote) => (
                         <SelectItem key={quote.id} value={quote.id.toString()}>
-                          {quote.quoteNumber} - {quote.projectName || 'Untitled Project'}
+                          <div className="flex justify-between items-center w-full">
+                            <div className="flex flex-col items-start">
+                              <div className="font-semibold">{quote.quoteNumber}</div>
+                              <div className="text-sm text-gray-600">
+                                {quote.customer?.name || 'Unknown Customer'} - {quote.projectName || 'Untitled Project'}
+                              </div>
+                            </div>
+                            <div className="text-right text-sm">
+                              <div className="font-medium">${(quote.total || 0).toFixed(2)}</div>
+                              <div className="text-gray-500">{quote.lineItems?.length || 0} items</div>
+                            </div>
+                          </div>
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
+                  
+                  {/* Enhanced Preview of Selected Quote */}
+                  {selectedQuoteId && quotes && (
+                    <div className="p-3 bg-gray-50 rounded-lg border">
+                      {(() => {
+                        const selectedQuote = quotes.find(q => q.id.toString() === selectedQuoteId);
+                        if (!selectedQuote) return null;
+                        return (
+                          <div className="space-y-2">
+                            <div className="flex justify-between items-center">
+                              <h4 className="font-semibold text-sm">Selected Quote: {selectedQuote.quoteNumber}</h4>
+                              <Badge variant={selectedQuote.status === 'approved' ? 'default' : 'secondary'}>
+                                {selectedQuote.status}
+                              </Badge>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4 text-sm">
+                              <div>
+                                <span className="text-gray-600">Customer:</span> {selectedQuote.customer?.name || 'Unknown'}
+                              </div>
+                              <div>
+                                <span className="text-gray-600">Project:</span> {selectedQuote.projectName || 'Untitled'}
+                              </div>
+                              <div>
+                                <span className="text-gray-600">Current Items:</span> {selectedQuote.lineItems?.length || 0}
+                              </div>
+                              <div>
+                                <span className="text-gray-600">Current Total:</span> ${(selectedQuote.total || 0).toFixed(2)}
+                              </div>
+                            </div>
+                            <div className="text-xs text-blue-600 bg-blue-50 p-2 rounded mt-2">
+                              💡 Adding {editedData?.lineItems.length || 0} new items (${editedData?.lineItems.reduce((sum, item) => sum + item.total, 0).toFixed(2) || '0.00'}) 
+                              → New total: ${((selectedQuote.total || 0) + (editedData?.lineItems.reduce((sum, item) => sum + item.total, 0) || 0)).toFixed(2)}
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
