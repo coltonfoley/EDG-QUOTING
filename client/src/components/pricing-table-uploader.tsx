@@ -15,8 +15,10 @@ interface PricingTableUploaderProps {
 }
 
 interface PricingData {
-  length: number;
-  width: number;
+  lengthMin: number;
+  lengthMax: number;
+  widthMin: number;
+  widthMax: number;
   price: number;
 }
 
@@ -63,50 +65,81 @@ export function PricingTableUploader({ productId, onUploadComplete }: PricingTab
     data.forEach((row, index) => {
       const rowNum = index + 1;
       
-      // Check for required columns
-      if (!row.hasOwnProperty('Length') && !row.hasOwnProperty('length')) {
-        errors.push(`Row ${rowNum}: Missing 'Length' column`);
-        return;
-      }
-      
-      if (!row.hasOwnProperty('Width') && !row.hasOwnProperty('width')) {
-        errors.push(`Row ${rowNum}: Missing 'Width' column`);
-        return;
-      }
-      
-      if (!row.hasOwnProperty('Price') && !row.hasOwnProperty('price')) {
-        errors.push(`Row ${rowNum}: Missing 'Price' column`);
-        return;
-      }
+      // Check for required columns (support various naming conventions)
+      const requiredColumns = [
+        { names: ['LengthMin', 'lengthMin', 'Length Min'], key: 'lengthMin' },
+        { names: ['LengthMax', 'lengthMax', 'Length Max'], key: 'lengthMax' },
+        { names: ['WidthMin', 'widthMin', 'Width Min'], key: 'widthMin' },
+        { names: ['WidthMax', 'widthMax', 'Width Max'], key: 'widthMax' },
+        { names: ['Price', 'price'], key: 'price' }
+      ];
 
-      // Get values (try both cases)
-      const length = row.Length || row.length;
-      const width = row.Width || row.width;
-      const price = row.Price || row.price;
+      const values: any = {};
+      
+      for (const column of requiredColumns) {
+        let found = false;
+        for (const name of column.names) {
+          if (row.hasOwnProperty(name)) {
+            values[column.key] = row[name];
+            found = true;
+            break;
+          }
+        }
+        
+        if (!found) {
+          errors.push(`Row ${rowNum}: Missing '${column.names[0]}' column`);
+          return;
+        }
+      }
 
       // Validate numeric values
-      const lengthNum = parseFloat(length);
-      const widthNum = parseFloat(width);
-      const priceNum = parseFloat(price);
+      const lengthMinNum = parseFloat(values.lengthMin);
+      const lengthMaxNum = parseFloat(values.lengthMax);
+      const widthMinNum = parseFloat(values.widthMin);
+      const widthMaxNum = parseFloat(values.widthMax);
+      const priceNum = parseFloat(values.price);
 
-      if (isNaN(lengthNum) || lengthNum <= 0) {
-        errors.push(`Row ${rowNum}: Invalid length value '${length}'`);
+      if (isNaN(lengthMinNum) || lengthMinNum <= 0) {
+        errors.push(`Row ${rowNum}: Invalid lengthMin value '${values.lengthMin}'`);
         return;
       }
 
-      if (isNaN(widthNum) || widthNum <= 0) {
-        errors.push(`Row ${rowNum}: Invalid width value '${width}'`);
+      if (isNaN(lengthMaxNum) || lengthMaxNum <= 0) {
+        errors.push(`Row ${rowNum}: Invalid lengthMax value '${values.lengthMax}'`);
+        return;
+      }
+
+      if (isNaN(widthMinNum) || widthMinNum <= 0) {
+        errors.push(`Row ${rowNum}: Invalid widthMin value '${values.widthMin}'`);
+        return;
+      }
+
+      if (isNaN(widthMaxNum) || widthMaxNum <= 0) {
+        errors.push(`Row ${rowNum}: Invalid widthMax value '${values.widthMax}'`);
         return;
       }
 
       if (isNaN(priceNum) || priceNum <= 0) {
-        errors.push(`Row ${rowNum}: Invalid price value '${price}'`);
+        errors.push(`Row ${rowNum}: Invalid price value '${values.price}'`);
+        return;
+      }
+
+      // Validate that min < max
+      if (lengthMinNum >= lengthMaxNum) {
+        errors.push(`Row ${rowNum}: LengthMin (${lengthMinNum}) must be less than LengthMax (${lengthMaxNum})`);
+        return;
+      }
+
+      if (widthMinNum >= widthMaxNum) {
+        errors.push(`Row ${rowNum}: WidthMin (${widthMinNum}) must be less than WidthMax (${widthMaxNum})`);
         return;
       }
 
       valid.push({
-        length: lengthNum,
-        width: widthNum,
+        lengthMin: lengthMinNum,
+        lengthMax: lengthMaxNum,
+        widthMin: widthMinNum,
+        widthMax: widthMaxNum,
         price: priceNum,
       });
     });
@@ -213,8 +246,8 @@ export function PricingTableUploader({ productId, onUploadComplete }: PricingTab
           <Alert>
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
-              <strong>Expected format:</strong> Your file should have columns named "Length", "Width", and "Price". 
-              Each row represents one pricing entry (e.g., 12' × 8' = $2,500).
+              <strong>Expected format:</strong> Your file should have columns: "LengthMin", "LengthMax", "WidthMin", "WidthMax", and "Price". 
+              Each row represents a size band (e.g., Length 12.0-12.5 × Width 8.0-8.5 = $2,500).
             </AlertDescription>
           </Alert>
 
@@ -251,16 +284,16 @@ export function PricingTableUploader({ productId, onUploadComplete }: PricingTab
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b">
-                        <th className="text-left py-2">Length (ft)</th>
-                        <th className="text-left py-2">Width (ft)</th>
+                        <th className="text-left py-2">Length Range (ft)</th>
+                        <th className="text-left py-2">Width Range (ft)</th>
                         <th className="text-left py-2">Price</th>
                       </tr>
                     </thead>
                     <tbody>
                       {preview.map((item, index) => (
                         <tr key={index} className="border-b">
-                          <td className="py-1">{item.length}</td>
-                          <td className="py-1">{item.width}</td>
+                          <td className="py-1">{item.lengthMin} - {item.lengthMax}</td>
+                          <td className="py-1">{item.widthMin} - {item.widthMax}</td>
                           <td className="py-1">${item.price.toLocaleString()}</td>
                         </tr>
                       ))}
