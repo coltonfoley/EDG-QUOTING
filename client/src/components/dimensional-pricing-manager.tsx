@@ -41,8 +41,10 @@ export function DimensionalPricingManager({ productId, productName }: Dimensiona
   const form = useForm<PricingFormData>({
     resolver: zodResolver(pricingFormSchema),
     defaultValues: {
-      length: "",
-      width: "",
+      lengthMin: "",
+      lengthMax: "",
+      widthMin: "",
+      widthMax: "",
       basePrice: "",
     },
   });
@@ -104,8 +106,10 @@ export function DimensionalPricingManager({ productId, productName }: Dimensiona
   const handleEdit = (entry: PricingTable) => {
     setEditingEntry(entry);
     form.reset({
-      length: entry.length,
-      width: entry.width,
+      lengthMin: entry.lengthMin,
+      lengthMax: entry.lengthMax,
+      widthMin: entry.widthMin,
+      widthMax: entry.widthMax,
       basePrice: entry.basePrice,
     });
     setIsDialogOpen(true);
@@ -169,33 +173,63 @@ export function DimensionalPricingManager({ productId, productName }: Dimensiona
             </DialogHeader>
             <Form {...form}>
               <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="length"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Length (ft)</FormLabel>
-                        <FormControl>
-                          <Input type="number" step="0.1" placeholder="12.0" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="width"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Width (ft)</FormLabel>
-                        <FormControl>
-                          <Input type="number" step="0.1" placeholder="8.0" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="lengthMin"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Length Min (ft)</FormLabel>
+                          <FormControl>
+                            <Input type="number" step="0.1" placeholder="12.0" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="lengthMax"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Length Max (ft)</FormLabel>
+                          <FormControl>
+                            <Input type="number" step="0.1" placeholder="12.5" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="widthMin"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Width Min (ft)</FormLabel>
+                          <FormControl>
+                            <Input type="number" step="0.1" placeholder="8.0" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="widthMax"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Width Max (ft)</FormLabel>
+                          <FormControl>
+                            <Input type="number" step="0.1" placeholder="8.5" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
                 </div>
                 <FormField
                   control={form.control}
@@ -248,9 +282,9 @@ export function DimensionalPricingManager({ productId, productName }: Dimensiona
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Length (ft)</TableHead>
-                <TableHead>Width (ft)</TableHead>
-                <TableHead>Dimensions</TableHead>
+                <TableHead>Length Range (ft)</TableHead>
+                <TableHead>Width Range (ft)</TableHead>
+                <TableHead>Size Band</TableHead>
                 <TableHead>Base Price</TableHead>
                 <TableHead className="w-20">Actions</TableHead>
               </TableRow>
@@ -258,10 +292,10 @@ export function DimensionalPricingManager({ productId, productName }: Dimensiona
             <TableBody>
               {pricingTables.map((entry) => (
                 <TableRow key={entry.id}>
-                  <TableCell className="font-medium">{entry.length}</TableCell>
-                  <TableCell>{entry.width}</TableCell>
+                  <TableCell className="font-medium">{entry.lengthMin} - {entry.lengthMax}</TableCell>
+                  <TableCell>{entry.widthMin} - {entry.widthMax}</TableCell>
                   <TableCell className="text-gray-600">
-                    {entry.length} × {entry.width} ft
+                    {entry.lengthMin}-{entry.lengthMax} × {entry.widthMin}-{entry.widthMax} ft
                   </TableCell>
                   <TableCell className="font-semibold">
                     {formatCurrency(parseFloat(entry.basePrice))}
