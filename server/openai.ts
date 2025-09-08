@@ -250,8 +250,11 @@ export async function extractQuoteDataFromText(text: string): Promise<ExtractedQ
       ? text.substring(0, maxTextLength) + "\n... (truncated)"
       : text;
 
+    console.log("Processing PDF text length:", truncatedText.length);
+    console.log("First 200 chars of text:", truncatedText.substring(0, 200));
+    
     const response = await openai.chat.completions.create({
-      model: "gpt-5", // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
+      model: "gpt-4o", // Using proven working model for PDF extraction
       messages: [
         {
           role: "system",
@@ -315,13 +318,15 @@ export async function extractQuoteDataFromText(text: string): Promise<ExtractedQ
         },
       ],
       response_format: { type: "json_object" },
-      max_completion_tokens: 4000,
-      // GPT-5 only supports default temperature (1), so we remove this parameter
+      max_tokens: 4000,
+      temperature: 0
     });
 
     const content = response.choices[0].message.content;
     if (!content) {
       console.error("Empty response from OpenAI for quote extraction");
+      console.error("Full response:", JSON.stringify(response, null, 2));
+      console.error("Choices:", response.choices);
       return null;
     }
 
