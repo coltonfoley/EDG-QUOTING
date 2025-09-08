@@ -277,6 +277,9 @@ export function QuoteImporter({ onImportComplete, onClose }: QuoteImporterProps)
                 <p className="text-sm text-gray-500">
                   Upload a PDF quote from external configurators or contractors
                 </p>
+                <p className="text-xs text-blue-600 bg-blue-50 p-2 rounded">
+                  💡 Pro tip: You can upload multiple PDFs to combine quotes from different suppliers into one project
+                </p>
                 <Input
                   id="pdf-upload"
                   type="file"
