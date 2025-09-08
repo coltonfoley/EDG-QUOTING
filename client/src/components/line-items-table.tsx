@@ -31,6 +31,10 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
   const [showProductDialog, setShowProductDialog] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
+  const [showDimensionDialog, setShowDimensionDialog] = useState(false);
+  const [selectedConfigurableProduct, setSelectedConfigurableProduct] = useState<Product | null>(null);
+  const [dimensions, setDimensions] = useState({ length: "", width: "" });
+  const [calculatedPrice, setCalculatedPrice] = useState<number | null>(null);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -98,6 +102,22 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
     },
   });
 
+  const calculatePricingMutation = useMutation({
+    mutationFn: async ({ productId, length, width }: { productId: number; length: number; width: number }) => {
+      const response = await apiRequest("POST", `/api/products/${productId}/calculate-price`, {
+        length,
+        width
+      });
+      return response.json();
+    },
+    onSuccess: (data) => {
+      setCalculatedPrice(data.price);
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to calculate pricing", variant: "destructive" });
+    },
+  });
+
   const handleAddItem = () => {
     const itemData = {
       description: newItem.description,
@@ -141,18 +161,70 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
   };
 
   const handleAddFromProduct = (product: Product) => {
-    setNewItem({
-      description: product.name,
-      quantity: "1",
-      unitPrice: product.defaultUnitPrice,
-      markupType: product.defaultMarkupType as "percentage" | "dollar",
-      markupValue: product.defaultMarkupValue,
-    });
-    setShowProductDialog(false);
-    setShowNewItemForm(true);
+    if (product.productType === "configurable") {
+      // For configurable products, show dimension dialog
+      setSelectedConfigurableProduct(product);
+      setDimensions({ length: "", width: "" });
+      setCalculatedPrice(null);
+      setShowProductDialog(false);
+      setShowDimensionDialog(true);
+    } else {
+      // For simple products, add directly to form
+      setNewItem({
+        description: product.name,
+        quantity: "1",
+        unitPrice: product.defaultUnitPrice,
+        markupType: product.defaultMarkupType as "percentage" | "dollar",
+        markupValue: product.defaultMarkupValue,
+      });
+      setShowProductDialog(false);
+      setShowNewItemForm(true);
+    }
+    
     // Reset search when product is selected
     setSearchTerm("");
     setSelectedCategory("all");
+  };
+
+  const handleCalculatePricing = () => {
+    if (!selectedConfigurableProduct || !dimensions.length || !dimensions.width) {
+      toast({ title: "Error", description: "Please enter both length and width", variant: "destructive" });
+      return;
+    }
+
+    calculatePricingMutation.mutate({
+      productId: selectedConfigurableProduct.id,
+      length: parseFloat(dimensions.length),
+      width: parseFloat(dimensions.width)
+    });
+  };
+
+  const handleConfirmConfigurableProduct = () => {
+    if (!selectedConfigurableProduct || calculatedPrice === null) {
+      toast({ title: "Error", description: "Please calculate pricing first", variant: "destructive" });
+      return;
+    }
+
+    // Create line item with configurable product data
+    const itemData = {
+      description: `${selectedConfigurableProduct.name} (${dimensions.length}' × ${dimensions.width}')`,
+      quantity: "1",
+      unitPrice: calculatedPrice.toString(),
+      markupType: selectedConfigurableProduct.defaultMarkupType,
+      markupValue: selectedConfigurableProduct.defaultMarkupValue,
+      baseProductId: selectedConfigurableProduct.id,
+      configData: {
+        length: parseFloat(dimensions.length),
+        width: parseFloat(dimensions.width),
+        calculatedPrice: calculatedPrice
+      }
+    };
+
+    createLineItemMutation.mutate(itemData);
+    setShowDimensionDialog(false);
+    setSelectedConfigurableProduct(null);
+    setDimensions({ length: "", width: "" });
+    setCalculatedPrice(null);
   };
 
   // Get unique categories for filtering
@@ -298,9 +370,18 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                                     onClick={() => handleAddFromProduct(product)}
                                   >
                                     <div className="flex justify-between items-start mb-2">
-                                      <h4 className="font-medium text-edg-black">{product.name}</h4>
+                                      <div className="flex-1">
+                                        <h4 className="font-medium text-edg-black">{product.name}</h4>
+                                        <Badge variant={product.productType === "configurable" ? "default" : "secondary"} className="mt-1">
+                                          {product.productType === "configurable" ? "Configurable" : "Simple"}
+                                        </Badge>
+                                      </div>
                                       <span className="text-sm font-medium text-edg-teal">
-                                        {formatCurrency(product.defaultUnitPrice)}
+                                        {product.productType === "configurable" ? (
+                                          <span className="text-gray-500">Dimensional</span>
+                                        ) : (
+                                          formatCurrency(product.defaultUnitPrice)
+                                        )}
                                       </span>
                                     </div>
                                     {product.description && (
@@ -592,6 +673,99 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
           </table>
         </div>
       </CardContent>
+
+      {/* Dimension Configuration Dialog */}
+      <Dialog open={showDimensionDialog} onOpenChange={setShowDimensionDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              Configure Dimensions - {selectedConfigurableProduct?.name}
+            </DialogTitle>
+          </DialogHeader>
+          
+          {selectedConfigurableProduct && (
+            <div className="space-y-4">
+              <p className="text-sm text-gray-600">
+                Enter the dimensions for this configurable product to calculate pricing.
+              </p>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Length (ft)
+                  </label>
+                  <Input
+                    type="number"
+                    step="0.1"
+                    placeholder="12.0"
+                    value={dimensions.length}
+                    onChange={(e) => setDimensions(prev => ({ ...prev, length: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Width (ft)
+                  </label>
+                  <Input
+                    type="number"
+                    step="0.1"
+                    placeholder="8.0"
+                    value={dimensions.width}
+                    onChange={(e) => setDimensions(prev => ({ ...prev, width: e.target.value }))}
+                  />
+                </div>
+              </div>
+              
+              {dimensions.length && dimensions.width && (
+                <div className="bg-blue-50 p-3 rounded-md">
+                  <p className="text-sm text-blue-800">
+                    Dimensions: <strong>{dimensions.length} × {dimensions.width} ft</strong>
+                  </p>
+                </div>
+              )}
+              
+              <div className="flex space-x-2">
+                <Button
+                  onClick={handleCalculatePricing}
+                  disabled={!dimensions.length || !dimensions.width || calculatePricingMutation.isPending}
+                  className="flex-1"
+                  variant="outline"
+                >
+                  {calculatePricingMutation.isPending ? "Calculating..." : "Calculate Price"}
+                </Button>
+              </div>
+              
+              {calculatedPrice !== null && (
+                <div className="bg-green-50 border border-green-200 p-3 rounded-md">
+                  <p className="text-sm text-green-800">
+                    <strong>Calculated Price: {formatCurrency(calculatedPrice)}</strong>
+                  </p>
+                  <p className="text-xs text-green-600 mt-1">
+                    Base price for {dimensions.length} × {dimensions.width} ft
+                  </p>
+                </div>
+              )}
+              
+              <div className="flex justify-end space-x-3 pt-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShowDimensionDialog(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleConfirmConfigurableProduct}
+                  disabled={calculatedPrice === null || createLineItemMutation.isPending}
+                  className="bg-edg-black hover:bg-edg-grey text-white"
+                >
+                  {createLineItemMutation.isPending ? "Adding..." : "Add to Quote"}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }
