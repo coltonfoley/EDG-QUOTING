@@ -7,14 +7,17 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, FileText, Users, DollarSign, Search } from "lucide-react";
+import { Plus, FileText, Users, DollarSign, Search, Upload } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { useAuth } from "@/hooks/useAuth";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { QuoteImporter } from "@/components/quote-importer";
 import type { QuoteWithDetails } from "@shared/schema";
 
 export default function Quotes() {
   const [searchTerm, setSearchTerm] = useState("");
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
   const { toast } = useToast();
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   
@@ -62,8 +65,8 @@ export default function Quotes() {
       quote.customer.name.toLowerCase().includes(term) ||
       quote.customer.email.toLowerCase().includes(term) ||
       (quote.customer.company && quote.customer.company.toLowerCase().includes(term)) ||
-      quote.projectName.toLowerCase().includes(term) ||
-      quote.projectAddress.toLowerCase().includes(term)
+      (quote.projectName && quote.projectName.toLowerCase().includes(term)) ||
+      (quote.projectAddress && quote.projectAddress.toLowerCase().includes(term))
     );
   }, [quotes, searchTerm]);
 
@@ -135,6 +138,28 @@ export default function Quotes() {
                 className="pl-10 w-full sm:w-80"
               />
             </div>
+
+            <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline" className="w-full sm:w-auto">
+                  <Upload className="mr-2 h-4 w-4" />
+                  Import PDF
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>Import Quote from PDF</DialogTitle>
+                </DialogHeader>
+                <QuoteImporter 
+                  onImportComplete={() => {
+                    setImportDialogOpen(false);
+                    // Refetch quotes to show the new import
+                    window.location.reload();
+                  }}
+                  onClose={() => setImportDialogOpen(false)}
+                />
+              </DialogContent>
+            </Dialog>
 
             <Link href="/quotes/new">
               <Button className="bg-edg-black hover:bg-edg-grey text-edg-white w-full sm:w-auto">
@@ -211,13 +236,20 @@ export default function Quotes() {
                 <FileText className="mx-auto h-12 w-12 text-gray-400" />
                 <h3 className="mt-2 text-sm font-medium text-gray-900">No quotes yet</h3>
                 <p className="mt-1 text-sm text-gray-500">Get started by creating your first quote.</p>
-                <div className="mt-6">
+                <div className="mt-6 flex flex-col sm:flex-row gap-3 items-center justify-center">
                   <Link href="/quotes/new">
                     <Button className="bg-edg-black hover:bg-edg-grey text-edg-white">
                       <Plus className="mr-2 h-4 w-4" />
                       New Quote
                     </Button>
                   </Link>
+                  <Button 
+                    variant="outline" 
+                    onClick={() => setImportDialogOpen(true)}
+                  >
+                    <Upload className="mr-2 h-4 w-4" />
+                    Import PDF
+                  </Button>
                 </div>
               </div>
             ) : filteredQuotes && filteredQuotes.length === 0 ? (
