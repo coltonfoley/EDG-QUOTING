@@ -1,4 +1,4 @@
-import { customers, quotes, lineItems, products, users, contractTemplates, type Customer, type Quote, type LineItem, type Product, type User, type ContractTemplate, type InsertCustomer, type InsertQuote, type InsertLineItem, type InsertProduct, type InsertUser, type InsertContractTemplate, type QuoteWithDetails } from "@shared/schema";
+import { customers, quotes, lineItems, products, users, contractTemplates, pricingTables, productAccessories, type Customer, type Quote, type LineItem, type Product, type User, type ContractTemplate, type PricingTable, type ProductAccessory, type InsertCustomer, type InsertQuote, type InsertLineItem, type InsertProduct, type InsertUser, type InsertContractTemplate, type InsertPricingTable, type InsertProductAccessory, type QuoteWithDetails, type ProductWithDetails } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, inArray } from "drizzle-orm";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
@@ -30,10 +30,24 @@ export interface IStorage {
   // Product methods
   getAllProducts(): Promise<Product[]>;
   getProduct(id: number): Promise<Product | undefined>;
+  getProductWithDetails(id: number): Promise<ProductWithDetails | undefined>;
   createProduct(product: InsertProduct): Promise<Product>;
   updateProduct(id: number, product: Partial<InsertProduct>): Promise<Product | undefined>;
   deleteProduct(id: number): Promise<boolean>;
   bulkUpdateProducts(productIds: number[], updates: Partial<InsertProduct>): Promise<number>;
+
+  // Pricing table methods
+  getPricingTablesByProductId(productId: number): Promise<PricingTable[]>;
+  createPricingTable(pricingTable: InsertPricingTable): Promise<PricingTable>;
+  updatePricingTable(id: number, pricingTable: Partial<InsertPricingTable>): Promise<PricingTable | undefined>;
+  deletePricingTable(id: number): Promise<boolean>;
+  calculateConfigurableProductPrice(productId: number, length: number, width: number): Promise<number | null>;
+
+  // Product accessories methods  
+  getProductAccessoriesByProductId(productId: number): Promise<(ProductAccessory & { accessory: Product })[]>;
+  createProductAccessory(accessory: InsertProductAccessory): Promise<ProductAccessory>;
+  updateProductAccessory(id: number, accessory: Partial<InsertProductAccessory>): Promise<ProductAccessory | undefined>;
+  deleteProductAccessory(id: number): Promise<boolean>;
 
   // Line item methods
   getLineItemsByQuoteId(quoteId: number): Promise<LineItem[]>;
@@ -488,7 +502,143 @@ export class DatabaseStorage implements IStorage {
     return template || undefined;
   }
 
-  sessionStore: any
+  // Enhanced product method with details
+  async getProductWithDetails(id: number): Promise<ProductWithDetails | undefined> {
+    const [product] = await db.select().from(products).where(eq(products.id, id));
+    if (!product) return undefined;
+
+    // Get pricing tables for the product
+    const productPricingTables = await db.select().from(pricingTables).where(eq(pricingTables.productId, id));
+
+    // Get accessories with their product details
+    const accessoryLinks = await db
+      .select({
+        id: productAccessories.id,
+        baseProductId: productAccessories.baseProductId,
+        accessoryProductId: productAccessories.accessoryProductId,
+        isRequired: productAccessories.isRequired,
+        displayOrder: productAccessories.displayOrder,
+        category: productAccessories.category,
+        createdAt: productAccessories.createdAt,
+        accessory: products,
+      })
+      .from(productAccessories)
+      .leftJoin(products, eq(productAccessories.accessoryProductId, products.id))
+      .where(eq(productAccessories.baseProductId, id));
+
+    return {
+      ...product,
+      pricingTables: productPricingTables,
+      accessories: accessoryLinks as (ProductAccessory & { accessory: Product })[],
+    };
+  }
+
+  // Pricing table methods
+  async getPricingTablesByProductId(productId: number): Promise<PricingTable[]> {
+    return await db.select().from(pricingTables).where(eq(pricingTables.productId, productId));
+  }
+
+  async createPricingTable(insertPricingTable: InsertPricingTable): Promise<PricingTable> {
+    const [pricingTable] = await db
+      .insert(pricingTables)
+      .values(insertPricingTable)
+      .returning();
+    return pricingTable;
+  }
+
+  async updatePricingTable(id: number, pricingTableData: Partial<InsertPricingTable>): Promise<PricingTable | undefined> {
+    const [updated] = await db
+      .update(pricingTables)
+      .set(pricingTableData)
+      .where(eq(pricingTables.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deletePricingTable(id: number): Promise<boolean> {
+    const result = await db.delete(pricingTables).where(eq(pricingTables.id, id));
+    return (result.rowCount || 0) > 0;
+  }
+
+  async calculateConfigurableProductPrice(productId: number, length: number, width: number): Promise<number | null> {
+    // Find the closest pricing table entry for the given dimensions
+    const pricingTablesForProduct = await db
+      .select()
+      .from(pricingTables)
+      .where(eq(pricingTables.productId, productId));
+
+    if (pricingTablesForProduct.length === 0) {
+      return null;
+    }
+
+    // Simple strategy: find exact match first, then closest dimensions
+    let exactMatch = pricingTablesForProduct.find(
+      table => parseFloat(table.length) === length && parseFloat(table.width) === width
+    );
+
+    if (exactMatch) {
+      return parseFloat(exactMatch.basePrice);
+    }
+
+    // Find closest match by calculating distance
+    let closestTable = pricingTablesForProduct[0];
+    let minDistance = Infinity;
+
+    for (const table of pricingTablesForProduct) {
+      const lengthDiff = Math.abs(parseFloat(table.length) - length);
+      const widthDiff = Math.abs(parseFloat(table.width) - width);
+      const distance = Math.sqrt(lengthDiff * lengthDiff + widthDiff * widthDiff);
+
+      if (distance < minDistance) {
+        minDistance = distance;
+        closestTable = table;
+      }
+    }
+
+    return parseFloat(closestTable.basePrice);
+  }
+
+  // Product accessories methods
+  async getProductAccessoriesByProductId(productId: number): Promise<(ProductAccessory & { accessory: Product })[]> {
+    const accessoryLinks = await db
+      .select({
+        id: productAccessories.id,
+        baseProductId: productAccessories.baseProductId,
+        accessoryProductId: productAccessories.accessoryProductId,
+        isRequired: productAccessories.isRequired,
+        displayOrder: productAccessories.displayOrder,
+        category: productAccessories.category,
+        createdAt: productAccessories.createdAt,
+        accessory: products,
+      })
+      .from(productAccessories)
+      .leftJoin(products, eq(productAccessories.accessoryProductId, products.id))
+      .where(eq(productAccessories.baseProductId, productId));
+
+    return accessoryLinks as (ProductAccessory & { accessory: Product })[];
+  }
+
+  async createProductAccessory(insertAccessory: InsertProductAccessory): Promise<ProductAccessory> {
+    const [accessory] = await db
+      .insert(productAccessories)
+      .values(insertAccessory)
+      .returning();
+    return accessory;
+  }
+
+  async updateProductAccessory(id: number, accessoryData: Partial<InsertProductAccessory>): Promise<ProductAccessory | undefined> {
+    const [updated] = await db
+      .update(productAccessories)
+      .set(accessoryData)
+      .where(eq(productAccessories.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteProductAccessory(id: number): Promise<boolean> {
+    const result = await db.delete(productAccessories).where(eq(productAccessories.id, id));
+    return (result.rowCount || 0) > 0;
+  }
 }
 
 export const storage = new DatabaseStorage();

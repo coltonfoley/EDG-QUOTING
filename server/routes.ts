@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertCustomerSchema, insertQuoteSchema, insertLineItemSchema, insertProductSchema, insertContractTemplateSchema } from "@shared/schema";
+import { insertCustomerSchema, insertQuoteSchema, insertLineItemSchema, insertProductSchema, insertContractTemplateSchema, insertPricingTableSchema, insertProductAccessorySchema } from "@shared/schema";
 import { z } from "zod";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import multer from "multer";
@@ -302,6 +302,151 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Product not found" });
       }
       res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // Enhanced product endpoint with pricing tables and accessories
+  app.get("/api/products/:id/with-details", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const productWithDetails = await storage.getProductWithDetails(id);
+      if (!productWithDetails) {
+        return res.status(404).json({ message: "Product not found" });
+      }
+      res.json(productWithDetails);
+    } catch (error) {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // Pricing tables routes
+  app.get("/api/products/:productId/pricing-tables", isAuthenticated, async (req, res) => {
+    try {
+      const productId = parseInt(req.params.productId);
+      const pricingTables = await storage.getPricingTablesByProductId(productId);
+      res.json(pricingTables);
+    } catch (error) {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.post("/api/products/:productId/pricing-tables", isAuthenticated, async (req, res) => {
+    try {
+      const productId = parseInt(req.params.productId);
+      const pricingData = insertPricingTableSchema.parse({ ...req.body, productId });
+      const pricingTable = await storage.createPricingTable(pricingData);
+      res.status(201).json(pricingTable);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid pricing table data", errors: error.errors });
+      }
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.put("/api/pricing-tables/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const pricingData = insertPricingTableSchema.partial().parse(req.body);
+      const pricingTable = await storage.updatePricingTable(id, pricingData);
+      if (!pricingTable) {
+        return res.status(404).json({ message: "Pricing table not found" });
+      }
+      res.json(pricingTable);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid pricing table data", errors: error.errors });
+      }
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.delete("/api/pricing-tables/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const deleted = await storage.deletePricingTable(id);
+      if (!deleted) {
+        return res.status(404).json({ message: "Pricing table not found" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // Product accessories routes
+  app.get("/api/products/:productId/accessories", isAuthenticated, async (req, res) => {
+    try {
+      const productId = parseInt(req.params.productId);
+      const accessories = await storage.getProductAccessoriesByProductId(productId);
+      res.json(accessories);
+    } catch (error) {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.post("/api/products/:productId/accessories", isAuthenticated, async (req, res) => {
+    try {
+      const productId = parseInt(req.params.productId);
+      const accessoryData = insertProductAccessorySchema.parse({ ...req.body, baseProductId: productId });
+      const accessory = await storage.createProductAccessory(accessoryData);
+      res.status(201).json(accessory);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid accessory data", errors: error.errors });
+      }
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.put("/api/product-accessories/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const accessoryData = insertProductAccessorySchema.partial().parse(req.body);
+      const accessory = await storage.updateProductAccessory(id, accessoryData);
+      if (!accessory) {
+        return res.status(404).json({ message: "Product accessory not found" });
+      }
+      res.json(accessory);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid accessory data", errors: error.errors });
+      }
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.delete("/api/product-accessories/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const deleted = await storage.deleteProductAccessory(id);
+      if (!deleted) {
+        return res.status(404).json({ message: "Product accessory not found" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // Calculate pricing for configurable products
+  app.post("/api/products/:productId/calculate-price", isAuthenticated, async (req, res) => {
+    try {
+      const productId = parseInt(req.params.productId);
+      const { length, width } = req.body;
+      
+      if (!length || !width) {
+        return res.status(400).json({ message: "Length and width are required" });
+      }
+      
+      const price = await storage.calculateConfigurableProductPrice(productId, parseFloat(length), parseFloat(width));
+      if (price === null) {
+        return res.status(404).json({ message: "No pricing found for these dimensions" });
+      }
+      
+      res.json({ price, length, width });
     } catch (error) {
       res.status(500).json({ message: "Internal server error" });
     }
