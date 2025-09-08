@@ -135,12 +135,11 @@ export function QuoteImporter({ onImportComplete, onClose }: QuoteImporterProps)
         // Add line items
         for (const item of data.lineItems) {
           await apiRequest("POST", `/api/quotes/${quote.id}/line-items`, {
-            description: item.description,
-            quantity: item.quantity,
-            rate: item.price,
-            unit: item.unit || "each",
-            markupType: "none",
-            markupValue: 0,
+            description: item.description || "Imported Item",
+            quantity: item.quantity?.toString() || "1",
+            unitPrice: item.price?.toString() || "0",
+            markupType: "percentage",
+            markupValue: "0",
           });
         }
         
@@ -153,12 +152,11 @@ export function QuoteImporter({ onImportComplete, onClose }: QuoteImporterProps)
         
         for (const item of data.lineItems) {
           await apiRequest("POST", `/api/quotes/${selectedQuoteId}/line-items`, {
-            description: item.description,
-            quantity: item.quantity,
-            rate: item.price,
-            unit: item.unit || "each",
-            markupType: "none",
-            markupValue: 0,
+            description: item.description || "Imported Item",
+            quantity: item.quantity?.toString() || "1",
+            unitPrice: item.price?.toString() || "0",
+            markupType: "percentage", 
+            markupValue: "0",
           });
         }
         
