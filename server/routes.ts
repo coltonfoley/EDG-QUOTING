@@ -7,7 +7,7 @@ import { setupAuth, isAuthenticated } from "./replitAuth";
 import multer from "multer";
 import * as XLSX from "xlsx";
 import { parsePDF } from "./pdf-parser";
-import { extractProductsFromImage, extractProductsFromText } from "./openai";
+import { extractProductsFromImage, extractProductsFromText, extractQuoteDataFromText } from "./openai";
 import type { ExtractedProduct } from "./openai";
 
 // Configure multer for file uploads
@@ -166,6 +166,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(204).send();
     } catch (error) {
       res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // PDF Quote Import endpoint
+  app.post("/api/quotes/import-pdf", isAuthenticated, upload.single('pdf'), async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ message: "No PDF file uploaded" });
+      }
+
+      if (req.file.mimetype !== 'application/pdf') {
+        return res.status(400).json({ message: "File must be a PDF" });
+      }
+
+      // Extract text from PDF
+      const pdfData = await parsePDF(req.file.buffer);
+      if (!pdfData.text.trim()) {
+        return res.status(400).json({ message: "Failed to extract text from PDF" });
+      }
+
+      // Extract quote data using AI
+      const extractedQuoteData = await extractQuoteDataFromText(pdfData.text);
+      
+      if (!extractedQuoteData) {
+        return res.status(400).json({ message: "Failed to extract quote data from PDF" });
+      }
+
+      res.json({
+        success: true,
+        data: extractedQuoteData,
+        originalText: pdfData.text.substring(0, 500) + '...' // Preview of extracted text
+      });
+
+    } catch (error) {
+      console.error("Error processing PDF quote import:", error);
+      res.status(500).json({ 
+        message: "Failed to process PDF quote import",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
     }
   });
 
