@@ -932,8 +932,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const id = parseInt(req.params.id);
       const { returnUrl } = req.body;
       
-      // Get the quote with details
-      const quote = await storage.getQuote(id);
+      // Get the quote with details (including customer data)
+      const quote = await storage.getQuoteWithDetails(id);
       if (!quote) {
         return res.status(404).json({ message: "Quote not found" });
       }
