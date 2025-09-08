@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Plus, Edit, Trash2, DollarSign } from "lucide-react";
+import { Plus, Edit, Trash2, DollarSign, Upload } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
@@ -13,6 +13,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { insertPricingTableSchema, type PricingTable } from "@shared/schema";
 import { z } from "zod";
 import { formatCurrency } from "@/lib/utils";
+import { PricingTableUploader } from "./pricing-table-uploader";
 
 const pricingFormSchema = insertPricingTableSchema.omit({ productId: true });
 type PricingFormData = z.infer<typeof pricingFormSchema>;
@@ -24,6 +25,7 @@ interface DimensionalPricingManagerProps {
 
 export function DimensionalPricingManager({ productId, productName }: DimensionalPricingManagerProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState<PricingTable | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -134,13 +136,31 @@ export function DimensionalPricingManager({ productId, productName }: Dimensiona
             Configure pricing for {productName} based on length and width dimensions
           </p>
         </div>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button onClick={handleNewEntry} className="bg-edg-black hover:bg-edg-grey text-white">
-              <Plus className="mr-2 h-4 w-4" />
-              Add Pricing Entry
-            </Button>
-          </DialogTrigger>
+        <div className="flex space-x-3">
+          <Dialog open={isUploadDialogOpen} onOpenChange={setIsUploadDialogOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline" className="border-edg-teal text-edg-teal hover:bg-edg-teal hover:text-white">
+                <Upload className="mr-2 h-4 w-4" />
+                Upload CSV
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-4xl">
+              <DialogHeader>
+                <DialogTitle>Bulk Upload Pricing Data</DialogTitle>
+              </DialogHeader>
+              <PricingTableUploader 
+                productId={productId} 
+                onUploadComplete={() => setIsUploadDialogOpen(false)}
+              />
+            </DialogContent>
+          </Dialog>
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <DialogTrigger asChild>
+              <Button onClick={handleNewEntry} className="bg-edg-black hover:bg-edg-grey text-white">
+                <Plus className="mr-2 h-4 w-4" />
+                Add Pricing Entry
+              </Button>
+            </DialogTrigger>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>
@@ -210,6 +230,7 @@ export function DimensionalPricingManager({ productId, productName }: Dimensiona
             </Form>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       {!pricingTables || pricingTables.length === 0 ? (
