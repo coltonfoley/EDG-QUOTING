@@ -540,6 +540,33 @@ export function QuoteImporter({ onImportComplete, onClose }: QuoteImporterProps)
                               💡 Adding {editedData?.lineItems.length || 0} new items (${editedData?.lineItems.reduce((sum, item) => sum + item.total, 0).toFixed(2) || '0.00'}) 
                               → New total: ${((selectedQuote.total || 0) + (editedData?.lineItems.reduce((sum, item) => sum + item.total, 0) || 0)).toFixed(2)}
                             </div>
+                            
+                            {/* Duplicate Detection Warning */}
+                            {(() => {
+                              if (!editedData?.lineItems || !selectedQuote.lineItems) return null;
+                              const potentialDuplicates = editedData.lineItems.filter(newItem =>
+                                selectedQuote.lineItems?.some(existingItem =>
+                                  existingItem.description.toLowerCase().includes(newItem.description.toLowerCase().slice(0, 20)) ||
+                                  newItem.description.toLowerCase().includes(existingItem.description.toLowerCase().slice(0, 20))
+                                )
+                              );
+                              
+                              if (potentialDuplicates.length === 0) return null;
+                              
+                              return (
+                                <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 p-2 rounded mt-1">
+                                  ⚠️ Potential duplicates detected: {potentialDuplicates.length} items may already exist in this quote.
+                                  <details className="mt-1">
+                                    <summary className="cursor-pointer text-amber-800 font-medium">Show potential duplicates</summary>
+                                    <ul className="mt-1 space-y-1 text-amber-800">
+                                      {potentialDuplicates.map((item, idx) => (
+                                        <li key={idx}>• {item.description}</li>
+                                      ))}
+                                    </ul>
+                                  </details>
+                                </div>
+                              );
+                            })()}
                           </div>
                         );
                       })()}
