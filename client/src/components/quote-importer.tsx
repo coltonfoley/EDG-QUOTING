@@ -106,7 +106,15 @@ export function QuoteImporter({ onImportComplete, onClose }: QuoteImporterProps)
     mutationFn: async (data: ExtractedQuote) => {
       if (importType === "new") {
         // Create new quote with extracted data
-        const customerResponse = await apiRequest("POST", "/api/customers", data.customer);
+        // Ensure required customer fields have values
+        const customerData = {
+          name: data.customer.name || "Customer Name",
+          email: data.customer.email || "customer@example.com", 
+          phone: data.customer.phone || "000-000-0000",
+          company: data.customer.company || null,
+        };
+        
+        const customerResponse = await apiRequest("POST", "/api/customers", customerData);
         const customer = await customerResponse.json();
         
         const quoteData = {
