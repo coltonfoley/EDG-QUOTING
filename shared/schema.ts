@@ -74,10 +74,38 @@ export const products = pgTable("products", {
   name: text("name").notNull(),
   description: text("description"),
   category: text("category"),
+  productType: text("product_type").notNull().default("simple"), // simple, configurable
   defaultUnitPrice: decimal("default_unit_price", { precision: 10, scale: 2 }).notNull(),
   defaultMarkupType: text("default_markup_type").notNull().default("percentage"),
   defaultMarkupValue: decimal("default_markup_value", { precision: 10, scale: 2 }).notNull().default("25"),
   unit: text("unit").default("each"), // each, sq ft, linear ft, cubic yard, etc.
+  // Configuration fields for configurable products
+  configFields: jsonb("config_fields"), // JSON array of configuration field definitions
+  minLength: decimal("min_length", { precision: 8, scale: 2 }), // for dimensional products
+  maxLength: decimal("max_length", { precision: 8, scale: 2 }),
+  minWidth: decimal("min_width", { precision: 8, scale: 2 }),
+  maxWidth: decimal("max_width", { precision: 8, scale: 2 }),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Dimensional pricing tables for configurable products
+export const pricingTables = pgTable("pricing_tables", {
+  id: serial("id").primaryKey(),
+  productId: integer("product_id").notNull(),
+  length: decimal("length", { precision: 8, scale: 2 }).notNull(),
+  width: decimal("width", { precision: 8, scale: 2 }).notNull(),
+  basePrice: decimal("base_price", { precision: 10, scale: 2 }).notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Product accessories - items that can be added to base products
+export const productAccessories = pgTable("product_accessories", {
+  id: serial("id").primaryKey(),
+  baseProductId: integer("base_product_id").notNull(), // the main product (e.g., Brustor B200xl)
+  accessoryProductId: integer("accessory_product_id").notNull(), // the accessory product
+  isRequired: boolean("is_required").default(false),
+  displayOrder: integer("display_order").default(0),
+  category: text("category"), // e.g., "Motors", "Lighting", "Sensors"
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -90,6 +118,10 @@ export const lineItems = pgTable("line_items", {
   unitPrice: decimal("unit_price", { precision: 10, scale: 2 }).notNull(),
   markupType: text("markup_type").notNull(), // percentage, dollar
   markupValue: decimal("markup_value", { precision: 10, scale: 2 }).notNull(),
+  // Configuration data for configurable products
+  configData: jsonb("config_data"), // JSON object storing configuration values (dimensions, options, etc.)
+  baseProductId: integer("base_product_id"), // reference to base product for accessories
+  isAccessory: boolean("is_accessory").default(false),
 });
 
 
@@ -116,6 +148,24 @@ export const insertProductSchema = createInsertSchema(products).omit({
 }).extend({
   defaultUnitPrice: z.union([z.string(), z.number()]).transform(val => typeof val === 'string' ? val : val.toString()),
   defaultMarkupValue: z.union([z.string(), z.number()]).transform(val => typeof val === 'string' ? val : val.toString()),
+  minLength: z.union([z.string(), z.number(), z.null()]).transform(val => val === null ? null : (typeof val === 'string' ? val : val.toString())).optional(),
+  maxLength: z.union([z.string(), z.number(), z.null()]).transform(val => val === null ? null : (typeof val === 'string' ? val : val.toString())).optional(),
+  minWidth: z.union([z.string(), z.number(), z.null()]).transform(val => val === null ? null : (typeof val === 'string' ? val : val.toString())).optional(),
+  maxWidth: z.union([z.string(), z.number(), z.null()]).transform(val => val === null ? null : (typeof val === 'string' ? val : val.toString())).optional(),
+});
+
+export const insertPricingTableSchema = createInsertSchema(pricingTables).omit({
+  id: true,
+  createdAt: true,
+}).extend({
+  length: z.union([z.string(), z.number()]).transform(val => typeof val === 'string' ? val : val.toString()),
+  width: z.union([z.string(), z.number()]).transform(val => typeof val === 'string' ? val : val.toString()),
+  basePrice: z.union([z.string(), z.number()]).transform(val => typeof val === 'string' ? val : val.toString()),
+});
+
+export const insertProductAccessorySchema = createInsertSchema(productAccessories).omit({
+  id: true,
+  createdAt: true,
 });
 
 export const insertLineItemSchema = createInsertSchema(lineItems).omit({
@@ -139,17 +189,26 @@ export type Quote = typeof quotes.$inferSelect;
 export type Product = typeof products.$inferSelect;
 export type LineItem = typeof lineItems.$inferSelect;
 export type ContractTemplate = typeof contractTemplates.$inferSelect;
+export type PricingTable = typeof pricingTables.$inferSelect;
+export type ProductAccessory = typeof productAccessories.$inferSelect;
 
 export type InsertCustomer = z.infer<typeof insertCustomerSchema>;
 export type InsertQuote = z.infer<typeof insertQuoteSchema>;
 export type InsertProduct = z.infer<typeof insertProductSchema>;
 export type InsertLineItem = z.infer<typeof insertLineItemSchema>;
 export type InsertContractTemplate = z.infer<typeof insertContractTemplateSchema>;
+export type InsertPricingTable = z.infer<typeof insertPricingTableSchema>;
+export type InsertProductAccessory = z.infer<typeof insertProductAccessorySchema>;
 
 export type QuoteWithDetails = Quote & {
   customer: Customer;
   lineItems: LineItem[];
   contractTemplate?: ContractTemplate;
+};
+
+export type ProductWithDetails = Product & {
+  pricingTables?: PricingTable[];
+  accessories?: (ProductAccessory & { accessory: Product })[];
 };
 
 export const insertUserSchema = createInsertSchema(users).omit({
