@@ -92,8 +92,12 @@ export const products = pgTable("products", {
 export const pricingTables = pgTable("pricing_tables", {
   id: serial("id").primaryKey(),
   productId: integer("product_id").notNull(),
-  length: decimal("length", { precision: 8, scale: 2 }).notNull(),
-  width: decimal("width", { precision: 8, scale: 2 }).notNull(),
+  // Length band range
+  lengthMin: decimal("length_min", { precision: 8, scale: 2 }).notNull(),
+  lengthMax: decimal("length_max", { precision: 8, scale: 2 }).notNull(),
+  // Width band range  
+  widthMin: decimal("width_min", { precision: 8, scale: 2 }).notNull(),
+  widthMax: decimal("width_max", { precision: 8, scale: 2 }).notNull(),
   basePrice: decimal("base_price", { precision: 10, scale: 2 }).notNull(),
   createdAt: timestamp("created_at").defaultNow(),
 });
@@ -158,8 +162,10 @@ export const insertPricingTableSchema = createInsertSchema(pricingTables).omit({
   id: true,
   createdAt: true,
 }).extend({
-  length: z.union([z.string(), z.number()]).transform(val => typeof val === 'string' ? val : val.toString()),
-  width: z.union([z.string(), z.number()]).transform(val => typeof val === 'string' ? val : val.toString()),
+  lengthMin: z.union([z.string(), z.number()]).transform(val => typeof val === 'string' ? val : val.toString()),
+  lengthMax: z.union([z.string(), z.number()]).transform(val => typeof val === 'string' ? val : val.toString()),
+  widthMin: z.union([z.string(), z.number()]).transform(val => typeof val === 'string' ? val : val.toString()),
+  widthMax: z.union([z.string(), z.number()]).transform(val => typeof val === 'string' ? val : val.toString()),
   basePrice: z.union([z.string(), z.number()]).transform(val => typeof val === 'string' ? val : val.toString()),
 });
 
