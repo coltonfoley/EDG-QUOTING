@@ -3,6 +3,8 @@ import { db } from "./db";
 import { eq, desc, inArray } from "drizzle-orm";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
+import connectPg from "connect-pg-simple";
+import session from "express-session";
 
 const scryptAsync = promisify(scrypt);
 
@@ -254,16 +256,12 @@ export class DatabaseStorage implements IStorage {
   sessionStore: any;
 
   constructor() {
-    // Import session store with dynamic import to work with ES modules
-    import('connect-pg-simple').then(({ default: connectPg }) => {
-      import('express-session').then(({ default: session }) => {
-        const PostgresSessionStore = connectPg(session);
-        this.sessionStore = new PostgresSessionStore({
-          conString: process.env.DATABASE_URL,
-          createTableIfMissing: false,
-          tableName: "sessions",
-        });
-      });
+    // Initialize session store synchronously - imports are at top of file
+    const PostgresSessionStore = connectPg(session);
+    this.sessionStore = new PostgresSessionStore({
+      conString: process.env.DATABASE_URL,
+      createTableIfMissing: false,
+      tableName: "sessions",
     });
   }
   async getCustomer(id: number): Promise<Customer | undefined> {

@@ -107,9 +107,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Quote routes (protected)
   app.get("/api/quotes", isAuthenticated, async (req, res) => {
     try {
+      console.log("Attempting to get all quotes...");
       const quotes = await storage.getAllQuotes();
+      console.log(`Found ${quotes.length} quotes`);
       res.json(quotes);
     } catch (error) {
+      console.error("Error in /api/quotes:", error);
       res.status(500).json({ message: "Internal server error" });
     }
   });
