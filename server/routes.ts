@@ -954,15 +954,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Initialize DocuSign service
       const docusignService = new DocuSignService();
       
-      // For this implementation, we need the PDF content
-      // In a real implementation, you'd generate the PDF here or get it from storage
-      const pdfBase64 = ""; // TODO: Generate PDF and convert to base64
-      
-      if (!pdfBase64) {
-        return res.status(400).json({ 
-          message: "PDF generation not implemented. Please generate PDF first." 
-        });
-      }
+      // Generate PDF content for the quote
+      const { generateQuotePDF } = await import('./pdfGenerator');
+      const pdfBase64 = await generateQuotePDF(quote);
 
       // Create DocuSign envelope
       const envelope = await docusignService.createAndSendEnvelope(
