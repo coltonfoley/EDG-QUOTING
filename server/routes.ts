@@ -452,6 +452,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Bulk upload pricing table data
+  app.post("/api/products/:productId/pricing-tables/bulk-upload", isAuthenticated, async (req, res) => {
+    try {
+      const productId = parseInt(req.params.productId);
+      const { pricingData } = req.body;
+
+      if (!Array.isArray(pricingData) || pricingData.length === 0) {
+        return res.status(400).json({ message: "Valid pricing data array is required" });
+      }
+
+      // Validate pricing data format
+      for (const item of pricingData) {
+        if (!item.length || !item.width || !item.price || 
+            item.length <= 0 || item.width <= 0 || item.price <= 0) {
+          return res.status(400).json({ 
+            message: "Each pricing entry must have valid length, width, and price values" 
+          });
+        }
+      }
+
+      // Clear existing pricing tables for this product
+      await storage.deletePricingTablesByProductId(productId);
+
+      const results = [];
+      for (const item of pricingData) {
+        const pricingTable = await storage.createPricingTable({
+          productId,
+          length: parseFloat(item.length),
+          width: parseFloat(item.width),
+          price: parseFloat(item.price)
+        });
+        results.push(pricingTable);
+      }
+
+      res.status(201).json({ 
+        message: `Successfully uploaded ${results.length} pricing entries`,
+        data: results
+      });
+    } catch (error) {
+      console.error("Error bulk uploading pricing data:", error);
+      res.status(500).json({ message: "Failed to upload pricing data" });
+    }
+  });
+
   // Admin routes
   app.get('/api/admin/users', isAuthenticated, async (req: any, res) => {
     try {
