@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { FileText, Bookmark, Plus, Eye } from "lucide-react";
+import { FileText, Bookmark, Plus, Eye, Send, Mail, CheckCircle, AlertCircle, Clock } from "lucide-react";
 import { formatCurrency, calculateQuoteTotals } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { QuotePDFTemplate } from "./quote-pdf-template";
@@ -76,7 +76,39 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
     },
   });
 
-
+  // DocuSign send mutation
+  const sendToDocuSignMutation = useMutation({
+    mutationFn: async () => {
+      const returnUrl = `${window.location.origin}/quotes/${quote.id}`;
+      const response = await apiRequest("POST", `/api/quotes/${quote.id}/send-to-docusign`, {
+        returnUrl
+      });
+      return response.json();
+    },
+    onSuccess: (data) => {
+      toast({ 
+        title: "Quote sent to customer", 
+        description: `Quote has been sent to ${quote.customer?.name} via DocuSign` 
+      });
+      queryClient.invalidateQueries({ queryKey: [`/api/quotes/${quote.id}`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/quotes"] });
+      
+      // Optionally open the signing URL in a new tab for reference
+      if (data.signingUrl) {
+        toast({
+          title: "Customer signing URL ready",
+          description: "The customer can now sign the quote via the link sent to their email."
+        });
+      }
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: "Error sending quote", 
+        description: error.message || "Failed to send quote to customer via DocuSign", 
+        variant: "destructive" 
+      });
+    },
+  });
 
   // Simple save functions - no auto-save, manual button click only
   const handleSaveIssuerSignature = () => {
@@ -324,6 +356,87 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
             <FileText className="mr-2 h-4 w-4" />
             Generate PDF Quote
           </Button>
+
+          {/* DocuSign Send to Customer Button */}
+          {quote.customer?.email && quote.issuerSignature && !quote.docusignEnvelopeId && (
+            <Button
+              onClick={() => sendToDocuSignMutation.mutate()}
+              disabled={sendToDocuSignMutation.isPending}
+              className="w-full bg-edg-teal hover:bg-edg-teal/90 text-white"
+            >
+              {sendToDocuSignMutation.isPending ? (
+                <>
+                  <Clock className="mr-2 h-4 w-4 animate-spin" />
+                  Sending to Customer...
+                </>
+              ) : (
+                <>
+                  <Send className="mr-2 h-4 w-4" />
+                  Send to Customer (DocuSign)
+                </>
+              )}
+            </Button>
+          )}
+
+          {/* DocuSign Status Display */}
+          {quote.docusignEnvelopeId && (
+            <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <Mail className="h-4 w-4 text-blue-600 mr-2" />
+                  <span className="font-medium text-blue-800">Sent via DocuSign</span>
+                </div>
+                <div className="flex items-center text-sm">
+                  {quote.docusignStatus === 'completed' ? (
+                    <CheckCircle className="h-4 w-4 text-green-600" />
+                  ) : quote.docusignStatus === 'declined' ? (
+                    <AlertCircle className="h-4 w-4 text-red-600" />
+                  ) : (
+                    <Clock className="h-4 w-4 text-blue-600" />
+                  )}
+                  <span className={`ml-1 capitalize ${
+                    quote.docusignStatus === 'completed' ? 'text-green-600 font-semibold' :
+                    quote.docusignStatus === 'declined' ? 'text-red-600' :
+                    'text-blue-600'
+                  }`}>
+                    {quote.docusignStatus || 'Processing'}
+                  </span>
+                </div>
+              </div>
+              <div className="text-xs text-blue-700 mt-2">
+                <div>Envelope ID: {quote.docusignEnvelopeId}</div>
+                {quote.docusignSentDate && (
+                  <div>Sent: {new Date(quote.docusignSentDate).toLocaleString()}</div>
+                )}
+                {quote.docusignViewUrl && quote.docusignStatus !== 'completed' && (
+                  <div className="mt-1">
+                    <a 
+                      href={quote.docusignViewUrl} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:text-blue-800 underline"
+                    >
+                      Customer signing link →
+                    </a>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Requirements notice */}
+          {(!quote.customer?.email || !quote.issuerSignature) && !quote.docusignEnvelopeId && (
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+              <div className="flex items-center">
+                <AlertCircle className="h-4 w-4 text-amber-600 mr-2" />
+                <span className="text-sm text-amber-800 font-medium">Requirements for DocuSign</span>
+              </div>
+              <ul className="text-xs text-amber-700 mt-2 space-y-1">
+                {!quote.customer?.email && <li>• Customer email is required</li>}
+                {!quote.issuerSignature && <li>• Quote must be signed by EDG first</li>}
+              </ul>
+            </div>
+          )}
           {/* Signature Status */}
           <div className="p-3 bg-gray-50 rounded">
             <div className="text-sm text-center">
