@@ -51,9 +51,10 @@ export function calculateLineItemMargin(
   }
 }
 
-export function calculateQuoteTotals(lineItems: any[], taxRate: number | string = 0, discount: number | string = 0) {
+export function calculateQuoteTotals(lineItems: any[], taxRate: number | string = 0, discount: number | string = 0, shipping: number | string = 0) {
   const tax = typeof taxRate === 'string' ? parseFloat(taxRate) : taxRate;
   const disc = typeof discount === 'string' ? parseFloat(discount) : discount;
+  const shippingAmount = typeof shipping === 'string' ? parseFloat(shipping) : shipping;
 
   const subtotal = lineItems.reduce((sum, item) => {
     return sum + calculateLineItemTotal(
@@ -73,14 +74,16 @@ export function calculateQuoteTotals(lineItems: any[], taxRate: number | string 
   const totalMarkup = subtotal - baseCost;
   const discountAmount = disc > 0 ? (subtotal * (disc / 100)) : 0;
   const afterDiscount = subtotal - discountAmount;
-  const taxAmount = afterDiscount * (tax / 100);
-  const total = afterDiscount + taxAmount;
+  const beforeTax = afterDiscount + shippingAmount;
+  const taxAmount = beforeTax * (tax / 100);
+  const total = beforeTax + taxAmount;
   const margin = baseCost > 0 ? ((totalMarkup / baseCost) * 100) : 0;
 
   return {
     subtotal,
     totalMarkup,
     discountAmount,
+    shippingAmount,
     taxAmount,
     total,
     margin: Math.round(margin * 10) / 10,
