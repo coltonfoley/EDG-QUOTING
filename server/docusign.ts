@@ -120,6 +120,17 @@ export class DocuSignService {
       throw new Error('DOCUSIGN_PRIVATE_KEY environment variable is not set');
     }
 
+    // Format the private key properly - handle cases where it might be stored without proper line breaks
+    let formattedKey = privateKey;
+    if (!privateKey.includes('\n')) {
+      // If the key is stored as one line, add proper line breaks
+      formattedKey = privateKey
+        .replace(/-----BEGIN RSA PRIVATE KEY-----/, '-----BEGIN RSA PRIVATE KEY-----\n')
+        .replace(/-----END RSA PRIVATE KEY-----/, '\n-----END RSA PRIVATE KEY-----')
+        .replace(/(.{64})/g, '$1\n')
+        .replace(/\n\n/g, '\n');
+    }
+
     const now = Math.floor(Date.now() / 1000);
     
     const payload = {
@@ -131,7 +142,7 @@ export class DocuSignService {
       scope: 'signature impersonation'
     };
 
-    return jwt.sign(payload, privateKey, { algorithm: 'RS256' });
+    return jwt.sign(payload, formattedKey, { algorithm: 'RS256' });
   }
 
   private async requestAccessTokenWithJWT(): Promise<DocuSignTokenResponse> {
