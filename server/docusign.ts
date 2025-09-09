@@ -1,4 +1,6 @@
 // Using global fetch available in Node.js 18+
+import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 
 interface DocuSignConfig {
   integrationKey: string;
@@ -97,8 +99,8 @@ export class DocuSignService {
       return this.accessToken;
     }
 
-    // Get new token using client credentials flow
-    const tokenResponse = await this.requestAccessTokenWithClientCredentials();
+    // Get new token using JWT Bearer Grant
+    const tokenResponse = await this.requestAccessTokenWithJWT();
     
     this.accessToken = tokenResponse.access_token;
     this.tokenExpiry = new Date(Date.now() + tokenResponse.expires_in * 1000);
@@ -107,24 +109,33 @@ export class DocuSignService {
   }
 
   /**
-   * Request access token using authorization code grant flow
-   * For development/testing, we'll simulate having a valid access token
+   * Request access token using JWT Bearer Grant
    */
-  private async requestAccessTokenWithClientCredentials(): Promise<DocuSignTokenResponse> {
-    // For now, we'll create a mock successful response to test the rest of the integration
-    // In production, you would implement proper OAuth2 authorization code grant flow
+  private async requestAccessTokenWithJWT(): Promise<DocuSignTokenResponse> {
+    const jwtToken = this.generateJWTToken();
     
-    console.log('Note: Using mock DocuSign authentication for development');
-    console.log('Integration Key:', this.config.integrationKey?.substring(0, 8) + '...');
-    
-    // Return a mock token response to test the integration flow
-    // The actual DocuSign API calls will fail, but we can test the PDF generation and data flow
-    return {
-      access_token: 'mock_access_token_for_development',
-      token_type: 'Bearer',
-      expires_in: 3600,
-      scope: 'signature'
-    } as DocuSignTokenResponse;
+    const authUrl = this.config.baseUrl.includes('demo') 
+      ? 'https://account-d.docusign.com/oauth/token'
+      : 'https://account.docusign.com/oauth/token';
+
+    const response = await fetch(authUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({
+        grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+        assertion: jwtToken,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('DocuSign JWT auth failed:', response.status, errorText);
+      throw new Error(`Failed to get access token: ${response.status} ${response.statusText} - ${errorText}`);
+    }
+
+    return response.json() as Promise<DocuSignTokenResponse>;
   }
 
   /**
