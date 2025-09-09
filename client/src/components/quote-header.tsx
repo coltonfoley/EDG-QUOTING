@@ -20,7 +20,7 @@ const quoteFormSchema = insertQuoteSchema.extend({
   customerEmail: z.string().email("Valid email is required"),
   customerPhone: z.string().min(1, "Phone number is required"),
   customerCompany: z.string().optional(),
-}).omit({ customerId: true, taxRate: true, discount: true });
+}).omit({ customerId: true });
 
 type QuoteFormData = z.infer<typeof quoteFormSchema>;
 
@@ -38,11 +38,14 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
     resolver: zodResolver(quoteFormSchema),
     defaultValues: {
       quoteNumber: quote?.quoteNumber || "",
-      projectName: quote?.projectName ?? "",
-      projectAddress: quote?.projectAddress ?? "",
-      estimatedStartDate: quote?.estimatedStartDate ?? "",
+      projectName: quote?.projectName || "",
+      projectAddress: quote?.projectAddress || "",
+      estimatedStartDate: quote?.estimatedStartDate || "",
       notes: quote?.notes || "",
       status: quote?.status || "draft",
+      taxRate: quote?.taxRate || "0",
+      discount: quote?.discount || "0",
+      shipping: quote?.shipping || "0",
       customerName: quote?.customer?.name || "",
       customerEmail: quote?.customer?.email || "",
       customerPhone: quote?.customer?.phone || "",
@@ -60,6 +63,9 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
         estimatedStartDate: quote.estimatedStartDate || "",
         notes: quote.notes || "",
         status: quote.status || "draft",
+        taxRate: quote.taxRate || "0",
+        discount: quote.discount || "0",
+        shipping: quote.shipping || "0",
         customerName: quote.customer?.name || "",
         customerEmail: quote.customer?.email || "",
         customerPhone: quote.customer?.phone || "",
