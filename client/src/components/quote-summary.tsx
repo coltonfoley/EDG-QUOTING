@@ -67,7 +67,7 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
     },
     onSuccess: () => {
       toast({ title: "Quote signed successfully" });
-      queryClient.invalidateQueries({ queryKey: ['/api/quotes', quote.id] });
+      queryClient.invalidateQueries({ queryKey: [`/api/quotes/${quote.id}`] });
     },
     onError: () => {
       toast({ 
