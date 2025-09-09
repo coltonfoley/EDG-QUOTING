@@ -24,6 +24,7 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
   const [issuerSignatureInput, setIssuerSignatureInput] = useState("");
   const [localTaxRate, setLocalTaxRate] = useState<string>("");
   const [localDiscount, setLocalDiscount] = useState<string>("");
+  const [localNotes, setLocalNotes] = useState<string>("");
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -160,8 +161,14 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
               <Textarea
                 id="notes"
                 rows={4}
-                value={quote.notes ?? ""}
-                onChange={(e) => onUpdateQuote("notes", e.target.value)}
+                value={localNotes || quote.notes || ""}
+                onChange={(e) => setLocalNotes(e.target.value)}
+                onBlur={(e) => {
+                  if (localNotes !== "" && localNotes !== quote.notes) {
+                    onUpdateQuote("notes", localNotes);
+                  }
+                  setLocalNotes("");
+                }}
                 placeholder="Add project notes, terms, or special conditions..."
                 className="mt-1"
               />
