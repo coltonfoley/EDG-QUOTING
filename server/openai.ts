@@ -21,15 +21,15 @@ export type ExtractedProduct = z.infer<typeof ExtractedProductSchema>;
 
 // Schema for extracted quote data
 const ExtractedLineItemSchema = z.object({
-  description: z.string(),
-  quantity: z.number(),
-  price: z.number(),
-  total: z.number(),
+  description: z.string().nullable().optional(),
+  quantity: z.number().nullable().optional(),
+  price: z.number().nullable().optional(),
+  total: z.number().nullable().optional(),
   unit: z.string().nullable().optional(),
 });
 
 const ExtractedCustomerSchema = z.object({
-  name: z.string(),
+  name: z.string().nullable().optional(),
   email: z.string().nullable().optional(),
   phone: z.string().nullable().optional(),
   company: z.string().nullable().optional(),
@@ -258,30 +258,30 @@ export async function extractQuoteDataFromText(text: string): Promise<ExtractedQ
       messages: [
         {
           role: "system",
-          content: `You are a data extraction expert specializing in construction quotes and estimates. Extract complete quote information from text.
+          content: `You are a data extraction expert specializing in construction quotes and estimates. Extract available quote information from text, accommodating different supplier formats.
           
-          Extract the following information and return as JSON:
+          Extract the following information and return as JSON (ALL FIELDS ARE OPTIONAL):
           
           1. Customer Information:
-             - name (string, required)
+             - name (string or null) - individual name, company contact, or any identifiable customer reference
              - email (string or null)
              - phone (string or null)
-             - company (string or null)
-             - address (string or null)
+             - company (string or null) - company/business name
+             - address (string or null) - any address information
           
           2. Quote Details:
-             - quoteNumber (string or null)
-             - date (string or null)
-             - projectDescription (string or null)
-             - notes (string or null)
-             - terms (string or null)
+             - quoteNumber (string or null) - quote/estimate number or reference
+             - date (string or null) - quote date, creation date, or any relevant date
+             - projectDescription (string or null) - project name, description, or work details
+             - notes (string or null) - any additional notes or special instructions
+             - terms (string or null) - payment terms, conditions, or contract details
           
-          3. Line Items (array of objects):
-             - description (string, required)
-             - quantity (number, required)
-             - price (number per unit, required)
-             - total (number, required)
-             - unit (string or null, e.g., "each", "sqft", "linear ft")
+          3. Line Items (array of objects, can be empty):
+             - description (string or null) - item name, product, or service description
+             - quantity (number or null) - quantity or amount
+             - price (number or null) - unit price
+             - total (number or null) - line total
+             - unit (string or null) - unit of measurement (e.g., "each", "sqft", "linear ft")
           
           4. Financial Summary:
              - subtotal (number or null)
@@ -292,25 +292,29 @@ export async function extractQuoteDataFromText(text: string): Promise<ExtractedQ
           
           Return valid JSON in this exact format:
           {
-            "customer": {"name": "John Doe", "email": "john@example.com", "phone": "555-1234", "company": "ABC Corp", "address": "123 Main St"},
-            "quoteNumber": "Q-2024-001",
-            "date": "2024-01-15",
-            "projectDescription": "Patio construction",
-            "lineItems": [
-              {"description": "Materials", "quantity": 1, "price": 500.00, "total": 500.00, "unit": "each"}
-            ],
-            "subtotal": 500.00,
-            "taxRate": 0.08,
-            "taxAmount": 40.00,
+            "customer": {"name": null, "email": null, "phone": null, "company": "Supplier Company", "address": null},
+            "quoteNumber": null,
+            "date": null,
+            "projectDescription": null,
+            "lineItems": [],
+            "subtotal": null,
+            "taxRate": null,
+            "taxAmount": null,
             "discountAmount": null,
-            "total": 540.00,
-            "notes": "Additional notes",
-            "terms": "Payment terms"
+            "total": null,
+            "notes": null,
+            "terms": null
           }
           
-          If information is missing or unclear, use null for optional fields.
-          Ensure all numbers are valid and line item totals match quantity × price.
-          Focus on accuracy and completeness.`,
+          IMPORTANT RULES:
+          - ALL fields are optional - if information is not clearly present, use null
+          - Extract only information that is explicitly available in the document
+          - For numbers, always use numeric values (not strings)
+          - Line items array can be empty if no clear items are found
+          - Be flexible with different quote formats from various suppliers and vendors
+          - Don't invent or assume missing information
+          - Focus on extracting what's clearly available rather than forcing missing data
+          - Handle catalogs, price lists, estimates, and formal quotes equally well`,
         },
         {
           role: "user",
