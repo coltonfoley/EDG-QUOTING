@@ -13,6 +13,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { z } from "zod";
+import { useEffect } from "react";
 
 const quoteFormSchema = insertQuoteSchema.extend({
   customerName: z.string().min(1, "Customer name is required"),
@@ -48,6 +49,24 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
       customerCompany: quote?.customer?.company || "",
     },
   });
+
+  // Update form values when quote data changes
+  useEffect(() => {
+    if (quote) {
+      form.reset({
+        quoteNumber: quote.quoteNumber || "",
+        projectName: quote.projectName || "",
+        projectAddress: quote.projectAddress || "",
+        estimatedStartDate: quote.estimatedStartDate || "",
+        notes: quote.notes || "",
+        status: quote.status || "draft",
+        customerName: quote.customer?.name || "",
+        customerEmail: quote.customer?.email || "",
+        customerPhone: quote.customer?.phone || "",
+        customerCompany: quote.customer?.company || "",
+      });
+    }
+  }, [quote, form]);
 
   const updateStatusMutation = useMutation({
     mutationFn: async ({ status }: { status: string }) => {
@@ -87,6 +106,8 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
   };
 
   const handleSubmit = (data: QuoteFormData) => {
+    console.log("Form submission data:", data);
+    console.log("Form errors:", form.formState.errors);
     onSave(data);
   };
 
