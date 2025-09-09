@@ -112,8 +112,6 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
   };
 
   const handleSubmit = (data: QuoteFormData) => {
-    console.log("Form submission data:", data);
-    console.log("Form errors:", form.formState.errors);
     onSave(data);
   };
 
