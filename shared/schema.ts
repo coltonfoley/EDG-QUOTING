@@ -46,6 +46,7 @@ export const quotes = pgTable("quotes", {
   notes: text("notes"),
   taxRate: decimal("tax_rate", { precision: 5, scale: 2 }).default("0"),
   discount: decimal("discount", { precision: 5, scale: 2 }).default("0"),
+  shipping: decimal("shipping", { precision: 10, scale: 2 }).default("0"),
   status: text("status").notNull().default("draft"), // draft, sent, approved, rejected
   // Contract and signature fields
   contractTemplateId: integer("contract_template_id"), // reference to contract template
@@ -145,6 +146,7 @@ export const insertQuoteSchema = createInsertSchema(quotes).omit({
 }).extend({
   taxRate: z.union([z.string(), z.number(), z.null()]).transform(val => val === null ? "0" : (typeof val === 'string' ? val : val.toString())),
   discount: z.union([z.string(), z.number(), z.null()]).transform(val => val === null ? "0" : (typeof val === 'string' ? val : val.toString())),
+  shipping: z.union([z.string(), z.number(), z.null()]).transform(val => val === null ? "0" : (typeof val === 'string' ? val : val.toString())),
   projectName: z.union([z.string(), z.null()]).transform(val => val === null ? "" : val),
   projectAddress: z.union([z.string(), z.null()]).transform(val => val === null ? "" : val),
   estimatedStartDate: z.union([z.string(), z.null()]).transform(val => val === null ? "" : val),
