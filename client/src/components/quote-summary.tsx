@@ -24,6 +24,7 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
   const [issuerSignatureInput, setIssuerSignatureInput] = useState("");
   const [localTaxRate, setLocalTaxRate] = useState<string>("");
   const [localDiscount, setLocalDiscount] = useState<string>("");
+  const [localShipping, setLocalShipping] = useState<string>("");
   const [localNotes, setLocalNotes] = useState<string>("");
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -144,7 +145,8 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
       markupValue: item.markupValue,
     })),
     quote.taxRate ?? 0,
-    quote.discount ?? 0
+    quote.discount ?? 0,
+    quote.shipping ?? 0
   );
 
   return (
@@ -263,7 +265,7 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
                 <Label htmlFor="taxRate">Tax Rate (%)</Label>
                 <Input
@@ -298,6 +300,24 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
                   className="mt-1"
                 />
               </div>
+              <div>
+                <Label htmlFor="shipping">Shipping ($)</Label>
+                <Input
+                  id="shipping"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={localShipping || quote.shipping}
+                  onChange={(e) => setLocalShipping(e.target.value)}
+                  onBlur={(e) => {
+                    if (localShipping !== "" && localShipping !== quote.shipping) {
+                      onUpdateQuote("shipping", localShipping);
+                    }
+                    setLocalShipping("");
+                  }}
+                  className="mt-1"
+                />
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -327,6 +347,14 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
                 <span className="text-accent-grey">Discount:</span>
                 <span className="font-medium text-red-600">
                   -{formatCurrency(totals.discountAmount)}
+                </span>
+              </div>
+            )}
+            {totals.shippingAmount > 0 && (
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-accent-grey">Shipping:</span>
+                <span className="font-medium text-charcoal">
+                  {formatCurrency(totals.shippingAmount)}
                 </span>
               </div>
             )}
