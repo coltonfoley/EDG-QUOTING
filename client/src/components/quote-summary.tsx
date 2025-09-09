@@ -272,7 +272,7 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
                   id="taxRate"
                   type="number"
                   step="0.1"
-                  value={localTaxRate || quote.taxRate}
+                  value={localTaxRate || quote.taxRate || ""}
                   onChange={(e) => setLocalTaxRate(e.target.value)}
                   onBlur={(e) => {
                     if (localTaxRate !== "" && localTaxRate !== quote.taxRate) {
@@ -289,7 +289,7 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
                   id="discount"
                   type="number"
                   step="0.1"
-                  value={localDiscount || quote.discount}
+                  value={localDiscount || quote.discount || ""}
                   onChange={(e) => setLocalDiscount(e.target.value)}
                   onBlur={(e) => {
                     if (localDiscount !== "" && localDiscount !== quote.discount) {
@@ -307,7 +307,7 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
                   type="number"
                   step="0.01"
                   min="0"
-                  value={localShipping || quote.shipping}
+                  value={localShipping || quote.shipping || ""}
                   onChange={(e) => setLocalShipping(e.target.value)}
                   onBlur={(e) => {
                     if (localShipping !== "" && localShipping !== quote.shipping) {
