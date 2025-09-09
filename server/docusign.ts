@@ -120,15 +120,33 @@ export class DocuSignService {
       throw new Error('DOCUSIGN_PRIVATE_KEY environment variable is not set');
     }
 
-    // Format the private key properly - handle cases where it might be stored without proper line breaks
-    let formattedKey = privateKey;
-    if (!privateKey.includes('\n')) {
-      // If the key is stored as one line, add proper line breaks
-      formattedKey = privateKey
+    // Robust private key formatting that handles multiple storage scenarios
+    let formattedKey = privateKey.trim();
+    
+    // Replace literal \n with actual newlines (common when stored in environment variables)
+    formattedKey = formattedKey.replace(/\\n/g, '\n');
+    
+    // If key still doesn't have newlines, format it properly
+    if (!formattedKey.includes('\n')) {
+      // Split into proper lines - RSA key should have 64-char lines
+      formattedKey = formattedKey
         .replace(/-----BEGIN RSA PRIVATE KEY-----/, '-----BEGIN RSA PRIVATE KEY-----\n')
         .replace(/-----END RSA PRIVATE KEY-----/, '\n-----END RSA PRIVATE KEY-----')
         .replace(/(.{64})/g, '$1\n')
         .replace(/\n\n/g, '\n');
+    }
+    
+    // Clean up any extra whitespace or double newlines
+    formattedKey = formattedKey.replace(/\n+/g, '\n').trim();
+    
+    // Ensure it ends with a newline before END marker
+    if (!formattedKey.includes('\n-----END RSA PRIVATE KEY-----')) {
+      formattedKey = formattedKey.replace('-----END RSA PRIVATE KEY-----', '\n-----END RSA PRIVATE KEY-----');
+    }
+
+    // Validate the key format before using it
+    if (!formattedKey.includes('-----BEGIN RSA PRIVATE KEY-----') || !formattedKey.includes('-----END RSA PRIVATE KEY-----')) {
+      throw new Error('Invalid RSA private key format - missing BEGIN/END markers');
     }
 
     const now = Math.floor(Date.now() / 1000);
@@ -142,7 +160,12 @@ export class DocuSignService {
       scope: 'signature impersonation'
     };
 
-    return jwt.sign(payload, formattedKey, { algorithm: 'RS256' });
+    try {
+      return jwt.sign(payload, formattedKey, { algorithm: 'RS256' });
+    } catch (error: any) {
+      console.error('JWT signing failed. Error:', error);
+      throw new Error(`JWT signing failed: ${error.message}`);
+    }
   }
 
   private async requestAccessTokenWithJWT(): Promise<DocuSignTokenResponse> {
