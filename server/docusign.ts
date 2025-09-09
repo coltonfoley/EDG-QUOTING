@@ -111,6 +111,29 @@ export class DocuSignService {
   /**
    * Request access token using JWT Bearer Grant
    */
+  /**
+   * Generate JWT token for DocuSign authentication
+   */
+  private generateJWTToken(): string {
+    const privateKey = process.env.DOCUSIGN_PRIVATE_KEY;
+    if (!privateKey) {
+      throw new Error('DOCUSIGN_PRIVATE_KEY environment variable is not set');
+    }
+
+    const now = Math.floor(Date.now() / 1000);
+    
+    const payload = {
+      iss: this.config.integrationKey, // Integration Key (Client ID)
+      sub: this.config.userId, // User ID  
+      aud: this.config.baseUrl.includes('demo') ? 'account-d.docusign.com' : 'account.docusign.com',
+      iat: now, // Issued at
+      exp: now + 3600, // Expires in 1 hour
+      scope: 'signature impersonation'
+    };
+
+    return jwt.sign(payload, privateKey, { algorithm: 'RS256' });
+  }
+
   private async requestAccessTokenWithJWT(): Promise<DocuSignTokenResponse> {
     const jwtToken = this.generateJWTToken();
     
@@ -191,49 +214,25 @@ export class DocuSignService {
       status: 'sent',
     };
 
-    try {
-      const response = await fetch(
-        `${this.config.baseUrl}/accounts/${this.config.userId}/envelopes`,
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(envelopeRequest),
-        }
-      );
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.log('DocuSign API error:', response.status, errorText);
-        
-        // For development with mock authentication, return a simulated successful response
-        if (accessToken === 'mock_access_token_for_development') {
-          console.log('Using mock DocuSign envelope response for development');
-          return {
-            envelopeId: `mock_envelope_${Date.now()}`,
-            status: 'sent',
-            statusDateTime: new Date().toISOString(),
-          } as DocuSignEnvelopeResponse;
-        }
-        
-        throw new Error(`Failed to create envelope: ${response.statusText} - ${errorText}`);
+    const response = await fetch(
+      `${this.config.baseUrl}/accounts/${this.config.userId}/envelopes`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(envelopeRequest),
       }
+    );
 
-      return response.json() as Promise<DocuSignEnvelopeResponse>;
-    } catch (error) {
-      // If using mock authentication, return simulated response instead of failing
-      if (accessToken === 'mock_access_token_for_development') {
-        console.log('DocuSign API unavailable, using mock response for development');
-        return {
-          envelopeId: `mock_envelope_${Date.now()}`,
-          status: 'sent',  
-          statusDateTime: new Date().toISOString(),
-        } as DocuSignEnvelopeResponse;
-      }
-      throw error;
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('DocuSign envelope creation failed:', response.status, errorText);
+      throw new Error(`Failed to create envelope: ${response.status} ${response.statusText} - ${errorText}`);
     }
+
+    return response.json() as Promise<DocuSignEnvelopeResponse>;
   }
 
   /**
@@ -245,12 +244,6 @@ export class DocuSignService {
     returnUrl: string
   ): Promise<string> {
     const accessToken = await this.getAccessToken();
-    
-    // For development with mock authentication, return a mock signing URL
-    if (accessToken === 'mock_access_token_for_development' || envelopeId.startsWith('mock_envelope_')) {
-      console.log('Using mock DocuSign signing URL for development');
-      return `https://demo.docusign.net/Member/PowerFormSigning.aspx?PowerFormId=mock-demo-url&env=demo&ReturnUrl=${encodeURIComponent(returnUrl)}`;
-    }
     
     const viewRequest: DocuSignRecipientViewRequest = {
       authenticationMethod: 'none',
