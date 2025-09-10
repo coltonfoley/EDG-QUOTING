@@ -692,7 +692,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Length (m)
+                    Length (ft)
                   </label>
                   <Input
                     type="number"
@@ -703,13 +703,13 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                   />
                   {dimensions.length && !isNaN(parseFloat(dimensions.length)) && (
                     <p className="text-xs text-gray-500 mt-1">
-                      {(parseFloat(dimensions.length) * 1000).toFixed(0)}mm
+                      {(parseFloat(dimensions.length) * 304.8).toFixed(0)}mm
                     </p>
                   )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Width (m)
+                    Width (ft)
                   </label>
                   <Input
                     type="number"
@@ -720,7 +720,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                   />
                   {dimensions.width && !isNaN(parseFloat(dimensions.width)) && (
                     <p className="text-xs text-gray-500 mt-1">
-                      {(parseFloat(dimensions.width) * 1000).toFixed(0)}mm
+                      {(parseFloat(dimensions.width) * 304.8).toFixed(0)}mm
                     </p>
                   )}
                 </div>
@@ -729,7 +729,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
               {dimensions.length && dimensions.width && (
                 <div className="bg-blue-50 p-3 rounded-md">
                   <p className="text-sm text-blue-800">
-                    Dimensions: <strong>{dimensions.length} × {dimensions.width} m</strong>
+                    Dimensions: <strong>{dimensions.length} × {dimensions.width} ft</strong>
                   </p>
                 </div>
               )}
@@ -751,7 +751,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                     <strong>Calculated Price: {formatCurrency(calculatedPrice)}</strong>
                   </p>
                   <p className="text-xs text-green-600 mt-1">
-                    Base price for {dimensions.length} × {dimensions.width} m
+                    Base price for {dimensions.length} × {dimensions.width} ft
                   </p>
                 </div>
               )}
