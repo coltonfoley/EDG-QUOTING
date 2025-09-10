@@ -17,18 +17,32 @@ export function calculateLineItemTotal(
   quantity: number | string,
   unitPrice: number | string,
   markupType: string,
-  markupValue: number | string
+  markupValue: number | string,
+  discountType: string = "percentage",
+  discountValue: number | string = 0
 ): number {
   const qty = typeof quantity === 'string' ? parseFloat(quantity) : quantity;
   const price = typeof unitPrice === 'string' ? parseFloat(unitPrice) : unitPrice;
   const markup = typeof markupValue === 'string' ? parseFloat(markupValue) : markupValue;
+  const discount = typeof discountValue === 'string' ? parseFloat(discountValue) : discountValue;
 
   const baseTotal = qty * price;
   
+  // Apply manufacturer discount first
+  let afterDiscount = baseTotal;
+  if (discount > 0) {
+    if (discountType === 'percentage') {
+      afterDiscount = baseTotal - (baseTotal * (discount / 100));
+    } else {
+      afterDiscount = baseTotal - discount;
+    }
+  }
+  
+  // Then apply markup to the discounted amount
   if (markupType === 'percentage') {
-    return baseTotal + (baseTotal * (markup / 100));
+    return afterDiscount + (afterDiscount * (markup / 100));
   } else {
-    return baseTotal + markup;
+    return afterDiscount + markup;
   }
 }
 
@@ -36,16 +50,30 @@ export function calculateLineItemMargin(
   quantity: number | string,
   unitPrice: number | string,
   markupType: string,
-  markupValue: number | string
+  markupValue: number | string,
+  discountType: string = "percentage",
+  discountValue: number | string = 0
 ): number {
   const qty = typeof quantity === 'string' ? parseFloat(quantity) : quantity;
   const price = typeof unitPrice === 'string' ? parseFloat(unitPrice) : unitPrice;
   const markup = typeof markupValue === 'string' ? parseFloat(markupValue) : markupValue;
+  const discount = typeof discountValue === 'string' ? parseFloat(discountValue) : discountValue;
 
   const baseTotal = qty * price;
   
+  // Apply manufacturer discount first
+  let afterDiscount = baseTotal;
+  if (discount > 0) {
+    if (discountType === 'percentage') {
+      afterDiscount = baseTotal - (baseTotal * (discount / 100));
+    } else {
+      afterDiscount = baseTotal - discount;
+    }
+  }
+  
+  // Calculate markup on the discounted amount
   if (markupType === 'percentage') {
-    return baseTotal * (markup / 100);
+    return afterDiscount * (markup / 100);
   } else {
     return markup;
   }
@@ -61,7 +89,9 @@ export function calculateQuoteTotals(lineItems: any[], taxRate: number | string 
       item.quantity,
       item.unitPrice,
       item.markupType,
-      item.markupValue
+      item.markupValue,
+      item.discountType || "percentage",
+      item.discountValue || 0
     );
   }, 0);
 
@@ -71,7 +101,26 @@ export function calculateQuoteTotals(lineItems: any[], taxRate: number | string 
     return sum + (qty * price);
   }, 0);
 
-  const totalMarkup = subtotal - baseCost;
+  // Calculate total manufacturer discounts for display purposes
+  const totalManufacturerDiscount = lineItems.reduce((sum, item) => {
+    const qty = typeof item.quantity === 'string' ? parseFloat(item.quantity) : item.quantity;
+    const price = typeof item.unitPrice === 'string' ? parseFloat(item.unitPrice) : item.unitPrice;
+    const discountValue = typeof item.discountValue === 'string' ? parseFloat(item.discountValue) : item.discountValue || 0;
+    const discountType = item.discountType || "percentage";
+    
+    const lineBaseTotal = qty * price;
+    
+    if (discountValue > 0) {
+      if (discountType === 'percentage') {
+        return sum + (lineBaseTotal * (discountValue / 100));
+      } else {
+        return sum + discountValue;
+      }
+    }
+    return sum;
+  }, 0);
+
+  const totalMarkup = subtotal - baseCost + totalManufacturerDiscount;
   const discountAmount = disc > 0 ? (subtotal * (disc / 100)) : 0;
   const afterDiscount = subtotal - discountAmount;
   const beforeTax = afterDiscount + shippingAmount;
@@ -82,6 +131,7 @@ export function calculateQuoteTotals(lineItems: any[], taxRate: number | string 
   return {
     subtotal,
     totalMarkup,
+    totalManufacturerDiscount,
     discountAmount,
     shippingAmount,
     taxAmount,

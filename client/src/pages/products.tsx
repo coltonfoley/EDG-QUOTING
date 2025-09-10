@@ -45,10 +45,11 @@ export default function Products() {
       description: "",
       category: "",
       productType: "simple",
-      requiresDimensions: false,
       defaultUnitPrice: "0",
       defaultMarkupType: "percentage",
       defaultMarkupValue: "25",
+      defaultDiscountType: "percentage",
+      defaultDiscountValue: "0",
       unit: "each",
     },
   });
@@ -114,11 +115,16 @@ export default function Products() {
       description: product.description || "",
       category: product.category || "",
       productType: product.productType || "simple",
-      requiresDimensions: product.requiresDimensions || false,
       defaultUnitPrice: product.defaultUnitPrice,
       defaultMarkupType: product.defaultMarkupType,
       defaultMarkupValue: product.defaultMarkupValue,
+      defaultDiscountType: product.defaultDiscountType,
+      defaultDiscountValue: product.defaultDiscountValue,
       unit: product.unit || "each",
+      minLength: product.minLength,
+      maxLength: product.maxLength,
+      minWidth: product.minWidth,
+      maxWidth: product.maxWidth,
     });
     setIsDialogOpen(true);
   };
@@ -348,6 +354,40 @@ export default function Products() {
                               name="defaultMarkupType"
                               render={({ field: markupField }) => (
                                 <Select onValueChange={markupField.onChange} defaultValue={markupField.value}>
+                                  <SelectTrigger className="w-16">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="percentage">%</SelectItem>
+                                    <SelectItem value="dollar">$</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              )}
+                            />
+                          </div>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  {/* Manufacturer Discount Section */}
+                  <div className="grid grid-cols-1 md:grid-cols-1 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="defaultDiscountValue"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Manufacturer Discount</FormLabel>
+                          <div className="flex space-x-1">
+                            <FormControl>
+                              <Input type="number" step="0.01" {...field} className="flex-1" />
+                            </FormControl>
+                            <FormField
+                              control={form.control}
+                              name="defaultDiscountType"
+                              render={({ field: discountField }) => (
+                                <Select onValueChange={discountField.onChange} defaultValue={discountField.value}>
                                   <SelectTrigger className="w-16">
                                     <SelectValue />
                                   </SelectTrigger>
