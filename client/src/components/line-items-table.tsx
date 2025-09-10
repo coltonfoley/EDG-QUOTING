@@ -220,6 +220,8 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
       unitPrice: calculatedPrice.toString(),
       markupType: selectedConfigurableProduct.defaultMarkupType,
       markupValue: selectedConfigurableProduct.defaultMarkupValue,
+      discountType: selectedConfigurableProduct.defaultDiscountType || "percentage",
+      discountValue: selectedConfigurableProduct.defaultDiscountValue || "0",
       baseProductId: selectedConfigurableProduct.id,
       configData: {
         length: parseFloat(dimensions.length),
