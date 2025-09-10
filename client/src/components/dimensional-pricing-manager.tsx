@@ -1,22 +1,40 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Plus, Edit, Trash2, DollarSign, Upload } from "lucide-react";
+import { Plus, Edit, Trash2, DollarSign, Upload, TrendingDown } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { insertPricingTableSchema, type PricingTable } from "@shared/schema";
+import { insertPricingTableSchema, type PricingTable, type Product } from "@shared/schema";
 import { z } from "zod";
 import { formatCurrency } from "@/lib/utils";
 import { PricingTableUploader } from "./pricing-table-uploader";
 
 const pricingFormSchema = insertPricingTableSchema.omit({ productId: true });
 type PricingFormData = z.infer<typeof pricingFormSchema>;
+
+// Helper function to calculate discounted price
+function calculateDiscountedPrice(retailPrice: string, discountType: string, discountValue: string): string {
+  const retail = parseFloat(retailPrice) || 0;
+  const discount = parseFloat(discountValue) || 0;
+  
+  if (discountType === 'percentage') {
+    return (retail * (1 - discount / 100)).toFixed(2);
+  } else {
+    return Math.max(0, retail - discount).toFixed(2);
+  }
+}
+
+// Helper function to calculate discount percentage
+function calculateDiscountPercentage(retailPrice: number, costPrice: number): number {
+  if (retailPrice === 0) return 0;
+  return ((retailPrice - costPrice) / retailPrice) * 100;
+}
 
 interface DimensionalPricingManagerProps {
   productId: number;
@@ -29,6 +47,15 @@ export function DimensionalPricingManager({ productId, productName }: Dimensiona
   const [editingEntry, setEditingEntry] = useState<PricingTable | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  // Fetch product details to get discount information
+  const { data: product } = useQuery<Product>({
+    queryKey: ["/api/products", productId],
+    queryFn: async () => {
+      const response = await apiRequest("GET", `/api/products/${productId}`);
+      return response.json();
+    },
+  });
 
   const { data: pricingTables, isLoading } = useQuery<PricingTable[]>({
     queryKey: ["/api/products", productId, "pricing-tables"],
@@ -45,9 +72,25 @@ export function DimensionalPricingManager({ productId, productName }: Dimensiona
       lengthMax: "",
       widthMin: "",
       widthMax: "",
+      retailPrice: "",
       basePrice: "",
     },
   });
+
+  // Watch retail price for auto-calculation
+  const retailPrice = useWatch({ control: form.control, name: "retailPrice" });
+  
+  // Auto-calculate base price when retail price changes
+  useEffect(() => {
+    if (retailPrice && product && !editingEntry) {
+      const calculatedBasePrice = calculateDiscountedPrice(
+        retailPrice,
+        product.defaultDiscountType,
+        product.defaultDiscountValue
+      );
+      form.setValue("basePrice", calculatedBasePrice);
+    }
+  }, [retailPrice, product, form, editingEntry]);
 
   const createPricingMutation = useMutation({
     mutationFn: async (data: PricingFormData) => {
@@ -110,6 +153,7 @@ export function DimensionalPricingManager({ productId, productName }: Dimensiona
       lengthMax: entry.lengthMax,
       widthMin: entry.widthMin,
       widthMax: entry.widthMax,
+      retailPrice: entry.retailPrice,
       basePrice: entry.basePrice,
     });
     setIsDialogOpen(true);
@@ -137,8 +181,13 @@ export function DimensionalPricingManager({ productId, productName }: Dimensiona
         <div>
           <h3 className="text-lg font-semibold">Dimensional Pricing Table</h3>
           <p className="text-sm text-gray-600">
-            Configure pricing for {productName} based on length and width dimensions
+            Configure retail and cost pricing for {productName} based on length and width dimensions
           </p>
+          {product && (
+            <p className="text-xs text-blue-600 mt-1">
+              Default discount: {product.defaultDiscountType === 'percentage' ? `${product.defaultDiscountValue}%` : `$${product.defaultDiscountValue}`} off retail
+            </p>
+          )}
         </div>
         <div className="flex space-x-3">
           <Dialog open={isUploadDialogOpen} onOpenChange={setIsUploadDialogOpen}>
@@ -251,19 +300,65 @@ export function DimensionalPricingManager({ productId, productName }: Dimensiona
                     />
                   </div>
                 </div>
-                <FormField
-                  control={form.control}
-                  name="basePrice"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Base Price ($)</FormLabel>
-                      <FormControl>
-                        <Input type="number" step="0.01" placeholder="2500.00" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
+                <div className="space-y-4">
+                  <FormField
+                    control={form.control}
+                    name="retailPrice"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Retail Price ($)</FormLabel>
+                        <FormControl>
+                          <Input 
+                            type="number" 
+                            step="0.01" 
+                            placeholder="4500.00" 
+                            {...field}
+                            data-testid="input-retail-price" 
+                          />
+                        </FormControl>
+                        <p className="text-xs text-gray-500">Manufacturer's suggested retail price</p>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  {product && retailPrice && (
+                    <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+                      <div className="flex items-center space-x-2 text-sm">
+                        <TrendingDown className="h-4 w-4 text-blue-600" />
+                        <span className="font-medium text-blue-900">
+                          Discount: {product.defaultDiscountType === 'percentage' ? `${product.defaultDiscountValue}%` : `$${product.defaultDiscountValue}`}
+                        </span>
+                      </div>
+                      <p className="text-xs text-blue-700 mt-1">
+                        Your cost will be calculated automatically based on the product discount
+                      </p>
+                    </div>
                   )}
-                />
+                  <FormField
+                    control={form.control}
+                    name="basePrice"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Cost Price ($)</FormLabel>
+                        <FormControl>
+                          <Input 
+                            type="number" 
+                            step="0.01" 
+                            placeholder="2500.00" 
+                            {...field}
+                            readOnly={!editingEntry}
+                            className={!editingEntry ? "bg-gray-50 text-gray-700" : ""}
+                            data-testid="input-cost-price"
+                          />
+                        </FormControl>
+                        <p className="text-xs text-gray-500">
+                          {!editingEntry ? "Automatically calculated from retail price" : "Your discounted cost price"}
+                        </p>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
                 <div className="flex justify-end space-x-3 pt-4">
                   <Button
                     type="button"
@@ -302,45 +397,69 @@ export function DimensionalPricingManager({ productId, productName }: Dimensiona
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Length Range (m)</TableHead>
-                <TableHead>Width Range (m)</TableHead>
+                <TableHead>Length Range (ft)</TableHead>
+                <TableHead>Width Range (ft)</TableHead>
                 <TableHead>Size Band</TableHead>
-                <TableHead>Base Price</TableHead>
+                <TableHead>Retail Price</TableHead>
+                <TableHead>Discount</TableHead>
+                <TableHead>Cost Price</TableHead>
                 <TableHead className="w-20">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {pricingTables.map((entry) => (
-                <TableRow key={entry.id}>
-                  <TableCell className="font-medium">{entry.lengthMin} - {entry.lengthMax}</TableCell>
-                  <TableCell>{entry.widthMin} - {entry.widthMax}</TableCell>
-                  <TableCell className="text-gray-600">
-                    {entry.lengthMin}-{entry.lengthMax} × {entry.widthMin}-{entry.widthMax} ft
-                  </TableCell>
-                  <TableCell className="font-semibold">
-                    {formatCurrency(parseFloat(entry.basePrice))}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex space-x-1">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => handleEdit(entry)}
-                      >
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => handleDelete(entry.id)}
-                        className="text-red-600 hover:text-red-800"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
+              {pricingTables.map((entry) => {
+                const retailPrice = parseFloat(entry.retailPrice);
+                const costPrice = parseFloat(entry.basePrice);
+                const discountPercent = calculateDiscountPercentage(retailPrice, costPrice);
+                const discountAmount = retailPrice - costPrice;
+                
+                return (
+                  <TableRow key={entry.id}>
+                    <TableCell className="font-medium">{entry.lengthMin} - {entry.lengthMax}</TableCell>
+                    <TableCell>{entry.widthMin} - {entry.widthMax}</TableCell>
+                    <TableCell className="text-gray-600">
+                      {entry.lengthMin}-{entry.lengthMax} × {entry.widthMin}-{entry.widthMax} ft
+                    </TableCell>
+                    <TableCell className="font-semibold" data-testid={`text-retail-price-${entry.id}`}>
+                      {formatCurrency(retailPrice)}
+                    </TableCell>
+                    <TableCell className="text-green-600">
+                      <div className="flex flex-col">
+                        <span className="font-medium" data-testid={`text-discount-${entry.id}`}>
+                          {discountPercent.toFixed(1)}%
+                        </span>
+                        <span className="text-xs text-gray-500">
+                          -{formatCurrency(discountAmount)}
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="font-semibold text-blue-600" data-testid={`text-cost-price-${entry.id}`}>
+                      {formatCurrency(costPrice)}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex space-x-1">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleEdit(entry)}
+                          data-testid={`button-edit-${entry.id}`}
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleDelete(entry.id)}
+                          className="text-red-600 hover:text-red-800"
+                          data-testid={`button-delete-${entry.id}`}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </div>
