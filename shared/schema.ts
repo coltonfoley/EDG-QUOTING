@@ -106,6 +106,7 @@ export const pricingTables = pgTable("pricing_tables", {
   // Width band range  
   widthMin: decimal("width_min", { precision: 8, scale: 2 }).notNull(),
   widthMax: decimal("width_max", { precision: 8, scale: 2 }).notNull(),
+  retailPrice: decimal("retail_price", { precision: 10, scale: 2 }).notNull(),
   basePrice: decimal("base_price", { precision: 10, scale: 2 }).notNull(),
   createdAt: timestamp("created_at").defaultNow(),
 });
@@ -178,6 +179,7 @@ export const insertPricingTableSchema = createInsertSchema(pricingTables).omit({
   lengthMax: z.union([z.string(), z.number()]).transform(val => typeof val === 'string' ? val : val.toString()),
   widthMin: z.union([z.string(), z.number()]).transform(val => typeof val === 'string' ? val : val.toString()),
   widthMax: z.union([z.string(), z.number()]).transform(val => typeof val === 'string' ? val : val.toString()),
+  retailPrice: z.union([z.string(), z.number()]).transform(val => typeof val === 'string' ? val : val.toString()),
   basePrice: z.union([z.string(), z.number()]).transform(val => typeof val === 'string' ? val : val.toString()),
 });
 
