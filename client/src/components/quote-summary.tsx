@@ -342,6 +342,14 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
                 {formatCurrency(totals.totalMarkup)}
               </span>
             </div>
+            {totals.totalManufacturerDiscount > 0 && (
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-accent-grey">Manufacturer Discount:</span>
+                <span className="font-medium text-blue-600">
+                  -{formatCurrency(totals.totalManufacturerDiscount)}
+                </span>
+              </div>
+            )}
             {totals.discountAmount > 0 && (
               <div className="flex justify-between items-center text-sm">
                 <span className="text-accent-grey">Discount:</span>
