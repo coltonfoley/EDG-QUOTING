@@ -180,13 +180,13 @@ export function DimensionalPricingManager({ productId, productName }: Dimensiona
                       name="lengthMin"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Length Min (m)</FormLabel>
+                          <FormLabel>Length Min (ft)</FormLabel>
                           <FormControl>
                             <Input type="number" step="0.1" placeholder="12.0" {...field} />
                           </FormControl>
                           {field.value && !isNaN(parseFloat(field.value)) && (
                             <p className="text-xs text-gray-500 mt-1">
-                              {(parseFloat(field.value) * 1000).toFixed(0)}mm
+                              {(parseFloat(field.value) * 304.8).toFixed(0)}mm
                             </p>
                           )}
                           <FormMessage />
@@ -198,13 +198,13 @@ export function DimensionalPricingManager({ productId, productName }: Dimensiona
                       name="lengthMax"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Length Max (m)</FormLabel>
+                          <FormLabel>Length Max (ft)</FormLabel>
                           <FormControl>
                             <Input type="number" step="0.1" placeholder="12.5" {...field} />
                           </FormControl>
                           {field.value && !isNaN(parseFloat(field.value)) && (
                             <p className="text-xs text-gray-500 mt-1">
-                              {(parseFloat(field.value) * 1000).toFixed(0)}mm
+                              {(parseFloat(field.value) * 304.8).toFixed(0)}mm
                             </p>
                           )}
                           <FormMessage />
@@ -218,13 +218,13 @@ export function DimensionalPricingManager({ productId, productName }: Dimensiona
                       name="widthMin"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Width Min (m)</FormLabel>
+                          <FormLabel>Width Min (ft)</FormLabel>
                           <FormControl>
                             <Input type="number" step="0.1" placeholder="8.0" {...field} />
                           </FormControl>
                           {field.value && !isNaN(parseFloat(field.value)) && (
                             <p className="text-xs text-gray-500 mt-1">
-                              {(parseFloat(field.value) * 1000).toFixed(0)}mm
+                              {(parseFloat(field.value) * 304.8).toFixed(0)}mm
                             </p>
                           )}
                           <FormMessage />
@@ -236,13 +236,13 @@ export function DimensionalPricingManager({ productId, productName }: Dimensiona
                       name="widthMax"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Width Max (m)</FormLabel>
+                          <FormLabel>Width Max (ft)</FormLabel>
                           <FormControl>
                             <Input type="number" step="0.1" placeholder="8.5" {...field} />
                           </FormControl>
                           {field.value && !isNaN(parseFloat(field.value)) && (
                             <p className="text-xs text-gray-500 mt-1">
-                              {(parseFloat(field.value) * 1000).toFixed(0)}mm
+                              {(parseFloat(field.value) * 304.8).toFixed(0)}mm
                             </p>
                           )}
                           <FormMessage />
@@ -315,7 +315,7 @@ export function DimensionalPricingManager({ productId, productName }: Dimensiona
                   <TableCell className="font-medium">{entry.lengthMin} - {entry.lengthMax}</TableCell>
                   <TableCell>{entry.widthMin} - {entry.widthMax}</TableCell>
                   <TableCell className="text-gray-600">
-                    {entry.lengthMin}-{entry.lengthMax} × {entry.widthMin}-{entry.widthMax} m
+                    {entry.lengthMin}-{entry.lengthMax} × {entry.widthMin}-{entry.widthMax} ft
                   </TableCell>
                   <TableCell className="font-semibold">
                     {formatCurrency(parseFloat(entry.basePrice))}
