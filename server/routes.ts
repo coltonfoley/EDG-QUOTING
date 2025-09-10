@@ -732,6 +732,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
               defaultUnitPrice: extractedProduct.price.toString(),
               defaultMarkupType: 'percentage',
               defaultMarkupValue: '25',
+              defaultDiscountType: 'percentage',
+              defaultDiscountValue: '0',
               unit: extractedProduct.unit || 'each',
             });
             created++;
