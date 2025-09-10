@@ -8,7 +8,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Plus, Edit, Trash2, DollarSign, Upload } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertPricingTableSchema, type PricingTable } from "@shared/schema";
 import { z } from "zod";
@@ -184,6 +184,11 @@ export function DimensionalPricingManager({ productId, productName }: Dimensiona
                           <FormControl>
                             <Input type="number" step="0.1" placeholder="12.0" {...field} />
                           </FormControl>
+                          {field.value && !isNaN(parseFloat(field.value)) && (
+                            <p className="text-xs text-gray-500 mt-1">
+                              {(parseFloat(field.value) * 1000).toFixed(0)}mm
+                            </p>
+                          )}
                           <FormMessage />
                         </FormItem>
                       )}
@@ -197,6 +202,11 @@ export function DimensionalPricingManager({ productId, productName }: Dimensiona
                           <FormControl>
                             <Input type="number" step="0.1" placeholder="12.5" {...field} />
                           </FormControl>
+                          {field.value && !isNaN(parseFloat(field.value)) && (
+                            <p className="text-xs text-gray-500 mt-1">
+                              {(parseFloat(field.value) * 1000).toFixed(0)}mm
+                            </p>
+                          )}
                           <FormMessage />
                         </FormItem>
                       )}
@@ -212,6 +222,11 @@ export function DimensionalPricingManager({ productId, productName }: Dimensiona
                           <FormControl>
                             <Input type="number" step="0.1" placeholder="8.0" {...field} />
                           </FormControl>
+                          {field.value && !isNaN(parseFloat(field.value)) && (
+                            <p className="text-xs text-gray-500 mt-1">
+                              {(parseFloat(field.value) * 1000).toFixed(0)}mm
+                            </p>
+                          )}
                           <FormMessage />
                         </FormItem>
                       )}
@@ -225,6 +240,11 @@ export function DimensionalPricingManager({ productId, productName }: Dimensiona
                           <FormControl>
                             <Input type="number" step="0.1" placeholder="8.5" {...field} />
                           </FormControl>
+                          {field.value && !isNaN(parseFloat(field.value)) && (
+                            <p className="text-xs text-gray-500 mt-1">
+                              {(parseFloat(field.value) * 1000).toFixed(0)}mm
+                            </p>
+                          )}
                           <FormMessage />
                         </FormItem>
                       )}
