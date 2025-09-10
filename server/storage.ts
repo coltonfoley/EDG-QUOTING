@@ -224,7 +224,9 @@ export class MemStorage {
       productId: insertLineItem.productId || null,
       baseProductId: insertLineItem.baseProductId || null,
       configData: insertLineItem.configData || null,
-      isAccessory: insertLineItem.isAccessory || null,
+      isAccessory: insertLineItem.isAccessory || false,
+      discountType: insertLineItem.discountType || "percentage",
+      discountValue: insertLineItem.discountValue || "0",
     };
     this.lineItems.set(id, lineItem);
     return lineItem;
@@ -589,6 +591,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   async calculateConfigurableProductPrice(productId: number, length: number, width: number): Promise<number | null> {
+    // Convert input dimensions from feet to meters (1 foot = 0.3048 meters)
+    const lengthInMeters = length * 0.3048;
+    const widthInMeters = width * 0.3048;
+
     // Find the pricing band that contains the given dimensions
     const pricingTablesForProduct = await db
       .select()
@@ -599,15 +605,15 @@ export class DatabaseStorage implements IStorage {
       return null;
     }
 
-    // Find band that contains the requested dimensions
+    // Find band that contains the requested dimensions (using converted meter values)
     const matchingBand = pricingTablesForProduct.find(table => {
       const lengthMin = parseFloat(table.lengthMin);
       const lengthMax = parseFloat(table.lengthMax);
       const widthMin = parseFloat(table.widthMin);
       const widthMax = parseFloat(table.widthMax);
       
-      return length >= lengthMin && length <= lengthMax && 
-             width >= widthMin && width <= widthMax;
+      return lengthInMeters >= lengthMin && lengthInMeters <= lengthMax && 
+             widthInMeters >= widthMin && widthInMeters <= widthMax;
     });
 
     if (matchingBand) {
@@ -623,8 +629,8 @@ export class DatabaseStorage implements IStorage {
       const lengthCenter = (parseFloat(table.lengthMin) + parseFloat(table.lengthMax)) / 2;
       const widthCenter = (parseFloat(table.widthMin) + parseFloat(table.widthMax)) / 2;
       
-      const lengthDiff = Math.abs(lengthCenter - length);
-      const widthDiff = Math.abs(widthCenter - width);
+      const lengthDiff = Math.abs(lengthCenter - lengthInMeters);
+      const widthDiff = Math.abs(widthCenter - widthInMeters);
       const distance = Math.sqrt(lengthDiff * lengthDiff + widthDiff * widthDiff);
 
       if (distance < minDistance) {
