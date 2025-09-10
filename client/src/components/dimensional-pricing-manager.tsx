@@ -148,7 +148,7 @@ export function DimensionalPricingManager({ productId, productName }: Dimensiona
                 Upload CSV
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-4xl">
+            <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Bulk Upload Pricing Data</DialogTitle>
               </DialogHeader>

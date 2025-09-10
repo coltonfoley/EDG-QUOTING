@@ -44,7 +44,7 @@ export function PricingTableUploader({ productId, onUploadComplete }: PricingTab
         title: "Success",
         description: data.message || "Pricing data uploaded successfully",
       });
-      queryClient.invalidateQueries({ queryKey: [`/api/products/${productId}/pricing-tables`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/products", productId, "pricing-tables"] });
       setFile(null);
       setPreview([]);
       setErrors([]);
