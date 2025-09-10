@@ -84,6 +84,8 @@ export const products = pgTable("products", {
   defaultUnitPrice: decimal("default_unit_price", { precision: 10, scale: 2 }).notNull(),
   defaultMarkupType: text("default_markup_type").notNull().default("percentage"),
   defaultMarkupValue: decimal("default_markup_value", { precision: 10, scale: 2 }).notNull().default("25"),
+  defaultDiscountType: text("default_discount_type").notNull().default("percentage"),
+  defaultDiscountValue: decimal("default_discount_value", { precision: 10, scale: 2 }).notNull().default("0"),
   unit: text("unit").default("each"), // each, sq ft, linear ft, cubic yard, etc.
   // Configuration fields for configurable products
   configFields: jsonb("config_fields"), // JSON array of configuration field definitions
@@ -128,6 +130,8 @@ export const lineItems = pgTable("line_items", {
   unitPrice: decimal("unit_price", { precision: 10, scale: 2 }).notNull(),
   markupType: text("markup_type").notNull(), // percentage, dollar
   markupValue: decimal("markup_value", { precision: 10, scale: 2 }).notNull(),
+  discountType: text("discount_type").notNull().default("percentage"), // percentage, dollar
+  discountValue: decimal("discount_value", { precision: 10, scale: 2 }).notNull().default("0"),
   // Configuration data for configurable products
   configData: jsonb("config_data"), // JSON object storing configuration values (dimensions, options, etc.)
   baseProductId: integer("base_product_id"), // reference to base product for accessories
@@ -159,6 +163,7 @@ export const insertProductSchema = createInsertSchema(products).omit({
 }).extend({
   defaultUnitPrice: z.union([z.string(), z.number()]).transform(val => typeof val === 'string' ? val : val.toString()),
   defaultMarkupValue: z.union([z.string(), z.number()]).transform(val => typeof val === 'string' ? val : val.toString()),
+  defaultDiscountValue: z.union([z.string(), z.number()]).transform(val => typeof val === 'string' ? val : val.toString()),
   minLength: z.union([z.string(), z.number(), z.null()]).transform(val => val === null ? null : (typeof val === 'string' ? val : val.toString())).optional(),
   maxLength: z.union([z.string(), z.number(), z.null()]).transform(val => val === null ? null : (typeof val === 'string' ? val : val.toString())).optional(),
   minWidth: z.union([z.string(), z.number(), z.null()]).transform(val => val === null ? null : (typeof val === 'string' ? val : val.toString())).optional(),
@@ -187,6 +192,7 @@ export const insertLineItemSchema = createInsertSchema(lineItems).omit({
   quantity: z.union([z.string(), z.number()]).transform(val => typeof val === 'string' ? val : val.toString()),
   unitPrice: z.union([z.string(), z.number()]).transform(val => typeof val === 'string' ? val : val.toString()),
   markupValue: z.union([z.string(), z.number()]).transform(val => typeof val === 'string' ? val : val.toString()),
+  discountValue: z.union([z.string(), z.number()]).transform(val => typeof val === 'string' ? val : val.toString()),
 });
 
 export const insertContractTemplateSchema = createInsertSchema(contractTemplates).omit({

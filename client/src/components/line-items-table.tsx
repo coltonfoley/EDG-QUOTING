@@ -24,6 +24,8 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
     description: "",
     quantity: "1",
     unitPrice: "0",
+    discountType: "percentage" as "percentage" | "dollar",
+    discountValue: "0",
     markupType: "percentage" as "percentage" | "dollar",
     markupValue: "0",
   });
@@ -55,6 +57,8 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
         description: "",
         quantity: "1",
         unitPrice: "0",
+        discountType: "percentage",
+        discountValue: "0",
         markupType: "percentage",
         markupValue: "0",
       });
@@ -123,6 +127,8 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
       description: newItem.description,
       quantity: newItem.quantity,
       unitPrice: newItem.unitPrice,
+      discountType: newItem.discountType,
+      discountValue: newItem.discountValue,
       markupType: newItem.markupType,
       markupValue: newItem.markupValue,
     };
@@ -148,8 +154,8 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
   };
 
   const handleBlurUpdate = (item: LineItem, field: string) => {
-    const editingValue = editingValues[item.id]?.[field];
-    if (editingValue !== undefined && editingValue !== item[field]) {
+    const editingValue = (editingValues[item.id] as any)?.[field];
+    if (editingValue !== undefined && editingValue !== (item as any)[field]) {
       handleUpdateItem(item, field, editingValue);
     }
   };
@@ -174,6 +180,8 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
         description: product.name,
         quantity: "1",
         unitPrice: product.defaultUnitPrice,
+        discountType: product.defaultDiscountType as "percentage" | "dollar",
+        discountValue: product.defaultDiscountValue,
         markupType: product.defaultMarkupType as "percentage" | "dollar",
         markupValue: product.defaultMarkupValue,
       });
@@ -429,6 +437,9 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                   Unit Price
                 </th>
                 <th className="px-6 py-3 text-center text-xs font-medium text-edg-grey uppercase tracking-wider">
+                  Discount
+                </th>
+                <th className="px-6 py-3 text-center text-xs font-medium text-edg-grey uppercase tracking-wider">
                   Markup
                 </th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-edg-grey uppercase tracking-wider">
@@ -457,19 +468,29 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                 const currentMarkupType = editingValues[item.id]?.markupType !== undefined 
                   ? editingValues[item.id].markupType as "percentage" | "dollar"
                   : item.markupType;
+                const currentDiscountValue = editingValues[item.id]?.discountValue !== undefined 
+                  ? (editingValues[item.id].discountValue === '' ? 0 : parseFloat(editingValues[item.id].discountValue as string) || 0)
+                  : item.discountValue;
+                const currentDiscountType = editingValues[item.id]?.discountType !== undefined 
+                  ? editingValues[item.id].discountType as "percentage" | "dollar"
+                  : item.discountType;
                 
                 const total = calculateLineItemTotal(
                   currentQuantity,
                   currentUnitPrice,
                   currentMarkupType,
-                  currentMarkupValue
+                  currentMarkupValue,
+                  currentDiscountType,
+                  currentDiscountValue
                 );
                 
                 const margin = calculateLineItemMargin(
                   currentQuantity,
                   currentUnitPrice,
                   currentMarkupType,
-                  currentMarkupValue
+                  currentMarkupValue,
+                  currentDiscountType,
+                  currentDiscountValue
                 );
 
                 return (
@@ -519,6 +540,39 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                         }}
                         className="w-32 text-center"
                       />
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      <div className="flex items-center justify-center space-x-1">
+                        <Input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={editingValues[item.id]?.discountValue !== undefined ? editingValues[item.id].discountValue : item.discountValue}
+                          onChange={(e) => updateEditingValue(item.id, "discountValue", e.target.value)}
+                          onBlur={() => {
+                            const value = editingValues[item.id]?.discountValue;
+                            if (value !== undefined) {
+                              const numValue = value === '' ? 0 : parseFloat(value as string);
+                              if (!isNaN(numValue)) {
+                                handleUpdateItem(item, "discountValue", numValue);
+                              }
+                            }
+                          }}
+                          className="w-20 text-center"
+                        />
+                        <Select
+                          value={item.discountType}
+                          onValueChange={(value) => handleUpdateItem(item, "discountType", value)}
+                        >
+                          <SelectTrigger className="w-16">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="percentage">%</SelectItem>
+                            <SelectItem value="dollar">$</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </td>
                     <td className="px-6 py-4 text-center">
                       <div className="flex items-center justify-center space-x-1">
@@ -611,6 +665,31 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                         type="number"
                         step="0.01"
                         min="0"
+                        value={newItem.discountValue}
+                        onChange={(e) => setNewItem({ ...newItem, discountValue: e.target.value })}
+                        className="w-20 text-center"
+                        placeholder="0"
+                      />
+                      <Select
+                        value={newItem.discountType}
+                        onValueChange={(value) => setNewItem({ ...newItem, discountType: value as "percentage" | "dollar" })}
+                      >
+                        <SelectTrigger className="w-16">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="percentage">%</SelectItem>
+                          <SelectItem value="dollar">$</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 text-center">
+                    <div className="flex items-center justify-center space-x-1">
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0"
                         value={newItem.markupValue}
                         onChange={(e) => setNewItem({ ...newItem, markupValue: e.target.value })}
                         className="w-20 text-center"
@@ -636,7 +715,9 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                         newItem.quantity,
                         newItem.unitPrice,
                         newItem.markupType,
-                        newItem.markupValue
+                        newItem.markupValue,
+                        newItem.discountType,
+                        newItem.discountValue
                       )
                     )}
                   </td>
@@ -646,7 +727,9 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                         newItem.quantity,
                         newItem.unitPrice,
                         newItem.markupType,
-                        newItem.markupValue
+                        newItem.markupValue,
+                        newItem.discountType,
+                        newItem.discountValue
                       )
                     )}
                   </td>
