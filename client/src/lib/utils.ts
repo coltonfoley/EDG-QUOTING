@@ -140,6 +140,25 @@ export function calculateQuoteTotals(lineItems: any[], taxRate: number | string 
   };
 }
 
+export function applyDiscountToPrice(
+  price: number | string,
+  discountType: string,
+  discountValue: number | string
+): number {
+  const unitPrice = typeof price === 'string' ? parseFloat(price) : price;
+  const discount = typeof discountValue === 'string' ? parseFloat(discountValue) : discountValue;
+
+  if (discount <= 0) {
+    return unitPrice;
+  }
+
+  if (discountType === 'percentage') {
+    return unitPrice - (unitPrice * (discount / 100));
+  } else {
+    return unitPrice - discount;
+  }
+}
+
 export function generateQuoteNumber(): string {
   const year = new Date().getFullYear();
   const timestamp = Date.now().toString().slice(-6);
