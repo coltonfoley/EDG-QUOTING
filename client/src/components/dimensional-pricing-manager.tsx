@@ -180,7 +180,7 @@ export function DimensionalPricingManager({ productId, productName }: Dimensiona
                       name="lengthMin"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Length Min (ft)</FormLabel>
+                          <FormLabel>Length Min (m)</FormLabel>
                           <FormControl>
                             <Input type="number" step="0.1" placeholder="12.0" {...field} />
                           </FormControl>
@@ -193,7 +193,7 @@ export function DimensionalPricingManager({ productId, productName }: Dimensiona
                       name="lengthMax"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Length Max (ft)</FormLabel>
+                          <FormLabel>Length Max (m)</FormLabel>
                           <FormControl>
                             <Input type="number" step="0.1" placeholder="12.5" {...field} />
                           </FormControl>
@@ -208,7 +208,7 @@ export function DimensionalPricingManager({ productId, productName }: Dimensiona
                       name="widthMin"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Width Min (ft)</FormLabel>
+                          <FormLabel>Width Min (m)</FormLabel>
                           <FormControl>
                             <Input type="number" step="0.1" placeholder="8.0" {...field} />
                           </FormControl>
@@ -221,7 +221,7 @@ export function DimensionalPricingManager({ productId, productName }: Dimensiona
                       name="widthMax"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Width Max (ft)</FormLabel>
+                          <FormLabel>Width Max (m)</FormLabel>
                           <FormControl>
                             <Input type="number" step="0.1" placeholder="8.5" {...field} />
                           </FormControl>
@@ -282,8 +282,8 @@ export function DimensionalPricingManager({ productId, productName }: Dimensiona
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Length Range (ft)</TableHead>
-                <TableHead>Width Range (ft)</TableHead>
+                <TableHead>Length Range (m)</TableHead>
+                <TableHead>Width Range (m)</TableHead>
                 <TableHead>Size Band</TableHead>
                 <TableHead>Base Price</TableHead>
                 <TableHead className="w-20">Actions</TableHead>
@@ -295,7 +295,7 @@ export function DimensionalPricingManager({ productId, productName }: Dimensiona
                   <TableCell className="font-medium">{entry.lengthMin} - {entry.lengthMax}</TableCell>
                   <TableCell>{entry.widthMin} - {entry.widthMax}</TableCell>
                   <TableCell className="text-gray-600">
-                    {entry.lengthMin}-{entry.lengthMax} × {entry.widthMin}-{entry.widthMax} ft
+                    {entry.lengthMin}-{entry.lengthMax} × {entry.widthMin}-{entry.widthMax} m
                   </TableCell>
                   <TableCell className="font-semibold">
                     {formatCurrency(parseFloat(entry.basePrice))}
