@@ -457,8 +457,8 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                 <th className="px-1 py-2 text-center text-xs font-medium text-edg-grey uppercase w-20">
                   Unit Price
                 </th>
-                <th className="px-1 py-2 text-center text-xs font-medium text-edg-grey uppercase w-20">
-                  Retail Price
+                <th className="px-1 py-2 text-center text-xs font-medium text-gray-400 uppercase w-20">
+                  Retail
                 </th>
                 <th className="px-1 py-2 text-center text-xs font-medium text-edg-grey uppercase w-16">
                   Discount
@@ -567,26 +567,9 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                     </td>
                     <td className="px-1 py-2 text-center">
                       {item.retailPrice && (parseFloat(item.discountValue.toString()) > 0 || parseFloat(item.retailPrice.toString()) !== parseFloat(item.unitPrice.toString())) ? (
-                        <div className="text-xs">
-                          <Input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            value={editingValues[item.id]?.retailPrice?.toString() ?? item.retailPrice?.toString() ?? ""}
-                            onChange={(e) => updateEditingValue(item.id, "retailPrice", e.target.value)}
-                            onBlur={() => {
-                              const value = editingValues[item.id]?.retailPrice;
-                              if (value !== undefined) {
-                                const numValue = value === '' ? null : parseFloat(value as string);
-                                if (value === '' || !isNaN(numValue!)) {
-                                  handleUpdateItem(item, "retailPrice", numValue);
-                                }
-                              }
-                            }}
-                            className="w-full text-center text-xs"
-                            data-testid={`input-retail-price-${item.id}`}
-                          />
-                        </div>
+                        <span className="text-gray-500 text-xs font-mono" data-testid={`text-retail-price-${item.id}`}>
+                          {formatCurrency(parseFloat(item.retailPrice.toString()))}
+                        </span>
                       ) : (
                         <span className="text-gray-400 text-xs" data-testid={`text-no-retail-price-${item.id}`}>-</span>
                       )}
@@ -712,16 +695,12 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                     />
                   </td>
                   <td className="px-1 py-2 text-center">
-                    <Input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={newItem.retailPrice}
-                      onChange={(e) => setNewItem({ ...newItem, retailPrice: e.target.value })}
-                      className="w-full text-center text-xs"
-                      placeholder="0.00"
-                      data-testid="input-retail-price-new"
-                    />
+                    <span className="text-gray-500 text-xs font-mono">
+                      {newItem.retailPrice && parseFloat(newItem.retailPrice) > 0 ? 
+                        formatCurrency(parseFloat(newItem.retailPrice)) : 
+                        <span className="text-gray-400">-</span>
+                      }
+                    </span>
                   </td>
                   <td className="px-1 py-2 text-center">
                     <div className="flex items-center justify-center space-x-1">
