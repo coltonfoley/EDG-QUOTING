@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { AppHeader } from "@/components/app-header";
 import { Button } from "@/components/ui/button";
@@ -7,12 +7,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, FileText, Users, DollarSign, Search, Upload } from "lucide-react";
+import { Plus, FileText, Users, DollarSign, Search, Upload, Trash2 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { useAuth } from "@/hooks/useAuth";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { QuoteImporter } from "@/components/quote-importer";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { QuoteWithDetails } from "@shared/schema";
 
 export default function Quotes() {
@@ -24,6 +26,27 @@ export default function Quotes() {
   const { data: quotes, isLoading, error } = useQuery<QuoteWithDetails[]>({
     queryKey: ["/api/quotes"],
     enabled: isAuthenticated,
+  });
+
+  // Delete mutation
+  const deleteQuoteMutation = useMutation({
+    mutationFn: async (quoteId: number) => {
+      return await apiRequest("DELETE", `/api/quotes/${quoteId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/quotes"] });
+      toast({
+        title: "Quote deleted",
+        description: "The quote has been successfully deleted.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete quote. Please try again.",
+        variant: "destructive",
+      });
+    },
   });
 
   // Redirect to login if not authenticated
@@ -345,11 +368,44 @@ export default function Quotes() {
                             {formatCurrency(total)}
                           </td>
                           <td className="px-6 py-4 text-center text-sm">
-                            <Link href={`/quotes/${quote.id}`}>
-                              <Button variant="ghost" size="sm" className="text-edg-teal hover:text-edg-dark-teal">
-                                Edit
-                              </Button>
-                            </Link>
+                            <div className="flex items-center justify-center space-x-2">
+                              <Link href={`/quotes/${quote.id}`}>
+                                <Button variant="ghost" size="sm" className="text-edg-teal hover:text-edg-dark-teal" data-testid={`button-edit-quote-${quote.id}`}>
+                                  Edit
+                                </Button>
+                              </Link>
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button 
+                                    variant="ghost" 
+                                    size="sm" 
+                                    className="text-red-600 hover:text-red-800 hover:bg-red-50"
+                                    data-testid={`button-delete-quote-${quote.id}`}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Delete Quote</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      Are you sure you want to delete quote {quote.quoteNumber}? This action cannot be undone and will also delete all associated line items.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel data-testid={`button-cancel-delete-${quote.id}`}>Cancel</AlertDialogCancel>
+                                    <AlertDialogAction 
+                                      onClick={() => deleteQuoteMutation.mutate(quote.id)}
+                                      className="bg-red-600 hover:bg-red-700"
+                                      disabled={deleteQuoteMutation.isPending}
+                                      data-testid={`button-confirm-delete-${quote.id}`}
+                                    >
+                                      {deleteQuoteMutation.isPending ? "Deleting..." : "Delete"}
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            </div>
                           </td>
                         </tr>
                       );

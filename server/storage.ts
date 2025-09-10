@@ -222,6 +222,7 @@ export class MemStorage {
       ...insertLineItem, 
       id,
       productId: insertLineItem.productId || null,
+      retailPrice: insertLineItem.retailPrice || null,
       baseProductId: insertLineItem.baseProductId || null,
       configData: insertLineItem.configData || null,
       isAccessory: insertLineItem.isAccessory || false,
