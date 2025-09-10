@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Trash2, Edit, Plus, Package, Search, Filter, X } from "lucide-react";
-import { formatCurrency, calculateLineItemTotal, calculateLineItemMargin } from "@/lib/utils";
+import { formatCurrency, calculateLineItemTotal, calculateLineItemMargin, applyDiscountToPrice } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { LineItem, Product } from "@shared/schema";
@@ -23,6 +23,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
   const [newItem, setNewItem] = useState({
     description: "",
     quantity: "1",
+    retailPrice: "",
     unitPrice: "0",
     discountType: "percentage" as "percentage" | "dollar",
     discountValue: "0",
@@ -56,6 +57,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
       setNewItem({
         description: "",
         quantity: "1",
+        retailPrice: "",
         unitPrice: "0",
         discountType: "percentage",
         discountValue: "0",
@@ -126,6 +128,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
     const itemData = {
       description: newItem.description,
       quantity: newItem.quantity,
+      retailPrice: newItem.retailPrice || null,
       unitPrice: newItem.unitPrice,
       discountType: newItem.discountType,
       discountValue: newItem.discountValue,
@@ -176,10 +179,18 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
       setShowDimensionDialog(true);
     } else {
       // For simple products, add directly to form
+      const retailPrice = product.defaultUnitPrice;
+      const discountedUnitPrice = applyDiscountToPrice(
+        retailPrice,
+        product.defaultDiscountType || "percentage",
+        product.defaultDiscountValue || 0
+      );
+      
       setNewItem({
         description: product.name,
         quantity: "1",
-        unitPrice: product.defaultUnitPrice,
+        retailPrice: retailPrice, // Original retail price for transparency
+        unitPrice: discountedUnitPrice.toString(), // Apply manufacturer discount
         discountType: product.defaultDiscountType as "percentage" | "dollar",
         discountValue: product.defaultDiscountValue,
         markupType: product.defaultMarkupType as "percentage" | "dollar",
@@ -214,10 +225,18 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
     }
 
     // Create line item with configurable product data
+    const retailPrice = calculatedPrice;
+    const discountedUnitPrice = applyDiscountToPrice(
+      retailPrice,
+      selectedConfigurableProduct.defaultDiscountType || "percentage",
+      selectedConfigurableProduct.defaultDiscountValue || 0
+    );
+    
     const itemData = {
       description: `${selectedConfigurableProduct.name} (${dimensions.length}' × ${dimensions.width}')`,
       quantity: "1",
-      unitPrice: calculatedPrice.toString(),
+      retailPrice: retailPrice.toString(), // Original calculated price for transparency
+      unitPrice: discountedUnitPrice.toString(), // Apply manufacturer discount to calculated price
       markupType: selectedConfigurableProduct.defaultMarkupType,
       markupValue: selectedConfigurableProduct.defaultMarkupValue,
       discountType: selectedConfigurableProduct.defaultDiscountType || "percentage",
@@ -439,6 +458,9 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                   Unit Price
                 </th>
                 <th className="px-6 py-3 text-center text-xs font-medium text-edg-grey uppercase tracking-wider">
+                  Retail Price
+                </th>
+                <th className="px-6 py-3 text-center text-xs font-medium text-edg-grey uppercase tracking-wider">
                   Discount
                 </th>
                 <th className="px-6 py-3 text-center text-xs font-medium text-edg-grey uppercase tracking-wider">
@@ -542,6 +564,32 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                         }}
                         className="w-32 text-center"
                       />
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      {item.retailPrice && (parseFloat(item.discountValue.toString()) > 0 || parseFloat(item.retailPrice.toString()) !== parseFloat(item.unitPrice.toString())) ? (
+                        <div className="text-sm">
+                          <Input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={editingValues[item.id]?.retailPrice?.toString() ?? item.retailPrice?.toString() ?? ""}
+                            onChange={(e) => updateEditingValue(item.id, "retailPrice", e.target.value)}
+                            onBlur={() => {
+                              const value = editingValues[item.id]?.retailPrice;
+                              if (value !== undefined) {
+                                const numValue = value === '' ? null : parseFloat(value as string);
+                                if (value === '' || !isNaN(numValue!)) {
+                                  handleUpdateItem(item, "retailPrice", numValue);
+                                }
+                              }
+                            }}
+                            className="w-32 text-center"
+                            data-testid={`input-retail-price-${item.id}`}
+                          />
+                        </div>
+                      ) : (
+                        <span className="text-gray-400 text-sm" data-testid={`text-no-retail-price-${item.id}`}>-</span>
+                      )}
                     </td>
                     <td className="px-6 py-4 text-center">
                       <div className="flex items-center justify-center space-x-1">
@@ -659,6 +707,19 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                       onChange={(e) => setNewItem({ ...newItem, unitPrice: e.target.value })}
                       className="w-32 text-center"
                       placeholder="0.00"
+                      data-testid="input-unit-price-new"
+                    />
+                  </td>
+                  <td className="px-6 py-4 text-center">
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={newItem.retailPrice}
+                      onChange={(e) => setNewItem({ ...newItem, retailPrice: e.target.value })}
+                      className="w-32 text-center"
+                      placeholder="0.00"
+                      data-testid="input-retail-price-new"
                     />
                   </td>
                   <td className="px-6 py-4 text-center">

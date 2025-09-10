@@ -128,6 +128,7 @@ export const lineItems = pgTable("line_items", {
   productId: integer("product_id"), // optional reference to product catalog
   description: text("description").notNull(),
   quantity: decimal("quantity", { precision: 10, scale: 2 }).notNull(),
+  retailPrice: decimal("retail_price", { precision: 10, scale: 2 }), // manufacturer's suggested retail price
   unitPrice: decimal("unit_price", { precision: 10, scale: 2 }).notNull(),
   markupType: text("markup_type").notNull(), // percentage, dollar
   markupValue: decimal("markup_value", { precision: 10, scale: 2 }).notNull(),
@@ -192,6 +193,7 @@ export const insertLineItemSchema = createInsertSchema(lineItems).omit({
   id: true,
 }).extend({
   quantity: z.union([z.string(), z.number()]).transform(val => typeof val === 'string' ? val : val.toString()),
+  retailPrice: z.union([z.string(), z.number(), z.null()]).transform(val => val === null ? null : (typeof val === 'string' ? val : val.toString())).optional(),
   unitPrice: z.union([z.string(), z.number()]).transform(val => typeof val === 'string' ? val : val.toString()),
   markupValue: z.union([z.string(), z.number()]).transform(val => typeof val === 'string' ? val : val.toString()),
   discountValue: z.union([z.string(), z.number()]).transform(val => typeof val === 'string' ? val : val.toString()),
