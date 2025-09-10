@@ -448,22 +448,19 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
           <table className="w-full table-fixed divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-2 py-2 text-left text-xs font-medium text-edg-grey uppercase w-1/5">
+                <th className="px-3 py-3 text-left text-xs font-medium text-edg-grey uppercase w-1/4">
                   Description
                 </th>
-                <th className="px-1 py-2 text-center text-xs font-medium text-edg-grey uppercase w-12">
+                <th className="px-2 py-3 text-center text-xs font-medium text-edg-grey uppercase w-16">
                   Qty
                 </th>
-                <th className="px-1 py-2 text-center text-xs font-medium text-edg-grey uppercase w-20">
+                <th className="px-2 py-3 text-center text-xs font-medium text-edg-grey uppercase w-24">
                   Unit Price
                 </th>
-                <th className="px-1 py-2 text-center text-xs font-medium text-gray-400 uppercase w-20">
-                  Retail
-                </th>
-                <th className="px-1 py-2 text-center text-xs font-medium text-edg-grey uppercase w-16">
+                <th className="px-2 py-3 text-center text-xs font-medium text-edg-grey uppercase w-20">
                   Discount
                 </th>
-                <th className="px-1 py-2 text-center text-xs font-medium text-edg-grey uppercase w-16">
+                <th className="px-2 py-3 text-center text-xs font-medium text-edg-grey uppercase w-20">
                   Markup
                 </th>
                 <th className="px-1 py-2 text-right text-xs font-medium text-edg-grey uppercase w-16">
@@ -519,15 +516,22 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
 
                 return (
                   <tr key={item.id} className="hover:bg-gray-50">
-                    <td className="px-2 py-2">
-                      <Input
-                        value={editingValues[item.id]?.description !== undefined ? editingValues[item.id].description : item.description}
-                        onChange={(e) => updateEditingValue(item.id, "description", e.target.value)}
-                        onBlur={() => handleBlurUpdate(item, "description")}
-                        className="border-none bg-transparent focus:ring-2 focus:ring-edg-teal focus:border-transparent text-xs"
-                      />
+                    <td className="px-3 py-3">
+                      <div>
+                        <Input
+                          value={editingValues[item.id]?.description !== undefined ? editingValues[item.id].description : item.description}
+                          onChange={(e) => updateEditingValue(item.id, "description", e.target.value)}
+                          onBlur={() => handleBlurUpdate(item, "description")}
+                          className="border-none bg-transparent focus:ring-2 focus:ring-edg-teal focus:border-transparent text-sm"
+                        />
+                        {item.retailPrice && parseFloat(item.retailPrice.toString()) !== parseFloat(item.unitPrice.toString()) && (
+                          <div className="text-xs text-gray-500 mt-1">
+                            Retail: {formatCurrency(parseFloat(item.retailPrice.toString()))}
+                          </div>
+                        )}
+                      </div>
                     </td>
-                    <td className="px-1 py-2 text-center">
+                    <td className="px-2 py-3 text-center">
                       <Input
                         type="number"
                         step="1"
@@ -543,10 +547,10 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                             }
                           }
                         }}
-                        className="w-full text-center text-xs"
+                        className="w-full text-center text-sm"
                       />
                     </td>
-                    <td className="px-1 py-2 text-center">
+                    <td className="px-2 py-3 text-center">
                       <Input
                         type="number"
                         step="0.01"
@@ -562,20 +566,11 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                             }
                           }
                         }}
-                        className="w-full text-center text-xs"
+                        className="w-full text-center text-sm"
                       />
                     </td>
-                    <td className="px-1 py-2 text-center">
-                      {item.retailPrice && (parseFloat(item.discountValue.toString()) > 0 || parseFloat(item.retailPrice.toString()) !== parseFloat(item.unitPrice.toString())) ? (
-                        <span className="text-gray-500 text-xs font-mono" data-testid={`text-retail-price-${item.id}`}>
-                          {formatCurrency(parseFloat(item.retailPrice.toString()))}
-                        </span>
-                      ) : (
-                        <span className="text-gray-400 text-xs" data-testid={`text-no-retail-price-${item.id}`}>-</span>
-                      )}
-                    </td>
-                    <td className="px-1 py-2 text-center">
-                      <div className="flex items-center justify-center space-x-1">
+                    <td className="px-2 py-3 text-center">
+                      <div className="flex items-center justify-center space-x-2">
                         <Input
                           type="number"
                           step="0.01"
@@ -591,13 +586,13 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                               }
                             }
                           }}
-                          className="w-16 text-center text-xs"
+                          className="w-12 text-center text-sm border-gray-300 focus:border-edg-teal"
                         />
                         <Select
                           value={item.discountType}
                           onValueChange={(value) => handleUpdateItem(item, "discountType", value)}
                         >
-                          <SelectTrigger className="w-12 text-xs h-7">
+                          <SelectTrigger className="w-10 h-8 text-sm border-gray-300">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -607,8 +602,8 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                         </Select>
                       </div>
                     </td>
-                    <td className="px-1 py-2 text-center">
-                      <div className="flex items-center justify-center space-x-1">
+                    <td className="px-2 py-3 text-center">
+                      <div className="flex items-center justify-center space-x-2">
                         <Input
                           type="number"
                           step="0.01"
@@ -624,13 +619,13 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                               }
                             }
                           }}
-                          className="w-16 text-center text-xs"
+                          className="w-12 text-center text-sm border-gray-300 focus:border-edg-teal"
                         />
                         <Select
                           value={item.markupType}
                           onValueChange={(value) => handleUpdateItem(item, "markupType", value)}
                         >
-                          <SelectTrigger className="w-12 text-xs h-7">
+                          <SelectTrigger className="w-10 h-8 text-sm border-gray-300">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -640,21 +635,21 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                         </Select>
                       </div>
                     </td>
-                    <td className="px-1 py-2 text-right text-xs font-medium text-success-green">
+                    <td className="px-2 py-3 text-right text-sm font-medium text-success-green">
                       {formatCurrency(margin)}
                     </td>
-                    <td className="px-1 py-2 text-right text-xs font-medium text-edg-black">
+                    <td className="px-2 py-3 text-right text-sm font-medium text-edg-black">
                       {formatCurrency(total)}
                     </td>
-                    <td className="px-1 py-2 text-center">
+                    <td className="px-2 py-3 text-center">
                       <Button
                         variant="outline"
                         size="sm"
                         onClick={() => handleDeleteItem(item.id)}
-                        className="border-red-300 text-red-600 hover:bg-red-50 hover:border-red-400 hover:text-red-700 p-1"
+                        className="border-red-300 text-red-600 hover:bg-red-50 hover:border-red-400 hover:text-red-700"
                         data-testid={`button-delete-${item.id}`}
                       >
-                        <Trash2 className="h-3 w-3" />
+                        <Trash2 className="h-4 w-4" />
                       </Button>
                     </td>
                   </tr>
@@ -663,61 +658,53 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
 
               {showNewItemForm && (
                 <tr className="bg-blue-50">
-                  <td className="px-2 py-2">
+                  <td className="px-3 py-3">
                     <Input
                       placeholder="Description"
                       value={newItem.description}
                       onChange={(e) => setNewItem({ ...newItem, description: e.target.value })}
-                      className="border border-gray-300 text-xs"
+                      className="border border-gray-300 text-sm"
                     />
                   </td>
-                  <td className="px-1 py-2 text-center">
+                  <td className="px-2 py-3 text-center">
                     <Input
                       type="number"
                       step="1"
                       min="0"
                       value={newItem.quantity}
                       onChange={(e) => setNewItem({ ...newItem, quantity: e.target.value })}
-                      className="w-full text-center text-xs"
+                      className="w-full text-center text-sm"
                       placeholder="1"
                     />
                   </td>
-                  <td className="px-1 py-2 text-center">
+                  <td className="px-2 py-3 text-center">
                     <Input
                       type="number"
                       step="0.01"
                       min="0"
                       value={newItem.unitPrice}
                       onChange={(e) => setNewItem({ ...newItem, unitPrice: e.target.value })}
-                      className="w-full text-center text-xs"
+                      className="w-full text-center text-sm"
                       placeholder="0.00"
                       data-testid="input-unit-price-new"
                     />
                   </td>
-                  <td className="px-1 py-2 text-center">
-                    <span className="text-gray-500 text-xs font-mono">
-                      {newItem.retailPrice && parseFloat(newItem.retailPrice) > 0 ? 
-                        formatCurrency(parseFloat(newItem.retailPrice)) : 
-                        <span className="text-gray-400">-</span>
-                      }
-                    </span>
-                  </td>
-                  <td className="px-1 py-2 text-center">
-                    <div className="flex items-center justify-center space-x-1">
+                  <td className="px-2 py-3 text-center">
+                    <div className="flex items-center justify-center space-x-2">
                       <Input
                         type="number"
                         step="0.01"
                         min="0"
                         value={newItem.discountValue}
                         onChange={(e) => setNewItem({ ...newItem, discountValue: e.target.value })}
-                        className="w-10 text-center text-xs"
+                        className="w-12 text-center text-sm border-gray-300"
                         placeholder="0"
                       />
                       <Select
                         value={newItem.discountType}
                         onValueChange={(value) => setNewItem({ ...newItem, discountType: value as "percentage" | "dollar" })}
                       >
-                        <SelectTrigger className="w-12 text-xs h-7">
+                        <SelectTrigger className="w-10 h-8 text-sm border-gray-300">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -727,22 +714,22 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                       </Select>
                     </div>
                   </td>
-                  <td className="px-1 py-2 text-center">
-                    <div className="flex items-center justify-center space-x-1">
+                  <td className="px-2 py-3 text-center">
+                    <div className="flex items-center justify-center space-x-2">
                       <Input
                         type="number"
                         step="0.01"
                         min="0"
                         value={newItem.markupValue}
                         onChange={(e) => setNewItem({ ...newItem, markupValue: e.target.value })}
-                        className="w-10 text-center text-xs"
+                        className="w-12 text-center text-sm border-gray-300"
                         placeholder="0"
                       />
                       <Select
                         value={newItem.markupType}
                         onValueChange={(value) => setNewItem({ ...newItem, markupType: value as "percentage" | "dollar" })}
                       >
-                        <SelectTrigger className="w-12 text-xs h-7">
+                        <SelectTrigger className="w-10 h-8 text-sm border-gray-300">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -752,7 +739,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                       </Select>
                     </div>
                   </td>
-                  <td className="px-1 py-2 text-right text-xs font-medium text-success-green">
+                  <td className="px-2 py-3 text-right text-sm font-medium text-success-green">
                     {formatCurrency(
                       calculateLineItemMargin(
                         newItem.quantity,
@@ -764,7 +751,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                       )
                     )}
                   </td>
-                  <td className="px-1 py-2 text-right text-xs font-medium text-edg-black">
+                  <td className="px-2 py-3 text-right text-sm font-medium text-edg-black">
                     {formatCurrency(
                       calculateLineItemTotal(
                         newItem.quantity,
@@ -776,12 +763,12 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                       )
                     )}
                   </td>
-                  <td className="px-1 py-2 text-center space-x-1">
+                  <td className="px-2 py-3 text-center space-x-2">
                     <Button
                       size="sm"
                       onClick={handleAddItem}
                       disabled={!newItem.description || createLineItemMutation.isPending}
-                      className="bg-edg-black hover:bg-edg-grey text-edg-white text-xs p-1"
+                      className="bg-edg-black hover:bg-edg-grey text-edg-white"
                     >
                       Save
                     </Button>
@@ -789,7 +776,6 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                       variant="outline"
                       size="sm"
                       onClick={() => setShowNewItemForm(false)}
-                      className="text-xs p-1"
                     >
                       Cancel
                     </Button>
