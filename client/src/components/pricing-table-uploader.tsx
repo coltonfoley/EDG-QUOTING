@@ -1,13 +1,15 @@
 import { useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Upload, FileSpreadsheet, AlertCircle, CheckCircle } from "lucide-react";
+import { Upload, FileSpreadsheet, AlertCircle, CheckCircle, Calculator } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { Skeleton } from "@/components/ui/skeleton";
 import * as XLSX from "xlsx";
 import { apiRequest } from "@/lib/queryClient";
+import type { Product } from "@shared/schema";
 
 interface PricingTableUploaderProps {
   productId: number;
@@ -19,7 +21,8 @@ interface PricingData {
   lengthMax: number;
   widthMin: number;
   widthMax: number;
-  price: number;
+  retailPrice: number;
+  basePrice: number;
 }
 
 export function PricingTableUploader({ productId, onUploadComplete }: PricingTableUploaderProps) {
@@ -31,6 +34,28 @@ export function PricingTableUploader({ productId, onUploadComplete }: PricingTab
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  // Fetch product details to get discount settings
+  const { data: product, isLoading: isLoadingProduct } = useQuery({
+    queryKey: ["/api/products", productId],
+    queryFn: async (): Promise<Product> => {
+      const response = await apiRequest("GET", `/api/products/${productId}`);
+      return await response.json();
+    },
+  });
+
+  const calculateBasePrice = (retailPrice: number): number => {
+    if (!product) return retailPrice;
+    
+    const discountValue = parseFloat(product.defaultDiscountValue.toString());
+    
+    if (product.defaultDiscountType === 'percentage') {
+      return retailPrice * (1 - discountValue / 100);
+    } else {
+      // dollar discount
+      return Math.max(0, retailPrice - discountValue);
+    }
+  };
 
   const uploadMutation = useMutation({
     mutationFn: async (pricingData: PricingData[]) => {
@@ -64,6 +89,11 @@ export function PricingTableUploader({ productId, onUploadComplete }: PricingTab
     const errors: string[] = [];
     let skipped = 0;
 
+    if (!product) {
+      errors.push('Product information not loaded');
+      return { valid, errors, skipped };
+    }
+
     data.forEach((row, index) => {
       const rowNum = index + 1;
       
@@ -73,7 +103,7 @@ export function PricingTableUploader({ productId, onUploadComplete }: PricingTab
         { names: ['LengthMax', 'lengthMax', 'Length Max'], key: 'lengthMax' },
         { names: ['WidthMin', 'widthMin', 'Width Min'], key: 'widthMin' },
         { names: ['WidthMax', 'widthMax', 'Width Max'], key: 'widthMax' },
-        { names: ['Price', 'price'], key: 'price' }
+        { names: ['RetailPrice', 'retailPrice', 'Retail Price', 'Price', 'price'], key: 'retailPrice' }
       ];
 
       const values: any = {};
@@ -94,8 +124,8 @@ export function PricingTableUploader({ productId, onUploadComplete }: PricingTab
         }
       }
 
-      // Check if price indicates "not available" - skip these rows
-      const priceStr = String(values.price || '').trim().toLowerCase();
+      // Check if retail price indicates "not available" - skip these rows
+      const priceStr = String(values.retailPrice || '').trim().toLowerCase();
       if (priceStr === 'n/a' || priceStr === 'na' || priceStr === '' || 
           priceStr === 'null' || priceStr === 'undefined' || priceStr === '-') {
         skipped++;
@@ -107,7 +137,7 @@ export function PricingTableUploader({ productId, onUploadComplete }: PricingTab
       const lengthMaxNum = parseFloat(values.lengthMax);
       const widthMinNum = parseFloat(values.widthMin);
       const widthMaxNum = parseFloat(values.widthMax);
-      const priceNum = parseFloat(values.price);
+      const retailPriceNum = parseFloat(values.retailPrice);
 
       if (isNaN(lengthMinNum) || lengthMinNum <= 0) {
         errors.push(`Row ${rowNum}: Invalid lengthMin value '${values.lengthMin}'`);
@@ -129,8 +159,8 @@ export function PricingTableUploader({ productId, onUploadComplete }: PricingTab
         return;
       }
 
-      if (isNaN(priceNum) || priceNum <= 0) {
-        errors.push(`Row ${rowNum}: Invalid price value '${values.price}'`);
+      if (isNaN(retailPriceNum) || retailPriceNum <= 0) {
+        errors.push(`Row ${rowNum}: Invalid retail price value '${values.retailPrice}'`);
         return;
       }
 
@@ -145,12 +175,15 @@ export function PricingTableUploader({ productId, onUploadComplete }: PricingTab
         return;
       }
 
+      const basePrice = calculateBasePrice(retailPriceNum);
+
       valid.push({
         lengthMin: lengthMinNum,
         lengthMax: lengthMaxNum,
         widthMin: widthMinNum,
         widthMax: widthMaxNum,
-        price: priceNum,
+        retailPrice: retailPriceNum,
+        basePrice: basePrice,
       });
     });
 
@@ -168,6 +201,11 @@ export function PricingTableUploader({ productId, onUploadComplete }: PricingTab
     setSkippedCount(0);
 
     try {
+      if (!product) {
+        setErrors(["Product information not loaded. Please wait and try again."]);
+        return;
+      }
+
       const buffer = await selectedFile.arrayBuffer();
       const workbook = XLSX.read(buffer, { type: "array" });
       const sheetName = workbook.SheetNames[0];
@@ -234,7 +272,7 @@ export function PricingTableUploader({ productId, onUploadComplete }: PricingTab
             <div className="space-y-2">
               <h3 className="text-lg font-medium">Choose a file to upload</h3>
               <p className="text-sm text-gray-500">
-                Excel (.xlsx, .xls) or CSV files with LengthMin, LengthMax, WidthMin, WidthMax, Price columns
+                Excel (.xlsx, .xls) or CSV files with LengthMin, LengthMax, WidthMin, WidthMax, RetailPrice columns
               </p>
             </div>
             <Input
@@ -259,12 +297,34 @@ export function PricingTableUploader({ productId, onUploadComplete }: PricingTab
           <Alert>
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
-              <strong>Expected format:</strong> Your file should have columns: "LengthMin", "LengthMax", "WidthMin", "WidthMax", and "Price". 
+              <strong>Expected format:</strong> Your file should have columns: "LengthMin", "LengthMax", "WidthMin", "WidthMax", and "RetailPrice". 
               Each row represents a size band (e.g., Length 12.0-12.5 × Width 8.0-8.5 = $2,500).
+              <br />
+              <strong>Retail Pricing:</strong> Upload retail/manufacturer prices - cost prices will be calculated automatically using the product's discount settings.
               <br />
               <strong>N/A values:</strong> Use "N/A" or leave empty for non-manufacturable size combinations - these will be skipped automatically.
             </AlertDescription>
           </Alert>
+
+          {/* Discount Info */}
+          {product && (
+            <Alert className="border-blue-200 bg-blue-50">
+              <Calculator className="h-4 w-4 text-blue-600" />
+              <AlertDescription className="text-blue-800">
+                <strong>Automatic Cost Calculation:</strong> {product.defaultDiscountType === 'percentage' 
+                  ? `${product.defaultDiscountValue}% discount will be applied to retail prices to calculate cost prices`
+                  : `$${product.defaultDiscountValue} will be subtracted from retail prices to calculate cost prices`
+                }.
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {isLoadingProduct && (
+            <div className="space-y-2">
+              <Skeleton className="h-4 w-3/4" />
+              <Skeleton className="h-4 w-1/2" />
+            </div>
+          )}
 
           {/* Errors */}
           {errors.length > 0 && (
@@ -289,7 +349,7 @@ export function PricingTableUploader({ productId, onUploadComplete }: PricingTab
             <Alert className="border-yellow-200 bg-yellow-50">
               <AlertCircle className="h-4 w-4 text-yellow-600" />
               <AlertDescription className="text-yellow-800">
-                Skipped {skippedCount} row(s) with N/A or empty prices (non-manufacturable sizes).
+                Skipped {skippedCount} row(s) with N/A or empty retail prices (non-manufacturable sizes).
               </AlertDescription>
             </Alert>
           )}
@@ -311,17 +371,24 @@ export function PricingTableUploader({ productId, onUploadComplete }: PricingTab
                       <tr className="border-b">
                         <th className="text-left py-2">Length Range (ft)</th>
                         <th className="text-left py-2">Width Range (ft)</th>
-                        <th className="text-left py-2">Price</th>
+                        <th className="text-left py-2">Retail Price</th>
+                        <th className="text-left py-2">Cost Price</th>
+                        <th className="text-left py-2">Margin</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {preview.map((item, index) => (
-                        <tr key={index} className="border-b">
-                          <td className="py-1">{item.lengthMin} - {item.lengthMax}</td>
-                          <td className="py-1">{item.widthMin} - {item.widthMax}</td>
-                          <td className="py-1">${item.price.toLocaleString()}</td>
-                        </tr>
-                      ))}
+                      {preview.map((item, index) => {
+                        const margin = ((item.retailPrice - item.basePrice) / item.retailPrice * 100).toFixed(1);
+                        return (
+                          <tr key={index} className="border-b">
+                            <td className="py-1">{item.lengthMin} - {item.lengthMax}</td>
+                            <td className="py-1">{item.widthMin} - {item.widthMax}</td>
+                            <td className="py-1">${item.retailPrice.toLocaleString()}</td>
+                            <td className="py-1 text-green-600">${item.basePrice.toLocaleString()}</td>
+                            <td className="py-1 text-blue-600">{margin}%</td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -333,7 +400,7 @@ export function PricingTableUploader({ productId, onUploadComplete }: PricingTab
           <div className="flex justify-end space-x-3">
             <Button
               onClick={handleUpload}
-              disabled={!file || preview.length === 0 || errors.length > 0 || uploadMutation.isPending}
+              disabled={!file || preview.length === 0 || errors.length > 0 || uploadMutation.isPending || isLoadingProduct}
               className="bg-edg-black hover:bg-edg-grey text-white"
             >
               {uploadMutation.isPending ? "Uploading..." : `Upload ${preview.length} Entries`}
