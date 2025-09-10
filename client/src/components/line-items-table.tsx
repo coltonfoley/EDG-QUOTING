@@ -586,7 +586,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                               }
                             }
                           }}
-                          className="w-12 text-center text-sm border-gray-300 focus:border-edg-teal"
+                          className="w-16 text-center text-sm border-gray-300 focus:border-edg-teal"
                         />
                         <Select
                           value={item.discountType}
@@ -619,7 +619,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                               }
                             }
                           }}
-                          className="w-12 text-center text-sm border-gray-300 focus:border-edg-teal"
+                          className="w-16 text-center text-sm border-gray-300 focus:border-edg-teal"
                         />
                         <Select
                           value={item.markupType}
