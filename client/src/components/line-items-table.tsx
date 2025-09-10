@@ -448,7 +448,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
           <table className="w-full table-fixed divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-3 py-3 text-left text-xs font-medium text-edg-grey uppercase w-1/4">
+                <th className="px-3 py-3 text-left text-xs font-medium text-edg-grey uppercase w-60">
                   Description
                 </th>
                 <th className="px-2 py-3 text-center text-xs font-medium text-edg-grey uppercase w-16">
@@ -457,19 +457,19 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                 <th className="px-2 py-3 text-center text-xs font-medium text-edg-grey uppercase w-24">
                   Unit Price
                 </th>
-                <th className="px-2 py-3 text-center text-xs font-medium text-edg-grey uppercase w-20">
+                <th className="px-2 py-3 text-center text-xs font-medium text-edg-grey uppercase w-28">
                   Discount
                 </th>
-                <th className="px-2 py-3 text-center text-xs font-medium text-edg-grey uppercase w-20">
+                <th className="px-2 py-3 text-center text-xs font-medium text-edg-grey uppercase w-28">
                   Markup
                 </th>
-                <th className="px-1 py-2 text-right text-xs font-medium text-edg-grey uppercase w-16">
+                <th className="px-2 py-3 text-right text-xs font-medium text-edg-grey uppercase w-20">
                   Margin
                 </th>
-                <th className="px-1 py-2 text-right text-xs font-medium text-edg-grey uppercase w-20">
+                <th className="px-2 py-3 text-right text-xs font-medium text-edg-grey uppercase w-24">
                   Total
                 </th>
-                <th className="px-1 py-2 text-center text-xs font-medium text-edg-grey uppercase w-12">
+                <th className="px-2 py-3 text-center text-xs font-medium text-edg-grey uppercase w-16">
                   Actions
                 </th>
               </tr>
