@@ -591,13 +591,13 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                               }
                             }
                           }}
-                          className="w-10 text-center text-xs"
+                          className="w-16 text-center text-xs"
                         />
                         <Select
                           value={item.discountType}
                           onValueChange={(value) => handleUpdateItem(item, "discountType", value)}
                         >
-                          <SelectTrigger className="w-8 text-xs h-6">
+                          <SelectTrigger className="w-12 text-xs h-7">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -624,13 +624,13 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                               }
                             }
                           }}
-                          className="w-10 text-center text-xs"
+                          className="w-16 text-center text-xs"
                         />
                         <Select
                           value={item.markupType}
                           onValueChange={(value) => handleUpdateItem(item, "markupType", value)}
                         >
-                          <SelectTrigger className="w-8 text-xs h-6">
+                          <SelectTrigger className="w-12 text-xs h-7">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -717,7 +717,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                         value={newItem.discountType}
                         onValueChange={(value) => setNewItem({ ...newItem, discountType: value as "percentage" | "dollar" })}
                       >
-                        <SelectTrigger className="w-8 text-xs h-6">
+                        <SelectTrigger className="w-12 text-xs h-7">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -742,7 +742,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                         value={newItem.markupType}
                         onValueChange={(value) => setNewItem({ ...newItem, markupType: value as "percentage" | "dollar" })}
                       >
-                        <SelectTrigger className="w-8 text-xs h-6">
+                        <SelectTrigger className="w-12 text-xs h-7">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
