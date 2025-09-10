@@ -4,8 +4,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Plus, Edit, Trash2, DollarSign, Upload, TrendingDown } from "lucide-react";
+import { Plus, Edit, Trash2, DollarSign, Upload, TrendingDown, RefreshCw } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useForm, useWatch } from "react-hook-form";
@@ -44,6 +45,7 @@ interface DimensionalPricingManagerProps {
 export function DimensionalPricingManager({ productId, productName }: DimensionalPricingManagerProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
+  const [isRecalculateDialogOpen, setIsRecalculateDialogOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState<PricingTable | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -138,6 +140,24 @@ export function DimensionalPricingManager({ productId, productName }: Dimensiona
     },
   });
 
+  const recalculatePricingMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("POST", `/api/products/${productId}/recalculate-pricing`);
+      return response.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/products", productId, "pricing-tables"] });
+      setIsRecalculateDialogOpen(false);
+      toast({
+        title: "Pricing recalculated successfully",
+        description: `Updated ${data.updated} pricing entries with current discount rates`
+      });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to recalculate pricing entries", variant: "destructive" });
+    },
+  });
+
   const handleSubmit = (data: PricingFormData) => {
     if (editingEntry) {
       updatePricingMutation.mutate({ id: editingEntry.id, data });
@@ -190,6 +210,69 @@ export function DimensionalPricingManager({ productId, productName }: Dimensiona
           )}
         </div>
         <div className="flex space-x-3">
+          <AlertDialog open={isRecalculateDialogOpen} onOpenChange={setIsRecalculateDialogOpen}>
+            <AlertDialogTrigger asChild>
+              <Button 
+                variant="outline" 
+                className="border-orange-500 text-orange-600 hover:bg-orange-500 hover:text-white"
+                data-testid="button-recalculate-costs"
+              >
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Recalculate Costs
+                {product && (
+                  <span className="ml-2 text-xs bg-orange-100 text-orange-800 px-2 py-1 rounded">
+                    {product.defaultDiscountType === 'percentage' ? `${product.defaultDiscountValue}%` : `$${product.defaultDiscountValue}`}
+                  </span>
+                )}
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Recalculate All Cost Prices?</AlertDialogTitle>
+                <AlertDialogDescription className="space-y-2">
+                  <p>
+                    This will update all cost prices in the pricing table based on the current discount settings.
+                  </p>
+                  {product && (
+                    <div className="p-3 bg-orange-50 rounded-lg border border-orange-200">
+                      <div className="flex items-center space-x-2 text-sm">
+                        <TrendingDown className="h-4 w-4 text-orange-600" />
+                        <span className="font-medium text-orange-900">
+                          Current discount: {product.defaultDiscountType === 'percentage' ? `${product.defaultDiscountValue}%` : `$${product.defaultDiscountValue}`} off retail
+                        </span>
+                      </div>
+                      <p className="text-xs text-orange-700 mt-1">
+                        All cost prices will be recalculated using this discount rate
+                      </p>
+                    </div>
+                  )}
+                  <p className="text-sm font-medium text-gray-900">
+                    {pricingTables?.length || 0} pricing entries will be updated.
+                  </p>
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel data-testid="button-cancel-recalculate">
+                  Cancel
+                </AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={() => recalculatePricingMutation.mutate()}
+                  disabled={recalculatePricingMutation.isPending}
+                  className="bg-orange-600 hover:bg-orange-700"
+                  data-testid="button-confirm-recalculate"
+                >
+                  {recalculatePricingMutation.isPending ? (
+                    <>
+                      <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                      Recalculating...
+                    </>
+                  ) : (
+                    'Recalculate All'
+                  )}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
           <Dialog open={isUploadDialogOpen} onOpenChange={setIsUploadDialogOpen}>
             <DialogTrigger asChild>
               <Button variant="outline" className="border-edg-teal text-edg-teal hover:bg-edg-teal hover:text-white">

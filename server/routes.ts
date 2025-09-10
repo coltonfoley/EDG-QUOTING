@@ -498,6 +498,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Recalculate pricing tables when discount changes
+  app.post("/api/products/:productId/recalculate-pricing", isAuthenticated, async (req, res) => {
+    try {
+      const productId = parseInt(req.params.productId);
+      
+      const product = await storage.getProduct(productId);
+      if (!product) {
+        return res.status(404).json({ message: "Product not found" });
+      }
+
+      const result = await storage.recalculatePricingTables(productId);
+      res.json({ 
+        message: `Successfully recalculated ${result.updated} pricing entries`,
+        updated: result.updated 
+      });
+    } catch (error) {
+      console.error("Error recalculating pricing:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
   // Bulk upload pricing table data
   app.post("/api/products/:productId/pricing-tables/bulk-upload", isAuthenticated, async (req, res) => {
     try {

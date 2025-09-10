@@ -1,6 +1,6 @@
 import { customers, quotes, lineItems, products, users, contractTemplates, pricingTables, productAccessories, type Customer, type Quote, type LineItem, type Product, type User, type ContractTemplate, type PricingTable, type ProductAccessory, type InsertCustomer, type InsertQuote, type InsertLineItem, type InsertProduct, type InsertUser, type InsertContractTemplate, type InsertPricingTable, type InsertProductAccessory, type QuoteWithDetails, type ProductWithDetails } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, inArray } from "drizzle-orm";
+import { eq, desc, inArray, sql } from "drizzle-orm";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 import connectPg from "connect-pg-simple";
@@ -682,6 +682,40 @@ export class DatabaseStorage implements IStorage {
   async deleteProductAccessory(id: number): Promise<boolean> {
     const result = await db.delete(productAccessories).where(eq(productAccessories.id, id));
     return (result.rowCount || 0) > 0;
+  }
+
+  // Recalculate pricing tables when product discount changes
+  async recalculatePricingTables(productId: number): Promise<{ updated: number }> {
+    // Get product discount settings
+    const product = await this.getProduct(productId);
+    if (!product) {
+      throw new Error("Product not found");
+    }
+
+    const discountType = product.defaultDiscountType;
+    const discountValue = parseFloat(product.defaultDiscountValue);
+
+    // Recalculate basePrice for all pricing tables for this product
+    let updateSql;
+    if (discountType === "percentage") {
+      // For percentage discount: basePrice = retailPrice * (1 - discount/100)
+      const multiplier = (100 - discountValue) / 100;
+      updateSql = sql`
+        UPDATE pricing_tables 
+        SET base_price = ROUND(retail_price * ${multiplier}, 2)
+        WHERE product_id = ${productId}
+      `;
+    } else {
+      // For dollar discount: basePrice = retailPrice - discountValue
+      updateSql = sql`
+        UPDATE pricing_tables 
+        SET base_price = ROUND(retail_price - ${discountValue}, 2)
+        WHERE product_id = ${productId}
+      `;
+    }
+
+    const result = await db.execute(updateSql);
+    return { updated: result.rowCount || 0 };
   }
 }
 
