@@ -1,7 +1,9 @@
 import { useParams } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import { AppHeader } from "@/components/app-header";
 import { QuoteHeader } from "@/components/quote-header";
+import { ImageAssetsPreview } from "@/components/image-assets-preview";
 import { LineItemsTable } from "@/components/line-items-table";
 import { QuoteSummary } from "@/components/quote-summary";
 import { Button } from "@/components/ui/button";
@@ -11,6 +13,7 @@ import { generateQuoteNumber } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Save } from "lucide-react";
 import type { QuoteWithDetails } from "@shared/schema";
+import type { UploadedImage } from "@/components/image-uploader";
 
 export default function QuoteBuilder() {
   const { id } = useParams();
@@ -19,6 +22,19 @@ export default function QuoteBuilder() {
   
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  // State to track upload states from QuoteHeader
+  const [uploadStates, setUploadStates] = useState<{
+    projectImages: UploadedImage[];
+    portfolioImages: UploadedImage[];
+    technicalDiagrams: UploadedImage[];
+    companyImages: UploadedImage[];
+  }>({
+    projectImages: [],
+    portfolioImages: [],
+    technicalDiagrams: [],
+    companyImages: [],
+  });
 
   const { data: quote, isLoading, error } = useQuery<QuoteWithDetails>({
     queryKey: [`/api/quotes/${quoteId}`],
@@ -189,6 +205,19 @@ export default function QuoteBuilder() {
           quote={isNewQuote ? undefined : currentQuote}
           onSave={handleSaveQuote}
           isLoading={createQuoteMutation.isPending || updateQuoteMutation.isPending}
+          onUploadStatesChange={setUploadStates}
+        />
+
+        {/* Image Assets Preview - Show for both new and existing quotes */}
+        <ImageAssetsPreview
+          projectImages={currentQuote.projectImages as any[]}
+          portfolioImages={currentQuote.portfolioImages as any[]}
+          technicalDiagrams={currentQuote.technicalDiagrams as any[]}
+          companyImages={currentQuote.companyImages as any[]}
+          uploadedProjectImages={uploadStates.projectImages}
+          uploadedPortfolioImages={uploadStates.portfolioImages}
+          uploadedTechnicalDiagrams={uploadStates.technicalDiagrams}
+          uploadedCompanyImages={uploadStates.companyImages}
         />
 
         {currentQuote.id > 0 && (

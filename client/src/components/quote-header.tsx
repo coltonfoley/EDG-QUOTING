@@ -29,9 +29,15 @@ interface QuoteHeaderProps {
   quote?: QuoteWithDetails;
   onSave: (data: QuoteFormData) => void;
   isLoading?: boolean;
+  onUploadStatesChange?: (states: {
+    projectImages: UploadedImage[];
+    portfolioImages: UploadedImage[];
+    technicalDiagrams: UploadedImage[];
+    companyImages: UploadedImage[];
+  }) => void;
 }
 
-export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
+export function QuoteHeader({ quote, onSave, isLoading, onUploadStatesChange }: QuoteHeaderProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -126,6 +132,18 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
       form.handleSubmit(handleSubmit)();
     }
   }, [pendingSave, isUploading, form]);
+
+  // Notify parent component of upload state changes
+  useEffect(() => {
+    if (onUploadStatesChange) {
+      onUploadStatesChange({
+        projectImages,
+        portfolioImages,
+        technicalDiagrams,
+        companyImages,
+      });
+    }
+  }, [projectImages, portfolioImages, technicalDiagrams, companyImages, onUploadStatesChange]);
 
   const updateStatusMutation = useMutation({
     mutationFn: async ({ status }: { status: string }) => {
