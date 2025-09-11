@@ -229,6 +229,20 @@ export type QuoteWithDetails = Quote & {
   contractTemplate?: ContractTemplate;
 };
 
+// DTO types for API responses that include calculated fields
+export type QuoteListItem = QuoteWithDetails & {
+  total: number;
+};
+
+export type QuoteDetail = QuoteListItem & {
+  subtotal: number;
+  taxAmount: number;
+  discountAmount: number;
+  shippingAmount: number;
+  margin: number;
+  totalMarkup: number;
+};
+
 export type ProductWithDetails = Product & {
   pricingTables?: PricingTable[];
   accessories?: (ProductAccessory & { accessory: Product })[];

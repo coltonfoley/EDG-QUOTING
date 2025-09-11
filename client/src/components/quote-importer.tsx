@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -12,12 +12,14 @@ import { Loader2, Upload, FileText, Edit3, Check, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
-import type { Quote } from "@shared/schema";
+import { calculateQuoteTotals } from "@/lib/utils";
+import type { QuoteWithDetails, QuoteListItem } from "@shared/schema";
 
 interface ExtractedLineItem {
   description: string;
   quantity: number;
   price: number;
+  cost?: number; // Our actual cost for margin calculation
   total: number;
   unit?: string | null;
 }
@@ -61,10 +63,29 @@ export function QuoteImporter({ onImportComplete, onClose }: QuoteImporterProps)
   const { toast } = useToast();
 
   // Fetch existing quotes for "add to existing" option
-  const { data: quotes } = useQuery<Quote[]>({
+  const { data: quotesData } = useQuery<QuoteWithDetails[]>({
     queryKey: ["/api/quotes"],
     enabled: importType === "existing",
   });
+
+  // Transform quotes to include calculated totals
+  const quotes = useMemo<QuoteListItem[]>(() => {
+    if (!quotesData) return [];
+    
+    return quotesData.map(quote => {
+      const totals = calculateQuoteTotals(
+        quote.lineItems,
+        quote.taxRate || "0",
+        quote.discount || "0",
+        quote.shipping || "0"
+      );
+      
+      return {
+        ...quote,
+        total: totals.total,
+      };
+    });
+  }, [quotesData]);
 
   // PDF processing mutation
   const processPdfMutation = useMutation({
@@ -218,7 +239,7 @@ export function QuoteImporter({ onImportComplete, onClose }: QuoteImporterProps)
     });
   };
 
-  const updateLineItem = (index: number, field: keyof ExtractedLineItem, value: string | number) => {
+  const updateLineItem = (index: number, field: keyof ExtractedLineItem, value: string | number | undefined) => {
     if (!editedData) return;
     const updatedLineItems = [...editedData.lineItems];
     updatedLineItems[index] = {
@@ -391,8 +412,8 @@ export function QuoteImporter({ onImportComplete, onClose }: QuoteImporterProps)
                   <div className="space-y-2">
                     {editedData.lineItems.map((item, index) => (
                       <div key={index} className="p-4 border rounded-lg">
-                        <div className="grid grid-cols-5 gap-4 items-end">
-                          <div className="col-span-2">
+                        <div className="grid grid-cols-6 gap-4 items-end">
+                          <div>
                             <Label>Description</Label>
                             <Input
                               value={item.description}
@@ -412,7 +433,20 @@ export function QuoteImporter({ onImportComplete, onClose }: QuoteImporterProps)
                             />
                           </div>
                           <div>
-                            <Label>Price</Label>
+                            <Label>Our Cost</Label>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              placeholder="Enter cost"
+                              value={item.cost || ""}
+                              onChange={(e) =>
+                                updateLineItem(index, "cost", parseFloat(e.target.value) || undefined)
+                              }
+                              data-testid={`input-cost-${index}`}
+                            />
+                          </div>
+                          <div>
+                            <Label>Selling Price</Label>
                             <Input
                               type="number"
                               step="0.01"
@@ -428,11 +462,18 @@ export function QuoteImporter({ onImportComplete, onClose }: QuoteImporterProps)
                               <div className="text-lg font-semibold">
                                 ${item.total.toFixed(2)}
                               </div>
+                              {item.cost && (
+                                <div className="text-sm text-green-600 font-medium">
+                                  Margin: ${((item.price - item.cost) * item.quantity).toFixed(2)} 
+                                  ({(((item.price - item.cost) / item.cost) * 100).toFixed(1)}%)
+                                </div>
+                              )}
                             </div>
                             <Button
                               variant="outline"
                               size="sm"
                               onClick={() => removeLineItem(index)}
+                              data-testid={`button-remove-${index}`}
                             >
                               <X className="h-4 w-4" />
                             </Button>
@@ -495,12 +536,12 @@ export function QuoteImporter({ onImportComplete, onClose }: QuoteImporterProps)
                             <div className="flex flex-col items-start">
                               <div className="font-semibold">{quote.quoteNumber}</div>
                               <div className="text-sm text-gray-600">
-                                {quote.customer?.name || 'Unknown Customer'} - {quote.projectName || 'Untitled Project'}
+                                {quote.customer.name || 'Unknown Customer'} - {quote.projectName || 'Untitled Project'}
                               </div>
                             </div>
                             <div className="text-right text-sm">
-                              <div className="font-medium">${(quote.total || 0).toFixed(2)}</div>
-                              <div className="text-gray-500">{quote.lineItems?.length || 0} items</div>
+                              <div className="font-medium">${quote.total.toFixed(2)}</div>
+                              <div className="text-gray-500">{quote.lineItems.length} items</div>
                             </div>
                           </div>
                         </SelectItem>
@@ -524,28 +565,28 @@ export function QuoteImporter({ onImportComplete, onClose }: QuoteImporterProps)
                             </div>
                             <div className="grid grid-cols-2 gap-4 text-sm">
                               <div>
-                                <span className="text-gray-600">Customer:</span> {selectedQuote.customer?.name || 'Unknown'}
+                                <span className="text-gray-600">Customer:</span> {selectedQuote.customer.name || 'Unknown'}
                               </div>
                               <div>
                                 <span className="text-gray-600">Project:</span> {selectedQuote.projectName || 'Untitled'}
                               </div>
                               <div>
-                                <span className="text-gray-600">Current Items:</span> {selectedQuote.lineItems?.length || 0}
+                                <span className="text-gray-600">Current Items:</span> {selectedQuote.lineItems.length}
                               </div>
                               <div>
-                                <span className="text-gray-600">Current Total:</span> ${(selectedQuote.total || 0).toFixed(2)}
+                                <span className="text-gray-600">Current Total:</span> ${selectedQuote.total.toFixed(2)}
                               </div>
                             </div>
                             <div className="text-xs text-blue-600 bg-blue-50 p-2 rounded mt-2">
                               💡 Adding {editedData?.lineItems.length || 0} new items (${editedData?.lineItems.reduce((sum, item) => sum + item.total, 0).toFixed(2) || '0.00'}) 
-                              → New total: ${((selectedQuote.total || 0) + (editedData?.lineItems.reduce((sum, item) => sum + item.total, 0) || 0)).toFixed(2)}
+                              → New total: ${(selectedQuote.total + (editedData?.lineItems.reduce((sum, item) => sum + item.total, 0) || 0)).toFixed(2)}
                             </div>
                             
                             {/* Duplicate Detection Warning */}
                             {(() => {
                               if (!editedData?.lineItems || !selectedQuote.lineItems) return null;
                               const potentialDuplicates = editedData.lineItems.filter(newItem =>
-                                selectedQuote.lineItems?.some(existingItem =>
+                                selectedQuote.lineItems.some((existingItem: any) =>
                                   existingItem.description.toLowerCase().includes(newItem.description.toLowerCase().slice(0, 20)) ||
                                   newItem.description.toLowerCase().includes(existingItem.description.toLowerCase().slice(0, 20))
                                 )
