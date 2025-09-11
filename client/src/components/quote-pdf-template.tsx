@@ -206,33 +206,36 @@ export function QuotePDFTemplate({ quote, isOpen, onClose }: QuotePDFTemplatePro
 
       console.log('🔧 Attempting to convert image to DataURL:', imageUrl);
 
-      // Try fetch approach first for object storage URLs (better CORS handling)
+      // Use backend proxy for object storage URLs (bypasses CORS)
       if (imageUrl.includes('storage.replit.com')) {
         try {
-          console.log('📦 Using fetch approach for Replit storage URL');
+          console.log('🔄 Using backend proxy for Replit storage URL');
           const controller = new AbortController();
           const timeout = setTimeout(() => controller.abort(), timeoutMs);
           
-          const response = await fetch(imageUrl, { 
-            signal: controller.signal,
-            mode: 'cors'
+          const proxyUrl = `/api/image-proxy?url=${encodeURIComponent(imageUrl)}`;
+          const response = await fetch(proxyUrl, { 
+            signal: controller.signal
           });
           clearTimeout(timeout);
           
           if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            throw new Error(`Proxy error ${response.status}: ${response.statusText}`);
           }
           
           const blob = await response.blob();
           
           return new Promise((resolve, reject) => {
             const reader = new FileReader();
-            reader.onload = () => resolve(reader.result as string);
+            reader.onload = () => {
+              console.log('✅ Successfully converted via proxy:', imageUrl, `(${Math.round((reader.result as string).length / 1024)}KB)`);
+              resolve(reader.result as string);
+            };
             reader.onerror = () => reject(new Error('FileReader failed'));
             reader.readAsDataURL(blob);
           });
-        } catch (fetchError) {
-          console.warn('❌ Fetch approach failed:', fetchError);
+        } catch (proxyError) {
+          console.warn('❌ Proxy approach failed:', proxyError);
           // Fall through to Image element approach
         }
       }
