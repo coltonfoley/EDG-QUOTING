@@ -75,6 +75,27 @@ export const contractTemplates = pgTable("contract_templates", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Proposal templates for different proposal layouts and content structures
+export const proposalTemplates = pgTable("proposal_templates", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description"),
+  category: text("category").notNull(), // basic_quote, full_proposal, executive_summary, technical_spec
+  templateType: text("template_type").notNull().default("pdf"), // pdf, html, email
+  // Layout configuration  
+  sections: jsonb("sections").notNull(), // Array of section configurations
+  layoutSettings: jsonb("layout_settings"), // Layout preferences, spacing, page settings
+  // Visual settings
+  brandingSettings: jsonb("branding_settings"), // Colors, logos, fonts
+  // Default content
+  defaultContent: jsonb("default_content"), // Default text and placeholders for sections
+  // Template status
+  isActive: boolean("is_active").default(true),
+  isDefault: boolean("is_default").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 export const products = pgTable("products", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
@@ -205,6 +226,19 @@ export const insertContractTemplateSchema = createInsertSchema(contractTemplates
   updatedAt: true,
 });
 
+export const insertProposalTemplateSchema = createInsertSchema(proposalTemplates).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  category: z.enum(['basic_quote', 'full_proposal', 'executive_summary', 'technical_spec'], {
+    errorMap: () => ({ message: "Category must be one of: basic_quote, full_proposal, executive_summary, technical_spec" }),
+  }),
+  templateType: z.enum(['pdf', 'html', 'email'], {
+    errorMap: () => ({ message: "Template type must be one of: pdf, html, email" }),
+  }).default('pdf'),
+});
+
 
 
 export type Customer = typeof customers.$inferSelect;
@@ -212,6 +246,7 @@ export type Quote = typeof quotes.$inferSelect;
 export type Product = typeof products.$inferSelect;
 export type LineItem = typeof lineItems.$inferSelect;
 export type ContractTemplate = typeof contractTemplates.$inferSelect;
+export type ProposalTemplate = typeof proposalTemplates.$inferSelect;
 export type PricingTable = typeof pricingTables.$inferSelect;
 export type ProductAccessory = typeof productAccessories.$inferSelect;
 
@@ -220,6 +255,7 @@ export type InsertQuote = z.infer<typeof insertQuoteSchema>;
 export type InsertProduct = z.infer<typeof insertProductSchema>;
 export type InsertLineItem = z.infer<typeof insertLineItemSchema>;
 export type InsertContractTemplate = z.infer<typeof insertContractTemplateSchema>;
+export type InsertProposalTemplate = z.infer<typeof insertProposalTemplateSchema>;
 export type InsertPricingTable = z.infer<typeof insertPricingTableSchema>;
 export type InsertProductAccessory = z.infer<typeof insertProductAccessorySchema>;
 

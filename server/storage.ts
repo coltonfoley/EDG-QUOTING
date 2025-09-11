@@ -1,4 +1,4 @@
-import { customers, quotes, lineItems, products, users, contractTemplates, pricingTables, productAccessories, type Customer, type Quote, type LineItem, type Product, type User, type ContractTemplate, type PricingTable, type ProductAccessory, type InsertCustomer, type InsertQuote, type InsertLineItem, type InsertProduct, type InsertUser, type InsertContractTemplate, type InsertPricingTable, type InsertProductAccessory, type QuoteWithDetails, type ProductWithDetails } from "@shared/schema";
+import { customers, quotes, lineItems, products, users, contractTemplates, proposalTemplates, pricingTables, productAccessories, type Customer, type Quote, type LineItem, type Product, type User, type ContractTemplate, type ProposalTemplate, type PricingTable, type ProductAccessory, type InsertCustomer, type InsertQuote, type InsertLineItem, type InsertProduct, type InsertUser, type InsertContractTemplate, type InsertProposalTemplate, type InsertPricingTable, type InsertProductAccessory, type QuoteWithDetails, type ProductWithDetails } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, inArray, sql } from "drizzle-orm";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
@@ -76,6 +76,14 @@ export interface IStorage {
   updateContractTemplate(id: number, template: Partial<InsertContractTemplate>): Promise<ContractTemplate | undefined>;
   deleteContractTemplate(id: number): Promise<boolean>;
   getDefaultContractTemplate(): Promise<ContractTemplate | undefined>;
+
+  // Proposal template methods
+  getAllProposalTemplates(includeInactive?: boolean): Promise<ProposalTemplate[]>;
+  getProposalTemplate(id: number): Promise<ProposalTemplate | undefined>;
+  createProposalTemplate(template: InsertProposalTemplate): Promise<ProposalTemplate>;
+  updateProposalTemplate(id: number, template: Partial<InsertProposalTemplate>): Promise<ProposalTemplate | undefined>;
+  deleteProposalTemplate(id: number): Promise<boolean>;
+  getDefaultProposalTemplate(): Promise<ProposalTemplate | undefined>;
   
   // Session store for authentication
   sessionStore: any;
@@ -583,6 +591,71 @@ export class DatabaseStorage implements IStorage {
 
   async getDefaultContractTemplate(): Promise<ContractTemplate | undefined> {
     const [template] = await db.select().from(contractTemplates).where(eq(contractTemplates.isDefault, true));
+    return template || undefined;
+  }
+
+  // Proposal template methods
+  async getAllProposalTemplates(includeInactive?: boolean): Promise<ProposalTemplate[]> {
+    // Build query conditionally to avoid type issues
+    if (!includeInactive) {
+      return await db
+        .select()
+        .from(proposalTemplates)
+        .where(eq(proposalTemplates.isActive, true))
+        .orderBy(proposalTemplates.name);
+    }
+    
+    return await db
+      .select()
+      .from(proposalTemplates)
+      .orderBy(proposalTemplates.name);
+  }
+
+  async getProposalTemplate(id: number): Promise<ProposalTemplate | undefined> {
+    const [template] = await db.select().from(proposalTemplates).where(eq(proposalTemplates.id, id));
+    return template || undefined;
+  }
+
+  async createProposalTemplate(insertTemplate: InsertProposalTemplate): Promise<ProposalTemplate> {
+    // If this template is being set as default, first unset all other defaults
+    if (insertTemplate.isDefault) {
+      await db
+        .update(proposalTemplates)
+        .set({ isDefault: false })
+        .where(eq(proposalTemplates.isDefault, true));
+    }
+    
+    const [template] = await db
+      .insert(proposalTemplates)
+      .values(insertTemplate)
+      .returning();
+    return template;
+  }
+
+  async updateProposalTemplate(id: number, templateData: Partial<InsertProposalTemplate>): Promise<ProposalTemplate | undefined> {
+    // If this template is being set as default, first unset all other defaults
+    if (templateData.isDefault) {
+      await db
+        .update(proposalTemplates)
+        .set({ isDefault: false })
+        .where(eq(proposalTemplates.isDefault, true));
+    }
+    
+    const [updated] = await db
+      .update(proposalTemplates)
+      .set(templateData)
+      .where(eq(proposalTemplates.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteProposalTemplate(id: number): Promise<boolean> {
+    const result = await db.delete(proposalTemplates).where(eq(proposalTemplates.id, id));
+    return (result.rowCount || 0) > 0;
+  }
+
+  async getDefaultProposalTemplate(): Promise<ProposalTemplate | undefined> {
+    const [template] = await db.select().from(proposalTemplates).where(eq(proposalTemplates.isDefault, true));
     return template || undefined;
   }
 
