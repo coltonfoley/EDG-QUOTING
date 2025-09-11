@@ -1,6 +1,6 @@
 import { customers, quotes, lineItems, products, users, contractTemplates, proposalTemplates, pricingTables, productAccessories, type Customer, type Quote, type LineItem, type Product, type User, type ContractTemplate, type ProposalTemplate, type PricingTable, type ProductAccessory, type InsertCustomer, type InsertQuote, type InsertLineItem, type InsertProduct, type InsertUser, type InsertContractTemplate, type InsertProposalTemplate, type InsertPricingTable, type InsertProductAccessory, type QuoteWithDetails, type ProductWithDetails } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, inArray, sql } from "drizzle-orm";
+import { eq, desc, inArray, sql, and, ne } from "drizzle-orm";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 import connectPg from "connect-pg-simple";
@@ -84,6 +84,8 @@ export interface IStorage {
   updateProposalTemplate(id: number, template: Partial<InsertProposalTemplate>): Promise<ProposalTemplate | undefined>;
   deleteProposalTemplate(id: number): Promise<boolean>;
   getDefaultProposalTemplate(): Promise<ProposalTemplate | undefined>;
+  getDefaultProposalTemplateByCategory(category: string): Promise<ProposalTemplate | undefined>;
+  getProposalTemplatesByCategory(category: string, includeInactive?: boolean): Promise<ProposalTemplate[]>;
   
   // Session store for authentication
   sessionStore: any;
@@ -617,12 +619,17 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createProposalTemplate(insertTemplate: InsertProposalTemplate): Promise<ProposalTemplate> {
-    // If this template is being set as default, first unset all other defaults
-    if (insertTemplate.isDefault) {
+    // If this template is being set as default, first unset all other defaults in the same category
+    if (insertTemplate.isDefault && insertTemplate.category) {
       await db
         .update(proposalTemplates)
         .set({ isDefault: false })
-        .where(eq(proposalTemplates.isDefault, true));
+        .where(
+          and(
+            eq(proposalTemplates.isDefault, true),
+            eq(proposalTemplates.category, insertTemplate.category)
+          )
+        );
     }
     
     const [template] = await db
@@ -633,12 +640,25 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateProposalTemplate(id: number, templateData: Partial<InsertProposalTemplate>): Promise<ProposalTemplate | undefined> {
-    // If this template is being set as default, first unset all other defaults
+    // If this template is being set as default, first unset all other defaults in the same category
     if (templateData.isDefault) {
-      await db
-        .update(proposalTemplates)
-        .set({ isDefault: false })
-        .where(eq(proposalTemplates.isDefault, true));
+      // Get the current template to determine its category
+      const currentTemplate = await this.getProposalTemplate(id);
+      if (currentTemplate) {
+        // Use the category from template data if provided, otherwise use current template's category
+        const targetCategory = templateData.category || currentTemplate.category;
+        
+        await db
+          .update(proposalTemplates)
+          .set({ isDefault: false })
+          .where(
+            and(
+              eq(proposalTemplates.isDefault, true),
+              eq(proposalTemplates.category, targetCategory),
+              ne(proposalTemplates.id, id) // Don't unset itself
+            )
+          );
+      }
     }
     
     const [updated] = await db
@@ -657,6 +677,34 @@ export class DatabaseStorage implements IStorage {
   async getDefaultProposalTemplate(): Promise<ProposalTemplate | undefined> {
     const [template] = await db.select().from(proposalTemplates).where(eq(proposalTemplates.isDefault, true));
     return template || undefined;
+  }
+
+  async getDefaultProposalTemplateByCategory(category: string): Promise<ProposalTemplate | undefined> {
+    const [template] = await db
+      .select()
+      .from(proposalTemplates)
+      .where(
+        and(
+          eq(proposalTemplates.isDefault, true),
+          eq(proposalTemplates.category, category),
+          eq(proposalTemplates.isActive, true)
+        )
+      );
+    return template || undefined;
+  }
+
+  async getProposalTemplatesByCategory(category: string, includeInactive?: boolean): Promise<ProposalTemplate[]> {
+    const conditions = [eq(proposalTemplates.category, category)];
+    
+    if (!includeInactive) {
+      conditions.push(eq(proposalTemplates.isActive, true));
+    }
+    
+    return await db
+      .select()
+      .from(proposalTemplates)
+      .where(and(...conditions))
+      .orderBy(desc(proposalTemplates.isDefault), proposalTemplates.name);
   }
 
   // Enhanced product method with details
