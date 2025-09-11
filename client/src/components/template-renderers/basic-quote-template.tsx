@@ -1,4 +1,5 @@
 import { formatCurrency, calculateQuoteTotals } from "@/lib/utils";
+import { getProxiedImageUrl } from "@/lib/image-utils";
 import type { QuoteWithDetails, ProposalTemplate, BrandingSettings, DefaultContent } from "@shared/schema";
 import logoPath from "@assets/my-logo.png_1753970984943.jpg";
 import { 
@@ -61,7 +62,7 @@ export function BasicQuoteTemplate({ quote, template, companyInfo, quoteTerms }:
           {/* Use company logo if available, fallback to asset logo */}
           {companyLogo ? (
             <img 
-              src={companyLogo.url} 
+              src={getProxiedImageUrl(companyLogo.url)} 
               alt={companyLogo.altText || companyInfo.name}
               className="h-10 w-auto object-contain" 
             />

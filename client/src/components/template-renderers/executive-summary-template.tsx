@@ -1,4 +1,5 @@
 import { formatCurrency, calculateQuoteTotals } from "@/lib/utils";
+import { getProxiedImageUrl } from "@/lib/image-utils";
 import type { QuoteWithDetails, ProposalTemplate, BrandingSettings, DefaultContent, PortfolioImage, CompanyImage } from "@shared/schema";
 import logoPath from "@assets/my-logo.png_1753970984943.jpg";
 import { 
@@ -67,7 +68,7 @@ export function ExecutiveSummaryTemplate({ quote, template, companyInfo, quoteTe
         {companyLogo ? (
           <div className="mx-auto mb-6 flex justify-center">
             <img 
-              src={companyLogo.url} 
+              src={getProxiedImageUrl(companyLogo.url)} 
               alt={companyLogo.altText || companyInfo.name}
               className="h-14 w-auto object-contain" 
             />
