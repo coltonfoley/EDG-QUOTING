@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Trash2, Edit, Plus, Package, Search, Filter, X, ChevronDown, ChevronUp, Save, XCircle, Percent, DollarSign, Check, CheckSquare, Square, Minus, Users, Tags, Settings, Eye, EyeOff, Calculator, Receipt, TrendingUp, ShoppingCart, Layers, Target } from "lucide-react";
+import { Trash2, Edit, Plus, Package, Search, Filter, X, ChevronDown, ChevronUp, Save, XCircle, Percent, DollarSign, Check, CheckSquare, Square, Minus, Users, Tags, Settings, Eye, EyeOff, Calculator, Receipt, TrendingUp, ShoppingCart, Layers, Target, Image, FileText } from "lucide-react";
 import { formatCurrency, calculateLineItemTotal, calculateLineItemMargin, applyDiscountToPrice } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -99,6 +99,133 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
   const { data: products } = useQuery<Product[]>({
     queryKey: ["/api/products"],
   });
+
+  // Helper function to get product by ID
+  const getProductById = (productId: number | null) => {
+    if (!productId || !products) return null;
+    return products.find(p => p.id === productId) || null;
+  };
+
+  // Helper function to get product image URL
+  const getProductImageUrl = (product: Product | null) => {
+    if (!product) return null;
+    
+    // Try primary image first
+    if (product.primaryImage) {
+      return product.primaryImage;
+    }
+    
+    // Fallback to first gallery image
+    const galleryImages = product.galleryImages as any[] | null;
+    if (galleryImages && Array.isArray(galleryImages) && galleryImages.length > 0) {
+      return (galleryImages[0] as any)?.url || null;
+    }
+    
+    return null;
+  };
+
+  // Helper function to render product image
+  const ProductImage = ({ item, size = "sm" }: { item: LineItem; size?: "sm" | "md" | "lg" }) => {
+    const product = getProductById(item.productId);
+    const imageUrl = getProductImageUrl(product);
+    
+    const sizeClasses = {
+      sm: "w-8 h-8",
+      md: "w-12 h-12", 
+      lg: "w-16 h-16"
+    };
+    
+    return (
+      <div className={`${sizeClasses[size]} rounded-md overflow-hidden bg-gray-100 flex-shrink-0 border relative`}>
+        {imageUrl ? (
+          <img
+            src={imageUrl}
+            alt={product?.name || item.description}
+            className="w-full h-full object-cover"
+            onError={(e) => {
+              // Fallback to placeholder if image fails to load
+              e.currentTarget.style.display = 'none';
+              e.currentTarget.parentElement?.classList.add('flex', 'items-center', 'justify-center');
+            }}
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center">
+            <Package className={`${size === 'sm' ? 'h-4 w-4' : size === 'md' ? 'h-6 w-6' : 'h-8 w-8'} text-gray-400`} />
+          </div>
+        )}
+        
+        {/* Product indicator badges */}
+        {product && (
+          <>
+            {/* Gallery images indicator */}
+            {product.galleryImages && Array.isArray(product.galleryImages) && (product.galleryImages as any[]).length > 1 && size !== 'sm' && (
+              <div className="absolute -top-1 -right-1 bg-blue-600 text-white text-xs w-4 h-4 rounded-full flex items-center justify-center">
+                {(product.galleryImages as any[]).length}
+              </div>
+            )}
+            
+            {/* Specs indicator */}
+            {product.specificationSheets && Array.isArray(product.specificationSheets) && (product.specificationSheets as any[]).length > 0 && size === 'lg' && (
+              <div className="absolute bottom-1 left-1 bg-green-600 text-white text-xs px-1 rounded flex items-center gap-1">
+                <FileText className="h-2 w-2" />
+                {(product.specificationSheets as any[]).length}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    );
+  };
+
+  // Helper function to render product catalog image (direct from Product object)
+  const CatalogProductImage = ({ product, size = "md" }: { product: Product; size?: "sm" | "md" | "lg" }) => {
+    const imageUrl = getProductImageUrl(product);
+    
+    const sizeClasses = {
+      sm: "w-12 h-12",
+      md: "w-16 h-16", 
+      lg: "w-20 h-20"
+    };
+    
+    return (
+      <div className={`${sizeClasses[size]} rounded-lg overflow-hidden bg-gray-100 flex-shrink-0 border relative shadow-sm`}>
+        {imageUrl ? (
+          <img
+            src={imageUrl}
+            alt={product.name}
+            className="w-full h-full object-cover"
+            onError={(e) => {
+              // Fallback to placeholder if image fails to load
+              e.currentTarget.style.display = 'none';
+              e.currentTarget.parentElement?.classList.add('flex', 'items-center', 'justify-center');
+            }}
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center">
+            <Package className={`${size === 'sm' ? 'h-5 w-5' : size === 'md' ? 'h-7 w-7' : 'h-9 w-9'} text-gray-400`} />
+          </div>
+        )}
+        
+        {/* Product indicator badges */}
+        <>
+          {/* Gallery images indicator */}
+          {product.galleryImages && Array.isArray(product.galleryImages) && (product.galleryImages as any[]).length > 1 && (
+            <div className="absolute -top-1 -right-1 bg-blue-600 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center">
+              {(product.galleryImages as any[]).length}
+            </div>
+          )}
+          
+          {/* Specs indicator */}
+          {product.specificationSheets && Array.isArray(product.specificationSheets) && (product.specificationSheets as any[]).length > 0 && (
+            <div className="absolute bottom-1 left-1 bg-green-600 text-white text-xs px-1 rounded flex items-center gap-1">
+              <FileText className="h-2 w-2" />
+              {(product.specificationSheets as any[]).length}
+            </div>
+          )}
+        </>
+      </div>
+    );
+  };
 
   const createLineItemMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -806,28 +933,52 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
 
         {/* Main Info - Always Visible */}
         <div className="space-y-3 pr-10">{/* Add padding-right to avoid overlap with checkbox */}
-          {/* Description */}
+          {/* Product Image and Info Section */}
+          <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-md border">
+            <ProductImage item={item} size="md" />
+            <div className="flex-1 min-w-0">
+              <h3 className="font-medium text-gray-900 text-sm mb-1">{item.description}</h3>
+              {/* Product catalog info */}
+              {getProductById(item.productId) && (
+                <div className="space-y-1">
+                  <div className="text-xs text-gray-600">
+                    <span className="font-medium">From catalog:</span> {getProductById(item.productId)?.name}
+                  </div>
+                  {getProductById(item.productId)?.category && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded">
+                        {getProductById(item.productId)?.category}
+                      </span>
+                      {getProductById(item.productId)?.productType === 'configurable' && (
+                        <span className="text-xs px-2 py-1 bg-purple-100 text-purple-700 rounded">
+                          Configurable
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+          
+          {/* Description (for editing mode) */}
+          {isEditing && (
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-            {isEditing ? (
-              <Input
-                value={safeInputValue(editingValues[item.id]?.description, item.description)}
-                onChange={(e) => updateEditingValue(item.id, "description", e.target.value)}
-                className="border-edg-teal focus:ring-edg-teal focus:border-edg-teal text-sm bg-white"
-                data-testid={`input-description-${item.id}`}
-                autoFocus
-              />
-            ) : (
-              <div className="bg-gray-50 border border-gray-200 rounded-md px-3 py-2 text-sm">
-                {item.description}
-              </div>
-            )}
+            <Input
+              value={safeInputValue(editingValues[item.id]?.description, item.description)}
+              onChange={(e) => updateEditingValue(item.id, "description", e.target.value)}
+              className="border-edg-teal focus:ring-edg-teal focus:border-edg-teal text-sm bg-white"
+              data-testid={`input-description-${item.id}`}
+              autoFocus
+            />
             {item.retailPrice && parseFloat(item.retailPrice.toString()) !== parseFloat(item.unitPrice.toString()) && (
               <div className="text-xs text-gray-500 mt-1">
                 Retail: {formatCurrency(parseFloat(item.retailPrice.toString()))}
               </div>
             )}
           </div>
+          )}
 
           {/* Primary Controls Row */}
           <div className="grid grid-cols-3 gap-3">
@@ -1441,7 +1592,13 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                     )}
                   </Button>
                 </th>
-                <th className="px-4 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wide w-56">
+                <th className="px-3 py-4 text-center text-xs font-bold text-gray-700 uppercase tracking-wide w-16">
+                  <div className="flex items-center justify-center gap-1">
+                    <Image className="h-4 w-4 text-edg-teal" />
+                    Image
+                  </div>
+                </th>
+                <th className="px-4 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wide w-48">
                   <div className="flex items-center gap-2">
                     <Package className="h-4 w-4 text-edg-teal" />
                     Description
@@ -1562,6 +1719,9 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                           <Square className="h-4 w-4 text-gray-400" />
                         )}
                       </Button>
+                    </td>
+                    <td className="px-3 py-3 text-center">
+                      <ProductImage item={item} size="sm" />
                     </td>
                     <td className="px-3 py-3">
                       <div>

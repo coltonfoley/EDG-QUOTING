@@ -10,14 +10,16 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Package, Edit, Trash2, Search, Grid, List, Filter, X, Settings } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Plus, Package, Edit, Trash2, Search, Grid, List, Filter, X, Settings, Camera, FileText, Image } from "lucide-react";
 import { DimensionalPricingManager } from "@/components/dimensional-pricing-manager";
+import { ImageUploader, type UploadedImage } from "@/components/image-uploader";
 import { formatCurrency } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { insertProductSchema, type Product, type ProductWithDetails } from "@shared/schema";
+import { insertProductSchema, type Product, type ProductWithDetails, type ProductImage } from "@shared/schema";
 import { z } from "zod";
 
 const productFormSchema = insertProductSchema;
@@ -31,6 +33,12 @@ export default function Products() {
   const [viewMode, setViewMode] = useState<"grid" | "table">("table");
   const [showPricingManager, setShowPricingManager] = useState(false);
   const [managingPricingProduct, setManagingPricingProduct] = useState<Product | null>(null);
+  
+  // Image management state
+  const [primaryImage, setPrimaryImage] = useState<UploadedImage[]>([]);
+  const [galleryImages, setGalleryImages] = useState<UploadedImage[]>([]);
+  const [specificationSheets, setSpecificationSheets] = useState<UploadedImage[]>([]);
+  
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -63,6 +71,9 @@ export default function Products() {
       queryClient.invalidateQueries({ queryKey: ["/api/products"] });
       setIsDialogOpen(false);
       form.reset();
+      setPrimaryImage([]);
+      setGalleryImages([]);
+      setSpecificationSheets([]);
       toast({ title: "Product created successfully" });
     },
     onError: () => {
@@ -80,6 +91,9 @@ export default function Products() {
       setIsDialogOpen(false);
       setEditingProduct(null);
       form.reset();
+      setPrimaryImage([]);
+      setGalleryImages([]);
+      setSpecificationSheets([]);
       toast({ title: "Product updated successfully" });
     },
     onError: () => {
@@ -100,16 +114,83 @@ export default function Products() {
     },
   });
 
+  const convertUploadedImagesToProductImages = (images: UploadedImage[], imageType: 'primary' | 'gallery' | 'specification'): ProductImage[] => {
+    return images.map((img, index) => ({
+      url: img.url || img.preview,
+      filename: img.metadata.filename || '',
+      caption: img.metadata.caption,
+      altText: img.metadata.altText,
+      uploadedAt: img.metadata.uploadedAt || new Date().toISOString(),
+      size: img.metadata.size,
+      thumbnailUrl: img.metadata.thumbnailUrl,
+      imageType,
+      displayOrder: index,
+    }));
+  };
+
   const handleSubmit = (data: ProductFormData) => {
+    // Process image data
+    const processedData = {
+      ...data,
+      primaryImage: primaryImage.length > 0 ? primaryImage[0].url || primaryImage[0].preview : undefined,
+      galleryImages: galleryImages.length > 0 ? convertUploadedImagesToProductImages(galleryImages, 'gallery') : undefined,
+      specificationSheets: specificationSheets.length > 0 ? convertUploadedImagesToProductImages(specificationSheets, 'specification') : undefined,
+    };
+    
     if (editingProduct) {
-      updateProductMutation.mutate({ id: editingProduct.id, data });
+      updateProductMutation.mutate({ id: editingProduct.id, data: processedData });
     } else {
-      createProductMutation.mutate(data);
+      createProductMutation.mutate(processedData);
     }
+  };
+
+  const convertProductImagesToUploaded = (images: ProductImage[] | null | undefined, imageType: 'primary' | 'gallery' | 'specification'): UploadedImage[] => {
+    if (!images || !Array.isArray(images)) return [];
+    
+    return images.map((img, index) => ({
+      id: `existing-${imageType}-${index}`,
+      file: new File([], img.filename, { type: 'image/jpeg' }), // Mock file for existing images
+      preview: img.url,
+      uploadProgress: 100,
+      uploaded: true,
+      url: img.url,
+      metadata: {
+        url: img.url,
+        filename: img.filename,
+        caption: img.caption,
+        altText: img.altText,
+        uploadedAt: img.uploadedAt,
+        size: img.size,
+        thumbnailUrl: img.thumbnailUrl,
+      },
+    }));
   };
 
   const handleEdit = (product: Product) => {
     setEditingProduct(product);
+    
+    // Load existing images
+    if (product.primaryImage) {
+      setPrimaryImage([{
+        id: 'existing-primary-0',
+        file: new File([], 'primary.jpg', { type: 'image/jpeg' }),
+        preview: product.primaryImage,
+        uploadProgress: 100,
+        uploaded: true,
+        url: product.primaryImage,
+        metadata: {
+          url: product.primaryImage,
+          filename: 'Primary Image',
+          uploadedAt: new Date().toISOString(),
+        },
+      }]);
+    } else {
+      setPrimaryImage([]);
+    }
+    
+    setGalleryImages(convertProductImagesToUploaded(product.galleryImages as ProductImage[], 'gallery'));
+    setSpecificationSheets(convertProductImagesToUploaded(product.specificationSheets as ProductImage[], 'specification'));
+    
     form.reset({
       name: product.name,
       description: product.description || "",
@@ -208,20 +289,36 @@ export default function Products() {
                 onClick={() => {
                   setEditingProduct(null);
                   form.reset();
+                  setPrimaryImage([]);
+                  setGalleryImages([]);
+                  setSpecificationSheets([]);
                 }}
               >
                 <Plus className="mr-2 h-4 w-4" />
                 New Product
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-2xl">
+            <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>
                   {editingProduct ? "Edit Product" : "Create New Product"}
                 </DialogTitle>
               </DialogHeader>
               <Form {...form}>
-                <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+                <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
+                  <Tabs defaultValue="basic" className="w-full">
+                    <TabsList className="grid w-full grid-cols-2">
+                      <TabsTrigger value="basic" className="flex items-center gap-2">
+                        <Package className="h-4 w-4" />
+                        Basic Info
+                      </TabsTrigger>
+                      <TabsTrigger value="images" className="flex items-center gap-2">
+                        <Camera className="h-4 w-4" />
+                        Images & Media
+                      </TabsTrigger>
+                    </TabsList>
+                    
+                    <TabsContent value="basic" className="space-y-4 mt-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FormField
                       control={form.control}
@@ -404,7 +501,57 @@ export default function Products() {
                       )}
                     />
                   </div>
-                  <div className="flex justify-end space-x-3 pt-4">
+                    </TabsContent>
+                    
+                    <TabsContent value="images" className="space-y-6 mt-4">
+                      <div className="space-y-6">
+                        {/* Primary Image */}
+                        <ImageUploader
+                          imageType="product"
+                          title="Primary Product Image"
+                          description="Main product photo that represents this item in catalogs and line items"
+                          maxFiles={1}
+                          onImagesChange={setPrimaryImage}
+                          initialImages={primaryImage}
+                          categoryOptions={[
+                            { value: 'primary', label: 'Primary Image' }
+                          ]}
+                          data-testid="primary-image-uploader"
+                        />
+                        
+                        {/* Gallery Images */}
+                        <ImageUploader
+                          imageType="product"
+                          title="Product Gallery"
+                          description="Additional product photos showcasing different angles, features, or configurations"
+                          maxFiles={10}
+                          onImagesChange={setGalleryImages}
+                          initialImages={galleryImages}
+                          categoryOptions={[
+                            { value: 'gallery', label: 'Gallery Image' }
+                          ]}
+                          data-testid="gallery-images-uploader"
+                        />
+                        
+                        {/* Specification Sheets */}
+                        <ImageUploader
+                          imageType="product"
+                          title="Technical Specifications"
+                          description="Technical drawings, specification sheets, installation guides, or other technical documentation"
+                          maxFiles={5}
+                          allowedTypes={['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'application/pdf']}
+                          onImagesChange={setSpecificationSheets}
+                          initialImages={specificationSheets}
+                          categoryOptions={[
+                            { value: 'specification', label: 'Technical Document' }
+                          ]}
+                          data-testid="specification-sheets-uploader"
+                        />
+                      </div>
+                    </TabsContent>
+                  </Tabs>
+                  
+                  <div className="flex justify-end space-x-3 pt-4 border-t">
                     <Button
                       type="button"
                       variant="outline"
@@ -542,8 +689,56 @@ export default function Products() {
                   <Badge variant="outline">{categoryProducts.length}</Badge>
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {categoryProducts.map((product) => (
-                    <Card key={product.id} className="hover:shadow-md transition-shadow">
+                  {categoryProducts.map((product) => {
+                    // Get primary image or first gallery image
+                    const galleryImages = product.galleryImages as any[] | null;
+                    const specificationSheets = product.specificationSheets as any[] | null;
+                    const primaryImageUrl = product.primaryImage || 
+                      (galleryImages && Array.isArray(galleryImages) && galleryImages.length > 0 
+                        ? (galleryImages[0] as any)?.url 
+                        : null);
+                    
+                    return (
+                    <Card key={product.id} className="hover:shadow-md transition-shadow overflow-hidden">
+                      {/* Product Image */}
+                      <div className="relative h-48 bg-gray-100 overflow-hidden">
+                        {primaryImageUrl ? (
+                          <img
+                            src={primaryImageUrl}
+                            alt={product.name}
+                            className="w-full h-full object-cover transition-transform hover:scale-105"
+                            onError={(e) => {
+                              // Fallback to placeholder if image fails to load
+                              e.currentTarget.style.display = 'none';
+                              e.currentTarget.parentElement?.classList.add('flex', 'items-center', 'justify-center');
+                            }}
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center bg-gray-100">
+                            <div className="text-center">
+                              <Package className="mx-auto h-12 w-12 text-gray-400 mb-2" />
+                              <p className="text-sm text-gray-500">No Image</p>
+                            </div>
+                          </div>
+                        )}
+                        
+                        {/* Image count badge for gallery images */}
+                        {galleryImages && Array.isArray(galleryImages) && galleryImages.length > 1 && (
+                          <div className="absolute top-2 right-2 bg-black/60 text-white text-xs px-2 py-1 rounded-full flex items-center gap-1">
+                            <Image className="h-3 w-3" />
+                            {galleryImages.length}
+                          </div>
+                        )}
+                        
+                        {/* Specification sheets indicator */}
+                        {specificationSheets && Array.isArray(specificationSheets) && specificationSheets.length > 0 && (
+                          <div className="absolute top-2 left-2 bg-blue-600/80 text-white text-xs px-2 py-1 rounded-full flex items-center gap-1">
+                            <FileText className="h-3 w-3" />
+                            {specificationSheets.length}
+                          </div>
+                        )}
+                      </div>
+                      
                       <CardHeader className="pb-3">
                         <div className="flex justify-between items-start">
                           <div>
@@ -609,7 +804,8 @@ export default function Products() {
                         </div>
                       </CardContent>
                     </Card>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             ))}
@@ -651,7 +847,8 @@ function ProductTable({ products, onEdit, onDelete, onManagePricing }: ProductTa
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-[300px]">Product Name</TableHead>
+              <TableHead className="w-[80px]">Image</TableHead>
+              <TableHead className="w-[280px]">Product Name</TableHead>
               <TableHead>Category</TableHead>
               <TableHead>Type</TableHead>
               <TableHead>Unit</TableHead>
@@ -661,14 +858,57 @@ function ProductTable({ products, onEdit, onDelete, onManagePricing }: ProductTa
             </TableRow>
           </TableHeader>
           <TableBody>
-            {products.map((product) => (
+            {products.map((product) => {
+              // Get primary image or first gallery image
+              const galleryImages = product.galleryImages as any[] | null;
+              const specificationSheets = product.specificationSheets as any[] | null;
+              const primaryImageUrl = product.primaryImage || 
+                (galleryImages && Array.isArray(galleryImages) && galleryImages.length > 0 
+                  ? (galleryImages[0] as any)?.url 
+                  : null);
+              
+              return (
               <TableRow key={product.id} className="hover:bg-gray-50">
+                <TableCell>
+                  <div className="relative w-12 h-12 rounded-md overflow-hidden bg-gray-100 flex-shrink-0">
+                    {primaryImageUrl ? (
+                      <img
+                        src={primaryImageUrl}
+                        alt={product.name}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          // Fallback to placeholder if image fails to load
+                          e.currentTarget.style.display = 'none';
+                          e.currentTarget.parentElement?.classList.add('flex', 'items-center', 'justify-center');
+                        }}
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <Package className="h-6 w-6 text-gray-400" />
+                      </div>
+                    )}
+                    
+                    {/* Gallery indicator */}
+                    {galleryImages && Array.isArray(galleryImages) && galleryImages.length > 1 && (
+                      <div className="absolute -top-1 -right-1 bg-black text-white text-xs w-4 h-4 rounded-full flex items-center justify-center">
+                        {galleryImages.length}
+                      </div>
+                    )}
+                  </div>
+                </TableCell>
                 <TableCell>
                   <div>
                     <div className="font-medium">{product.name}</div>
                     {product.description && (
                       <div className="text-sm text-gray-500 truncate max-w-xs">
                         {product.description}
+                      </div>
+                    )}
+                    {/* Technical docs indicator */}
+                    {specificationSheets && Array.isArray(specificationSheets) && specificationSheets.length > 0 && (
+                      <div className="flex items-center gap-1 mt-1">
+                        <FileText className="h-3 w-3 text-blue-600" />
+                        <span className="text-xs text-blue-600">{specificationSheets.length} docs</span>
                       </div>
                     )}
                   </div>
@@ -728,7 +968,8 @@ function ProductTable({ products, onEdit, onDelete, onManagePricing }: ProductTa
                   </div>
                 </TableCell>
               </TableRow>
-            ))}
+              );
+            })}
           </TableBody>
         </Table>
       </CardContent>
