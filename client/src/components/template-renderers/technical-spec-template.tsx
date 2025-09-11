@@ -1,6 +1,16 @@
 import { formatCurrency, calculateQuoteTotals } from "@/lib/utils";
-import type { QuoteWithDetails, ProposalTemplate, BrandingSettings, DefaultContent } from "@shared/schema";
+import type { QuoteWithDetails, ProposalTemplate, BrandingSettings, DefaultContent, ProjectImage, CompanyImage } from "@shared/schema";
 import logoPath from "@assets/my-logo.png_1753970984943.jpg";
+import { 
+  HeroImage, 
+  ImageGrid, 
+  TechnicalDiagramDisplay, 
+  CompanyImageDisplay, 
+  ProjectPhaseDisplay,
+  ProfessionalImage,
+  getBestImage,
+  getCompanyLogo 
+} from "@/components/image-components";
 
 interface TechnicalSpecTemplateProps {
   quote: QuoteWithDetails;
@@ -39,12 +49,32 @@ export function TechnicalSpecTemplate({ quote, template, companyInfo, quoteTerms
     quote.discount ?? 0
   );
 
+  // Extract and organize images from quote data
+  const projectImages = quote.projectImages ? JSON.parse(JSON.stringify(quote.projectImages)) : [];
+  const portfolioImages = quote.portfolioImages ? JSON.parse(JSON.stringify(quote.portfolioImages)) : [];
+  const technicalDiagrams = quote.technicalDiagrams ? JSON.parse(JSON.stringify(quote.technicalDiagrams)) : [];
+  const companyImages = quote.companyImages ? JSON.parse(JSON.stringify(quote.companyImages)) : [];
+  
+  // Get best images for different purposes
+  const companyLogo = getCompanyLogo(companyImages);
+  const installationImages = projectImages.filter((img: ProjectImage) => img.category === 'during');
+  const beforeAfterImages = projectImages.filter((img: ProjectImage) => img.category === 'before' || img.category === 'after');
+
   return (
     <div className="bg-white text-black" style={{ fontFamily: 'system-ui, sans-serif', color: branding.textColor }}>
       {/* Technical Header */}
       <div className="flex justify-between items-start mb-8 border-b-2 pb-6" style={{ borderColor: branding.primaryColor }}>
         <div className="flex items-start space-x-4">
-          <img src={logoPath} alt={companyInfo.name} className="h-8" />
+          {/* Use company logo if available, fallback to asset logo */}
+          {companyLogo ? (
+            <img 
+              src={companyLogo.url} 
+              alt={companyLogo.altText || companyInfo.name}
+              className="h-8 w-auto object-contain" 
+            />
+          ) : (
+            <img src={logoPath} alt={companyInfo.name} className="h-8" />
+          )}
           <div>
             <h1 className="text-2xl font-bold mb-1" style={{ color: branding.accentColor }}>
               TECHNICAL SPECIFICATIONS
@@ -68,6 +98,19 @@ export function TechnicalSpecTemplate({ quote, template, companyInfo, quoteTerms
         <h2 className="text-lg font-bold mb-4 border-b pb-2" style={{ color: branding.primaryColor, borderColor: branding.accentColor }}>
           1. PROJECT SPECIFICATIONS
         </h2>
+        
+        {/* Primary Technical Diagrams */}
+        {technicalDiagrams.length > 0 && (
+          <div className="mb-6">
+            <h3 className="font-semibold mb-4 text-sm" style={{ color: branding.accentColor }}>Technical Drawings & Plans</h3>
+            <TechnicalDiagramDisplay 
+              diagrams={technicalDiagrams.slice(0, 4)} 
+              layout={technicalDiagrams.length === 1 ? "single" : "grid"}
+              showLabels={true}
+            />
+          </div>
+        )}
+        
         <div className="grid grid-cols-2 gap-6 text-sm">
           <div>
             <h3 className="font-semibold mb-2" style={{ color: branding.accentColor }}>Site Information</h3>
@@ -94,6 +137,19 @@ export function TechnicalSpecTemplate({ quote, template, companyInfo, quoteTerms
             </table>
           </div>
         </div>
+        
+        {/* Site Images - Before/After */}
+        {beforeAfterImages.length > 0 && (
+          <div className="mt-6">
+            <h3 className="font-semibold mb-4 text-sm" style={{ color: branding.accentColor }}>Site Analysis</h3>
+            <ImageGrid 
+              images={beforeAfterImages} 
+              columns={beforeAfterImages.length >= 4 ? 4 : 2} 
+              maxImages={4}
+              showCaptions={true}
+            />
+          </div>
+        )}
         
         {quote.notes && (
           <div className="mt-4 p-4 border border-gray-300 rounded">
@@ -148,6 +204,20 @@ export function TechnicalSpecTemplate({ quote, template, companyInfo, quoteTerms
         <h2 className="text-lg font-bold mb-4 border-b pb-2" style={{ color: branding.primaryColor, borderColor: branding.accentColor }}>
           3. INSTALLATION DETAILS
         </h2>
+        
+        {/* Installation Process Images */}
+        {installationImages.length > 0 && (
+          <div className="mb-6">
+            <h3 className="font-semibold mb-4 text-sm" style={{ color: branding.accentColor }}>Installation Process Documentation</h3>
+            <ImageGrid 
+              images={installationImages} 
+              columns={3} 
+              maxImages={6}
+              showCaptions={true}
+            />
+          </div>
+        )}
+        
         <div className="space-y-4 text-sm">
           <div>
             <h3 className="font-semibold mb-2" style={{ color: branding.accentColor }}>3.1 Preparation Work</h3>
@@ -198,6 +268,19 @@ export function TechnicalSpecTemplate({ quote, template, companyInfo, quoteTerms
         <h2 className="text-lg font-bold mb-4 border-b pb-2" style={{ color: branding.primaryColor, borderColor: branding.accentColor }}>
           {quote.technicalSpecs ? '5' : '4'}. CODE COMPLIANCE & STANDARDS
         </h2>
+        
+        {/* Company Certifications */}
+        {companyImages.some((img: CompanyImage) => img.imageType === 'certification') && (
+          <div className="mb-6">
+            <h3 className="font-semibold mb-4 text-sm" style={{ color: branding.accentColor }}>Professional Certifications & Licenses</h3>
+            <CompanyImageDisplay 
+              images={companyImages}
+              type="certification"
+              layout="banner"
+            />
+          </div>
+        )}
+        
         <div className="grid grid-cols-2 gap-6 text-sm">
           <div>
             <h3 className="font-semibold mb-2" style={{ color: branding.accentColor }}>Building Codes</h3>

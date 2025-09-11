@@ -1,6 +1,11 @@
 import { formatCurrency, calculateQuoteTotals } from "@/lib/utils";
 import type { QuoteWithDetails, ProposalTemplate, BrandingSettings, DefaultContent } from "@shared/schema";
 import logoPath from "@assets/my-logo.png_1753970984943.jpg";
+import { 
+  ProfessionalImage,
+  getBestImage,
+  getCompanyLogo 
+} from "@/components/image-components";
 
 interface BasicQuoteTemplateProps {
   quote: QuoteWithDetails;
@@ -39,12 +44,30 @@ export function BasicQuoteTemplate({ quote, template, companyInfo, quoteTerms }:
     quote.discount ?? 0
   );
 
+  // Extract and organize images from quote data
+  const projectImages = quote.projectImages ? JSON.parse(JSON.stringify(quote.projectImages)) : [];
+  const portfolioImages = quote.portfolioImages ? JSON.parse(JSON.stringify(quote.portfolioImages)) : [];
+  const companyImages = quote.companyImages ? JSON.parse(JSON.stringify(quote.companyImages)) : [];
+  
+  // Get best images for simple display
+  const keyProjectImage = getBestImage([...projectImages, ...portfolioImages], ['featured', 'before', 'after']);
+  const companyLogo = getCompanyLogo(companyImages);
+
   return (
     <div className="bg-white text-black" style={{ fontFamily: 'system-ui, sans-serif' }}>
       {/* Simple Header */}
       <div className="flex justify-between items-start mb-8 border-b-2 pb-6" style={{ borderColor: branding.primaryColor }}>
         <div className="flex items-start space-x-4">
-          <img src={logoPath} alt={companyInfo.name} className="h-10" />
+          {/* Use company logo if available, fallback to asset logo */}
+          {companyLogo ? (
+            <img 
+              src={companyLogo.url} 
+              alt={companyLogo.altText || companyInfo.name}
+              className="h-10 w-auto object-contain" 
+            />
+          ) : (
+            <img src={logoPath} alt={companyInfo.name} className="h-10" />
+          )}
           <div>
             <h1 className="text-2xl font-bold mb-1" style={{ color: branding.accentColor }}>
               {companyInfo.name}
@@ -90,6 +113,19 @@ export function BasicQuoteTemplate({ quote, template, companyInfo, quoteTerms }:
           </div>
         </div>
       </div>
+      
+      {/* Optional Project Visual - Clean and Simple */}
+      {keyProjectImage && (
+        <div className="mb-8 text-center">
+          <ProfessionalImage 
+            src={keyProjectImage.url}
+            alt={keyProjectImage.altText || quote.projectName || 'Project visualization'}
+            caption={keyProjectImage.caption}
+            className="rounded-lg shadow-sm border border-gray-200"
+            style={{ maxHeight: '200px', maxWidth: '400px', margin: '0 auto' }}
+          />
+        </div>
+      )}
 
       {/* Line Items Table */}
       <div className="mb-6">
