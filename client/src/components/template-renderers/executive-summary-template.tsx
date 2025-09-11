@@ -1,6 +1,15 @@
 import { formatCurrency, calculateQuoteTotals } from "@/lib/utils";
-import type { QuoteWithDetails, ProposalTemplate, BrandingSettings, DefaultContent } from "@shared/schema";
+import type { QuoteWithDetails, ProposalTemplate, BrandingSettings, DefaultContent, PortfolioImage, CompanyImage } from "@shared/schema";
 import logoPath from "@assets/my-logo.png_1753970984943.jpg";
+import { 
+  HeroImage, 
+  ImageGrid, 
+  TechnicalDiagramDisplay, 
+  CompanyImageDisplay, 
+  ProfessionalImage,
+  getBestImage,
+  getCompanyLogo 
+} from "@/components/image-components";
 
 interface ExecutiveSummaryTemplateProps {
   quote: QuoteWithDetails;
@@ -39,11 +48,33 @@ export function ExecutiveSummaryTemplate({ quote, template, companyInfo, quoteTe
     quote.discount ?? 0
   );
 
+  // Extract and organize images from quote data
+  const projectImages = quote.projectImages ? JSON.parse(JSON.stringify(quote.projectImages)) : [];
+  const portfolioImages = quote.portfolioImages ? JSON.parse(JSON.stringify(quote.portfolioImages)) : [];
+  const technicalDiagrams = quote.technicalDiagrams ? JSON.parse(JSON.stringify(quote.technicalDiagrams)) : [];
+  const companyImages = quote.companyImages ? JSON.parse(JSON.stringify(quote.companyImages)) : [];
+  
+  // Get best images for different purposes
+  const keyProjectImage = getBestImage([...projectImages, ...portfolioImages], ['featured', 'before', 'after']);
+  const featuredPortfolioImages = portfolioImages.filter((img: PortfolioImage) => img.featured).slice(0, 3);
+  const companyLogo = getCompanyLogo(companyImages);
+
   return (
     <div className="bg-white text-black" style={{ fontFamily: 'system-ui, sans-serif', color: branding.textColor }}>
       {/* Executive Header */}
       <div className="text-center mb-10 border-b-4 pb-8" style={{ borderColor: branding.primaryColor }}>
-        <img src={logoPath} alt={companyInfo.name} className="mx-auto h-14 mb-6" />
+        {/* Use company logo if available, fallback to asset logo */}
+        {companyLogo ? (
+          <div className="mx-auto mb-6 flex justify-center">
+            <img 
+              src={companyLogo.url} 
+              alt={companyLogo.altText || companyInfo.name}
+              className="h-14 w-auto object-contain" 
+            />
+          </div>
+        ) : (
+          <img src={logoPath} alt={companyInfo.name} className="mx-auto h-14 mb-6" />
+        )}
         <h1 className="text-3xl font-bold mb-2" style={{ color: branding.primaryColor }}>
           EXECUTIVE SUMMARY
         </h1>
@@ -98,6 +129,19 @@ export function ExecutiveSummaryTemplate({ quote, template, companyInfo, quoteTe
           </div>
         </div>
         
+        {/* Key Project Visual */}
+        {keyProjectImage && (
+          <div className="mb-6">
+            <ProfessionalImage 
+              src={keyProjectImage.url}
+              alt={keyProjectImage.altText || 'Project visualization'}
+              caption={keyProjectImage.caption || 'Project visualization'}
+              className="rounded-lg shadow-lg"
+              style={{ maxHeight: '250px' }}
+            />
+          </div>
+        )}
+        
         <div className="leading-relaxed">
           <div className="mb-4 whitespace-pre-wrap">{quote.projectScope || content.projectScope}</div>
           {quote.notes && (
@@ -107,6 +151,18 @@ export function ExecutiveSummaryTemplate({ quote, template, companyInfo, quoteTe
             </div>
           )}
         </div>
+        
+        {/* Technical Summary Graphics */}
+        {technicalDiagrams.length > 0 && (
+          <div className="mt-6">
+            <h3 className="font-semibold text-lg mb-4" style={{ color: branding.accentColor }}>Technical Specifications</h3>
+            <TechnicalDiagramDisplay 
+              diagrams={technicalDiagrams.slice(0, 2)} 
+              layout="grid"
+              showLabels={false}
+            />
+          </div>
+        )}
       </div>
 
       {/* Investment Summary */}
@@ -163,6 +219,20 @@ export function ExecutiveSummaryTemplate({ quote, template, companyInfo, quoteTe
         <div className="grid grid-cols-2 gap-8">
           <div>
             <h3 className="text-lg font-semibold mb-4" style={{ color: branding.accentColor }}>Why {companyInfo.name}?</h3>
+            
+            {/* Portfolio Highlights */}
+            {(featuredPortfolioImages.length > 0 || portfolioImages.length > 0) && (
+              <div className="mb-6">
+                <h4 className="font-medium text-sm mb-3" style={{ color: branding.primaryColor }}>Recent Project Highlights</h4>
+                <ImageGrid 
+                  images={featuredPortfolioImages.length > 0 ? featuredPortfolioImages : portfolioImages.slice(0, 3)} 
+                  columns={3} 
+                  maxImages={3}
+                  showCaptions={false}
+                />
+              </div>
+            )}
+            
             <ul className="space-y-3">
               <li className="flex items-start">
                 <div className="w-6 h-6 rounded-full flex items-center justify-center mr-3 mt-0.5" 
@@ -193,6 +263,18 @@ export function ExecutiveSummaryTemplate({ quote, template, companyInfo, quoteTe
                 <span className="text-sm">Premium materials and expert craftsmanship</span>
               </li>
             </ul>
+            
+            {/* Company Certifications */}
+            {companyImages.some((img: CompanyImage) => img.imageType === 'certification') && (
+              <div className="mt-6">
+                <h4 className="font-medium text-sm mb-3" style={{ color: branding.primaryColor }}>Our Certifications</h4>
+                <CompanyImageDisplay 
+                  images={companyImages}
+                  type="certification"
+                  layout="banner"
+                />
+              </div>
+            )}
           </div>
           
           <div>

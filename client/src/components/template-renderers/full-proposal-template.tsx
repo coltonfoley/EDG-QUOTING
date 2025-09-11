@@ -1,6 +1,16 @@
 import { formatCurrency, calculateQuoteTotals } from "@/lib/utils";
-import type { QuoteWithDetails, ProposalTemplate, BrandingSettings, DefaultContent } from "@shared/schema";
+import type { QuoteWithDetails, ProposalTemplate, BrandingSettings, DefaultContent, PortfolioImage, CompanyImage } from "@shared/schema";
 import logoPath from "@assets/my-logo.png_1753970984943.jpg";
+import { 
+  HeroImage, 
+  ImageGrid, 
+  TechnicalDiagramDisplay, 
+  CompanyImageDisplay, 
+  ProjectPhaseDisplay,
+  ProfessionalImage,
+  getBestImage,
+  getCompanyLogo 
+} from "@/components/image-components";
 
 interface FullProposalTemplateProps {
   quote: QuoteWithDetails;
@@ -39,12 +49,44 @@ export function FullProposalTemplate({ quote, template, companyInfo, quoteTerms 
     quote.discount ?? 0
   );
 
+  // Extract and organize images from quote data
+  const projectImages = quote.projectImages ? JSON.parse(JSON.stringify(quote.projectImages)) : [];
+  const portfolioImages = quote.portfolioImages ? JSON.parse(JSON.stringify(quote.portfolioImages)) : [];
+  const technicalDiagrams = quote.technicalDiagrams ? JSON.parse(JSON.stringify(quote.technicalDiagrams)) : [];
+  const companyImages = quote.companyImages ? JSON.parse(JSON.stringify(quote.companyImages)) : [];
+  
+  // Get best images for different purposes
+  const heroImage = getBestImage([...projectImages, ...portfolioImages], ['featured', 'before', 'after']);
+  const companyLogo = getCompanyLogo(companyImages);
+
   return (
     <div className="bg-white text-black" style={{ fontFamily: 'system-ui, sans-serif', color: branding.textColor }}>
       {/* Cover Page */}
       <div className="text-center mb-12 page-break-after">
+        {/* Hero Image Section */}
+        {heroImage && (
+          <div className="mb-8">
+            <HeroImage 
+              image={heroImage}
+              title={quote.projectName || undefined}
+              subtitle={`Proposal for ${companyInfo.customerName}`}
+              overlay={true}
+              height="400px"
+            />
+          </div>
+        )}
+        
         <div className="mb-8">
-          <img src={logoPath} alt={companyInfo.name} className="mx-auto h-16 mb-6" />
+          {/* Use company logo if available, fallback to asset logo */}
+          {companyLogo ? (
+            <CompanyImageDisplay 
+              images={companyImages}
+              type="logo"
+              layout="inline"
+            />
+          ) : (
+            <img src={logoPath} alt={companyInfo.name} className="mx-auto h-16 mb-6" />
+          )}
           <h1 className="text-4xl font-bold mb-4" style={{ color: branding.primaryColor }}>
             PROJECT PROPOSAL
           </h1>
@@ -126,6 +168,14 @@ export function FullProposalTemplate({ quote, template, companyInfo, quoteTerms 
             )}
           </div>
 
+          {/* Project Images Section */}
+          {projectImages.length > 0 && (
+            <div>
+              <h3 className="text-lg font-semibold mb-4" style={{ color: branding.accentColor }}>Project Visuals</h3>
+              <ProjectPhaseDisplay images={projectImages} showPhases={true} />
+            </div>
+          )}
+
           <div>
             <h3 className="text-lg font-semibold mb-2" style={{ color: branding.accentColor }}>Deliverables Include:</h3>
             <ul className="list-disc list-inside space-y-1">
@@ -146,6 +196,18 @@ export function FullProposalTemplate({ quote, template, companyInfo, quoteTerms 
           Project Timeline
         </h2>
         <div className="space-y-4">
+          {/* Technical Diagrams for Timeline Visualization */}
+          {technicalDiagrams.length > 0 && (
+            <div className="mb-6">
+              <h3 className="text-lg font-semibold mb-4" style={{ color: branding.accentColor }}>Project Plans & Specifications</h3>
+              <TechnicalDiagramDisplay 
+                diagrams={technicalDiagrams} 
+                layout={technicalDiagrams.length === 1 ? "single" : "grid"}
+                showLabels={true}
+              />
+            </div>
+          )}
+          
           {quote.timeline ? (
             <div className="whitespace-pre-wrap leading-relaxed">{quote.timeline}</div>
           ) : (
@@ -250,10 +312,46 @@ export function FullProposalTemplate({ quote, template, companyInfo, quoteTerms 
         <div className="space-y-4 leading-relaxed">
           <p>{content.companyDescription}</p>
           
+          {/* Portfolio Images Section */}
+          {portfolioImages.length > 0 && (
+            <div>
+              <h3 className="text-lg font-semibold mb-4" style={{ color: branding.accentColor }}>Our Recent Projects</h3>
+              <ImageGrid 
+                images={portfolioImages.filter((img: PortfolioImage) => img.featured || portfolioImages.length <= 6)} 
+                columns={3} 
+                maxImages={6}
+                showCaptions={true}
+              />
+            </div>
+          )}
+          
           <div>
             <h3 className="text-lg font-semibold mb-2" style={{ color: branding.accentColor }}>Our Credentials</h3>
             <p>{content.credentials}</p>
+            
+            {/* Company Certification Images */}
+            {companyImages.some((img: CompanyImage) => img.imageType === 'certification') && (
+              <div className="mt-4">
+                <CompanyImageDisplay 
+                  images={companyImages}
+                  type="certification"
+                  layout="banner"
+                />
+              </div>
+            )}
           </div>
+          
+          {/* Team Images */}
+          {companyImages.some((img: CompanyImage) => img.imageType === 'team') && (
+            <div>
+              <h3 className="text-lg font-semibold mb-4" style={{ color: branding.accentColor }}>Our Professional Team</h3>
+              <CompanyImageDisplay 
+                images={companyImages}
+                type="team"
+                layout="grid"
+              />
+            </div>
+          )}
           
           <div>
             <h3 className="text-lg font-semibold mb-2" style={{ color: branding.accentColor }}>Why Choose Us</h3>
@@ -265,6 +363,18 @@ export function FullProposalTemplate({ quote, template, companyInfo, quoteTerms 
               <li>Transparent communication throughout</li>
             </ul>
           </div>
+          
+          {/* Facility Images */}
+          {companyImages.some((img: CompanyImage) => img.imageType === 'facility') && (
+            <div>
+              <h3 className="text-lg font-semibold mb-4" style={{ color: branding.accentColor }}>Our Facilities</h3>
+              <CompanyImageDisplay 
+                images={companyImages}
+                type="facility"
+                layout="grid"
+              />
+            </div>
+          )}
         </div>
       </div>
 
