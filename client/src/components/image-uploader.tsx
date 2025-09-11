@@ -220,13 +220,21 @@ export function ImageUploader({
     newImages.forEach(async (image) => {
       try {
         const url = await realUpload(image);
-        setImages(prev =>
-          prev.map(img =>
-            img.id === image.id
-              ? { ...img, uploaded: true, url, metadata: { ...img.metadata, url } }
-              : img
-          )
-        );
+        const updatedImages = await new Promise<UploadedImage[]>(resolve => {
+          setImages(prev => {
+            const updated = prev.map(img =>
+              img.id === image.id
+                ? { ...img, uploaded: true, url, metadata: { ...img.metadata, url } }
+                : img
+            );
+            resolve(updated);
+            return updated;
+          });
+        });
+        
+        // CRITICAL FIX: Notify parent component that upload completed!
+        onImagesChange(updatedImages);
+        
         toast({
           title: "Upload successful",
           description: `${image.file.name} has been uploaded successfully.`
@@ -237,7 +245,11 @@ export function ImageUploader({
           description: `Failed to upload ${image.file.name}. Please try again.`,
           variant: "destructive"
         });
-        setImages(prev => prev.filter(img => img.id !== image.id));
+        setImages(prev => {
+          const updated = prev.filter(img => img.id !== image.id);
+          onImagesChange(updated); // Also notify on removal
+          return updated;
+        });
       }
     });
   }, [images, maxFiles, onImagesChange, toast]);
