@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -6,7 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { Trash2, Edit, Plus, Package, Search, Filter, X } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Trash2, Edit, Plus, Package, Search, Filter, X, ChevronDown, ChevronUp } from "lucide-react";
 import { formatCurrency, calculateLineItemTotal, calculateLineItemMargin, applyDiscountToPrice } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -38,6 +39,20 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
   const [selectedConfigurableProduct, setSelectedConfigurableProduct] = useState<Product | null>(null);
   const [dimensions, setDimensions] = useState({ length: "", width: "" });
   const [calculatedPrice, setCalculatedPrice] = useState<number | null>(null);
+  const [expandedCards, setExpandedCards] = useState<Record<number, boolean>>({});
+  const [isMobile, setIsMobile] = useState(false);
+
+  // Responsive detection
+  useEffect(() => {
+    const checkIsMobile = () => {
+      setIsMobile(window.innerWidth < 1024);
+    };
+    
+    checkIsMobile();
+    window.addEventListener('resize', checkIsMobile);
+    
+    return () => window.removeEventListener('resize', checkIsMobile);
+  }, []);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -290,6 +305,258 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
     }, {} as Record<string, Product[]>);
   }, [filteredProducts]);
 
+  // Helper function to safely get input values (fixes React warnings)
+  const safeInputValue = (value: any): string => {
+    if (value === null || value === undefined) return "";
+    return String(value);
+  };
+
+  // Toggle card expansion
+  const toggleCardExpansion = (itemId: number) => {
+    setExpandedCards(prev => ({
+      ...prev,
+      [itemId]: !prev[itemId]
+    }));
+  };
+
+  // Render mobile card layout
+  const renderMobileCard = (item: LineItem) => {
+    const isExpanded = expandedCards[item.id];
+    
+    // Use editing values if available, otherwise use item values
+    const currentQuantity = editingValues[item.id]?.quantity !== undefined 
+      ? (editingValues[item.id].quantity === '' ? 0 : parseFloat(editingValues[item.id].quantity as string) || 0)
+      : item.quantity;
+    const currentUnitPrice = editingValues[item.id]?.unitPrice !== undefined 
+      ? (editingValues[item.id].unitPrice === '' ? 0 : parseFloat(editingValues[item.id].unitPrice as string) || 0)
+      : item.unitPrice;
+    const currentMarkupValue = editingValues[item.id]?.markupValue !== undefined 
+      ? (editingValues[item.id].markupValue === '' ? 0 : parseFloat(editingValues[item.id].markupValue as string) || 0)
+      : item.markupValue;
+    const currentMarkupType = editingValues[item.id]?.markupType !== undefined 
+      ? editingValues[item.id].markupType as "percentage" | "dollar"
+      : item.markupType;
+    const currentDiscountValue = editingValues[item.id]?.discountValue !== undefined 
+      ? (editingValues[item.id].discountValue === '' ? 0 : parseFloat(editingValues[item.id].discountValue as string) || 0)
+      : item.discountValue;
+    const currentDiscountType = editingValues[item.id]?.discountType !== undefined 
+      ? editingValues[item.id].discountType as "percentage" | "dollar"
+      : item.discountType;
+    
+    const total = calculateLineItemTotal(
+      currentQuantity,
+      currentUnitPrice,
+      currentMarkupType,
+      currentMarkupValue,
+      currentDiscountType,
+      currentDiscountValue
+    );
+    
+    const margin = calculateLineItemMargin(
+      currentQuantity,
+      currentUnitPrice,
+      currentMarkupType,
+      currentMarkupValue,
+      currentDiscountType,
+      currentDiscountValue
+    );
+
+    return (
+      <div key={item.id} className="border border-gray-200 rounded-lg p-4 mb-4 bg-white hover:shadow-sm transition-shadow">
+        {/* Main Info - Always Visible */}
+        <div className="space-y-3">
+          {/* Description */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+            <Input
+              value={safeInputValue(editingValues[item.id]?.description !== undefined ? editingValues[item.id].description : item.description)}
+              onChange={(e) => updateEditingValue(item.id, "description", e.target.value)}
+              onBlur={() => handleBlurUpdate(item, "description")}
+              className="border-gray-300 focus:ring-edg-teal focus:border-edg-teal text-sm"
+              data-testid={`input-description-${item.id}`}
+            />
+            {item.retailPrice && parseFloat(item.retailPrice.toString()) !== parseFloat(item.unitPrice.toString()) && (
+              <div className="text-xs text-gray-500 mt-1">
+                Retail: {formatCurrency(parseFloat(item.retailPrice.toString()))}
+              </div>
+            )}
+          </div>
+
+          {/* Primary Controls Row */}
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Quantity</label>
+              <Input
+                type="number"
+                step="1"
+                min="0"
+                value={safeInputValue(editingValues[item.id]?.quantity !== undefined ? editingValues[item.id].quantity : item.quantity)}
+                onChange={(e) => updateEditingValue(item.id, "quantity", e.target.value)}
+                onBlur={() => {
+                  const value = editingValues[item.id]?.quantity;
+                  if (value !== undefined) {
+                    const numValue = value === '' ? 0 : parseFloat(value as string);
+                    if (!isNaN(numValue)) {
+                      handleUpdateItem(item, "quantity", numValue);
+                    }
+                  }
+                }}
+                className="text-center text-sm"
+                data-testid={`input-quantity-${item.id}`}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Unit Price</label>
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                value={safeInputValue(editingValues[item.id]?.unitPrice !== undefined ? editingValues[item.id].unitPrice : item.unitPrice)}
+                onChange={(e) => updateEditingValue(item.id, "unitPrice", e.target.value)}
+                onBlur={() => {
+                  const value = editingValues[item.id]?.unitPrice;
+                  if (value !== undefined) {
+                    const numValue = value === '' ? 0 : parseFloat(value as string);
+                    if (!isNaN(numValue)) {
+                      handleUpdateItem(item, "unitPrice", numValue);
+                    }
+                  }
+                }}
+                className="text-center text-sm"
+                data-testid={`input-unit-price-${item.id}`}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-900 mb-1">Total</label>
+              <div className="bg-gray-50 border border-gray-200 rounded-md px-3 py-2 text-center font-semibold text-edg-black text-sm">
+                {formatCurrency(total)}
+              </div>
+            </div>
+          </div>
+
+          {/* Expand/Collapse Button and Actions */}
+          <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+            <Collapsible open={isExpanded} onOpenChange={() => toggleCardExpansion(item.id)}>
+              <CollapsibleTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-gray-600 hover:text-gray-900"
+                  data-testid={`button-expand-${item.id}`}
+                >
+                  {isExpanded ? (
+                    <><ChevronUp className="h-4 w-4 mr-1" />Hide Details</>
+                  ) : (
+                    <><ChevronDown className="h-4 w-4 mr-1" />Show Details</>
+                  )}
+                </Button>
+              </CollapsibleTrigger>
+            </Collapsible>
+            
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleDeleteItem(item.id)}
+              className="border-red-300 text-red-600 hover:bg-red-50 hover:border-red-400 hover:text-red-700"
+              data-testid={`button-delete-${item.id}`}
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
+
+          {/* Expanded Details */}
+          <Collapsible open={isExpanded}>
+            <CollapsibleContent className="space-y-3 pt-3 border-t border-gray-100">
+              {/* Discount Controls */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Discount</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={safeInputValue(editingValues[item.id]?.discountValue !== undefined ? editingValues[item.id].discountValue : item.discountValue)}
+                    onChange={(e) => updateEditingValue(item.id, "discountValue", e.target.value)}
+                    onBlur={() => {
+                      const value = editingValues[item.id]?.discountValue;
+                      if (value !== undefined) {
+                        const numValue = value === '' ? 0 : parseFloat(value as string);
+                        if (!isNaN(numValue)) {
+                          handleUpdateItem(item, "discountValue", numValue);
+                        }
+                      }
+                    }}
+                    className="text-center text-sm border-gray-300 focus:border-edg-teal"
+                    placeholder="0"
+                    data-testid={`input-discount-value-${item.id}`}
+                  />
+                  <Select
+                    value={item.discountType}
+                    onValueChange={(value) => handleUpdateItem(item, "discountType", value)}
+                  >
+                    <SelectTrigger className="text-sm border-gray-300">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="percentage">%</SelectItem>
+                      <SelectItem value="dollar">$</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {/* Markup Controls */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Markup</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={safeInputValue(editingValues[item.id]?.markupValue !== undefined ? editingValues[item.id].markupValue : item.markupValue)}
+                    onChange={(e) => updateEditingValue(item.id, "markupValue", e.target.value)}
+                    onBlur={() => {
+                      const value = editingValues[item.id]?.markupValue;
+                      if (value !== undefined) {
+                        const numValue = value === '' ? 0 : parseFloat(value as string);
+                        if (!isNaN(numValue)) {
+                          handleUpdateItem(item, "markupValue", numValue);
+                        }
+                      }
+                    }}
+                    className="text-center text-sm border-gray-300 focus:border-edg-teal"
+                    placeholder="0"
+                    data-testid={`input-markup-value-${item.id}`}
+                  />
+                  <Select
+                    value={item.markupType}
+                    onValueChange={(value) => handleUpdateItem(item, "markupType", value)}
+                  >
+                    <SelectTrigger className="text-sm border-gray-300">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="percentage">%</SelectItem>
+                      <SelectItem value="dollar">$</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {/* Margin Display */}
+              <div className="bg-green-50 border border-green-200 rounded-md p-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-medium text-green-800">Margin:</span>
+                  <span className="text-sm font-semibold text-green-600">{formatCurrency(margin)}</span>
+                </div>
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <Card className="mb-6">
       <CardHeader className="border-b border-gray-200">
@@ -444,8 +711,177 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
       </CardHeader>
 
       <CardContent className="p-0">
-        <div className="overflow-x-auto">
-          <table className="w-full table-fixed divide-y divide-gray-200">
+        {isMobile ? (
+          // Mobile Card Layout
+          <div className="p-4 space-y-4">
+            {lineItems.map(renderMobileCard)}
+            
+            {/* Mobile New Item Form */}
+            {showNewItemForm && (
+              <div className="border-2 border-dashed border-blue-300 rounded-lg p-4 bg-blue-50">
+                <h4 className="font-medium text-blue-900 mb-4">Add New Item</h4>
+                <div className="space-y-4">
+                  {/* Description */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                    <Input
+                      placeholder="Item description"
+                      value={newItem.description}
+                      onChange={(e) => setNewItem({ ...newItem, description: e.target.value })}
+                      className="border border-gray-300 text-sm"
+                      data-testid="input-description-new"
+                    />
+                  </div>
+
+                  {/* Primary Controls */}
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Quantity</label>
+                      <Input
+                        type="number"
+                        step="1"
+                        min="0"
+                        value={newItem.quantity}
+                        onChange={(e) => setNewItem({ ...newItem, quantity: e.target.value })}
+                        className="text-center text-sm"
+                        placeholder="1"
+                        data-testid="input-quantity-new"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Unit Price</label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={newItem.unitPrice}
+                        onChange={(e) => setNewItem({ ...newItem, unitPrice: e.target.value })}
+                        className="text-center text-sm"
+                        placeholder="0.00"
+                        data-testid="input-unit-price-new"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-900 mb-1">Total</label>
+                      <div className="bg-gray-100 border border-gray-300 rounded-md px-3 py-2 text-center font-semibold text-edg-black text-sm">
+                        {formatCurrency(
+                          calculateLineItemTotal(
+                            newItem.quantity,
+                            newItem.unitPrice,
+                            newItem.markupType,
+                            newItem.markupValue,
+                            newItem.discountType,
+                            newItem.discountValue
+                          )
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Advanced Controls */}
+                  <div className="space-y-3 pt-3 border-t border-blue-200">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Discount</label>
+                        <div className="grid grid-cols-2 gap-2">
+                          <Input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={newItem.discountValue}
+                            onChange={(e) => setNewItem({ ...newItem, discountValue: e.target.value })}
+                            className="text-center text-sm border-gray-300"
+                            placeholder="0"
+                          />
+                          <Select
+                            value={newItem.discountType}
+                            onValueChange={(value) => setNewItem({ ...newItem, discountType: value as "percentage" | "dollar" })}
+                          >
+                            <SelectTrigger className="text-sm border-gray-300">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="percentage">%</SelectItem>
+                              <SelectItem value="dollar">$</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Markup</label>
+                        <div className="grid grid-cols-2 gap-2">
+                          <Input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={newItem.markupValue}
+                            onChange={(e) => setNewItem({ ...newItem, markupValue: e.target.value })}
+                            className="text-center text-sm border-gray-300"
+                            placeholder="0"
+                          />
+                          <Select
+                            value={newItem.markupType}
+                            onValueChange={(value) => setNewItem({ ...newItem, markupType: value as "percentage" | "dollar" })}
+                          >
+                            <SelectTrigger className="text-sm border-gray-300">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="percentage">%</SelectItem>
+                              <SelectItem value="dollar">$</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Margin Display */}
+                    <div className="bg-green-50 border border-green-200 rounded-md p-3">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm font-medium text-green-800">Margin:</span>
+                        <span className="text-sm font-semibold text-green-600">
+                          {formatCurrency(
+                            calculateLineItemMargin(
+                              newItem.quantity,
+                              newItem.unitPrice,
+                              newItem.markupType,
+                              newItem.markupValue,
+                              newItem.discountType,
+                              newItem.discountValue
+                            )
+                          )}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="flex space-x-3 pt-4">
+                    <Button
+                      onClick={handleAddItem}
+                      disabled={!newItem.description || createLineItemMutation.isPending}
+                      className="flex-1 bg-edg-black hover:bg-edg-grey text-edg-white"
+                      data-testid="button-save-new-item"
+                    >
+                      {createLineItemMutation.isPending ? "Adding..." : "Save Item"}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => setShowNewItemForm(false)}
+                      className="flex-1"
+                      data-testid="button-cancel-new-item"
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          // Desktop Table Layout
+          <div className="overflow-x-auto">
+            <table className="w-full table-fixed divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
                 <th className="px-3 py-3 text-left text-xs font-medium text-edg-grey uppercase w-60">
@@ -519,7 +955,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                     <td className="px-3 py-3">
                       <div>
                         <Input
-                          value={editingValues[item.id]?.description !== undefined ? editingValues[item.id].description : item.description}
+                          value={safeInputValue(editingValues[item.id]?.description, item.description)}
                           onChange={(e) => updateEditingValue(item.id, "description", e.target.value)}
                           onBlur={() => handleBlurUpdate(item, "description")}
                           className="border-none bg-transparent focus:ring-2 focus:ring-edg-teal focus:border-transparent text-sm"
@@ -536,7 +972,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                         type="number"
                         step="1"
                         min="0"
-                        value={editingValues[item.id]?.quantity !== undefined ? editingValues[item.id].quantity : item.quantity}
+                        value={safeInputValue(editingValues[item.id]?.quantity, item.quantity)}
                         onChange={(e) => updateEditingValue(item.id, "quantity", e.target.value)}
                         onBlur={() => {
                           const value = editingValues[item.id]?.quantity;
@@ -555,7 +991,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                         type="number"
                         step="0.01"
                         min="0"
-                        value={editingValues[item.id]?.unitPrice !== undefined ? editingValues[item.id].unitPrice : item.unitPrice}
+                        value={safeInputValue(editingValues[item.id]?.unitPrice, item.unitPrice)}
                         onChange={(e) => updateEditingValue(item.id, "unitPrice", e.target.value)}
                         onBlur={() => {
                           const value = editingValues[item.id]?.unitPrice;
@@ -575,7 +1011,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                           type="number"
                           step="0.01"
                           min="0"
-                          value={editingValues[item.id]?.discountValue !== undefined ? editingValues[item.id].discountValue : item.discountValue}
+                          value={safeInputValue(editingValues[item.id]?.discountValue, item.discountValue)}
                           onChange={(e) => updateEditingValue(item.id, "discountValue", e.target.value)}
                           onBlur={() => {
                             const value = editingValues[item.id]?.discountValue;
@@ -608,7 +1044,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                           type="number"
                           step="0.01"
                           min="0"
-                          value={editingValues[item.id]?.markupValue !== undefined ? editingValues[item.id].markupValue : item.markupValue}
+                          value={safeInputValue(editingValues[item.id]?.markupValue, item.markupValue)}
                           onChange={(e) => updateEditingValue(item.id, "markupValue", e.target.value)}
                           onBlur={() => {
                             const value = editingValues[item.id]?.markupValue;
@@ -785,6 +1221,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
             </tbody>
           </table>
         </div>
+        )}
       </CardContent>
 
       {/* Dimension Configuration Dialog */}
