@@ -44,11 +44,6 @@ export const quotes = pgTable("quotes", {
   projectAddress: text("project_address"),
   estimatedStartDate: text("estimated_start_date"),
   notes: text("notes"),
-  // Rich content fields for enhanced proposals
-  projectScope: text("project_scope"), // detailed project description and objectives
-  timeline: text("timeline"), // project timeline and milestones  
-  companyOverview: text("company_overview"), // company credentials and experience
-  technicalSpecs: text("technical_specs"), // technical specifications and methodology
   // Image fields for comprehensive image integration
   projectImages: jsonb("project_images"), // Array of project photo URLs and metadata
   portfolioImages: jsonb("portfolio_images"), // Array of selected portfolio showcase images
@@ -225,11 +220,6 @@ export const insertQuoteSchema = createInsertSchema(quotes).omit({
   projectAddress: z.union([z.string(), z.null()]).transform(val => val === null ? "" : val),
   estimatedStartDate: z.union([z.string(), z.null()]).transform(val => val === null ? "" : val),
   notes: z.union([z.string(), z.null()]).transform(val => val === null ? "" : val),
-  // Rich content fields
-  projectScope: z.union([z.string(), z.null()]).transform(val => val === null ? "" : val).optional(),
-  timeline: z.union([z.string(), z.null()]).transform(val => val === null ? "" : val).optional(),
-  companyOverview: z.union([z.string(), z.null()]).transform(val => val === null ? "" : val).optional(),
-  technicalSpecs: z.union([z.string(), z.null()]).transform(val => val === null ? "" : val).optional(),
   // Image fields
   projectImages: z.array(projectImageSchema).optional(),
   portfolioImages: z.array(portfolioImageSchema).optional(),
