@@ -20,6 +20,11 @@ const quoteFormSchema = insertQuoteSchema.extend({
   customerEmail: z.string().email("Valid email is required"),
   customerPhone: z.string().min(1, "Phone number is required"),
   customerCompany: z.string().optional(),
+  // Rich content fields are optional but can be longer text
+  projectScope: z.string().optional(),
+  timeline: z.string().optional(),
+  companyOverview: z.string().optional(),
+  technicalSpecs: z.string().optional(),
 }).omit({ customerId: true });
 
 type QuoteFormData = z.infer<typeof quoteFormSchema>;
@@ -42,6 +47,10 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
       projectAddress: quote?.projectAddress || "",
       estimatedStartDate: quote?.estimatedStartDate || "",
       notes: quote?.notes || "",
+      projectScope: quote?.projectScope || "",
+      timeline: quote?.timeline || "",
+      companyOverview: quote?.companyOverview || "",
+      technicalSpecs: quote?.technicalSpecs || "",
       status: quote?.status || "draft",
       taxRate: quote?.taxRate || "0",
       discount: quote?.discount || "0",
@@ -62,6 +71,10 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
         projectAddress: quote.projectAddress || "",
         estimatedStartDate: quote.estimatedStartDate || "",
         notes: quote.notes || "",
+        projectScope: quote.projectScope || "",
+        timeline: quote.timeline || "",
+        companyOverview: quote.companyOverview || "",
+        technicalSpecs: quote.technicalSpecs || "",
         status: quote.status || "draft",
         taxRate: quote.taxRate || "0",
         discount: quote.discount || "0",
@@ -282,6 +295,107 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
                         <FormLabel>Estimated Start Date</FormLabel>
                         <FormControl>
                           <Input type="date" {...field} value={field.value || ""} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="notes"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Additional Notes (Optional)</FormLabel>
+                        <FormControl>
+                          <Textarea rows={3} placeholder="Any additional notes or requirements" {...field} value={field.value || ""} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </div>
+            </div>
+            
+            {/* Enhanced Content Section */}
+            <div className="mt-6 pt-6 border-t border-gray-200">
+              <h3 className="text-lg font-semibold text-charcoal mb-4">Enhanced Content (Optional)</h3>
+              <p className="text-sm text-accent-grey mb-4">Add rich content for comprehensive proposals and detailed templates.</p>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="space-y-4">
+                  <FormField
+                    control={form.control}
+                    name="projectScope"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Project Scope & Description</FormLabel>
+                        <FormControl>
+                          <Textarea 
+                            rows={4} 
+                            placeholder="Detailed project description, objectives, and scope of work..." 
+                            {...field} 
+                            value={field.value || ""} 
+                            data-testid="textarea-project-scope"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="timeline"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Project Timeline & Milestones</FormLabel>
+                        <FormControl>
+                          <Textarea 
+                            rows={4} 
+                            placeholder="Project timeline, key milestones, and delivery schedule..." 
+                            {...field} 
+                            value={field.value || ""} 
+                            data-testid="textarea-timeline"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+                <div className="space-y-4">
+                  <FormField
+                    control={form.control}
+                    name="companyOverview"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Company Overview & Credentials</FormLabel>
+                        <FormControl>
+                          <Textarea 
+                            rows={4} 
+                            placeholder="Company background, credentials, relevant experience, and qualifications..." 
+                            {...field} 
+                            value={field.value || ""} 
+                            data-testid="textarea-company-overview"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="technicalSpecs"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Technical Specifications</FormLabel>
+                        <FormControl>
+                          <Textarea 
+                            rows={4} 
+                            placeholder="Technical specifications, methodology, materials, and implementation details..." 
+                            {...field} 
+                            value={field.value || ""} 
+                            data-testid="textarea-technical-specs"
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>

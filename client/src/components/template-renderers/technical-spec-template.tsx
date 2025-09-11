@@ -181,10 +181,22 @@ export function TechnicalSpecTemplate({ quote, template, companyInfo, quoteTerms
         </div>
       </div>
 
+      {/* Technical Specifications */}
+      {quote.technicalSpecs && (
+        <div className="mb-8">
+          <h2 className="text-lg font-bold mb-4 border-b pb-2" style={{ color: branding.primaryColor, borderColor: branding.accentColor }}>
+            4. TECHNICAL SPECIFICATIONS
+          </h2>
+          <div className="text-sm leading-relaxed whitespace-pre-wrap p-4 border border-gray-300 rounded bg-gray-50">
+            {quote.technicalSpecs}
+          </div>
+        </div>
+      )}
+
       {/* Code Compliance */}
       <div className="mb-8">
         <h2 className="text-lg font-bold mb-4 border-b pb-2" style={{ color: branding.primaryColor, borderColor: branding.accentColor }}>
-          4. CODE COMPLIANCE & STANDARDS
+          {quote.technicalSpecs ? '5' : '4'}. CODE COMPLIANCE & STANDARDS
         </h2>
         <div className="grid grid-cols-2 gap-6 text-sm">
           <div>

@@ -44,6 +44,11 @@ export const quotes = pgTable("quotes", {
   projectAddress: text("project_address"),
   estimatedStartDate: text("estimated_start_date"),
   notes: text("notes"),
+  // Rich content fields for enhanced proposals
+  projectScope: text("project_scope"), // detailed project description and objectives
+  timeline: text("timeline"), // project timeline and milestones  
+  companyOverview: text("company_overview"), // company credentials and experience
+  technicalSpecs: text("technical_specs"), // technical specifications and methodology
   taxRate: decimal("tax_rate", { precision: 5, scale: 2 }).default("0"),
   discount: decimal("discount", { precision: 5, scale: 2 }).default("0"),
   shipping: decimal("shipping", { precision: 10, scale: 2 }).default("0"),

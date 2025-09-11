@@ -77,7 +77,7 @@ export function ExecutiveSummaryTemplate({ quote, template, companyInfo, quoteTe
                 {quote.estimatedStartDate && (
                   <div><strong>Start Date:</strong> {new Date(quote.estimatedStartDate).toLocaleDateString()}</div>
                 )}
-                <div><strong>Duration:</strong> {content.timeline}</div>
+                <div><strong>Duration:</strong> {quote.timeline || content.timeline}</div>
               </div>
             </div>
             <div>
@@ -99,7 +99,7 @@ export function ExecutiveSummaryTemplate({ quote, template, companyInfo, quoteTe
         </div>
         
         <div className="leading-relaxed">
-          <p className="mb-4">{content.projectScope}</p>
+          <div className="mb-4 whitespace-pre-wrap">{quote.projectScope || content.projectScope}</div>
           {quote.notes && (
             <div className="bg-blue-50 p-4 rounded border-l-4" style={{ borderColor: branding.primaryColor }}>
               <h4 className="font-semibold mb-2" style={{ color: branding.accentColor }}>Specific Requirements:</h4>
