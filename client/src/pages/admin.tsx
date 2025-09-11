@@ -186,7 +186,7 @@ export default function AdminPage() {
       email: userToEdit.email || "",
       firstName: userToEdit.firstName || "",
       lastName: userToEdit.lastName || "",
-      role: userToEdit.role,
+      role: userToEdit.role as "user" | "admin",
       password: "",
     });
     setShowEditDialog(true);
@@ -579,6 +579,7 @@ export default function AdminPage() {
 
 function PriceListUploader() {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [uploading, setUploading] = useState(false);
   const [results, setResults] = useState<{
     created: number;
@@ -632,6 +633,9 @@ function PriceListUploader() {
         title: "Price list processed successfully",
         description: `Created: ${data.created}, Updated: ${data.updated}, Skipped: ${data.skipped}`,
       });
+
+      // Invalidate products cache to refresh the bulk editor
+      queryClient.invalidateQueries({ queryKey: ["/api/products"] });
 
       // Clear the input
       event.target.value = '';
@@ -750,10 +754,11 @@ function ProductBulkEditor() {
         Object.entries(data).filter(([_, value]) => value && value !== "")
       );
       
-      return await apiRequest("POST", "/api/admin/bulk-update-products", {
+      const response = await apiRequest("POST", "/api/admin/bulk-update-products", {
         productIds: selectedProducts,
         updates,
       });
+      return response.json();
     },
     onSuccess: (data) => {
       toast({
