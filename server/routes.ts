@@ -10,6 +10,8 @@ import { parsePDF } from "./pdf-parser";
 import { extractProductsFromImage, extractProductsFromText, extractQuoteDataFromText } from "./openai";
 import type { ExtractedProduct } from "./openai";
 import DocuSignService from "./docusign";
+import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
+import { ObjectPermission } from "./objectAcl";
 
 // Configure multer for file uploads
 const upload = multer({
@@ -54,7 +56,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Real image upload endpoints using Object Storage
-  const { ObjectStorageService, ObjectNotFoundError } = require("./objectStorage");
+  // Note: Import moved to top of file below
 
   // Get upload URL for image uploads
   app.post("/api/images/upload-url", isAuthenticated, async (req, res) => {
@@ -129,7 +131,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const canAccess = await objectStorageService.canAccessObjectEntity({
         objectFile,
         userId: userId,
-        requestedPermission: require("./objectAcl").ObjectPermission.READ,
+        requestedPermission: ObjectPermission.READ,
       });
       if (!canAccess) {
         return res.sendStatus(401);
