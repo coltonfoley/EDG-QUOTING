@@ -351,6 +351,11 @@ export function ImageUploader({
               Supports: {allowedTypes.map(type => type.split('/')[1]).join(', ')} • 
               Max {maxFiles} files • Up to {(maxFileSize / 1024 / 1024).toFixed(0)}MB each
             </p>
+            {maxFiles > 1 && (
+              <p className="text-xs text-blue-600 font-medium">
+                💡 Select multiple files: Hold Ctrl (Windows) or Cmd (Mac) while clicking files
+              </p>
+            )}
           </div>
         </div>
 
@@ -367,7 +372,7 @@ export function ImageUploader({
           data-testid={`button-browse-${imageType}`}
         >
           <Upload className="h-4 w-4 mr-2" />
-          Choose Files
+          {maxFiles > 1 ? `Choose Files (up to ${maxFiles})` : 'Choose File'}
         </Button>
 
         {/* Uploaded Images */}
