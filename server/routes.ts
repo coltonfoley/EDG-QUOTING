@@ -53,6 +53,97 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Real image upload endpoints using Object Storage
+  const { ObjectStorageService, ObjectNotFoundError } = require("./objectStorage");
+
+  // Get upload URL for image uploads
+  app.post("/api/images/upload-url", isAuthenticated, async (req, res) => {
+    try {
+      const { imageType, filename } = req.body;
+      
+      if (!imageType || !filename) {
+        return res.status(400).json({ message: "imageType and filename are required" });
+      }
+      
+      const objectStorageService = new ObjectStorageService();
+      // Create a custom path based on image type and filename
+      const sanitizedFilename = filename.replace(/[^a-zA-Z0-9.-]/g, '_');
+      const timestamp = Date.now();
+      const customPath = `${imageType}s/${timestamp}-${sanitizedFilename}`;
+      
+      const { url, objectPath } = await objectStorageService.getObjectEntityUploadURL(customPath);
+      
+      console.log(`🔧 Generated upload URL for ${imageType}: ${objectPath}`);
+      
+      res.json({ 
+        uploadUrl: url, 
+        objectPath: objectPath,
+        publicUrl: `${req.protocol}://${req.get('host')}/objects${objectPath.replace('/objects', '')}`
+      });
+    } catch (error) {
+      console.error("❌ Error generating upload URL:", error);
+      res.status(500).json({ message: "Failed to generate upload URL" });
+    }
+  });
+
+  // Set ACL policy after successful upload
+  app.post("/api/images/finalize-upload", isAuthenticated, async (req, res) => {
+    try {
+      const { objectPath } = req.body;
+      const userId = req.user?.id;
+      
+      if (!objectPath || !userId) {
+        return res.status(400).json({ message: "objectPath and authenticated user required" });
+      }
+      
+      const objectStorageService = new ObjectStorageService();
+      
+      // Set ACL policy - making images public for now (quotes are shareable)
+      const normalizedPath = await objectStorageService.trySetObjectEntityAclPolicy(
+        objectPath,
+        {
+          owner: userId,
+          visibility: "public", // Images in quotes should be publicly accessible
+        }
+      );
+      
+      console.log(`✅ Finalized upload: ${normalizedPath}`);
+      
+      res.json({
+        success: true,
+        objectPath: normalizedPath,
+        publicUrl: `${req.protocol}://${req.get('host')}${normalizedPath}`
+      });
+    } catch (error) {
+      console.error("❌ Error finalizing upload:", error);
+      res.status(500).json({ message: "Failed to finalize upload" });
+    }
+  });
+
+  // Serve uploaded objects (with ACL check)
+  app.get("/objects/:objectPath(*)", isAuthenticated, async (req, res) => {
+    const userId = req.user?.id;
+    const objectStorageService = new ObjectStorageService();
+    try {
+      const objectFile = await objectStorageService.getObjectEntityFile(`/objects/${req.params.objectPath}`);
+      const canAccess = await objectStorageService.canAccessObjectEntity({
+        objectFile,
+        userId: userId,
+        requestedPermission: require("./objectAcl").ObjectPermission.READ,
+      });
+      if (!canAccess) {
+        return res.sendStatus(401);
+      }
+      await objectStorageService.downloadObject(objectFile, res);
+    } catch (error) {
+      console.error("Error accessing object:", error);
+      if (error instanceof ObjectNotFoundError) {
+        return res.sendStatus(404);
+      }
+      return res.sendStatus(500);
+    }
+  });
+
   // Image proxy endpoint to bypass CORS for object storage images
   app.get("/api/image-proxy", isAuthenticated, async (req, res) => {
     try {
@@ -63,13 +154,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Only allow Replit storage URLs for security
-      if (!imageUrl.includes('storage.replit.com')) {
+      if (!imageUrl.includes('storage.replit.com') && !imageUrl.includes('/objects/')) {
         return res.status(403).json({ message: "Only Replit storage URLs allowed" });
       }
       
       console.log(`🔧 Proxying image request: ${imageUrl}`);
       
-      // Fetch the image from object storage
+      // If it's an internal objects URL, handle directly
+      if (imageUrl.includes('/objects/')) {
+        const objectPath = imageUrl.split('/objects/')[1];
+        const objectStorageService = new ObjectStorageService();
+        try {
+          const objectFile = await objectStorageService.getObjectEntityFile(`/objects/${objectPath}`);
+          await objectStorageService.downloadObject(objectFile, res);
+          return;
+        } catch (error) {
+          console.error(`❌ Failed to serve internal object: ${error}`);
+          return res.status(404).json({ message: "Object not found" });
+        }
+      }
+      
+      // Fetch the image from external object storage
       const response = await fetch(imageUrl);
       
       if (!response.ok) {
