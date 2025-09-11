@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Trash2, Edit, Plus, Package, Search, Filter, X, ChevronDown, ChevronUp } from "lucide-react";
+import { Trash2, Edit, Plus, Package, Search, Filter, X, ChevronDown, ChevronUp, Save, XCircle } from "lucide-react";
 import { formatCurrency, calculateLineItemTotal, calculateLineItemMargin, applyDiscountToPrice } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -164,6 +164,95 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
     }));
   };
 
+  const handleStartEdit = (itemId: number, item: LineItem) => {
+    // If another item is being edited, cancel that edit first
+    if (editingItem && editingItem !== itemId) {
+      handleCancelEdit();
+    }
+    
+    setEditingItem(itemId);
+    // Initialize editing values with current item values
+    setEditingValues(prev => ({
+      ...prev,
+      [itemId]: {
+        description: item.description,
+        quantity: item.quantity.toString(),
+        unitPrice: item.unitPrice.toString(),
+        discountType: item.discountType,
+        discountValue: item.discountValue.toString(),
+        markupType: item.markupType,
+        markupValue: item.markupValue.toString()
+      }
+    }));
+  };
+
+  const handleCancelEdit = () => {
+    if (editingItem) {
+      // Clear editing values for the item being edited
+      setEditingValues(prev => {
+        const newValues = { ...prev };
+        delete newValues[editingItem];
+        return newValues;
+      });
+    }
+    setEditingItem(null);
+  };
+
+  const handleSaveEdit = (item: LineItem) => {
+    if (!editingItem || editingItem !== item.id) return;
+    
+    const editedValues = editingValues[item.id];
+    if (!editedValues) return;
+
+    // Prepare the data for update - only include changed fields
+    const updateData: any = {};
+    let hasChanges = false;
+
+    if (editedValues.description !== undefined && editedValues.description !== item.description) {
+      updateData.description = editedValues.description;
+      hasChanges = true;
+    }
+    if (editedValues.quantity !== undefined && parseFloat(editedValues.quantity as string) !== item.quantity) {
+      updateData.quantity = parseFloat(editedValues.quantity as string) || 0;
+      hasChanges = true;
+    }
+    if (editedValues.unitPrice !== undefined && parseFloat(editedValues.unitPrice as string) !== item.unitPrice) {
+      updateData.unitPrice = parseFloat(editedValues.unitPrice as string) || 0;
+      hasChanges = true;
+    }
+    if (editedValues.discountType !== undefined && editedValues.discountType !== item.discountType) {
+      updateData.discountType = editedValues.discountType;
+      hasChanges = true;
+    }
+    if (editedValues.discountValue !== undefined && parseFloat(editedValues.discountValue as string) !== item.discountValue) {
+      updateData.discountValue = parseFloat(editedValues.discountValue as string) || 0;
+      hasChanges = true;
+    }
+    if (editedValues.markupType !== undefined && editedValues.markupType !== item.markupType) {
+      updateData.markupType = editedValues.markupType;
+      hasChanges = true;
+    }
+    if (editedValues.markupValue !== undefined && parseFloat(editedValues.markupValue as string) !== item.markupValue) {
+      updateData.markupValue = parseFloat(editedValues.markupValue as string) || 0;
+      hasChanges = true;
+    }
+
+    if (hasChanges) {
+      updateLineItemMutation.mutate({
+        id: item.id,
+        data: updateData
+      });
+    } else {
+      // No changes, just exit edit mode
+      setEditingItem(null);
+      setEditingValues(prev => {
+        const newValues = { ...prev };
+        delete newValues[item.id];
+        return newValues;
+      });
+    }
+  };
+
   const handleUpdateItem = (item: LineItem, field: string, value: any) => {
     updateLineItemMutation.mutate({
       id: item.id,
@@ -171,10 +260,12 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
     });
   };
 
-  const handleBlurUpdate = (item: LineItem, field: string) => {
-    const editingValue = (editingValues[item.id] as any)?.[field];
-    if (editingValue !== undefined && editingValue !== (item as any)[field]) {
-      handleUpdateItem(item, field, editingValue);
+  // This function is kept for select components that still need immediate updates
+  const handleSelectChange = (item: LineItem, field: string, value: any) => {
+    if (editingItem === item.id) {
+      updateEditingValue(item.id, field, value);
+    } else {
+      handleUpdateItem(item, field, value);
     }
   };
 
@@ -306,9 +397,17 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
   }, [filteredProducts]);
 
   // Helper function to safely get input values (fixes React warnings)
-  const safeInputValue = (value: any): string => {
-    if (value === null || value === undefined) return "";
-    return String(value);
+  const safeInputValue = (editingValue: any, originalValue?: any): string => {
+    // If we have an editing value, use it
+    if (editingValue !== undefined && editingValue !== null) {
+      return String(editingValue);
+    }
+    // Otherwise use the original value
+    if (originalValue !== undefined && originalValue !== null) {
+      return String(originalValue);
+    }
+    // Default to empty string
+    return "";
   };
 
   // Toggle card expansion
@@ -322,6 +421,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
   // Render mobile card layout
   const renderMobileCard = (item: LineItem) => {
     const isExpanded = expandedCards[item.id];
+    const isEditing = editingItem === item.id;
     
     // Use editing values if available, otherwise use item values
     const currentQuantity = editingValues[item.id]?.quantity !== undefined 
@@ -362,19 +462,29 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
     );
 
     return (
-      <div key={item.id} className="border border-gray-200 rounded-lg p-4 mb-4 bg-white hover:shadow-sm transition-shadow">
+      <div key={item.id} className={`border rounded-lg p-4 mb-4 bg-white transition-shadow ${
+        isEditing 
+          ? 'border-edg-teal shadow-md bg-blue-50' 
+          : 'border-gray-200 hover:shadow-sm'
+      }`}>
         {/* Main Info - Always Visible */}
         <div className="space-y-3">
           {/* Description */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-            <Input
-              value={safeInputValue(editingValues[item.id]?.description !== undefined ? editingValues[item.id].description : item.description)}
-              onChange={(e) => updateEditingValue(item.id, "description", e.target.value)}
-              onBlur={() => handleBlurUpdate(item, "description")}
-              className="border-gray-300 focus:ring-edg-teal focus:border-edg-teal text-sm"
-              data-testid={`input-description-${item.id}`}
-            />
+            {isEditing ? (
+              <Input
+                value={safeInputValue(editingValues[item.id]?.description, item.description)}
+                onChange={(e) => updateEditingValue(item.id, "description", e.target.value)}
+                className="border-edg-teal focus:ring-edg-teal focus:border-edg-teal text-sm bg-white"
+                data-testid={`input-description-${item.id}`}
+                autoFocus
+              />
+            ) : (
+              <div className="bg-gray-50 border border-gray-200 rounded-md px-3 py-2 text-sm">
+                {item.description}
+              </div>
+            )}
             {item.retailPrice && parseFloat(item.retailPrice.toString()) !== parseFloat(item.unitPrice.toString()) && (
               <div className="text-xs text-gray-500 mt-1">
                 Retail: {formatCurrency(parseFloat(item.retailPrice.toString()))}
@@ -386,45 +496,39 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
           <div className="grid grid-cols-3 gap-3">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Quantity</label>
-              <Input
-                type="number"
-                step="1"
-                min="0"
-                value={safeInputValue(editingValues[item.id]?.quantity !== undefined ? editingValues[item.id].quantity : item.quantity)}
-                onChange={(e) => updateEditingValue(item.id, "quantity", e.target.value)}
-                onBlur={() => {
-                  const value = editingValues[item.id]?.quantity;
-                  if (value !== undefined) {
-                    const numValue = value === '' ? 0 : parseFloat(value as string);
-                    if (!isNaN(numValue)) {
-                      handleUpdateItem(item, "quantity", numValue);
-                    }
-                  }
-                }}
-                className="text-center text-sm"
-                data-testid={`input-quantity-${item.id}`}
-              />
+              {isEditing ? (
+                <Input
+                  type="number"
+                  step="1"
+                  min="0"
+                  value={safeInputValue(editingValues[item.id]?.quantity, item.quantity)}
+                  onChange={(e) => updateEditingValue(item.id, "quantity", e.target.value)}
+                  className="text-center text-sm border-edg-teal focus:ring-edg-teal focus:border-edg-teal bg-white"
+                  data-testid={`input-quantity-${item.id}`}
+                />
+              ) : (
+                <div className="bg-gray-50 border border-gray-200 rounded-md px-3 py-2 text-center text-sm">
+                  {item.quantity}
+                </div>
+              )}
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Unit Price</label>
-              <Input
-                type="number"
-                step="0.01"
-                min="0"
-                value={safeInputValue(editingValues[item.id]?.unitPrice !== undefined ? editingValues[item.id].unitPrice : item.unitPrice)}
-                onChange={(e) => updateEditingValue(item.id, "unitPrice", e.target.value)}
-                onBlur={() => {
-                  const value = editingValues[item.id]?.unitPrice;
-                  if (value !== undefined) {
-                    const numValue = value === '' ? 0 : parseFloat(value as string);
-                    if (!isNaN(numValue)) {
-                      handleUpdateItem(item, "unitPrice", numValue);
-                    }
-                  }
-                }}
-                className="text-center text-sm"
-                data-testid={`input-unit-price-${item.id}`}
-              />
+              {isEditing ? (
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={safeInputValue(editingValues[item.id]?.unitPrice, item.unitPrice)}
+                  onChange={(e) => updateEditingValue(item.id, "unitPrice", e.target.value)}
+                  className="text-center text-sm border-edg-teal focus:ring-edg-teal focus:border-edg-teal bg-white"
+                  data-testid={`input-unit-price-${item.id}`}
+                />
+              ) : (
+                <div className="bg-gray-50 border border-gray-200 rounded-md px-3 py-2 text-center text-sm">
+                  {formatCurrency(item.unitPrice)}
+                </div>
+              )}
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-900 mb-1">Total</label>
@@ -434,34 +538,77 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
             </div>
           </div>
 
-          {/* Expand/Collapse Button and Actions */}
+          {/* Action Buttons Row */}
           <div className="flex items-center justify-between pt-2 border-t border-gray-100">
-            <Collapsible open={isExpanded} onOpenChange={() => toggleCardExpansion(item.id)}>
-              <CollapsibleTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-gray-600 hover:text-gray-900"
-                  data-testid={`button-expand-${item.id}`}
-                >
-                  {isExpanded ? (
-                    <><ChevronUp className="h-4 w-4 mr-1" />Hide Details</>
-                  ) : (
-                    <><ChevronDown className="h-4 w-4 mr-1" />Show Details</>
-                  )}
-                </Button>
-              </CollapsibleTrigger>
-            </Collapsible>
+            <div className="flex items-center space-x-2">
+              <Collapsible open={isExpanded} onOpenChange={() => toggleCardExpansion(item.id)}>
+                <CollapsibleTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-gray-600 hover:text-gray-900"
+                    data-testid={`button-expand-${item.id}`}
+                    disabled={isEditing}
+                  >
+                    {isExpanded ? (
+                      <><ChevronUp className="h-4 w-4 mr-1" />Hide Details</>
+                    ) : (
+                      <><ChevronDown className="h-4 w-4 mr-1" />Show Details</>
+                    )}
+                  </Button>
+                </CollapsibleTrigger>
+              </Collapsible>
+            </div>
             
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handleDeleteItem(item.id)}
-              className="border-red-300 text-red-600 hover:bg-red-50 hover:border-red-400 hover:text-red-700"
-              data-testid={`button-delete-${item.id}`}
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
+            <div className="flex items-center space-x-2">
+              {isEditing ? (
+                <>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleCancelEdit}
+                    className="text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+                    data-testid={`button-cancel-edit-${item.id}`}
+                  >
+                    <XCircle className="h-4 w-4 mr-1" />
+                    Cancel
+                  </Button>
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={() => handleSaveEdit(item)}
+                    disabled={updateLineItemMutation.isPending}
+                    className="bg-edg-teal text-white hover:bg-edg-teal/90"
+                    data-testid={`button-save-edit-${item.id}`}
+                  >
+                    <Save className="h-4 w-4 mr-1" />
+                    {updateLineItemMutation.isPending ? 'Saving...' : 'Save'}
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleStartEdit(item.id, item)}
+                    className="border-gray-300 text-gray-700 hover:bg-gray-50"
+                    data-testid={`button-edit-${item.id}`}
+                  >
+                    <Edit className="h-4 w-4 mr-1" />
+                    Edit
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleDeleteItem(item.id)}
+                    className="border-red-300 text-red-600 hover:bg-red-50 hover:border-red-400 hover:text-red-700"
+                    data-testid={`button-delete-${item.id}`}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </>
+              )}
+            </div>
           </div>
 
           {/* Expanded Details */}
@@ -471,37 +618,40 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Discount</label>
                 <div className="grid grid-cols-2 gap-2">
-                  <Input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={safeInputValue(editingValues[item.id]?.discountValue !== undefined ? editingValues[item.id].discountValue : item.discountValue)}
-                    onChange={(e) => updateEditingValue(item.id, "discountValue", e.target.value)}
-                    onBlur={() => {
-                      const value = editingValues[item.id]?.discountValue;
-                      if (value !== undefined) {
-                        const numValue = value === '' ? 0 : parseFloat(value as string);
-                        if (!isNaN(numValue)) {
-                          handleUpdateItem(item, "discountValue", numValue);
-                        }
-                      }
-                    }}
-                    className="text-center text-sm border-gray-300 focus:border-edg-teal"
-                    placeholder="0"
-                    data-testid={`input-discount-value-${item.id}`}
-                  />
-                  <Select
-                    value={item.discountType}
-                    onValueChange={(value) => handleUpdateItem(item, "discountType", value)}
-                  >
-                    <SelectTrigger className="text-sm border-gray-300">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="percentage">%</SelectItem>
-                      <SelectItem value="dollar">$</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  {isEditing ? (
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={safeInputValue(editingValues[item.id]?.discountValue, item.discountValue)}
+                      onChange={(e) => updateEditingValue(item.id, "discountValue", e.target.value)}
+                      className="text-center text-sm border-edg-teal focus:border-edg-teal bg-white"
+                      placeholder="0"
+                      data-testid={`input-discount-value-${item.id}`}
+                    />
+                  ) : (
+                    <div className="bg-gray-50 border border-gray-200 rounded-md px-3 py-2 text-center text-sm">
+                      {item.discountValue}
+                    </div>
+                  )}
+                  {isEditing ? (
+                    <Select
+                      value={editingValues[item.id]?.discountType !== undefined ? editingValues[item.id].discountType as string : item.discountType}
+                      onValueChange={(value) => updateEditingValue(item.id, "discountType", value)}
+                    >
+                      <SelectTrigger className="text-sm border-edg-teal bg-white">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="percentage">%</SelectItem>
+                        <SelectItem value="dollar">$</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <div className="bg-gray-50 border border-gray-200 rounded-md px-3 py-2 text-center text-sm">
+                      {item.discountType === 'percentage' ? '%' : '$'}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -509,37 +659,40 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Markup</label>
                 <div className="grid grid-cols-2 gap-2">
-                  <Input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={safeInputValue(editingValues[item.id]?.markupValue !== undefined ? editingValues[item.id].markupValue : item.markupValue)}
-                    onChange={(e) => updateEditingValue(item.id, "markupValue", e.target.value)}
-                    onBlur={() => {
-                      const value = editingValues[item.id]?.markupValue;
-                      if (value !== undefined) {
-                        const numValue = value === '' ? 0 : parseFloat(value as string);
-                        if (!isNaN(numValue)) {
-                          handleUpdateItem(item, "markupValue", numValue);
-                        }
-                      }
-                    }}
-                    className="text-center text-sm border-gray-300 focus:border-edg-teal"
-                    placeholder="0"
-                    data-testid={`input-markup-value-${item.id}`}
-                  />
-                  <Select
-                    value={item.markupType}
-                    onValueChange={(value) => handleUpdateItem(item, "markupType", value)}
-                  >
-                    <SelectTrigger className="text-sm border-gray-300">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="percentage">%</SelectItem>
-                      <SelectItem value="dollar">$</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  {isEditing ? (
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={safeInputValue(editingValues[item.id]?.markupValue, item.markupValue)}
+                      onChange={(e) => updateEditingValue(item.id, "markupValue", e.target.value)}
+                      className="text-center text-sm border-edg-teal focus:border-edg-teal bg-white"
+                      placeholder="0"
+                      data-testid={`input-markup-value-${item.id}`}
+                    />
+                  ) : (
+                    <div className="bg-gray-50 border border-gray-200 rounded-md px-3 py-2 text-center text-sm">
+                      {item.markupValue}
+                    </div>
+                  )}
+                  {isEditing ? (
+                    <Select
+                      value={editingValues[item.id]?.markupType !== undefined ? editingValues[item.id].markupType as string : item.markupType}
+                      onValueChange={(value) => updateEditingValue(item.id, "markupType", value)}
+                    >
+                      <SelectTrigger className="text-sm border-edg-teal bg-white">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="percentage">%</SelectItem>
+                        <SelectItem value="dollar">$</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <div className="bg-gray-50 border border-gray-200 rounded-md px-3 py-2 text-center text-sm">
+                      {item.markupType === 'percentage' ? '%' : '$'}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -912,6 +1065,8 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {lineItems.map((item) => {
+                const isEditing = editingItem === item.id;
+                
                 // Use editing values if available, otherwise use item values
                 const currentQuantity = editingValues[item.id]?.quantity !== undefined 
                   ? (editingValues[item.id].quantity === '' ? 0 : parseFloat(editingValues[item.id].quantity as string) || 0)
@@ -951,15 +1106,26 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                 );
 
                 return (
-                  <tr key={item.id} className="hover:bg-gray-50">
+                  <tr key={item.id} className={`${
+                    isEditing 
+                      ? 'bg-blue-50 border-l-4 border-edg-teal'
+                      : 'hover:bg-gray-50'
+                  }`}>
                     <td className="px-3 py-3">
                       <div>
-                        <Input
-                          value={safeInputValue(editingValues[item.id]?.description, item.description)}
-                          onChange={(e) => updateEditingValue(item.id, "description", e.target.value)}
-                          onBlur={() => handleBlurUpdate(item, "description")}
-                          className="border-none bg-transparent focus:ring-2 focus:ring-edg-teal focus:border-transparent text-sm"
-                        />
+                        {isEditing ? (
+                          <Input
+                            value={safeInputValue(editingValues[item.id]?.description, item.description)}
+                            onChange={(e) => updateEditingValue(item.id, "description", e.target.value)}
+                            className="border border-edg-teal focus:ring-2 focus:ring-edg-teal focus:border-edg-teal text-sm bg-white"
+                            data-testid={`input-description-${item.id}`}
+                            autoFocus
+                          />
+                        ) : (
+                          <div className="text-sm py-2 px-1">
+                            {item.description}
+                          </div>
+                        )}
                         {item.retailPrice && parseFloat(item.retailPrice.toString()) !== parseFloat(item.unitPrice.toString()) && (
                           <div className="text-xs text-gray-500 mt-1">
                             Retail: {formatCurrency(parseFloat(item.retailPrice.toString()))}
@@ -968,108 +1134,100 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                       </div>
                     </td>
                     <td className="px-2 py-3 text-center">
-                      <Input
-                        type="number"
-                        step="1"
-                        min="0"
-                        value={safeInputValue(editingValues[item.id]?.quantity, item.quantity)}
-                        onChange={(e) => updateEditingValue(item.id, "quantity", e.target.value)}
-                        onBlur={() => {
-                          const value = editingValues[item.id]?.quantity;
-                          if (value !== undefined) {
-                            const numValue = value === '' ? 0 : parseFloat(value as string);
-                            if (!isNaN(numValue)) {
-                              handleUpdateItem(item, "quantity", numValue);
-                            }
-                          }
-                        }}
-                        className="w-full text-center text-sm"
-                      />
+                      {isEditing ? (
+                        <Input
+                          type="number"
+                          step="1"
+                          min="0"
+                          value={safeInputValue(editingValues[item.id]?.quantity, item.quantity)}
+                          onChange={(e) => updateEditingValue(item.id, "quantity", e.target.value)}
+                          className="w-full text-center text-sm border border-edg-teal focus:ring-2 focus:ring-edg-teal bg-white"
+                          data-testid={`input-quantity-${item.id}`}
+                        />
+                      ) : (
+                        <div className="text-sm py-2">
+                          {item.quantity}
+                        </div>
+                      )}
                     </td>
                     <td className="px-2 py-3 text-center">
-                      <Input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={safeInputValue(editingValues[item.id]?.unitPrice, item.unitPrice)}
-                        onChange={(e) => updateEditingValue(item.id, "unitPrice", e.target.value)}
-                        onBlur={() => {
-                          const value = editingValues[item.id]?.unitPrice;
-                          if (value !== undefined) {
-                            const numValue = value === '' ? 0 : parseFloat(value as string);
-                            if (!isNaN(numValue)) {
-                              handleUpdateItem(item, "unitPrice", numValue);
-                            }
-                          }
-                        }}
-                        className="w-full text-center text-sm"
-                      />
-                    </td>
-                    <td className="px-2 py-3 text-center">
-                      <div className="flex items-center justify-center space-x-2">
+                      {isEditing ? (
                         <Input
                           type="number"
                           step="0.01"
                           min="0"
-                          value={safeInputValue(editingValues[item.id]?.discountValue, item.discountValue)}
-                          onChange={(e) => updateEditingValue(item.id, "discountValue", e.target.value)}
-                          onBlur={() => {
-                            const value = editingValues[item.id]?.discountValue;
-                            if (value !== undefined) {
-                              const numValue = value === '' ? 0 : parseFloat(value as string);
-                              if (!isNaN(numValue)) {
-                                handleUpdateItem(item, "discountValue", numValue);
-                              }
-                            }
-                          }}
-                          className="w-20 text-center text-sm border-gray-300 focus:border-edg-teal"
+                          value={safeInputValue(editingValues[item.id]?.unitPrice, item.unitPrice)}
+                          onChange={(e) => updateEditingValue(item.id, "unitPrice", e.target.value)}
+                          className="w-full text-center text-sm border border-edg-teal focus:ring-2 focus:ring-edg-teal bg-white"
+                          data-testid={`input-unit-price-${item.id}`}
                         />
-                        <Select
-                          value={item.discountType}
-                          onValueChange={(value) => handleUpdateItem(item, "discountType", value)}
-                        >
-                          <SelectTrigger className="w-10 h-8 text-sm border-gray-300">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="percentage">%</SelectItem>
-                            <SelectItem value="dollar">$</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
+                      ) : (
+                        <div className="text-sm py-2">
+                          {formatCurrency(item.unitPrice)}
+                        </div>
+                      )}
                     </td>
                     <td className="px-2 py-3 text-center">
-                      <div className="flex items-center justify-center space-x-2">
-                        <Input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          value={safeInputValue(editingValues[item.id]?.markupValue, item.markupValue)}
-                          onChange={(e) => updateEditingValue(item.id, "markupValue", e.target.value)}
-                          onBlur={() => {
-                            const value = editingValues[item.id]?.markupValue;
-                            if (value !== undefined) {
-                              const numValue = value === '' ? 0 : parseFloat(value as string);
-                              if (!isNaN(numValue)) {
-                                handleUpdateItem(item, "markupValue", numValue);
-                              }
-                            }
-                          }}
-                          className="w-20 text-center text-sm border-gray-300 focus:border-edg-teal"
-                        />
-                        <Select
-                          value={item.markupType}
-                          onValueChange={(value) => handleUpdateItem(item, "markupType", value)}
-                        >
-                          <SelectTrigger className="w-10 h-8 text-sm border-gray-300">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="percentage">%</SelectItem>
-                            <SelectItem value="dollar">$</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
+                      {isEditing ? (
+                        <div className="flex items-center justify-center space-x-2">
+                          <Input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={safeInputValue(editingValues[item.id]?.discountValue, item.discountValue)}
+                            onChange={(e) => updateEditingValue(item.id, "discountValue", e.target.value)}
+                            className="w-20 text-center text-sm border border-edg-teal focus:ring-2 focus:ring-edg-teal bg-white"
+                            data-testid={`input-discount-value-${item.id}`}
+                          />
+                          <Select
+                            value={editingValues[item.id]?.discountType !== undefined ? editingValues[item.id].discountType as string : item.discountType}
+                            onValueChange={(value) => updateEditingValue(item.id, "discountType", value)}
+                          >
+                            <SelectTrigger className="w-10 h-8 text-sm border border-edg-teal bg-white">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="percentage">%</SelectItem>
+                              <SelectItem value="dollar">$</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      ) : (
+                        <div className="text-sm py-2">
+                          {item.discountValue} {item.discountType === 'percentage' ? '%' : '$'}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-2 py-3 text-center">
+                      {isEditing ? (
+                        <div className="flex items-center justify-center space-x-2">
+                          <Input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={safeInputValue(editingValues[item.id]?.markupValue, item.markupValue)}
+                            onChange={(e) => updateEditingValue(item.id, "markupValue", e.target.value)}
+                            className="w-20 text-center text-sm border border-edg-teal focus:ring-2 focus:ring-edg-teal bg-white"
+                            data-testid={`input-markup-value-${item.id}`}
+                          />
+                          <Select
+                            value={editingValues[item.id]?.markupType !== undefined ? editingValues[item.id].markupType as string : item.markupType}
+                            onValueChange={(value) => updateEditingValue(item.id, "markupType", value)}
+                          >
+                            <SelectTrigger className="w-10 h-8 text-sm border border-edg-teal bg-white">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="percentage">%</SelectItem>
+                              <SelectItem value="dollar">$</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      ) : (
+                        <div className="text-sm py-2">
+                          {item.markupValue} {item.markupType === 'percentage' ? '%' : '$'}
+                        </div>
+                      )}
                     </td>
                     <td className="px-2 py-3 text-right text-sm font-medium text-success-green">
                       {formatCurrency(margin)}
@@ -1078,15 +1236,50 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                       {formatCurrency(total)}
                     </td>
                     <td className="px-2 py-3 text-center">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleDeleteItem(item.id)}
-                        className="border-red-300 text-red-600 hover:bg-red-50 hover:border-red-400 hover:text-red-700"
-                        data-testid={`button-delete-${item.id}`}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      {isEditing ? (
+                        <div className="flex items-center justify-center space-x-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={handleCancelEdit}
+                            className="text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+                            data-testid={`button-cancel-edit-${item.id}`}
+                          >
+                            <XCircle className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="default"
+                            size="sm"
+                            onClick={() => handleSaveEdit(item)}
+                            disabled={updateLineItemMutation.isPending}
+                            className="bg-edg-teal text-white hover:bg-edg-teal/90"
+                            data-testid={`button-save-edit-${item.id}`}
+                          >
+                            <Save className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-center space-x-1">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleStartEdit(item.id, item)}
+                            className="border-gray-300 text-gray-700 hover:bg-gray-50"
+                            data-testid={`button-edit-${item.id}`}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleDeleteItem(item.id)}
+                            className="border-red-300 text-red-600 hover:bg-red-50 hover:border-red-400 hover:text-red-700"
+                            data-testid={`button-delete-${item.id}`}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      )}
                     </td>
                   </tr>
                 );
