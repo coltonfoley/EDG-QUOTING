@@ -179,6 +179,8 @@ export function QuoteImporter({ onImportComplete, onClose }: QuoteImporterProps)
             unitPrice,
             markupType: "percentage",
             markupValue,
+            discountType: "percentage", // Required field
+            discountValue: "0", // Required field
           });
         }
         
@@ -212,6 +214,8 @@ export function QuoteImporter({ onImportComplete, onClose }: QuoteImporterProps)
             unitPrice,
             markupType: "percentage",
             markupValue,
+            discountType: "percentage", // Required field
+            discountValue: "0", // Required field
           });
         }
         
