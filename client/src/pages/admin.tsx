@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { AppHeader } from "@/components/app-header";
 import { Button } from "@/components/ui/button";
@@ -728,14 +728,36 @@ function ProductBulkEditor() {
   const queryClient = useQueryClient();
   const [selectedProducts, setSelectedProducts] = useState<number[]>([]);
   const [showBulkEditForm, setShowBulkEditForm] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState<string>("all");
+  const [searchTerm, setSearchTerm] = useState<string>("");
 
   // Fetch all products
   const { data: products = [], isLoading } = useQuery<Product[]>({
     queryKey: ["/api/products"],
   });
 
-  // Filter imported products
-  const importedProducts = products.filter(p => p.category === "Imported");
+  // Get unique categories
+  const categories = useMemo(() => {
+    if (!products) return [];
+    const uniqueCategories = Array.from(new Set(products.map(p => p.category || "Uncategorized")));
+    return uniqueCategories.sort();
+  }, [products]);
+
+  // Filter products by category and search term
+  const filteredProducts = useMemo(() => {
+    if (!products) return [];
+    
+    return products.filter(product => {
+      const matchesCategory = selectedCategory === "all" || 
+        (product.category || "Uncategorized") === selectedCategory;
+      
+      const matchesSearch = searchTerm === "" || 
+        product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (product.description || "").toLowerCase().includes(searchTerm.toLowerCase());
+      
+      return matchesCategory && matchesSearch;
+    });
+  }, [products, selectedCategory, searchTerm]);
 
   const bulkUpdateForm = useForm<BulkUpdateData>({
     resolver: zodResolver(bulkUpdateSchema),
@@ -781,7 +803,7 @@ function ProductBulkEditor() {
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      setSelectedProducts(importedProducts.map(p => p.id));
+      setSelectedProducts(filteredProducts.map(p => p.id));
     } else {
       setSelectedProducts([]);
     }
@@ -812,9 +834,9 @@ function ProductBulkEditor() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-lg font-semibold">Imported Products</h3>
+          <h3 className="text-lg font-semibold">Bulk Product Editor</h3>
           <p className="text-sm text-gray-600">
-            {importedProducts.length} products available for bulk editing
+            {filteredProducts.length} products available for bulk editing
           </p>
         </div>
         
@@ -829,11 +851,41 @@ function ProductBulkEditor() {
         )}
       </div>
 
-      {importedProducts.length === 0 ? (
+      {/* Filter Controls */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-gray-50 rounded-lg">
+        <div>
+          <Label htmlFor="category-filter">Filter by Category</Label>
+          <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+            <SelectTrigger id="category-filter">
+              <SelectValue placeholder="Select category" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Categories</SelectItem>
+              {categories.map((category) => (
+                <SelectItem key={category} value={category}>
+                  {category}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label htmlFor="search-products">Search Products</Label>
+          <Input
+            id="search-products"
+            type="text"
+            placeholder="Search by name or description..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
+      </div>
+
+      {filteredProducts.length === 0 ? (
         <div className="text-center py-8 text-gray-500">
           <Package className="h-16 w-16 mx-auto mb-4 text-gray-300" />
-          <p>No imported products found.</p>
-          <p className="text-sm">Use the Price List Uploader above to import products.</p>
+          <p>No products found matching your criteria.</p>
+          <p className="text-sm">Try adjusting your filters or importing products above.</p>
         </div>
       ) : (
         <div className="border rounded-lg overflow-hidden">
@@ -843,7 +895,7 @@ function ProductBulkEditor() {
                 <TableHead className="w-12">
                   <input
                     type="checkbox"
-                    checked={selectedProducts.length === importedProducts.length}
+                    checked={selectedProducts.length === filteredProducts.length && filteredProducts.length > 0}
                     onChange={(e) => handleSelectAll(e.target.checked)}
                     className="rounded border-gray-300"
                   />
@@ -856,7 +908,7 @@ function ProductBulkEditor() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {importedProducts.map((product) => (
+              {filteredProducts.map((product: Product) => (
                 <TableRow key={product.id}>
                   <TableCell>
                     <input
