@@ -202,7 +202,7 @@ export function FullProposalTemplate({ quote, template, companyInfo, quoteTerms 
               <h3 className="text-lg font-semibold mb-4" style={{ color: branding.accentColor }}>Project Plans & Specifications</h3>
               <TechnicalDiagramDisplay 
                 diagrams={technicalDiagrams} 
-                layout={technicalDiagrams.length === 1 ? "single" : "grid"}
+                layout={"grid"}
                 showLabels={true}
               />
             </div>
@@ -313,9 +313,9 @@ export function FullProposalTemplate({ quote, template, companyInfo, quoteTerms 
             <div>
               <h3 className="text-lg font-semibold mb-4" style={{ color: branding.accentColor }}>Our Recent Projects</h3>
               <ImageGrid 
-                images={portfolioImages.filter((img: PortfolioImage) => img.featured || portfolioImages.length <= 6)} 
+                images={portfolioImages.filter((img: PortfolioImage) => img.featured || portfolioImages.length <= 12)} 
                 columns={3} 
-                maxImages={6}
+                maxImages={12}
                 showCaptions={true}
               />
             </div>

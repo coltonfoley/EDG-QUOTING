@@ -242,7 +242,7 @@ export function CompanyImageDisplay({
   if (layout === 'banner') {
     return (
       <div className="flex justify-center space-x-4 mb-6">
-        {filteredImages.slice(0, 4).map((image, index) => (
+        {filteredImages.slice(0, 8).map((image, index) => (
           <img 
             key={index}
             src={image.url}
@@ -291,7 +291,7 @@ export function ProjectPhaseDisplay({
   if (images.length === 0) return null;
 
   if (!showPhases) {
-    return <ImageGrid images={images} columns={3} maxImages={6} />;
+    return <ImageGrid images={images} columns={3} maxImages={15} />;
   }
 
   const phases = ['before', 'during', 'after', 'other'] as const;
@@ -314,7 +314,7 @@ export function ProjectPhaseDisplay({
             <ImageGrid 
               images={phaseImages} 
               columns={3} 
-              maxImages={3}
+              maxImages={8}
               showCaptions={true}
             />
           </div>
