@@ -12,6 +12,7 @@ import Landing from "@/pages/landing";
 import Home from "@/pages/home";
 import AuthPage from "@/pages/auth-page";
 import AdminPage from "@/pages/admin";
+import AdminTemplatesPage from "@/pages/admin-templates";
 import ContractsPage from "@/pages/contracts";
 
 function Router() {
@@ -38,6 +39,7 @@ function Router() {
           <Route path="/products" component={Products} />
           <Route path="/contracts" component={ContractsPage} />
           <Route path="/admin" component={AdminPage} />
+          <Route path="/admin/templates" component={AdminTemplatesPage} />
         </>
       )}
     </Switch>

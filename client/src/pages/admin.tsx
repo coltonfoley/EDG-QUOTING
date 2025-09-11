@@ -14,7 +14,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
-import { UserPlus, Shield, User as UserIcon, Trash2, Edit, Upload, FileSpreadsheet, AlertCircle, CheckCircle, Package, Settings } from "lucide-react";
+import { UserPlus, Shield, User as UserIcon, Trash2, Edit, Upload, FileSpreadsheet, AlertCircle, CheckCircle, Package, Settings, FileText } from "lucide-react";
 import { z } from "zod";
 import type { User, Product } from "@shared/schema";
 
@@ -212,8 +212,22 @@ export default function AdminPage() {
       <AppHeader />
       <div className="max-w-6xl mx-auto px-4 py-8">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">User Management</h1>
-          <p className="text-gray-600">Create and manage team member accounts</p>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Administration</h1>
+          <p className="text-gray-600">Manage system settings, users, and templates</p>
+          
+          {/* Admin Navigation Tabs */}
+          <div className="flex space-x-1 mt-6 border-b">
+            <button className="px-4 py-2 text-sm font-medium text-edg-black border-b-2 border-edg-black bg-white">
+              Users & Access
+            </button>
+            <a 
+              href="/admin/templates"
+              className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-edg-black hover:border-b-2 hover:border-gray-300 transition-colors"
+            >
+              <FileText className="inline mr-2 h-4 w-4" />
+              Templates
+            </a>
+          </div>
         </div>
 
         <Card>
