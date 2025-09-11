@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Trash2, Edit, Plus, Package, Search, Filter, X, ChevronDown, ChevronUp, Save, XCircle } from "lucide-react";
+import { Trash2, Edit, Plus, Package, Search, Filter, X, ChevronDown, ChevronUp, Save, XCircle, Percent, DollarSign } from "lucide-react";
 import { formatCurrency, calculateLineItemTotal, calculateLineItemMargin, applyDiscountToPrice } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -418,6 +418,91 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
     }));
   };
 
+  // Render discount/markup control component
+  const DiscountMarkupControl = ({
+    label,
+    editingValue,
+    originalValue,
+    type,
+    onValueChange,
+    onTypeChange,
+    isEditing = false,
+    testIdPrefix,
+    variant = "mobile" // "mobile" or "desktop"
+  }: {
+    label: string;
+    editingValue: string | undefined;
+    originalValue: number;
+    type: "percentage" | "dollar";
+    onValueChange: (value: string) => void;
+    onTypeChange: (type: "percentage" | "dollar") => void;
+    isEditing?: boolean;
+    testIdPrefix: string;
+    variant?: "mobile" | "desktop";
+  }) => {
+    const displayValue = safeInputValue(editingValue, originalValue);
+    
+    if (!isEditing) {
+      return (
+        <div className={`text-sm py-2 ${variant === 'desktop' ? '' : 'bg-gray-50 border border-gray-200 rounded-md px-3 py-2 text-center'}`}>
+          {originalValue} {type === 'percentage' ? '%' : '$'}
+        </div>
+      );
+    }
+
+    const isMobileVariant = variant === "mobile";
+    
+    return (
+      <div className={`space-y-2 ${isMobileVariant ? 'bg-white border border-edg-teal rounded-md p-3' : 'border border-edg-teal rounded-md p-2 bg-white'}`}>
+        <label className="block text-xs font-medium text-gray-700 mb-1">{label}</label>
+        
+        {/* Value Input */}
+        <Input
+          type="number"
+          step="0.01"
+          min="0"
+          value={displayValue}
+          onChange={(e) => onValueChange(e.target.value)}
+          className={`text-center text-sm border-gray-300 focus:border-edg-teal focus:ring-edg-teal bg-white ${
+            isMobileVariant ? 'h-10' : 'h-8'
+          }`}
+          placeholder="0"
+          data-testid={testIdPrefix}
+        />
+        
+        {/* Type Selection - Radio Buttons */}
+        <div className={`flex gap-1 ${isMobileVariant ? 'justify-center' : ''}`}>
+          <button
+            type="button"
+            onClick={() => onTypeChange("percentage")}
+            className={`flex items-center justify-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-colors ${
+              type === "percentage" 
+                ? "bg-edg-teal text-white" 
+                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+            } ${isMobileVariant ? 'flex-1 h-8' : 'h-6'}`}
+            data-testid={`${testIdPrefix}-type-percentage`}
+          >
+            <Percent className={`${isMobileVariant ? 'h-3 w-3' : 'h-3 w-3'}`} />
+            %
+          </button>
+          <button
+            type="button"
+            onClick={() => onTypeChange("dollar")}
+            className={`flex items-center justify-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-colors ${
+              type === "dollar" 
+                ? "bg-edg-teal text-white" 
+                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+            } ${isMobileVariant ? 'flex-1 h-8' : 'h-6'}`}
+            data-testid={`${testIdPrefix}-type-dollar`}
+          >
+            <DollarSign className={`${isMobileVariant ? 'h-3 w-3' : 'h-3 w-3'}`} />
+            $
+          </button>
+        </div>
+      </div>
+    );
+  };
+
   // Render mobile card layout
   const renderMobileCard = (item: LineItem) => {
     const isExpanded = expandedCards[item.id];
@@ -615,86 +700,30 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
           <Collapsible open={isExpanded}>
             <CollapsibleContent className="space-y-3 pt-3 border-t border-gray-100">
               {/* Discount Controls */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Discount</label>
-                <div className="grid grid-cols-2 gap-2">
-                  {isEditing ? (
-                    <Input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={safeInputValue(editingValues[item.id]?.discountValue, item.discountValue)}
-                      onChange={(e) => updateEditingValue(item.id, "discountValue", e.target.value)}
-                      className="text-center text-sm border-edg-teal focus:border-edg-teal bg-white"
-                      placeholder="0"
-                      data-testid={`input-discount-value-${item.id}`}
-                    />
-                  ) : (
-                    <div className="bg-gray-50 border border-gray-200 rounded-md px-3 py-2 text-center text-sm">
-                      {item.discountValue}
-                    </div>
-                  )}
-                  {isEditing ? (
-                    <Select
-                      value={editingValues[item.id]?.discountType !== undefined ? editingValues[item.id].discountType as string : item.discountType}
-                      onValueChange={(value) => updateEditingValue(item.id, "discountType", value)}
-                    >
-                      <SelectTrigger className="text-sm border-edg-teal bg-white">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="percentage">%</SelectItem>
-                        <SelectItem value="dollar">$</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <div className="bg-gray-50 border border-gray-200 rounded-md px-3 py-2 text-center text-sm">
-                      {item.discountType === 'percentage' ? '%' : '$'}
-                    </div>
-                  )}
-                </div>
-              </div>
+              <DiscountMarkupControl
+                label="Discount"
+                editingValue={editingValues[item.id]?.discountValue}
+                originalValue={item.discountValue}
+                type={currentDiscountType}
+                onValueChange={(value) => updateEditingValue(item.id, "discountValue", value)}
+                onTypeChange={(type) => updateEditingValue(item.id, "discountType", type)}
+                isEditing={isEditing}
+                testIdPrefix={`input-discount-value-${item.id}`}
+                variant="mobile"
+              />
 
               {/* Markup Controls */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Markup</label>
-                <div className="grid grid-cols-2 gap-2">
-                  {isEditing ? (
-                    <Input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={safeInputValue(editingValues[item.id]?.markupValue, item.markupValue)}
-                      onChange={(e) => updateEditingValue(item.id, "markupValue", e.target.value)}
-                      className="text-center text-sm border-edg-teal focus:border-edg-teal bg-white"
-                      placeholder="0"
-                      data-testid={`input-markup-value-${item.id}`}
-                    />
-                  ) : (
-                    <div className="bg-gray-50 border border-gray-200 rounded-md px-3 py-2 text-center text-sm">
-                      {item.markupValue}
-                    </div>
-                  )}
-                  {isEditing ? (
-                    <Select
-                      value={editingValues[item.id]?.markupType !== undefined ? editingValues[item.id].markupType as string : item.markupType}
-                      onValueChange={(value) => updateEditingValue(item.id, "markupType", value)}
-                    >
-                      <SelectTrigger className="text-sm border-edg-teal bg-white">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="percentage">%</SelectItem>
-                        <SelectItem value="dollar">$</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <div className="bg-gray-50 border border-gray-200 rounded-md px-3 py-2 text-center text-sm">
-                      {item.markupType === 'percentage' ? '%' : '$'}
-                    </div>
-                  )}
-                </div>
-              </div>
+              <DiscountMarkupControl
+                label="Markup"
+                editingValue={editingValues[item.id]?.markupValue}
+                originalValue={item.markupValue}
+                type={currentMarkupType}
+                onValueChange={(value) => updateEditingValue(item.id, "markupValue", value)}
+                onTypeChange={(type) => updateEditingValue(item.id, "markupType", type)}
+                isEditing={isEditing}
+                testIdPrefix={`input-markup-value-${item.id}`}
+                variant="mobile"
+              />
 
               {/* Margin Display */}
               <div className="bg-green-50 border border-green-200 rounded-md p-3">
@@ -934,58 +963,28 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                   {/* Advanced Controls */}
                   <div className="space-y-3 pt-3 border-t border-blue-200">
                     <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Discount</label>
-                        <div className="grid grid-cols-2 gap-2">
-                          <Input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            value={newItem.discountValue}
-                            onChange={(e) => setNewItem({ ...newItem, discountValue: e.target.value })}
-                            className="text-center text-sm border-gray-300"
-                            placeholder="0"
-                          />
-                          <Select
-                            value={newItem.discountType}
-                            onValueChange={(value) => setNewItem({ ...newItem, discountType: value as "percentage" | "dollar" })}
-                          >
-                            <SelectTrigger className="text-sm border-gray-300">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="percentage">%</SelectItem>
-                              <SelectItem value="dollar">$</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Markup</label>
-                        <div className="grid grid-cols-2 gap-2">
-                          <Input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            value={newItem.markupValue}
-                            onChange={(e) => setNewItem({ ...newItem, markupValue: e.target.value })}
-                            className="text-center text-sm border-gray-300"
-                            placeholder="0"
-                          />
-                          <Select
-                            value={newItem.markupType}
-                            onValueChange={(value) => setNewItem({ ...newItem, markupType: value as "percentage" | "dollar" })}
-                          >
-                            <SelectTrigger className="text-sm border-gray-300">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="percentage">%</SelectItem>
-                              <SelectItem value="dollar">$</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
+                      <DiscountMarkupControl
+                        label="Discount"
+                        editingValue={newItem.discountValue}
+                        originalValue={0}
+                        type={newItem.discountType}
+                        onValueChange={(value) => setNewItem({ ...newItem, discountValue: value })}
+                        onTypeChange={(type) => setNewItem({ ...newItem, discountType: type })}
+                        isEditing={true}
+                        testIdPrefix="input-discount-new-mobile"
+                        variant="mobile"
+                      />
+                      <DiscountMarkupControl
+                        label="Markup"
+                        editingValue={newItem.markupValue}
+                        originalValue={0}
+                        type={newItem.markupType}
+                        onValueChange={(value) => setNewItem({ ...newItem, markupValue: value })}
+                        onTypeChange={(type) => setNewItem({ ...newItem, markupType: type })}
+                        isEditing={true}
+                        testIdPrefix="input-markup-new-mobile"
+                        variant="mobile"
+                      />
                     </div>
 
                     {/* Margin Display */}
@@ -1168,66 +1167,30 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                       )}
                     </td>
                     <td className="px-2 py-3 text-center">
-                      {isEditing ? (
-                        <div className="flex items-center justify-center space-x-2">
-                          <Input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            value={safeInputValue(editingValues[item.id]?.discountValue, item.discountValue)}
-                            onChange={(e) => updateEditingValue(item.id, "discountValue", e.target.value)}
-                            className="w-20 text-center text-sm border border-edg-teal focus:ring-2 focus:ring-edg-teal bg-white"
-                            data-testid={`input-discount-value-${item.id}`}
-                          />
-                          <Select
-                            value={editingValues[item.id]?.discountType !== undefined ? editingValues[item.id].discountType as string : item.discountType}
-                            onValueChange={(value) => updateEditingValue(item.id, "discountType", value)}
-                          >
-                            <SelectTrigger className="w-10 h-8 text-sm border border-edg-teal bg-white">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="percentage">%</SelectItem>
-                              <SelectItem value="dollar">$</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      ) : (
-                        <div className="text-sm py-2">
-                          {item.discountValue} {item.discountType === 'percentage' ? '%' : '$'}
-                        </div>
-                      )}
+                      <DiscountMarkupControl
+                        label=""
+                        editingValue={editingValues[item.id]?.discountValue}
+                        originalValue={item.discountValue}
+                        type={currentDiscountType}
+                        onValueChange={(value) => updateEditingValue(item.id, "discountValue", value)}
+                        onTypeChange={(type) => updateEditingValue(item.id, "discountType", type)}
+                        isEditing={isEditing}
+                        testIdPrefix={`input-discount-value-${item.id}`}
+                        variant="desktop"
+                      />
                     </td>
                     <td className="px-2 py-3 text-center">
-                      {isEditing ? (
-                        <div className="flex items-center justify-center space-x-2">
-                          <Input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            value={safeInputValue(editingValues[item.id]?.markupValue, item.markupValue)}
-                            onChange={(e) => updateEditingValue(item.id, "markupValue", e.target.value)}
-                            className="w-20 text-center text-sm border border-edg-teal focus:ring-2 focus:ring-edg-teal bg-white"
-                            data-testid={`input-markup-value-${item.id}`}
-                          />
-                          <Select
-                            value={editingValues[item.id]?.markupType !== undefined ? editingValues[item.id].markupType as string : item.markupType}
-                            onValueChange={(value) => updateEditingValue(item.id, "markupType", value)}
-                          >
-                            <SelectTrigger className="w-10 h-8 text-sm border border-edg-teal bg-white">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="percentage">%</SelectItem>
-                              <SelectItem value="dollar">$</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      ) : (
-                        <div className="text-sm py-2">
-                          {item.markupValue} {item.markupType === 'percentage' ? '%' : '$'}
-                        </div>
-                      )}
+                      <DiscountMarkupControl
+                        label=""
+                        editingValue={editingValues[item.id]?.markupValue}
+                        originalValue={item.markupValue}
+                        type={currentMarkupType}
+                        onValueChange={(value) => updateEditingValue(item.id, "markupValue", value)}
+                        onTypeChange={(type) => updateEditingValue(item.id, "markupType", type)}
+                        isEditing={isEditing}
+                        testIdPrefix={`input-markup-value-${item.id}`}
+                        variant="desktop"
+                      />
                     </td>
                     <td className="px-2 py-3 text-right text-sm font-medium text-success-green">
                       {formatCurrency(margin)}
@@ -1319,54 +1282,30 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                     />
                   </td>
                   <td className="px-2 py-3 text-center">
-                    <div className="flex items-center justify-center space-x-2">
-                      <Input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={newItem.discountValue}
-                        onChange={(e) => setNewItem({ ...newItem, discountValue: e.target.value })}
-                        className="w-12 text-center text-sm border-gray-300"
-                        placeholder="0"
-                      />
-                      <Select
-                        value={newItem.discountType}
-                        onValueChange={(value) => setNewItem({ ...newItem, discountType: value as "percentage" | "dollar" })}
-                      >
-                        <SelectTrigger className="w-10 h-8 text-sm border-gray-300">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="percentage">%</SelectItem>
-                          <SelectItem value="dollar">$</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
+                    <DiscountMarkupControl
+                      label=""
+                      editingValue={newItem.discountValue}
+                      originalValue={0}
+                      type={newItem.discountType}
+                      onValueChange={(value) => setNewItem({ ...newItem, discountValue: value })}
+                      onTypeChange={(type) => setNewItem({ ...newItem, discountType: type })}
+                      isEditing={true}
+                      testIdPrefix="input-discount-new"
+                      variant="desktop"
+                    />
                   </td>
                   <td className="px-2 py-3 text-center">
-                    <div className="flex items-center justify-center space-x-2">
-                      <Input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={newItem.markupValue}
-                        onChange={(e) => setNewItem({ ...newItem, markupValue: e.target.value })}
-                        className="w-12 text-center text-sm border-gray-300"
-                        placeholder="0"
-                      />
-                      <Select
-                        value={newItem.markupType}
-                        onValueChange={(value) => setNewItem({ ...newItem, markupType: value as "percentage" | "dollar" })}
-                      >
-                        <SelectTrigger className="w-10 h-8 text-sm border-gray-300">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="percentage">%</SelectItem>
-                          <SelectItem value="dollar">$</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
+                    <DiscountMarkupControl
+                      label=""
+                      editingValue={newItem.markupValue}
+                      originalValue={0}
+                      type={newItem.markupType}
+                      onValueChange={(value) => setNewItem({ ...newItem, markupValue: value })}
+                      onTypeChange={(type) => setNewItem({ ...newItem, markupType: type })}
+                      isEditing={true}
+                      testIdPrefix="input-markup-new"
+                      variant="desktop"
+                    />
                   </td>
                   <td className="px-2 py-3 text-right text-sm font-medium text-success-green">
                     {formatCurrency(
