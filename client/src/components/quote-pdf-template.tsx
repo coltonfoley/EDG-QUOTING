@@ -1,13 +1,15 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Download, Edit3, Loader2, FileText, AlertCircle } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Download, Edit3, Loader2, FileText, AlertCircle, CheckCircle, Star, Users, Briefcase, Settings, Clock, DollarSign } from "lucide-react";
 import { formatCurrency, calculateQuoteTotals } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -43,6 +45,7 @@ export function QuotePDFTemplate({ quote, isOpen, onClose }: QuotePDFTemplatePro
   const { toast } = useToast();
   const [isEditing, setIsEditing] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
+  const [showTemplateSelection, setShowTemplateSelection] = useState(true);
   
   // Fetch proposal templates with proper typing
   const { data: proposalTemplates, isLoading: templatesLoading, error: templatesError } = useQuery<ProposalTemplate[]>({
@@ -80,11 +83,114 @@ export function QuotePDFTemplate({ quote, isOpen, onClose }: QuotePDFTemplatePro
     quote.discount ?? 0
   );
 
-  // Get selected template or default
+  // Helper functions for smart template selection
+  const getQuoteComplexity = (quote: QuoteWithDetails) => {
+    const lineItemCount = quote.lineItems.length;
+    const totalValue = totals.total;
+    const hasProjectDetails = quote.projectName || quote.projectAddress || quote.notes;
+    
+    if (lineItemCount > 10 || totalValue > 50000 || hasProjectDetails) {
+      return 'complex';
+    } else if (lineItemCount > 5 || totalValue > 10000) {
+      return 'moderate';
+    }
+    return 'simple';
+  };
+
+  const getRecommendedTemplate = (templates: ProposalTemplate[], quote: QuoteWithDetails) => {
+    const complexity = getQuoteComplexity(quote);
+    
+    // Priority order for recommendations
+    const recommendationMap = {
+      simple: ['basic_quote', 'executive_summary'],
+      moderate: ['full_proposal', 'basic_quote', 'executive_summary'],
+      complex: ['full_proposal', 'technical_spec', 'executive_summary']
+    };
+    
+    const preferredCategories = recommendationMap[complexity];
+    
+    for (const category of preferredCategories) {
+      const template = templates.find(t => t.category === category && t.isActive);
+      if (template) return template;
+    }
+    
+    return templates.find(t => t.isDefault) || templates[0];
+  };
+
+  const getStorageKey = (quoteId: number) => `quote-template-${quoteId}`;
+
+  // Get templates array and handle smart selection
   const templatesArray = proposalTemplates || [];
+  
+  // Auto-select template when templates load
+  useEffect(() => {
+    if (!templatesArray.length || selectedTemplateId) return;
+    
+    // First, try to get last used template for this quote from localStorage
+    const savedTemplateId = localStorage.getItem(getStorageKey(quote.id));
+    if (savedTemplateId) {
+      const savedTemplate = templatesArray.find(t => t.id.toString() === savedTemplateId);
+      if (savedTemplate && savedTemplate.isActive) {
+        setSelectedTemplateId(savedTemplateId);
+        return;
+      }
+    }
+    
+    // Fall back to recommended template
+    const recommended = getRecommendedTemplate(templatesArray, quote);
+    if (recommended) {
+      setSelectedTemplateId(recommended.id.toString());
+    }
+  }, [templatesArray, quote.id, selectedTemplateId]);
+
+  // Save template selection to localStorage
+  const handleTemplateSelect = (templateId: string) => {
+    setSelectedTemplateId(templateId);
+    localStorage.setItem(getStorageKey(quote.id), templateId);
+    if (showTemplateSelection) {
+      setShowTemplateSelection(false);
+    }
+  };
+
   const selectedTemplate = templatesArray.find(
     (t) => t.id.toString() === selectedTemplateId
   ) || templatesArray.find((t) => t.isDefault) || templatesArray[0];
+
+  // Template information helpers
+  const getTemplateIcon = (category: string) => {
+    switch (category) {
+      case 'basic_quote': return FileText;
+      case 'full_proposal': return Briefcase;
+      case 'executive_summary': return Users;
+      case 'technical_spec': return Settings;
+      default: return FileText;
+    }
+  };
+
+  const getTemplateUseCase = (category: string) => {
+    switch (category) {
+      case 'basic_quote': return 'Simple quotes with essential details';
+      case 'full_proposal': return 'Comprehensive proposals with detailed scope';
+      case 'executive_summary': return 'High-level overviews for decision makers';
+      case 'technical_spec': return 'Detailed technical specifications';
+      default: return 'General purpose template';
+    }
+  };
+
+  const getTemplateBadgeColor = (category: string) => {
+    switch (category) {
+      case 'basic_quote': return 'bg-blue-100 text-blue-800 border-blue-200';
+      case 'full_proposal': return 'bg-green-100 text-green-800 border-green-200';
+      case 'executive_summary': return 'bg-purple-100 text-purple-800 border-purple-200';
+      case 'technical_spec': return 'bg-orange-100 text-orange-800 border-orange-200';
+      default: return 'bg-gray-100 text-gray-800 border-gray-200';
+    }
+  };
+
+  const isRecommendedTemplate = (template: ProposalTemplate) => {
+    const recommended = getRecommendedTemplate(templatesArray, quote);
+    return recommended?.id === template.id;
+  };
   
   // Render the appropriate template component
   const renderTemplate = () => {
@@ -252,55 +358,39 @@ export function QuotePDFTemplate({ quote, isOpen, onClose }: QuotePDFTemplatePro
         <DialogHeader>
           <div className="flex justify-between items-center">
             <DialogTitle>
-              {selectedTemplate?.name || "Quote PDF Template"}
-              {selectedTemplate && (
+              {showTemplateSelection ? "Select Template" : selectedTemplate?.name || "Quote PDF Template"}
+              {selectedTemplate && !showTemplateSelection && (
                 <span className="text-sm font-normal text-gray-600 ml-2">
                   ({selectedTemplate.description})
                 </span>
               )}
             </DialogTitle>
-            <div className="flex space-x-4">
-              <Select
-                value={selectedTemplateId || ""}
-                onValueChange={setSelectedTemplateId}
-                disabled={templatesLoading}
-              >
-                <SelectTrigger className="w-48">
-                  <SelectValue placeholder={templatesLoading ? "Loading..." : "Select Template"}>
-                    <div className="flex items-center">
-                      <FileText className="mr-2 h-4 w-4" />
-                      {selectedTemplate?.name || "Select Template"}
-                    </div>
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  {templatesArray.map((template) => (
-                    <SelectItem key={template.id} value={template.id.toString()}>
-                      <div className="flex items-center">
-                        <FileText className="mr-2 h-4 w-4" />
-                        <div>
-                          <div className="font-medium">{template.name}</div>
-                          <div className="text-xs text-gray-600 capitalize">
-                            {template.category.replace('_', ' ')}
-                          </div>
-                        </div>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="flex space-x-2">
+              {!showTemplateSelection && (
+                <Button
+                  variant="outline"
+                  onClick={() => setShowTemplateSelection(true)}
+                  className="border-gray-300 text-gray-700 hover:bg-gray-50"
+                  data-testid="button-change-template"
+                >
+                  <FileText className="mr-2 h-4 w-4" />
+                  Change Template
+                </Button>
+              )}
               <Button
                 variant="outline"
                 onClick={() => setIsEditing(!isEditing)}
                 className="border-edg-teal text-edg-teal hover:bg-edg-light-teal hover:bg-opacity-10"
+                data-testid="button-edit-template"
               >
                 <Edit3 className="mr-2 h-4 w-4" />
                 {isEditing ? "View" : "Edit"} Template
               </Button>
               <Button
                 onClick={handleDownload}
-                disabled={generatePDFMutation.isPending || !selectedTemplate}
+                disabled={generatePDFMutation.isPending || !selectedTemplate || showTemplateSelection}
                 className="bg-edg-black hover:bg-edg-grey text-edg-white"
+                data-testid="button-download-pdf"
               >
                 {generatePDFMutation.isPending ? (
                   <>
@@ -327,7 +417,142 @@ export function QuotePDFTemplate({ quote, isOpen, onClose }: QuotePDFTemplatePro
           </Alert>
         )}
 
-        {isEditing ? (
+        {showTemplateSelection ? (
+          <div className="space-y-6 p-6">
+            {/* Quote info and recommendation */}
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-4">
+              <div className="flex items-start justify-between">
+                <div>
+                  <h3 className="text-lg font-semibold text-blue-900 mb-2" data-testid="text-quote-info">
+                    Quote {quote.quoteNumber} - {formatCurrency(totals.total)}
+                  </h3>
+                  <div className="text-sm text-blue-700 space-y-1">
+                    <div className="flex items-center gap-4">
+                      <span className="flex items-center">
+                        <FileText className="h-4 w-4 mr-1" />
+                        {quote.lineItems.length} line {quote.lineItems.length === 1 ? 'item' : 'items'}
+                      </span>
+                      <span className="flex items-center">
+                        <Users className="h-4 w-4 mr-1" />
+                        {quote.customer.name}
+                      </span>
+                      {quote.projectName && (
+                        <span className="flex items-center">
+                          <Briefcase className="h-4 w-4 mr-1" />
+                          {quote.projectName}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <Badge className="bg-blue-100 text-blue-800 border-blue-200" data-testid="badge-complexity">
+                  {getQuoteComplexity(quote)} quote
+                </Badge>
+              </div>
+            </div>
+
+            {/* Template cards grid */}
+            {templatesLoading ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {[...Array(4)].map((_, i) => (
+                  <Card key={i} className="p-4">
+                    <Skeleton className="h-24 w-full mb-4" />
+                    <Skeleton className="h-4 w-3/4 mb-2" />
+                    <Skeleton className="h-3 w-full" />
+                  </Card>
+                ))}
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {templatesArray.filter(t => t.isActive).map((template) => {
+                  const IconComponent = getTemplateIcon(template.category);
+                  const isRecommended = isRecommendedTemplate(template);
+                  const isSelected = selectedTemplateId === template.id.toString();
+                  
+                  return (
+                    <Card 
+                      key={template.id} 
+                      className={`cursor-pointer transition-all duration-200 hover:shadow-lg border-2 ${
+                        isSelected 
+                          ? 'border-edg-teal bg-edg-light-teal/5 shadow-md' 
+                          : isRecommended 
+                            ? 'border-blue-300 bg-blue-50/50' 
+                            : 'border-gray-200 hover:border-gray-300'
+                      }`}
+                      onClick={() => handleTemplateSelect(template.id.toString())}
+                      data-testid={`card-template-${template.category}`}
+                    >
+                      <CardHeader className="pb-3">
+                        <div className="flex items-start justify-between">
+                          <div className="flex items-start space-x-3">
+                            <div className={`p-2 rounded-lg ${
+                              isSelected 
+                                ? 'bg-edg-teal text-white' 
+                                : 'bg-gray-100 text-gray-600'
+                            }`}>
+                              <IconComponent className="h-5 w-5" />
+                            </div>
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-1">
+                                <h4 className="font-semibold text-lg">{template.name}</h4>
+                                {isRecommended && (
+                                  <div className="flex items-center">
+                                    <Star className="h-4 w-4 text-amber-500 fill-current" />
+                                    <Badge className="ml-1 bg-amber-100 text-amber-800 border-amber-200 text-xs">
+                                      Recommended
+                                    </Badge>
+                                  </div>
+                                )}
+                                {template.isDefault && (
+                                  <Badge variant="outline" className="text-xs">Default</Badge>
+                                )}
+                              </div>
+                              <Badge className={`text-xs ${getTemplateBadgeColor(template.category)}`}>
+                                {template.category.replace('_', ' ').toUpperCase()}
+                              </Badge>
+                            </div>
+                          </div>
+                          {isSelected && (
+                            <CheckCircle className="h-5 w-5 text-edg-teal" />
+                          )}
+                        </div>
+                      </CardHeader>
+                      <CardContent className="pt-0">
+                        <p className="text-gray-600 text-sm mb-3">
+                          {template.description || getTemplateUseCase(template.category)}
+                        </p>
+                        <div className="text-xs text-gray-500 space-y-1">
+                          <div className="flex items-center">
+                            <Clock className="h-3 w-3 mr-1" />
+                            <span>{getTemplateUseCase(template.category)}</span>
+                          </div>
+                          {isRecommended && (
+                            <div className="flex items-center text-amber-600">
+                              <Star className="h-3 w-3 mr-1" />
+                              <span>Best fit for this quote</span>
+                            </div>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Action buttons */}
+            <div className="flex justify-center pt-4">
+              <Button
+                onClick={() => setShowTemplateSelection(false)}
+                disabled={!selectedTemplateId}
+                className="bg-edg-black hover:bg-edg-grey text-edg-white px-8"
+                data-testid="button-continue-template"
+              >
+                {selectedTemplateId ? 'Continue with Template' : 'Select a Template'}
+              </Button>
+            </div>
+          </div>
+        ) : isEditing ? (
           <div className="space-y-6 p-4">
             <Card>
               <CardContent className="p-4">
