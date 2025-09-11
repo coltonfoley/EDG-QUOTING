@@ -131,13 +131,13 @@ export function FullProposalTemplate({ quote, template, companyInfo, quoteTerms 
         <div className="space-y-4 leading-relaxed">
           <p>
             We are pleased to present this comprehensive proposal for your {quote.projectName} project. 
-            {quote.companyOverview || content.companyDescription}
+            {content.companyDescription}
           </p>
           <p>
             <strong>Project Investment:</strong> {formatCurrency(totals.total)}
           </p>
           <p>
-            <strong>Timeline:</strong> {quote.timeline || (quote.estimatedStartDate && `Project start date: ${quote.estimatedStartDate}`) || content.timeline}
+            <strong>Timeline:</strong> {(quote.estimatedStartDate && `Project start date: ${quote.estimatedStartDate}`) || content.timeline}
           </p>
           <p>
             This proposal outlines our approach, timeline, and investment required to deliver exceptional results 
@@ -159,7 +159,7 @@ export function FullProposalTemplate({ quote, template, companyInfo, quoteTerms 
           
           <div>
             <h3 className="text-lg font-semibold mb-2" style={{ color: branding.accentColor }}>Project Description</h3>
-            <div className="whitespace-pre-wrap">{quote.projectScope || content.projectScope}</div>
+            <div className="whitespace-pre-wrap">{content.projectScope}</div>
             {quote.notes && (
               <div className="mt-3">
                 <p><strong>Additional Requirements:</strong></p>
@@ -208,24 +208,20 @@ export function FullProposalTemplate({ quote, template, companyInfo, quoteTerms 
             </div>
           )}
           
-          {quote.timeline ? (
-            <div className="whitespace-pre-wrap leading-relaxed">{quote.timeline}</div>
-          ) : (
-            <div className="grid grid-cols-3 gap-4">
-              <div className="text-center p-4 border rounded" style={{ borderColor: branding.primaryColor }}>
-                <div className="font-bold text-lg mb-2" style={{ color: branding.primaryColor }}>Week 1</div>
-                <div className="text-sm">Permits & Site Preparation</div>
-              </div>
-              <div className="text-center p-4 border rounded" style={{ borderColor: branding.primaryColor }}>
-                <div className="font-bold text-lg mb-2" style={{ color: branding.primaryColor }}>Week 2-3</div>
-                <div className="text-sm">Construction & Installation</div>
-              </div>
-              <div className="text-center p-4 border rounded" style={{ borderColor: branding.primaryColor }}>
-                <div className="font-bold text-lg mb-2" style={{ color: branding.primaryColor }}>Week 4</div>
-                <div className="text-sm">Final Inspection & Completion</div>
-              </div>
+          <div className="grid grid-cols-3 gap-4">
+            <div className="text-center p-4 border rounded" style={{ borderColor: branding.primaryColor }}>
+              <div className="font-bold text-lg mb-2" style={{ color: branding.primaryColor }}>Week 1</div>
+              <div className="text-sm">Permits & Site Preparation</div>
             </div>
-          )}
+            <div className="text-center p-4 border rounded" style={{ borderColor: branding.primaryColor }}>
+              <div className="font-bold text-lg mb-2" style={{ color: branding.primaryColor }}>Week 2-3</div>
+              <div className="text-sm">Construction & Installation</div>
+            </div>
+            <div className="text-center p-4 border rounded" style={{ borderColor: branding.primaryColor }}>
+              <div className="font-bold text-lg mb-2" style={{ color: branding.primaryColor }}>Week 4</div>
+              <div className="text-sm">Final Inspection & Completion</div>
+            </div>
+          </div>
           
           {quote.estimatedStartDate && (
             <div className="mt-4">
