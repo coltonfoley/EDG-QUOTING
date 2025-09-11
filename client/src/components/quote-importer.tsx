@@ -59,6 +59,7 @@ export function QuoteImporter({ onImportComplete, onClose }: QuoteImporterProps)
   const [activeTab, setActiveTab] = useState("upload");
   const [importType, setImportType] = useState<"new" | "existing">("new");
   const [selectedQuoteId, setSelectedQuoteId] = useState<string>("");
+  const [bulkMarkupValue, setBulkMarkupValue] = useState<string>("");
 
   const { toast } = useToast();
 
@@ -155,12 +156,28 @@ export function QuoteImporter({ onImportComplete, onClose }: QuoteImporterProps)
         
         // Add line items
         for (const item of data.lineItems) {
+          // Calculate markup based on cost vs selling price
+          let unitPrice: string;
+          let markupValue: string;
+          
+          if (item.cost && item.cost > 0) {
+            // Use cost as unit price and calculate markup to reach selling price
+            unitPrice = item.cost.toString();
+            const markupPercentage = ((item.price - item.cost) / item.cost) * 100;
+            // Round to 2 decimal places for precision, allow negative markups
+            markupValue = (Math.round(markupPercentage * 100) / 100).toString();
+          } else {
+            // When cost is not provided or is 0, treat PDF price as cost with no markup
+            unitPrice = item.price?.toString() || "0";
+            markupValue = "0";
+          }
+          
           await apiRequest("POST", `/api/quotes/${quote.id}/line-items`, {
             description: item.description || "Imported Item",
             quantity: item.quantity?.toString() || "1",
-            unitPrice: item.price?.toString() || "0",
+            unitPrice,
             markupType: "percentage",
-            markupValue: "0",
+            markupValue,
           });
         }
         
@@ -172,12 +189,28 @@ export function QuoteImporter({ onImportComplete, onClose }: QuoteImporterProps)
         }
         
         for (const item of data.lineItems) {
+          // Calculate markup based on cost vs selling price
+          let unitPrice: string;
+          let markupValue: string;
+          
+          if (item.cost && item.cost > 0) {
+            // Use cost as unit price and calculate markup to reach selling price
+            unitPrice = item.cost.toString();
+            const markupPercentage = ((item.price - item.cost) / item.cost) * 100;
+            // Round to 2 decimal places for precision, allow negative markups
+            markupValue = (Math.round(markupPercentage * 100) / 100).toString();
+          } else {
+            // When cost is not provided or is 0, treat PDF price as cost with no markup
+            unitPrice = item.price?.toString() || "0";
+            markupValue = "0";
+          }
+          
           await apiRequest("POST", `/api/quotes/${selectedQuoteId}/line-items`, {
             description: item.description || "Imported Item",
             quantity: item.quantity?.toString() || "1",
-            unitPrice: item.price?.toString() || "0",
-            markupType: "percentage", 
-            markupValue: "0",
+            unitPrice,
+            markupType: "percentage",
+            markupValue,
           });
         }
         
@@ -264,6 +297,73 @@ export function QuoteImporter({ onImportComplete, onClose }: QuoteImporterProps)
     setEditedData({
       ...editedData,
       lineItems: updatedLineItems,
+    });
+  };
+
+  const applyBulkMarkup = () => {
+    if (!editedData) return;
+    
+    const markupPercentage = parseFloat(bulkMarkupValue);
+    
+    // Validate markup value
+    if (isNaN(markupPercentage)) {
+      toast({
+        title: "Invalid Markup",
+        description: "Please enter a valid number for markup percentage",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    if (markupPercentage < 0) {
+      toast({
+        title: "Invalid Markup",
+        description: "Markup percentage cannot be negative",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    const updatedLineItems = editedData.lineItems.map(item => {
+      // Calculate cost from selling price and markup percentage
+      // Formula: cost = selling price / (1 + markup/100)
+      const cost = item.price / (1 + markupPercentage / 100);
+      return {
+        ...item,
+        cost: Math.round(cost * 100) / 100, // Round to 2 decimal places
+      };
+    });
+    
+    setEditedData({
+      ...editedData,
+      lineItems: updatedLineItems,
+    });
+    
+    toast({
+      title: "Bulk Markup Applied",
+      description: `Applied ${markupPercentage}% markup to all ${updatedLineItems.length} items`,
+    });
+    
+    // Clear the input after successful application
+    setBulkMarkupValue("");
+  };
+
+  const clearAllCosts = () => {
+    if (!editedData) return;
+    
+    const updatedLineItems = editedData.lineItems.map(item => ({
+      ...item,
+      cost: undefined,
+    }));
+    
+    setEditedData({
+      ...editedData,
+      lineItems: updatedLineItems,
+    });
+    
+    toast({
+      title: "Costs Cleared",
+      description: "All cost information has been cleared",
     });
   };
 
@@ -408,7 +508,44 @@ export function QuoteImporter({ onImportComplete, onClose }: QuoteImporterProps)
 
                 {/* Line Items */}
                 <div className="space-y-4">
-                  <h3 className="text-lg font-semibold">Line Items</h3>
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-lg font-semibold">Line Items</h3>
+                    <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-2">
+                        <Label htmlFor="bulk-markup">Bulk Markup %:</Label>
+                        <Input
+                          id="bulk-markup"
+                          type="number"
+                          step="0.1"
+                          placeholder="25"
+                          className="w-20"
+                          value={bulkMarkupValue}
+                          onChange={(e) => setBulkMarkupValue(e.target.value)}
+                          data-testid="input-bulk-markup"
+                        />
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={applyBulkMarkup}
+                          disabled={!bulkMarkupValue.trim()}
+                          data-testid="button-apply-bulk-markup"
+                        >
+                          Apply
+                        </Button>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={clearAllCosts}
+                        data-testid="button-clear-costs"
+                      >
+                        Clear Costs
+                      </Button>
+                    </div>
+                  </div>
+                  <p className="text-sm text-gray-600">
+                    💡 Enter your costs for each item to see true margins, or use bulk markup to calculate costs from selling prices
+                  </p>
                   <div className="space-y-2">
                     {editedData.lineItems.map((item, index) => (
                       <div key={index} className="p-4 border rounded-lg">
