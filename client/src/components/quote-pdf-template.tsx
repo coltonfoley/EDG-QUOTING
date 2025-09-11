@@ -204,6 +204,41 @@ export function QuotePDFTemplate({ quote, isOpen, onClose }: QuotePDFTemplatePro
         return imageUrl;
       }
 
+      console.log('🔧 Attempting to convert image to DataURL:', imageUrl);
+
+      // Try fetch approach first for object storage URLs (better CORS handling)
+      if (imageUrl.includes('storage.replit.com')) {
+        try {
+          console.log('📦 Using fetch approach for Replit storage URL');
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), timeoutMs);
+          
+          const response = await fetch(imageUrl, { 
+            signal: controller.signal,
+            mode: 'cors'
+          });
+          clearTimeout(timeout);
+          
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          }
+          
+          const blob = await response.blob();
+          
+          return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = () => reject(new Error('FileReader failed'));
+            reader.readAsDataURL(blob);
+          });
+        } catch (fetchError) {
+          console.warn('❌ Fetch approach failed:', fetchError);
+          // Fall through to Image element approach
+        }
+      }
+
+      // Fallback to Image element approach
+      console.log('🖼️ Using Image element approach');
       return new Promise((resolve, reject) => {
         const img = new Image();
         const canvas = document.createElement('canvas');
@@ -211,11 +246,13 @@ export function QuotePDFTemplate({ quote, isOpen, onClose }: QuotePDFTemplatePro
         
         // Set up timeout
         const timeout = setTimeout(() => {
+          console.error('⏰ Image loading timeout:', imageUrl);
           reject(new Error(`Image loading timeout: ${imageUrl}`));
         }, timeoutMs);
 
         img.onload = () => {
           clearTimeout(timeout);
+          console.log('✅ Image loaded successfully:', imageUrl, `(${img.naturalWidth}x${img.naturalHeight})`);
           try {
             // Set canvas size to image size for best quality
             canvas.width = img.naturalWidth;
@@ -226,16 +263,17 @@ export function QuotePDFTemplate({ quote, isOpen, onClose }: QuotePDFTemplatePro
             
             // Convert to high-quality JPEG for smaller file size in PDF
             const dataURL = canvas.toDataURL('image/jpeg', 0.92);
+            console.log('✅ Successfully converted to DataURL:', imageUrl, `(${Math.round(dataURL.length / 1024)}KB)`);
             resolve(dataURL);
-          } catch (error) {
-            console.warn('Failed to convert image to data URL:', imageUrl, error);
+          } catch (canvasError) {
+            console.error('❌ Canvas conversion failed:', imageUrl, canvasError);
             resolve(null);
           }
         };
 
-        img.onerror = () => {
+        img.onerror = (error) => {
           clearTimeout(timeout);
-          console.warn('Failed to load image:', imageUrl);
+          console.error('❌ Image loading failed:', imageUrl, error);
           resolve(null);
         };
 
@@ -244,7 +282,7 @@ export function QuotePDFTemplate({ quote, isOpen, onClose }: QuotePDFTemplatePro
         img.src = imageUrl;
       });
     } catch (error) {
-      console.warn('Error processing image:', imageUrl, error);
+      console.error('❌ Error processing image:', imageUrl, error);
       return null;
     }
   };
