@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertCustomerSchema, insertQuoteSchema, insertLineItemSchema, insertProductSchema, insertContractTemplateSchema, insertPricingTableSchema, insertProductAccessorySchema } from "@shared/schema";
+import { insertCustomerSchema, insertQuoteSchema, insertLineItemSchema, insertProductSchema, insertContractTemplateSchema, insertProposalTemplateSchema, insertPricingTableSchema, insertProductAccessorySchema } from "@shared/schema";
 import { z } from "zod";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import multer from "multer";
@@ -1012,6 +1012,122 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error deleting contract template:", error);
       res.status(500).json({ message: "Failed to delete contract template" });
+    }
+  });
+
+  // Proposal template routes (protected)
+  app.get('/api/proposal-templates', isAuthenticated, async (req, res) => {
+    try {
+      const includeInactive = req.query.includeInactive === 'true';
+      const templates = await storage.getAllProposalTemplates(includeInactive);
+      res.json(templates);
+    } catch (error) {
+      console.error("Error fetching proposal templates:", error);
+      res.status(500).json({ message: "Failed to fetch proposal templates" });
+    }
+  });
+
+  app.get('/api/proposal-templates/:id', isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id) || id <= 0) {
+        return res.status(400).json({ message: "Invalid template ID. Must be a positive integer." });
+      }
+
+      const template = await storage.getProposalTemplate(id);
+      if (!template) {
+        return res.status(404).json({ message: "Proposal template not found" });
+      }
+      res.json(template);
+    } catch (error) {
+      console.error("Error fetching proposal template:", error);
+      res.status(500).json({ message: "Failed to fetch proposal template" });
+    }
+  });
+
+  app.post('/api/proposal-templates', isAuthenticated, async (req: any, res) => {
+    try {
+      const currentUser = await storage.getUser(req.user?.id);
+      if (currentUser?.role !== 'admin') {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+
+      const validatedData = insertProposalTemplateSchema.parse(req.body);
+      const template = await storage.createProposalTemplate(validatedData);
+      res.status(201).json(template);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid proposal template data", errors: error.errors });
+      }
+      console.error("Error creating proposal template:", error);
+      res.status(500).json({ message: "Failed to create proposal template" });
+    }
+  });
+
+  app.put('/api/proposal-templates/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const currentUser = await storage.getUser(req.user?.id);
+      if (currentUser?.role !== 'admin') {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+
+      const id = parseInt(req.params.id);
+      if (isNaN(id) || id <= 0) {
+        return res.status(400).json({ message: "Invalid template ID. Must be a positive integer." });
+      }
+
+      const validatedData = insertProposalTemplateSchema.partial().parse(req.body);
+      const template = await storage.updateProposalTemplate(id, validatedData);
+      
+      if (!template) {
+        return res.status(404).json({ message: "Proposal template not found" });
+      }
+      
+      res.json(template);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid proposal template data", errors: error.errors });
+      }
+      console.error("Error updating proposal template:", error);
+      res.status(500).json({ message: "Failed to update proposal template" });
+    }
+  });
+
+  app.get('/api/proposal-templates/default', isAuthenticated, async (req, res) => {
+    try {
+      const template = await storage.getDefaultProposalTemplate();
+      if (!template) {
+        return res.status(404).json({ message: "No default proposal template found" });
+      }
+      res.json(template);
+    } catch (error) {
+      console.error("Error fetching default proposal template:", error);
+      res.status(500).json({ message: "Failed to fetch default proposal template" });
+    }
+  });
+
+  app.delete('/api/proposal-templates/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const currentUser = await storage.getUser(req.user?.id);
+      if (currentUser?.role !== 'admin') {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+
+      const id = parseInt(req.params.id);
+      if (isNaN(id) || id <= 0) {
+        return res.status(400).json({ message: "Invalid template ID. Must be a positive integer." });
+      }
+
+      const success = await storage.deleteProposalTemplate(id);
+      
+      if (!success) {
+        return res.status(404).json({ message: "Proposal template not found" });
+      }
+      
+      res.json({ message: "Proposal template deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting proposal template:", error);
+      res.status(500).json({ message: "Failed to delete proposal template" });
     }
   });
 
