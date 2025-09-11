@@ -148,6 +148,7 @@ export function QuoteImporter({ onImportComplete, onClose }: QuoteImporterProps)
           notes: data.notes || "",
           taxRate: (data.taxRate || 0).toString(),
           discount: (data.discountAmount || 0).toString(),
+          shipping: "0", // Required field for quote validation
           status: "draft" as const,
         };
         
