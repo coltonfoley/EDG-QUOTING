@@ -46,6 +46,15 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
   const [technicalDiagrams, setTechnicalDiagrams] = useState<UploadedImage[]>([]);
   const [companyImages, setCompanyImages] = useState<UploadedImage[]>([]);
   
+  // Track upload completion and auto-save
+  const [pendingSave, setPendingSave] = useState(false);
+  
+  // Calculate if any uploads are still in progress
+  const isUploading = [...projectImages, ...portfolioImages, ...technicalDiagrams, ...companyImages]
+    .some(img => !img.uploaded);
+  const uploadingCount = [...projectImages, ...portfolioImages, ...technicalDiagrams, ...companyImages]
+    .filter(img => !img.uploaded).length;
+  
   const form = useForm<QuoteFormData>({
     resolver: zodResolver(quoteFormSchema),
     defaultValues: {
@@ -69,9 +78,36 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
     },
   });
 
-  // Update form values when quote data changes
+  // Initialize image states from database when quote loads
   useEffect(() => {
     if (quote) {
+      // Convert database image arrays to UploadedImage format
+      const convertDbImagesToUploaded = (dbImages: any[] = []): UploadedImage[] => {
+        return dbImages.map((img, index) => ({
+          id: `db-${Date.now()}-${index}`,
+          file: new File([], img.filename || 'image'),
+          preview: img.url,
+          uploadProgress: 100,
+          uploaded: true,
+          url: img.url,
+          metadata: {
+            filename: img.filename || '',
+            caption: img.caption || '',
+            altText: img.altText || '',
+            uploadedAt: img.uploadedAt || new Date().toISOString(),
+            size: img.size,
+            thumbnailUrl: img.thumbnailUrl,
+            url: img.url,
+            ...img
+          }
+        }));
+      };
+      
+      setProjectImages(convertDbImagesToUploaded(quote.projectImages));
+      setPortfolioImages(convertDbImagesToUploaded(quote.portfolioImages));
+      setTechnicalDiagrams(convertDbImagesToUploaded(quote.technicalDiagrams));
+      setCompanyImages(convertDbImagesToUploaded(quote.companyImages));
+      
       form.reset({
         quoteNumber: quote.quoteNumber || "",
         projectName: quote.projectName || "",
@@ -93,6 +129,16 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
       });
     }
   }, [quote, form]);
+  
+  // Auto-save after all uploads complete
+  useEffect(() => {
+    if (pendingSave && !isUploading) {
+      console.log('🎯 Auto-saving after all uploads completed');
+      setPendingSave(false);
+      // Trigger form submission with current form data
+      form.handleSubmit(handleSubmit)();
+    }
+  }, [pendingSave, isUploading, form]);
 
   const updateStatusMutation = useMutation({
     mutationFn: async ({ status }: { status: string }) => {
@@ -132,6 +178,17 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
   };
 
   const handleSubmit = (data: QuoteFormData) => {
+    // If images are still uploading, set pending save and return
+    if (isUploading) {
+      console.log('📋 Images still uploading, setting pending save flag');
+      setPendingSave(true);
+      toast({
+        title: "Upload in progress",
+        description: `Waiting for ${uploadingCount} images to finish uploading...`,
+      });
+      return;
+    }
+    
     // Convert uploaded images to the expected format for the database
     const imageData = {
       ...data,
@@ -222,10 +279,10 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
               type="submit" 
               form="quote-form" 
               className="bg-edg-black hover:bg-edg-grey text-edg-white"
-              disabled={isLoading}
+              disabled={isLoading || isUploading}
             >
               <Save className="mr-2 h-4 w-4" />
-              {isLoading ? "Saving..." : "Save Quote"}
+              {isLoading ? "Saving..." : isUploading ? `Uploading ${uploadingCount} images...` : "Save Quote"}
             </Button>
           </div>
         </div>
