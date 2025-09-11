@@ -49,6 +49,11 @@ export const quotes = pgTable("quotes", {
   timeline: text("timeline"), // project timeline and milestones  
   companyOverview: text("company_overview"), // company credentials and experience
   technicalSpecs: text("technical_specs"), // technical specifications and methodology
+  // Image fields for comprehensive image integration
+  projectImages: jsonb("project_images"), // Array of project photo URLs and metadata
+  portfolioImages: jsonb("portfolio_images"), // Array of selected portfolio showcase images
+  technicalDiagrams: jsonb("technical_diagrams"), // Array of technical diagrams and plans
+  companyImages: jsonb("company_images"), // Company branding and team photos
   taxRate: decimal("tax_rate", { precision: 5, scale: 2 }).default("0"),
   discount: decimal("discount", { precision: 5, scale: 2 }).default("0"),
   shipping: decimal("shipping", { precision: 10, scale: 2 }).default("0"),
@@ -119,6 +124,10 @@ export const products = pgTable("products", {
   maxLength: decimal("max_length", { precision: 8, scale: 2 }),
   minWidth: decimal("min_width", { precision: 8, scale: 2 }),
   maxWidth: decimal("max_width", { precision: 8, scale: 2 }),
+  // Image fields for product visualization
+  primaryImage: text("primary_image"), // Main product image URL
+  galleryImages: jsonb("gallery_images"), // Array of additional product photos
+  specificationSheets: jsonb("specification_sheets"), // Technical specification documents/images
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -172,6 +181,39 @@ export const insertCustomerSchema = createInsertSchema(customers).omit({
   id: true,
 });
 
+// Zod schemas for image metadata structures
+export const imageMetadataSchema = z.object({
+  url: z.string().url("Must be a valid URL"),
+  filename: z.string().min(1, "Filename is required"),
+  caption: z.string().optional(),
+  altText: z.string().optional(),
+  uploadedAt: z.string(),
+  size: z.number().optional(),
+  thumbnailUrl: z.string().url().optional(),
+});
+
+export const projectImageSchema = imageMetadataSchema.extend({
+  category: z.enum(['before', 'during', 'after', 'other']),
+});
+
+export const portfolioImageSchema = imageMetadataSchema.extend({
+  projectType: z.string().optional(),
+  featured: z.boolean().optional(),
+});
+
+export const technicalDiagramSchema = imageMetadataSchema.extend({
+  diagramType: z.enum(['floorplan', 'elevation', 'detail', 'specification', 'other']),
+});
+
+export const companyImageSchema = imageMetadataSchema.extend({
+  imageType: z.enum(['logo', 'team', 'facility', 'certification', 'other']),
+});
+
+export const productImageSchema = imageMetadataSchema.extend({
+  imageType: z.enum(['primary', 'gallery', 'specification']),
+  displayOrder: z.number().optional(),
+});
+
 export const insertQuoteSchema = createInsertSchema(quotes).omit({
   id: true,
   createdAt: true,
@@ -183,6 +225,16 @@ export const insertQuoteSchema = createInsertSchema(quotes).omit({
   projectAddress: z.union([z.string(), z.null()]).transform(val => val === null ? "" : val),
   estimatedStartDate: z.union([z.string(), z.null()]).transform(val => val === null ? "" : val),
   notes: z.union([z.string(), z.null()]).transform(val => val === null ? "" : val),
+  // Rich content fields
+  projectScope: z.union([z.string(), z.null()]).transform(val => val === null ? "" : val).optional(),
+  timeline: z.union([z.string(), z.null()]).transform(val => val === null ? "" : val).optional(),
+  companyOverview: z.union([z.string(), z.null()]).transform(val => val === null ? "" : val).optional(),
+  technicalSpecs: z.union([z.string(), z.null()]).transform(val => val === null ? "" : val).optional(),
+  // Image fields
+  projectImages: z.array(projectImageSchema).optional(),
+  portfolioImages: z.array(portfolioImageSchema).optional(),
+  technicalDiagrams: z.array(technicalDiagramSchema).optional(),
+  companyImages: z.array(companyImageSchema).optional(),
 });
 
 export const insertProductSchema = createInsertSchema(products).omit({
@@ -196,6 +248,10 @@ export const insertProductSchema = createInsertSchema(products).omit({
   maxLength: z.union([z.string(), z.number(), z.null()]).transform(val => val === null ? null : (typeof val === 'string' ? val : val.toString())).optional(),
   minWidth: z.union([z.string(), z.number(), z.null()]).transform(val => val === null ? null : (typeof val === 'string' ? val : val.toString())).optional(),
   maxWidth: z.union([z.string(), z.number(), z.null()]).transform(val => val === null ? null : (typeof val === 'string' ? val : val.toString())).optional(),
+  // Image fields
+  primaryImage: z.string().url().optional(),
+  galleryImages: z.array(productImageSchema).optional(),
+  specificationSheets: z.array(productImageSchema).optional(),
 });
 
 export const insertPricingTableSchema = createInsertSchema(pricingTables).omit({
@@ -289,6 +345,39 @@ export type ProductWithDetails = Product & {
   pricingTables?: PricingTable[];
   accessories?: (ProductAccessory & { accessory: Product })[];
 };
+
+// Image metadata types
+export interface ImageMetadata {
+  url: string;
+  filename: string;
+  caption?: string;
+  altText?: string;
+  uploadedAt: string;
+  size?: number;
+  thumbnailUrl?: string;
+}
+
+export interface ProjectImage extends ImageMetadata {
+  category: 'before' | 'during' | 'after' | 'other';
+}
+
+export interface PortfolioImage extends ImageMetadata {
+  projectType?: string;
+  featured?: boolean;
+}
+
+export interface TechnicalDiagram extends ImageMetadata {
+  diagramType: 'floorplan' | 'elevation' | 'detail' | 'specification' | 'other';
+}
+
+export interface CompanyImage extends ImageMetadata {
+  imageType: 'logo' | 'team' | 'facility' | 'certification' | 'other';
+}
+
+export interface ProductImage extends ImageMetadata {
+  imageType: 'primary' | 'gallery' | 'specification';
+  displayOrder?: number;
+}
 
 // Template configuration types
 export interface TemplateSection {

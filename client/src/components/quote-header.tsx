@@ -8,12 +8,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Save, Clock } from "lucide-react";
+import { Save, Clock, Camera, Image, Wrench, Building } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { z } from "zod";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { ImageUploader, type UploadedImage } from "@/components/image-uploader";
 
 const quoteFormSchema = insertQuoteSchema.extend({
   customerName: z.string().min(1, "Customer name is required"),
@@ -38,6 +39,12 @@ interface QuoteHeaderProps {
 export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  // State for managing image uploads
+  const [projectImages, setProjectImages] = useState<UploadedImage[]>([]);
+  const [portfolioImages, setPortfolioImages] = useState<UploadedImage[]>([]);
+  const [technicalDiagrams, setTechnicalDiagrams] = useState<UploadedImage[]>([]);
+  const [companyImages, setCompanyImages] = useState<UploadedImage[]>([]);
   
   const form = useForm<QuoteFormData>({
     resolver: zodResolver(quoteFormSchema),
@@ -125,7 +132,53 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
   };
 
   const handleSubmit = (data: QuoteFormData) => {
-    onSave(data);
+    // Convert uploaded images to the expected format for the database
+    const imageData = {
+      ...data,
+      projectImages: projectImages.filter(img => img.uploaded).map(img => ({
+        url: img.url || '',
+        filename: img.metadata.filename || '',
+        caption: img.metadata.caption || '',
+        altText: img.metadata.altText || '',
+        uploadedAt: img.metadata.uploadedAt || new Date().toISOString(),
+        size: img.metadata.size,
+        thumbnailUrl: img.metadata.thumbnailUrl,
+        category: (img.metadata as any).category || 'other',
+      })),
+      portfolioImages: portfolioImages.filter(img => img.uploaded).map(img => ({
+        url: img.url || '',
+        filename: img.metadata.filename || '',
+        caption: img.metadata.caption || '',
+        altText: img.metadata.altText || '',
+        uploadedAt: img.metadata.uploadedAt || new Date().toISOString(),
+        size: img.metadata.size,
+        thumbnailUrl: img.metadata.thumbnailUrl,
+        projectType: (img.metadata as any).projectType,
+        featured: (img.metadata as any).featured || false,
+      })),
+      technicalDiagrams: technicalDiagrams.filter(img => img.uploaded).map(img => ({
+        url: img.url || '',
+        filename: img.metadata.filename || '',
+        caption: img.metadata.caption || '',
+        altText: img.metadata.altText || '',
+        uploadedAt: img.metadata.uploadedAt || new Date().toISOString(),
+        size: img.metadata.size,
+        thumbnailUrl: img.metadata.thumbnailUrl,
+        diagramType: (img.metadata as any).diagramType || 'other',
+      })),
+      companyImages: companyImages.filter(img => img.uploaded).map(img => ({
+        url: img.url || '',
+        filename: img.metadata.filename || '',
+        caption: img.metadata.caption || '',
+        altText: img.metadata.altText || '',
+        uploadedAt: img.metadata.uploadedAt || new Date().toISOString(),
+        size: img.metadata.size,
+        thumbnailUrl: img.metadata.thumbnailUrl,
+        imageType: (img.metadata as any).imageType || 'other',
+      })),
+    };
+    
+    onSave(imageData);
   };
 
   return (
@@ -401,6 +454,116 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
                       </FormItem>
                     )}
                   />
+                </div>
+              </div>
+            </div>
+
+            {/* Image Assets Section */}
+            <div className="mt-6 pt-6 border-t border-gray-200">
+              <div className="mb-6">
+                <h3 className="text-lg font-semibold text-charcoal mb-2 flex items-center gap-2">
+                  <Camera className="h-5 w-5" />
+                  Image Assets
+                </h3>
+                <p className="text-sm text-accent-grey">
+                  Upload and manage images to enhance your proposals. Images will be stored securely and included in generated documents.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Project Images */}
+                <div className="space-y-4">
+                  <ImageUploader
+                    imageType="project"
+                    title="Project Photos"
+                    description="Before, during, and after photos of project work"
+                    maxFiles={15}
+                    onImagesChange={setProjectImages}
+                    initialImages={projectImages}
+                    categoryOptions={[
+                      { value: 'before', label: 'Before Photos' },
+                      { value: 'during', label: 'During Construction' },
+                      { value: 'after', label: 'After Completion' },
+                      { value: 'other', label: 'Other' }
+                    ]}
+                    data-testid="uploader-project-images"
+                  />
+
+                  <ImageUploader
+                    imageType="technical"
+                    title="Technical Diagrams"
+                    description="Blueprints, plans, and technical specifications"
+                    maxFiles={10}
+                    allowedTypes={['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'application/pdf']}
+                    onImagesChange={setTechnicalDiagrams}
+                    initialImages={technicalDiagrams}
+                    categoryOptions={[
+                      { value: 'floorplan', label: 'Floor Plans' },
+                      { value: 'elevation', label: 'Elevations' },
+                      { value: 'detail', label: 'Detail Drawings' },
+                      { value: 'specification', label: 'Specifications' },
+                      { value: 'other', label: 'Other' }
+                    ]}
+                    data-testid="uploader-technical-diagrams"
+                  />
+                </div>
+
+                <div className="space-y-4">
+                  <ImageUploader
+                    imageType="portfolio"
+                    title="Portfolio Showcase"
+                    description="Similar projects and portfolio examples to showcase expertise"
+                    maxFiles={12}
+                    onImagesChange={setPortfolioImages}
+                    initialImages={portfolioImages}
+                    categoryOptions={[
+                      { value: 'residential', label: 'Residential Projects' },
+                      { value: 'commercial', label: 'Commercial Projects' },
+                      { value: 'industrial', label: 'Industrial Projects' },
+                      { value: 'other', label: 'Other Projects' }
+                    ]}
+                    data-testid="uploader-portfolio-images"
+                  />
+
+                  <ImageUploader
+                    imageType="company"
+                    title="Company Assets"
+                    description="Company logos, team photos, certifications, and facility images"
+                    maxFiles={8}
+                    onImagesChange={setCompanyImages}
+                    initialImages={companyImages}
+                    categoryOptions={[
+                      { value: 'logo', label: 'Company Logo' },
+                      { value: 'team', label: 'Team Photos' },
+                      { value: 'facility', label: 'Facility Images' },
+                      { value: 'certification', label: 'Certifications' },
+                      { value: 'other', label: 'Other Assets' }
+                    ]}
+                    data-testid="uploader-company-images"
+                  />
+                </div>
+              </div>
+
+              {/* Image Summary */}
+              <div className="mt-6 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                <h4 className="text-sm font-medium text-gray-800 dark:text-gray-200 mb-2">Image Summary</h4>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm text-gray-600 dark:text-gray-400">
+                  <div className="flex items-center gap-2">
+                    <Camera className="h-4 w-4" />
+                    <span>Project: {projectImages.filter(img => img.uploaded).length}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Image className="h-4 w-4" />
+                    <span>Portfolio: {portfolioImages.filter(img => img.uploaded).length}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Wrench className="h-4 w-4" />
+                    <span>Technical: {technicalDiagrams.filter(img => img.uploaded).length}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Building className="h-4 w-4" />
+                    <span>Company: {companyImages.filter(img => img.uploaded).length}</span>
+                  </div>
                 </div>
               </div>
             </div>
