@@ -53,6 +53,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Image proxy endpoint to bypass CORS for object storage images
+  app.get("/api/image-proxy", isAuthenticated, async (req, res) => {
+    try {
+      const imageUrl = req.query.url as string;
+      
+      if (!imageUrl) {
+        return res.status(400).json({ message: "URL parameter required" });
+      }
+      
+      // Only allow Replit storage URLs for security
+      if (!imageUrl.includes('storage.replit.com')) {
+        return res.status(403).json({ message: "Only Replit storage URLs allowed" });
+      }
+      
+      console.log(`🔧 Proxying image request: ${imageUrl}`);
+      
+      // Fetch the image from object storage
+      const response = await fetch(imageUrl);
+      
+      if (!response.ok) {
+        console.error(`❌ Failed to fetch image: ${response.status} ${response.statusText}`);
+        return res.status(response.status).json({ message: `Failed to fetch image: ${response.statusText}` });
+      }
+      
+      // Get the image data as buffer
+      const buffer = await response.arrayBuffer();
+      const contentType = response.headers.get('content-type') || 'application/octet-stream';
+      
+      console.log(`✅ Successfully proxied image: ${imageUrl} (${buffer.byteLength} bytes, ${contentType})`);
+      
+      // Set appropriate headers and send the image
+      res.setHeader('Content-Type', contentType);
+      res.setHeader('Content-Length', buffer.byteLength.toString());
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Cache-Control', 'public, max-age=3600'); // Cache for 1 hour
+      
+      res.send(Buffer.from(buffer));
+      
+    } catch (error) {
+      console.error("❌ Image proxy error:", error);
+      res.status(500).json({ message: "Failed to proxy image" });
+    }
+  });
+
   // Customer routes (protected)
   app.get("/api/customers/:id", isAuthenticated, async (req, res) => {
     try {
