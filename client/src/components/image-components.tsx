@@ -5,6 +5,7 @@ import {
   CompanyImage, 
   ProductImage 
 } from "@shared/schema";
+import { getProxiedImageUrl } from "@/lib/image-utils";
 
 interface ImageDisplayProps {
   src: string;
@@ -14,12 +15,14 @@ interface ImageDisplayProps {
   style?: React.CSSProperties;
 }
 
-// Single professional image with caption
+// Single professional image with caption (CORS-aware)
 export function ProfessionalImage({ src, alt, caption, className, style }: ImageDisplayProps) {
+  const proxiedSrc = getProxiedImageUrl(src);
+  
   return (
     <div className={`mb-4 ${className || ''}`} style={style}>
       <img 
-        src={src} 
+        src={proxiedSrc} 
         alt={alt} 
         className="w-full h-auto object-cover rounded shadow-sm border border-gray-200"
         style={{ 
@@ -58,18 +61,21 @@ export function ImageGrid({
   
   return (
     <div className={`grid ${gridCols} gap-3 mb-6 ${className || ''}`}>
-      {displayImages.map((image, index) => (
-        <div key={index} className="text-center">
-          <img 
-            src={image.url} 
-            alt={image.altText || `Image ${index + 1}`}
-            className="w-full h-32 object-cover rounded shadow-sm border border-gray-200"
-          />
-          {showCaptions && image.caption && (
-            <p className="text-xs text-gray-600 mt-1 italic">{image.caption}</p>
-          )}
-        </div>
-      ))}
+      {displayImages.map((image, index) => {
+        const proxiedSrc = getProxiedImageUrl(image.url);
+        return (
+          <div key={index} className="text-center">
+            <img 
+              src={proxiedSrc} 
+              alt={image.altText || `Image ${index + 1}`}
+              className="w-full h-32 object-cover rounded shadow-sm border border-gray-200"
+            />
+            {showCaptions && image.caption && (
+              <p className="text-xs text-gray-600 mt-1 italic">{image.caption}</p>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
