@@ -263,6 +263,7 @@ export type QuoteWithDetails = Quote & {
   customer: Customer;
   lineItems: LineItem[];
   contractTemplate?: ContractTemplate;
+  proposalTemplate?: ProposalTemplate;
 };
 
 // DTO types for API responses that include calculated fields
@@ -283,6 +284,53 @@ export type ProductWithDetails = Product & {
   pricingTables?: PricingTable[];
   accessories?: (ProductAccessory & { accessory: Product })[];
 };
+
+// Template configuration types
+export interface TemplateSection {
+  id: string;
+  name: string;
+  order: number;
+  required: boolean;
+  defaultContent?: string;
+}
+
+export interface LayoutSettings {
+  pageSize: 'A4' | 'letter';
+  margins: {
+    top: number;
+    bottom: number;
+  left: number;
+    right: number;
+  };
+  spacing: {
+    sectionGap: number;
+    paragraphGap: number;
+  };
+  pageBreaks: {
+    beforeSections: string[];
+    avoidBreakInSections: string[];
+  };
+}
+
+export interface BrandingSettings {
+  primaryColor: string;
+  accentColor: string;
+  textColor: string;
+  backgroundColor: string;
+  logoSize: 'small' | 'medium' | 'large';
+  headerStyle: 'minimal' | 'standard' | 'formal';
+  footerStyle: 'minimal' | 'standard' | 'detailed';
+}
+
+export interface DefaultContent {
+  companyDescription?: string;
+  projectScope?: string;
+  timeline?: string;
+  credentials?: string;
+  warranty?: string;
+  paymentTerms?: string;
+  additionalTerms?: string;
+}
 
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,

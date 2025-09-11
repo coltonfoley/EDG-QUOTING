@@ -1,18 +1,24 @@
 import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
-import { Download, Edit3, Save, Loader2 } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Download, Edit3, Loader2, FileText, AlertCircle } from "lucide-react";
 import { formatCurrency, calculateQuoteTotals } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
-import type { QuoteWithDetails } from "@shared/schema";
-import jsPDF from "jspdf";
-import html2canvas from "html2canvas";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import type { QuoteWithDetails, ProposalTemplate } from "@shared/schema";
 import logoPath from "@assets/my-logo.png_1753970984943.jpg";
+
+// Import template renderers
+import { BasicQuoteTemplate } from "./template-renderers/basic-quote-template";
+import { FullProposalTemplate } from "./template-renderers/full-proposal-template";
+import { ExecutiveSummaryTemplate } from "./template-renderers/executive-summary-template";
+import { TechnicalSpecTemplate } from "./template-renderers/technical-spec-template";
 
 interface QuotePDFTemplateProps {
   quote: QuoteWithDetails;
@@ -36,6 +42,14 @@ interface CompanyInfo {
 export function QuotePDFTemplate({ quote, isOpen, onClose }: QuotePDFTemplateProps) {
   const { toast } = useToast();
   const [isEditing, setIsEditing] = useState(false);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
+  
+  // Fetch proposal templates with proper typing
+  const { data: proposalTemplates, isLoading: templatesLoading, error: templatesError } = useQuery<ProposalTemplate[]>({
+    queryKey: ["/api/proposal-templates"],
+    enabled: isOpen,
+  });
+  
   const [companyInfo, setCompanyInfo] = useState<CompanyInfo>({
     name: "EDG Patio & Shade",
     address: "123 Patio Drive, Shade City, SC 12345",
@@ -65,6 +79,37 @@ export function QuotePDFTemplate({ quote, isOpen, onClose }: QuotePDFTemplatePro
     quote.taxRate ?? 0,
     quote.discount ?? 0
   );
+
+  // Get selected template or default
+  const templatesArray = proposalTemplates || [];
+  const selectedTemplate = templatesArray.find(
+    (t) => t.id.toString() === selectedTemplateId
+  ) || templatesArray.find((t) => t.isDefault) || templatesArray[0];
+  
+  // Render the appropriate template component
+  const renderTemplate = () => {
+    if (!selectedTemplate) return null;
+    
+    const templateProps = {
+      quote,
+      template: selectedTemplate,
+      companyInfo,
+      quoteTerms,
+    };
+    
+    switch (selectedTemplate.category) {
+      case 'basic_quote':
+        return <BasicQuoteTemplate {...templateProps} />;
+      case 'full_proposal':
+        return <FullProposalTemplate {...templateProps} />;
+      case 'executive_summary':
+        return <ExecutiveSummaryTemplate {...templateProps} />;
+      case 'technical_spec':
+        return <TechnicalSpecTemplate {...templateProps} />;
+      default:
+        return <BasicQuoteTemplate {...templateProps} />;
+    }
+  };
 
   const generatePDFMutation = useMutation({
     mutationFn: async () => {
@@ -99,9 +144,35 @@ export function QuotePDFTemplate({ quote, isOpen, onClose }: QuotePDFTemplatePro
 
       // Create a clone of the element and replace logo src with base64
       const elementClone = element.cloneNode(true) as HTMLElement;
-      const logoImg = elementClone.querySelector('img[alt="EDG Patio & Shade"]');
-      if (logoImg && logoDataUrl) {
-        (logoImg as HTMLImageElement).src = logoDataUrl;
+      const logoImgs = elementClone.querySelectorAll('img');
+      logoImgs.forEach((logoImg) => {
+        if (logoDataUrl && logoImg.src.includes('my-logo')) {
+          logoImg.src = logoDataUrl;
+        }
+      });
+
+      // Copy all stylesheets from current document
+      let allStyles = '';
+      
+      // Get all style and link elements from the current document
+      const styleElements = document.querySelectorAll('style, link[rel="stylesheet"]');
+      for (const styleEl of styleElements) {
+        if (styleEl.tagName === 'STYLE') {
+          allStyles += styleEl.outerHTML;
+        } else if (styleEl.tagName === 'LINK') {
+          // For external stylesheets, we'll try to fetch and inline them
+          try {
+            const href = (styleEl as HTMLLinkElement).href;
+            if (href) {
+              const response = await fetch(href);
+              const cssText = await response.text();
+              allStyles += `<style>${cssText}</style>`;
+            }
+          } catch (error) {
+            // If we can't fetch external CSS, just copy the link tag
+            allStyles += styleEl.outerHTML;
+          }
+        }
       }
 
       // Create a complete HTML document for printing
@@ -109,18 +180,12 @@ export function QuotePDFTemplate({ quote, isOpen, onClose }: QuotePDFTemplatePro
         <!DOCTYPE html>
         <html>
         <head>
-          <title>Quote-${quote.quoteNumber}</title>
+          <title>${selectedTemplate?.name || 'Quote'}-${quote.quoteNumber}</title>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1">
+          ${allStyles}
           <style>
-            * { margin: 0; padding: 0; box-sizing: border-box; }
-            body { 
-              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-              font-size: 14px;
-              line-height: 1.4;
-              color: #000;
-              background: white;
-            }
-            
-            /* Print-specific styles */
+            /* Print-specific overrides */
             @media print {
               @page { 
                 size: A4; 
@@ -141,97 +206,11 @@ export function QuotePDFTemplate({ quote, isOpen, onClose }: QuotePDFTemplatePro
               }
             }
             
-            /* Copy all Tailwind-style classes used in the component */
-            .text-3xl { font-size: 1.875rem; font-weight: bold; }
-            .text-2xl { font-size: 1.5rem; font-weight: bold; }
-            .text-xl { font-size: 1.25rem; font-weight: bold; }
-            .text-lg { font-size: 1.125rem; font-weight: 600; }
-            .text-sm { font-size: 0.875rem; }
-            .text-xs { font-size: 0.75rem; }
-            .font-bold { font-weight: bold; }
-            .font-semibold { font-weight: 600; }
-            .font-medium { font-weight: 500; }
-            .italic { font-style: italic; }
-            .text-center { text-align: center; }
-            .text-right { text-align: right; }
-            .text-left { text-align: left; }
-            .whitespace-pre-wrap { white-space: pre-wrap; }
-            .whitespace-pre-line { white-space: pre-line; }
-            .leading-relaxed { line-height: 1.625; }
-            .capitalize { text-transform: capitalize; }
-            
-            /* Layout classes */
-            .flex { display: flex; }
-            .grid { display: grid; }
-            .grid-cols-1 { grid-template-columns: repeat(1, minmax(0, 1fr)); }
-            .grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-            .justify-between { justify-content: space-between; }
-            .justify-end { justify-content: flex-end; }
-            .items-start { align-items: flex-start; }
-            .items-end { align-items: flex-end; }
-            .items-center { align-items: center; }
-            .space-x-4 > * + * { margin-left: 1rem; }
-            
-            /* Spacing */
-            .mb-2 { margin-bottom: 0.5rem; }
-            .mb-3 { margin-bottom: 0.75rem; }
-            .mb-4 { margin-bottom: 1rem; }
-            .mb-6 { margin-bottom: 1.5rem; }
-            .mb-8 { margin-bottom: 2rem; }
-            .mt-8 { margin-top: 2rem; }
-            .pt-2 { padding-top: 0.5rem; }
-            .pt-6 { padding-top: 1.5rem; }
-            .pb-2 { padding-bottom: 0.5rem; }
-            .pb-6 { padding-bottom: 1.5rem; }
-            .px-4 { padding-left: 1rem; padding-right: 1rem; }
-            .py-3 { padding-top: 0.75rem; padding-bottom: 0.75rem; }
-            .p-3 { padding: 0.75rem; }
-            .space-y-1 > * + * { margin-top: 0.25rem; }
-            .space-y-2 > * + * { margin-top: 0.5rem; }
-            .space-y-3 > * + * { margin-top: 0.75rem; }
-            .space-y-4 > * + * { margin-top: 1rem; }
-            .space-y-6 > * + * { margin-top: 1.5rem; }
-            .gap-8 { gap: 2rem; }
-            
-            /* Colors */
-            .text-gray-600 { color: #4b5563; }
-            .text-gray-700 { color: #374151; }
-            .text-gray-800 { color: #1f2937; }
-            .text-red-600 { color: #dc2626; }
-            .text-green-600 { color: #16a34a; }
-            .text-yellow-600 { color: #ca8a04; }
-            .text-blue-600 { color: #2563eb; }
-            .bg-gray-50 { background-color: #f9fafb; }
-            .bg-gray-100 { background-color: #f3f4f6; }
-            
-            /* EDG Brand Colors */
-            .text-edg-black { color: #000000; }
-            .text-edg-grey { color: #6b7280; }
-            .border-edg-teal { border-color: #14b8a6; }
-            
-            /* Borders */
-            .border { border-width: 1px; border-style: solid; border-color: #d1d5db; }
-            .border-b { border-bottom-width: 1px; border-bottom-style: solid; border-color: #d1d5db; }
-            .border-b-2 { border-bottom-width: 2px; border-bottom-style: solid; }
-            .border-t { border-top-width: 1px; border-top-style: solid; border-color: #d1d5db; }
-            .border-gray-300 { border-color: #d1d5db; }
-            .border-gray-400 { border-color: #9ca3af; }
-            .rounded { border-radius: 0.25rem; }
-            
-            /* Table styles */
-            .border-collapse { border-collapse: collapse; }
-            .w-full { width: 100%; }
-            .w-80 { width: 20rem; }
-            .min-h-[40px] { min-height: 40px; }
-            
-            /* Custom table styling for better PDF output */
-            table { width: 100%; border-collapse: collapse; margin-bottom: 1rem; }
-            th, td { border: 1px solid #d1d5db; padding: 0.75rem; }
-            th { background-color: #f3f4f6; font-weight: 600; }
-            tr.border-b td { border-bottom: 1px solid #d1d5db; }
-            
-            @media (min-width: 768px) {
-              .md\\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            /* Ensure consistent font rendering in print */
+            body { 
+              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+              color: #000;
+              background: white;
             }
           </style>
         </head>
@@ -272,8 +251,44 @@ export function QuotePDFTemplate({ quote, isOpen, onClose }: QuotePDFTemplatePro
       <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <div className="flex justify-between items-center">
-            <DialogTitle>Quote PDF Template</DialogTitle>
+            <DialogTitle>
+              {selectedTemplate?.name || "Quote PDF Template"}
+              {selectedTemplate && (
+                <span className="text-sm font-normal text-gray-600 ml-2">
+                  ({selectedTemplate.description})
+                </span>
+              )}
+            </DialogTitle>
             <div className="flex space-x-4">
+              <Select
+                value={selectedTemplateId || ""}
+                onValueChange={setSelectedTemplateId}
+                disabled={templatesLoading}
+              >
+                <SelectTrigger className="w-48">
+                  <SelectValue placeholder={templatesLoading ? "Loading..." : "Select Template"}>
+                    <div className="flex items-center">
+                      <FileText className="mr-2 h-4 w-4" />
+                      {selectedTemplate?.name || "Select Template"}
+                    </div>
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {templatesArray.map((template) => (
+                    <SelectItem key={template.id} value={template.id.toString()}>
+                      <div className="flex items-center">
+                        <FileText className="mr-2 h-4 w-4" />
+                        <div>
+                          <div className="font-medium">{template.name}</div>
+                          <div className="text-xs text-gray-600 capitalize">
+                            {template.category.replace('_', ' ')}
+                          </div>
+                        </div>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <Button
                 variant="outline"
                 onClick={() => setIsEditing(!isEditing)}
@@ -284,7 +299,7 @@ export function QuotePDFTemplate({ quote, isOpen, onClose }: QuotePDFTemplatePro
               </Button>
               <Button
                 onClick={handleDownload}
-                disabled={generatePDFMutation.isPending}
+                disabled={generatePDFMutation.isPending || !selectedTemplate}
                 className="bg-edg-black hover:bg-edg-grey text-edg-white"
               >
                 {generatePDFMutation.isPending ? (
@@ -302,6 +317,15 @@ export function QuotePDFTemplate({ quote, isOpen, onClose }: QuotePDFTemplatePro
             </div>
           </div>
         </DialogHeader>
+
+        {templatesError && (
+          <Alert variant="destructive" className="mb-4">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              Failed to load templates. Please try again.
+            </AlertDescription>
+          </Alert>
+        )}
 
         {isEditing ? (
           <div className="space-y-6 p-4">
@@ -441,212 +465,25 @@ export function QuotePDFTemplate({ quote, isOpen, onClose }: QuotePDFTemplatePro
             </Card>
           </div>
         ) : (
-          <div id="quote-pdf-content" className="bg-white p-8 text-black" style={{ minHeight: '297mm' }}>
-            {/* Header */}
-            <div className="flex justify-between items-start mb-8 border-b-2 border-edg-teal pb-6">
-              <div className="flex items-start space-x-4">
-                <img src={logoPath} alt="EDG Patio & Shade" className="h-12 mt-1" />
-                <div>
-                  <h1 className="text-3xl font-bold text-edg-black mb-2">{companyInfo.name}</h1>
-                  <div className="text-sm text-gray-600 space-y-1">
-                    <div>{companyInfo.address}</div>
-                    <div>Phone: {companyInfo.phone} | Email: {companyInfo.email}</div>
-                    <div>{companyInfo.license}</div>
-                  </div>
+          <div id="quote-pdf-content" style={{ minHeight: '297mm' }}>
+            {templatesLoading ? (
+              <div className="flex items-center justify-center h-64">
+                <div className="text-center">
+                  <Loader2 className="h-8 w-8 animate-spin mx-auto mb-2" />
+                  <div>Loading templates...</div>
                 </div>
               </div>
-              <div className="text-right">
-                <h2 className="text-2xl font-bold text-edg-black mb-2">QUOTE</h2>
-                <div className="text-sm space-y-1">
-                  <div><strong>Quote #:</strong> {quote.quoteNumber}</div>
-                  <div><strong>Date:</strong> {new Date(quote.createdAt!).toLocaleDateString()}</div>
-                  <div><strong>Valid For:</strong> {quoteTerms.validFor}</div>
+            ) : !selectedTemplate ? (
+              <div className="flex items-center justify-center h-64">
+                <div className="text-center">
+                  <FileText className="h-12 w-12 mx-auto mb-4 text-gray-400" />
+                  <div className="text-lg font-medium mb-2">No Template Selected</div>
+                  <div className="text-gray-600">Please select a template to preview your quote</div>
                 </div>
               </div>
-            </div>
-
-            {/* Customer & Project Info */}
-            <div className="grid grid-cols-2 gap-8 mb-8">
-              <div>
-                <h3 className="text-lg font-semibold text-edg-black mb-3">Bill To:</h3>
-                <div className="space-y-1">
-                  <div className="font-medium">{companyInfo.customerName}</div>
-                  {companyInfo.customerCompany && (
-                    <div className="font-medium text-edg-grey">{companyInfo.customerCompany}</div>
-                  )}
-                  <div>{companyInfo.customerEmail}</div>
-                  {companyInfo.customerPhone && <div>{companyInfo.customerPhone}</div>}
-                </div>
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold text-edg-black mb-3">Project Details:</h3>
-                <div className="space-y-1">
-                  <div><strong>Project:</strong> {quote.projectName}</div>
-                  <div><strong>Location:</strong> {quote.projectAddress}</div>
-                  {quote.estimatedStartDate && (
-                    <div><strong>Est. Start:</strong> {new Date(quote.estimatedStartDate).toLocaleDateString()}</div>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Line Items Table */}
-            <div className="mb-8 page-break-avoid">
-              <h3 className="text-lg font-semibold text-edg-black mb-4">Project Line Items</h3>
-              <table className="w-full border-collapse border border-gray-300">
-                <thead>
-                  <tr className="bg-gray-100">
-                    <th className="border border-gray-300 px-4 py-3 text-left">Description</th>
-                    <th className="border border-gray-300 px-4 py-3 text-center">Quantity</th>
-                    <th className="border border-gray-300 px-4 py-3 text-right">Rate</th>
-                    <th className="border border-gray-300 px-4 py-3 text-right">Amount</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {quote.lineItems.map((item, index) => {
-                    const qty = parseFloat(item.quantity.toString());
-                    const price = parseFloat(item.unitPrice.toString());
-                    const markup = parseFloat(item.markupValue.toString());
-                    const baseTotal = qty * price;
-                    const total = item.markupType === 'percentage' 
-                      ? baseTotal + (baseTotal * (markup / 100))
-                      : baseTotal + markup;
-                    const rateWithMarkup = total / qty; // Final rate per unit including markup
-
-                    return (
-                      <tr key={index} className="border-b">
-                        <td className="border border-gray-300 px-4 py-3">{item.description}</td>
-                        <td className="border border-gray-300 px-4 py-3 text-center">{item.quantity}</td>
-                        <td className="border border-gray-300 px-4 py-3 text-right">{formatCurrency(rateWithMarkup)}</td>
-                        <td className="border border-gray-300 px-4 py-3 text-right font-medium">
-                          {formatCurrency(total)}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Totals - Avoid breaking this section */}
-            <div className="flex justify-end mb-8 no-break">
-              <div className="w-80">
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span>Subtotal:</span>
-                    <span>{formatCurrency(totals.subtotal)}</span>
-                  </div>
-                  {totals.discountAmount > 0 && (
-                    <div className="flex justify-between text-red-600">
-                      <span>Discount ({quote.discount}%):</span>
-                      <span>-{formatCurrency(totals.discountAmount)}</span>
-                    </div>
-                  )}
-                  <div className="flex justify-between">
-                    <span>Tax ({quote.taxRate}%):</span>
-                    <span>{formatCurrency(totals.taxAmount)}</span>
-                  </div>
-                  <div className="border-t border-gray-300 pt-2">
-                    <div className="flex justify-between text-lg font-bold text-edg-black">
-                      <span>Total:</span>
-                      <span>{formatCurrency(totals.total)}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Terms and Notes */}
-            <div className="space-y-6">
-              {quote.notes && (
-                <div>
-                  <h3 className="text-lg font-semibold text-edg-black mb-3">Project Notes:</h3>
-                  <p className="text-sm whitespace-pre-wrap">{quote.notes}</p>
-                </div>
-              )}
-
-              {/* Contract Terms Section - Start on new page */}
-              {(quote.contractTemplate || quote.customContractTerms) ? (
-                <div className="space-y-4 page-break-before">
-                  <h3 className="text-xl font-bold text-edg-black border-b-2 border-edg-teal pb-2">
-                    {quote.contractTemplate?.title || 'Contract Terms'}
-                  </h3>
-                  <div className="text-sm text-gray-800 leading-relaxed whitespace-pre-line contract-terms" style={{ lineHeight: '1.6' }}>
-                    {quote.customContractTerms || quote.contractTemplate?.terms}
-                  </div>
-                  
-                  {/* Signature Section - Start on new page */}
-                  <div className="mt-8 space-y-6 border-t border-gray-300 pt-6 signature-section page-break-before">
-                    <h4 className="text-lg font-semibold text-edg-black">Agreement Signatures</h4>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                      {/* Issuer Signature */}
-                      <div className="space-y-3">
-                        <h5 className="font-semibold text-edg-black">EDG Patio & Shade (Issuer)</h5>
-                        <div className="border-b-2 border-gray-400 pb-2 min-h-[40px] flex items-end">
-                          {quote.issuerSignature && (
-                            <span className="italic text-gray-700 text-lg">{quote.issuerSignature}</span>
-                          )}
-                        </div>
-                        <div className="text-xs text-gray-600">
-                          <div>Authorized Signature</div>
-                          {quote.issuerSignatureDate && (
-                            <div>Date: {new Date(quote.issuerSignatureDate).toLocaleDateString()}</div>
-                          )}
-                        </div>
-                      </div>
-                      
-                      {/* Customer Signature */}
-                      <div className="space-y-3">
-                        <h5 className="font-semibold text-edg-black">Customer Acceptance</h5>
-                        <div className="border-b-2 border-gray-400 pb-2 min-h-[40px] flex items-end">
-                          {quote.customerSignature && (
-                            <span className="italic text-gray-700 text-lg">{quote.customerSignature}</span>
-                          )}
-                        </div>
-                        <div className="text-xs text-gray-600">
-                          <div>Customer Signature</div>
-                          {quote.customerSignatureDate && (
-                            <div>Date: {new Date(quote.customerSignatureDate).toLocaleDateString()}</div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                    
-                    {/* Signature Status */}
-                    <div className="text-center p-3 bg-gray-50 rounded">
-                      <div className="text-sm">
-                        <span className="font-medium">Document Status: </span>
-                        <span className={`capitalize font-semibold ${
-                          quote.signatureStatus === 'signed' ? 'text-green-600' :
-                          quote.signatureStatus === 'unsigned' ? 'text-red-600' :
-                          'text-blue-600'
-                        }`}>
-                          {quote.signatureStatus === 'signed' ? 'Signed by EDG' : 
-                           quote.signatureStatus === 'unsigned' ? 'Unsigned' : 
-                           quote.signatureStatus?.replace('_', ' ')}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                // Legacy Terms & Conditions for quotes without contracts  
-                <div className="page-break-before">
-                  <h3 className="text-lg font-semibold text-edg-black mb-3">Terms & Conditions:</h3>
-                  <div className="text-sm space-y-2">
-                    <div><strong>Payment Terms:</strong> {quoteTerms.paymentTerms}</div>
-                    <div><strong>Warranty:</strong> {quoteTerms.warranty}</div>
-                    <div><strong>Additional Notes:</strong> {quoteTerms.additionalNotes}</div>
-                  </div>
-                </div>
-              )}
-
-              <div className="border-t border-gray-300 pt-6 text-center text-sm text-gray-600">
-                <p>Thank you for considering {companyInfo.name} for your construction project.</p>
-                <p>This quote is valid for {quoteTerms.validFor} from the date above.</p>
-              </div>
-            </div>
+            ) : (
+              renderTemplate()
+            )}
           </div>
         )}
       </DialogContent>
