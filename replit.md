@@ -95,6 +95,7 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+- September 11, 2025: Enhanced PDF import functionality with cost tracking for true margin visibility - users can now enter actual costs for imported line items to see real profit margins, includes bulk markup application and cost clearing features
 - August 6, 2025: Added search functionality to product catalog selection when creating quotes - users can now search and filter products in the "From Catalog" dialog
 - July 31, 2025: Redesigned Products page UI for better scalability with hundreds of products - added search bar, category filters, table/grid view toggle, and compact table layout
 - July 31, 2025: Completed mass product adjustment feature with ProductBulkEditor component for bulk category, markup, and unit updates
