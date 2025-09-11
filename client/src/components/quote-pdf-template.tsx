@@ -9,10 +9,11 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Download, Edit3, Loader2, FileText, AlertCircle, CheckCircle, Star, Users, Briefcase, Settings, Clock, DollarSign } from "lucide-react";
+import { Download, Edit3, Loader2, FileText, AlertCircle, CheckCircle, Star, Users, Briefcase, Settings, Clock, DollarSign, Image as ImageIcon } from "lucide-react";
 import { formatCurrency, calculateQuoteTotals } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Progress } from "@/components/ui/progress";
 import type { QuoteWithDetails, ProposalTemplate } from "@shared/schema";
 import logoPath from "@assets/my-logo.png_1753970984943.jpg";
 
@@ -46,6 +47,9 @@ export function QuotePDFTemplate({ quote, isOpen, onClose }: QuotePDFTemplatePro
   const [isEditing, setIsEditing] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
   const [showTemplateSelection, setShowTemplateSelection] = useState(true);
+  const [imageLoadingProgress, setImageLoadingProgress] = useState(0);
+  const [imageLoadingStatus, setImageLoadingStatus] = useState<'idle' | 'loading' | 'complete' | 'error'>('idle');
+  const [imageLoadingDetails, setImageLoadingDetails] = useState('');
   
   // Fetch proposal templates with proper typing
   const { data: proposalTemplates, isLoading: templatesLoading, error: templatesError } = useQuery<ProposalTemplate[]>({
@@ -191,6 +195,136 @@ export function QuotePDFTemplate({ quote, isOpen, onClose }: QuotePDFTemplatePro
     const recommended = getRecommendedTemplate(templatesArray, quote);
     return recommended?.id === template.id;
   };
+
+  // Image processing utilities for PDF generation
+  const convertImageToDataURL = async (imageUrl: string, timeoutMs = 10000): Promise<string | null> => {
+    try {
+      // Handle blob URLs and data URLs directly
+      if (imageUrl.startsWith('blob:') || imageUrl.startsWith('data:')) {
+        return imageUrl;
+      }
+
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Set up timeout
+        const timeout = setTimeout(() => {
+          reject(new Error(`Image loading timeout: ${imageUrl}`));
+        }, timeoutMs);
+
+        img.onload = () => {
+          clearTimeout(timeout);
+          try {
+            // Set canvas size to image size for best quality
+            canvas.width = img.naturalWidth;
+            canvas.height = img.naturalHeight;
+            
+            // Draw image on canvas
+            ctx?.drawImage(img, 0, 0);
+            
+            // Convert to high-quality JPEG for smaller file size in PDF
+            const dataURL = canvas.toDataURL('image/jpeg', 0.92);
+            resolve(dataURL);
+          } catch (error) {
+            console.warn('Failed to convert image to data URL:', imageUrl, error);
+            resolve(null);
+          }
+        };
+
+        img.onerror = () => {
+          clearTimeout(timeout);
+          console.warn('Failed to load image:', imageUrl);
+          resolve(null);
+        };
+
+        // Enable CORS for cross-origin images
+        img.crossOrigin = 'anonymous';
+        img.src = imageUrl;
+      });
+    } catch (error) {
+      console.warn('Error processing image:', imageUrl, error);
+      return null;
+    }
+  };
+
+  const extractImageUrlsFromElement = (element: HTMLElement): string[] => {
+    const images = element.querySelectorAll('img');
+    const urls = new Set<string>();
+    
+    images.forEach(img => {
+      if (img.src && !img.src.startsWith('data:')) {
+        urls.add(img.src);
+      }
+    });
+    
+    return Array.from(urls);
+  };
+
+  const preloadAndConvertImages = async (imageUrls: string[]): Promise<Map<string, string>> => {
+    const imageDataMap = new Map<string, string>();
+    
+    if (imageUrls.length === 0) {
+      return imageDataMap;
+    }
+
+    setImageLoadingStatus('loading');
+    setImageLoadingProgress(0);
+    setImageLoadingDetails(`Loading ${imageUrls.length} images...`);
+
+    const promises = imageUrls.map(async (url, index) => {
+      try {
+        setImageLoadingDetails(`Loading image ${index + 1} of ${imageUrls.length}...`);
+        const dataURL = await convertImageToDataURL(url);
+        
+        if (dataURL) {
+          imageDataMap.set(url, dataURL);
+        }
+        
+        // Update progress
+        const progress = ((index + 1) / imageUrls.length) * 100;
+        setImageLoadingProgress(progress);
+        
+        return { url, dataURL };
+      } catch (error) {
+        console.warn(`Failed to load image ${url}:`, error);
+        return { url, dataURL: null };
+      }
+    });
+
+    try {
+      await Promise.allSettled(promises);
+      setImageLoadingStatus('complete');
+      setImageLoadingDetails(`Successfully loaded ${imageDataMap.size} of ${imageUrls.length} images`);
+    } catch (error) {
+      setImageLoadingStatus('error');
+      setImageLoadingDetails('Some images failed to load');
+      console.error('Error loading images:', error);
+    }
+
+    return imageDataMap;
+  };
+
+  const replaceImageSourcesInElement = (element: HTMLElement, imageDataMap: Map<string, string>): void => {
+    const images = element.querySelectorAll('img');
+    
+    images.forEach(img => {
+      const originalSrc = img.src;
+      
+      // Replace with data URL if available
+      if (imageDataMap.has(originalSrc)) {
+        const dataURL = imageDataMap.get(originalSrc);
+        if (dataURL) {
+          img.src = dataURL;
+        }
+      }
+      // Special handling for logo path
+      else if (originalSrc.includes('my-logo')) {
+        // This will be handled separately as before
+      }
+    });
+  };
   
   // Render the appropriate template component
   const renderTemplate = () => {
@@ -219,132 +353,194 @@ export function QuotePDFTemplate({ quote, isOpen, onClose }: QuotePDFTemplatePro
 
   const generatePDFMutation = useMutation({
     mutationFn: async () => {
-      // Use browser's native print which respects CSS page breaks
-      const printWindow = window.open('', '_blank');
-      if (!printWindow) throw new Error('Could not open print window');
-
-      const element = document.getElementById('quote-pdf-content');
-      if (!element) throw new Error('PDF content not found');
-
-      // Convert logo to base64 for embedding in PDF
-      let logoDataUrl = '';
       try {
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        const img = new Image();
+        // Reset loading states
+        setImageLoadingStatus('loading');
+        setImageLoadingProgress(0);
+        setImageLoadingDetails('Preparing PDF generation...');
+
+        const element = document.getElementById('quote-pdf-content');
+        if (!element) throw new Error('PDF content not found');
+
+        // Extract all image URLs from the template
+        const imageUrls = extractImageUrlsFromElement(element);
         
-        await new Promise((resolve, reject) => {
-          img.onload = () => {
-            canvas.width = img.width;
-            canvas.height = img.height;
-            ctx?.drawImage(img, 0, 0);
-            logoDataUrl = canvas.toDataURL('image/png');
-            resolve(logoDataUrl);
-          };
-          img.onerror = reject;
-          img.src = logoPath;
-        });
-      } catch (error) {
-        console.warn('Failed to load logo for PDF:', error);
-      }
+        // Pre-load and convert all images to data URLs
+        const imageDataMap = await preloadAndConvertImages(imageUrls);
+        
+        setImageLoadingDetails('Processing document...');
 
-      // Create a clone of the element and replace logo src with base64
-      const elementClone = element.cloneNode(true) as HTMLElement;
-      const logoImgs = elementClone.querySelectorAll('img');
-      logoImgs.forEach((logoImg) => {
-        if (logoDataUrl && logoImg.src.includes('my-logo')) {
-          logoImg.src = logoDataUrl;
+        // Create a clone of the element for processing
+        const elementClone = element.cloneNode(true) as HTMLElement;
+        
+        // Replace all image sources with data URLs
+        replaceImageSourcesInElement(elementClone, imageDataMap);
+        
+        // Handle company logo separately (as before)
+        let logoDataUrl = '';
+        try {
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+          const img = new Image();
+          
+          await new Promise((resolve, reject) => {
+            img.onload = () => {
+              canvas.width = img.width;
+              canvas.height = img.height;
+              ctx?.drawImage(img, 0, 0);
+              logoDataUrl = canvas.toDataURL('image/png');
+              resolve(logoDataUrl);
+            };
+            img.onerror = reject;
+            img.src = logoPath;
+          });
+        } catch (error) {
+          console.warn('Failed to load logo for PDF:', error);
         }
-      });
 
-      // Copy all stylesheets from current document
-      let allStyles = '';
-      
-      // Get all style and link elements from the current document
-      const styleElements = document.querySelectorAll('style, link[rel="stylesheet"]');
-      for (const styleEl of styleElements) {
-        if (styleEl.tagName === 'STYLE') {
-          allStyles += styleEl.outerHTML;
-        } else if (styleEl.tagName === 'LINK') {
-          // For external stylesheets, we'll try to fetch and inline them
-          try {
-            const href = (styleEl as HTMLLinkElement).href;
-            if (href) {
-              const response = await fetch(href);
-              const cssText = await response.text();
-              allStyles += `<style>${cssText}</style>`;
+        // Replace logo images that use the asset logo
+        if (logoDataUrl) {
+          const logoImgs = elementClone.querySelectorAll('img');
+          logoImgs.forEach((logoImg) => {
+            if (logoImg.src.includes('my-logo')) {
+              logoImg.src = logoDataUrl;
             }
-          } catch (error) {
-            // If we can't fetch external CSS, just copy the link tag
+          });
+        }
+
+        setImageLoadingDetails('Applying styles...');
+
+        // Copy all stylesheets from current document
+        let allStyles = '';
+        
+        // Get all style and link elements from the current document
+        const styleElements = document.querySelectorAll('style, link[rel="stylesheet"]');
+        for (const styleEl of Array.from(styleElements)) {
+          if (styleEl.tagName === 'STYLE') {
             allStyles += styleEl.outerHTML;
+          } else if (styleEl.tagName === 'LINK') {
+            // For external stylesheets, try to fetch and inline them
+            try {
+              const href = (styleEl as HTMLLinkElement).href;
+              if (href) {
+                const response = await fetch(href);
+                const cssText = await response.text();
+                allStyles += `<style>${cssText}</style>`;
+              }
+            } catch (error) {
+              // If we can't fetch external CSS, just copy the link tag
+              allStyles += styleEl.outerHTML;
+            }
           }
         }
-      }
 
-      // Create a complete HTML document for printing
-      printWindow.document.write(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <title>${selectedTemplate?.name || 'Quote'}-${quote.quoteNumber}</title>
-          <meta charset="utf-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1">
-          ${allStyles}
-          <style>
-            /* Print-specific overrides */
-            @media print {
-              @page { 
-                size: A4; 
-                margin: 20mm; 
+        setImageLoadingDetails('Opening print dialog...');
+
+        // Open print window
+        const printWindow = window.open('', '_blank');
+        if (!printWindow) throw new Error('Could not open print window');
+
+        // Create a complete HTML document for printing
+        printWindow.document.write(`
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <title>${selectedTemplate?.name || 'Quote'}-${quote.quoteNumber}</title>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            ${allStyles}
+            <style>
+              /* Print-specific overrides */
+              @media print {
+                @page { 
+                  size: A4; 
+                  margin: 20mm; 
+                }
+                .page-break-before { page-break-before: always; }
+                .page-break-after { page-break-after: always; }
+                .page-break-avoid { page-break-inside: avoid; }
+                .no-break { break-inside: avoid; }
+                .signature-section { 
+                  break-inside: avoid; 
+                  min-height: 200px;
+                  page-break-inside: avoid;
+                }
+                .contract-terms {
+                  break-inside: auto;
+                  page-break-inside: auto;
+                }
+                
+                /* Ensure images print at good quality */
+                img {
+                  max-width: 100% !important;
+                  height: auto !important;
+                  page-break-inside: avoid;
+                  image-rendering: -webkit-optimize-contrast;
+                  image-rendering: crisp-edges;
+                }
               }
-              .page-break-before { page-break-before: always; }
-              .page-break-after { page-break-after: always; }
-              .page-break-avoid { page-break-inside: avoid; }
-              .no-break { break-inside: avoid; }
-              .signature-section { 
-                break-inside: avoid; 
-                min-height: 200px;
-                page-break-inside: avoid;
+              
+              /* Ensure consistent font rendering in print */
+              body { 
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                color: #000;
+                background: white;
               }
-              .contract-terms {
-                break-inside: auto;
-                page-break-inside: auto;
+              
+              /* Image quality optimizations */
+              img {
+                image-rendering: -webkit-optimize-contrast;
+                image-rendering: crisp-edges;
+                image-rendering: pixelated;
               }
-            }
-            
-            /* Ensure consistent font rendering in print */
-            body { 
-              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-              color: #000;
-              background: white;
-            }
-          </style>
-        </head>
-        <body>
-          ${elementClone.outerHTML}
-          <script>
-            window.onload = function() {
-              window.print();
-              setTimeout(function() {
-                window.close();
-              }, 1000);
-            };
-          </script>
-        </body>
-        </html>
-      `);
-      
-      printWindow.document.close();
+            </style>
+          </head>
+          <body>
+            ${elementClone.outerHTML}
+            <script>
+              window.onload = function() {
+                // Small delay to ensure all images are rendered
+                setTimeout(function() {
+                  window.print();
+                  setTimeout(function() {
+                    window.close();
+                  }, 1000);
+                }, 500);
+              };
+            </script>
+          </body>
+          </html>
+        `);
+        
+        printWindow.document.close();
+        
+        // Reset states
+        setImageLoadingStatus('idle');
+        setImageLoadingProgress(0);
+        setImageLoadingDetails('');
+        
+      } catch (error) {
+        setImageLoadingStatus('error');
+        setImageLoadingDetails('Failed to generate PDF');
+        throw error;
+      }
     },
     onSuccess: () => {
-      toast({ title: "Print dialog opened - save as PDF to download" });
+      toast({ 
+        title: "PDF Generated", 
+        description: "Print dialog opened - save as PDF to download" 
+      });
     },
-    onError: () => {
+    onError: (error) => {
+      console.error('PDF generation error:', error);
       toast({ 
         title: "Error", 
-        description: "Failed to generate PDF", 
+        description: "Failed to generate PDF. Please try again.", 
         variant: "destructive" 
       });
+      setImageLoadingStatus('idle');
+      setImageLoadingProgress(0);
+      setImageLoadingDetails('');
     },
   });
 
@@ -388,14 +584,14 @@ export function QuotePDFTemplate({ quote, isOpen, onClose }: QuotePDFTemplatePro
               </Button>
               <Button
                 onClick={handleDownload}
-                disabled={generatePDFMutation.isPending || !selectedTemplate || showTemplateSelection}
+                disabled={generatePDFMutation.isPending || !selectedTemplate || showTemplateSelection || imageLoadingStatus === 'loading'}
                 className="bg-edg-black hover:bg-edg-grey text-edg-white"
                 data-testid="button-download-pdf"
               >
-                {generatePDFMutation.isPending ? (
+                {generatePDFMutation.isPending || imageLoadingStatus === 'loading' ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Opening Print Dialog...
+                    {imageLoadingStatus === 'loading' ? 'Processing Images...' : 'Opening Print Dialog...'}
                   </>
                 ) : (
                   <>
@@ -413,6 +609,48 @@ export function QuotePDFTemplate({ quote, isOpen, onClose }: QuotePDFTemplatePro
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
               Failed to load templates. Please try again.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {/* Image Loading Progress Indicator */}
+        {imageLoadingStatus === 'loading' && (
+          <Alert className="mb-4">
+            <ImageIcon className="h-4 w-4" />
+            <AlertDescription>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-medium">Processing Images for PDF</span>
+                  <span className="text-sm text-gray-600">{Math.round(imageLoadingProgress)}%</span>
+                </div>
+                <Progress value={imageLoadingProgress} className="w-full" />
+                <p className="text-sm text-gray-600">{imageLoadingDetails}</p>
+              </div>
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {imageLoadingStatus === 'error' && (
+          <Alert variant="destructive" className="mb-4">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              <div className="space-y-1">
+                <p className="font-medium">Image Processing Error</p>
+                <p className="text-sm">{imageLoadingDetails}</p>
+                <p className="text-sm">PDF generation will continue with available images.</p>
+              </div>
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {imageLoadingStatus === 'complete' && imageLoadingDetails && (
+          <Alert className="mb-4">
+            <CheckCircle className="h-4 w-4" />
+            <AlertDescription>
+              <div className="flex items-center justify-between">
+                <span className="font-medium">Images Ready</span>
+                <span className="text-sm text-gray-600">{imageLoadingDetails}</span>
+              </div>
             </AlertDescription>
           </Alert>
         )}
