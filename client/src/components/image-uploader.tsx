@@ -84,21 +84,92 @@ export function ImageUploader({
     return null;
   };
 
-  const simulateUpload = async (image: UploadedImage): Promise<string> => {
-    // Simulate upload progress
-    for (let progress = 0; progress <= 100; progress += 10) {
-      await new Promise(resolve => setTimeout(resolve, 100));
+  const realUpload = async (image: UploadedImage): Promise<string> => {
+    try {
+      console.log(`🚀 Starting real upload for ${image.file.name}`);
+      
+      // Step 1: Get upload URL from backend
       setImages(prev =>
         prev.map(img =>
-          img.id === image.id ? { ...img, uploadProgress: progress } : img
+          img.id === image.id ? { ...img, uploadProgress: 10 } : img
         )
       );
-    }
 
-    // In a real implementation, this would upload to object storage
-    // For now, we'll generate a mock URL
-    const mockUrl = `https://storage.replit.com/objects/${imageType}s/${image.file.name}`;
-    return mockUrl;
+      const uploadResponse = await fetch('/api/images/upload-url', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          imageType,
+          filename: image.file.name
+        })
+      });
+
+      if (!uploadResponse.ok) {
+        throw new Error(`Failed to get upload URL: ${uploadResponse.statusText}`);
+      }
+
+      const { uploadUrl, objectPath, publicUrl } = await uploadResponse.json();
+      console.log(`📦 Got upload URL for ${image.file.name}: ${objectPath}`);
+
+      // Step 2: Upload file directly to object storage
+      setImages(prev =>
+        prev.map(img =>
+          img.id === image.id ? { ...img, uploadProgress: 30 } : img
+        )
+      );
+
+      const fileUploadResponse = await fetch(uploadUrl, {
+        method: 'PUT',
+        body: image.file,
+        headers: {
+          'Content-Type': image.file.type,
+        }
+      });
+
+      if (!fileUploadResponse.ok) {
+        throw new Error(`File upload failed: ${fileUploadResponse.statusText}`);
+      }
+
+      console.log(`✅ File uploaded successfully: ${image.file.name}`);
+
+      // Step 3: Finalize upload and set ACL policy
+      setImages(prev =>
+        prev.map(img =>
+          img.id === image.id ? { ...img, uploadProgress: 80 } : img
+        )
+      );
+
+      const finalizeResponse = await fetch('/api/images/finalize-upload', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          objectPath
+        })
+      });
+
+      if (!finalizeResponse.ok) {
+        throw new Error(`Failed to finalize upload: ${finalizeResponse.statusText}`);
+      }
+
+      const { publicUrl: finalPublicUrl } = await finalizeResponse.json();
+      console.log(`🎉 Upload completed: ${finalPublicUrl}`);
+
+      // Step 4: Complete upload progress
+      setImages(prev =>
+        prev.map(img =>
+          img.id === image.id ? { ...img, uploadProgress: 100 } : img
+        )
+      );
+
+      return finalPublicUrl;
+    } catch (error) {
+      console.error('❌ Real upload failed:', error);
+      throw error;
+    }
   };
 
   const handleFiles = useCallback(async (acceptedFiles: File[]) => {
@@ -148,7 +219,7 @@ export function ImageUploader({
     // Start upload process for each new image
     newImages.forEach(async (image) => {
       try {
-        const url = await simulateUpload(image);
+        const url = await realUpload(image);
         setImages(prev =>
           prev.map(img =>
             img.id === image.id
