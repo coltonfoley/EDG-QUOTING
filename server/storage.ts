@@ -379,9 +379,40 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateQuote(id: number, quoteData: Partial<InsertQuote>): Promise<Quote | undefined> {
+    // Get existing quote data to merge images properly
+    const [existingQuote] = await db
+      .select()
+      .from(quotes)
+      .where(eq(quotes.id, id));
+    
+    if (!existingQuote) {
+      return undefined;
+    }
+
+    // Prepare the update data
+    let finalQuoteData = { ...quoteData };
+
+    // Merge image arrays instead of replacing them
+    const imageFields = ['projectImages', 'portfolioImages', 'technicalDiagrams', 'companyImages'] as const;
+    
+    for (const field of imageFields) {
+      if (quoteData[field] && Array.isArray(quoteData[field])) {
+        const existingImages = (existingQuote[field] as any[]) || [];
+        const newImages = quoteData[field] as any[];
+        
+        // Merge arrays, avoiding duplicates based on URL
+        const existingUrls = new Set(existingImages.map(img => img.url));
+        const uniqueNewImages = newImages.filter(img => !existingUrls.has(img.url));
+        
+        finalQuoteData[field] = [...existingImages, ...uniqueNewImages] as any;
+        
+        console.log(`📸 Merged ${field}: ${existingImages.length} existing + ${uniqueNewImages.length} new = ${(finalQuoteData[field] as any[]).length} total`);
+      }
+    }
+
     const [updated] = await db
       .update(quotes)
-      .set(quoteData)
+      .set(finalQuoteData)
       .where(eq(quotes.id, id))
       .returning();
     return updated || undefined;
