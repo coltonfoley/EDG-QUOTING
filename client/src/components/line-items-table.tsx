@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Trash2, Edit, Plus, Package, Search, Filter, X, ChevronDown, ChevronUp, Save, XCircle, Percent, DollarSign, Check, CheckSquare, Square, Minus, Users, Tags } from "lucide-react";
+import { Trash2, Edit, Plus, Package, Search, Filter, X, ChevronDown, ChevronUp, Save, XCircle, Percent, DollarSign, Check, CheckSquare, Square, Minus, Users, Tags, Settings, Eye, EyeOff } from "lucide-react";
 import { formatCurrency, calculateLineItemTotal, calculateLineItemMargin, applyDiscountToPrice } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -41,6 +41,13 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
   const [calculatedPrice, setCalculatedPrice] = useState<number | null>(null);
   const [expandedCards, setExpandedCards] = useState<Record<number, boolean>>({});
   const [isMobile, setIsMobile] = useState(false);
+  
+  // Progressive disclosure state
+  const [showAdvancedFields, setShowAdvancedFields] = useState<boolean>(() => {
+    // Load preference from sessionStorage, default to false (simple view)
+    const saved = sessionStorage.getItem('line-items-show-advanced');
+    return saved ? JSON.parse(saved) : false;
+  });
 
   // Bulk selection states
   const [selectedItems, setSelectedItems] = useState<Set<number>>(new Set());
@@ -63,6 +70,16 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
     
     return () => window.removeEventListener('resize', checkIsMobile);
   }, []);
+
+  // Persist advanced fields preference
+  useEffect(() => {
+    sessionStorage.setItem('line-items-show-advanced', JSON.stringify(showAdvancedFields));
+  }, [showAdvancedFields]);
+
+  // Toggle advanced fields display
+  const toggleAdvancedFields = () => {
+    setShowAdvancedFields(prev => !prev);
+  };
 
   // Clear selected items when line items data changes to avoid stale IDs
   useEffect(() => {
@@ -934,39 +951,49 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
           {/* Expanded Details */}
           <Collapsible open={isExpanded}>
             <CollapsibleContent className="space-y-3 pt-3 border-t border-gray-100">
-              {/* Discount Controls */}
-              <DiscountMarkupControl
-                label="Discount"
-                editingValue={editingValues[item.id]?.discountValue}
-                originalValue={item.discountValue}
-                type={currentDiscountType}
-                onValueChange={(value) => updateEditingValue(item.id, "discountValue", value)}
-                onTypeChange={(type) => updateEditingValue(item.id, "discountType", type)}
-                isEditing={isEditing}
-                testIdPrefix={`input-discount-value-${item.id}`}
-                variant="mobile"
-              />
+              {showAdvancedFields && (
+                <>
+                  {/* Discount Controls */}
+                  <DiscountMarkupControl
+                    label="Discount"
+                    editingValue={editingValues[item.id]?.discountValue}
+                    originalValue={item.discountValue}
+                    type={currentDiscountType}
+                    onValueChange={(value) => updateEditingValue(item.id, "discountValue", value)}
+                    onTypeChange={(type) => updateEditingValue(item.id, "discountType", type)}
+                    isEditing={isEditing}
+                    testIdPrefix={`input-discount-value-${item.id}`}
+                    variant="mobile"
+                  />
 
-              {/* Markup Controls */}
-              <DiscountMarkupControl
-                label="Markup"
-                editingValue={editingValues[item.id]?.markupValue}
-                originalValue={item.markupValue}
-                type={currentMarkupType}
-                onValueChange={(value) => updateEditingValue(item.id, "markupValue", value)}
-                onTypeChange={(type) => updateEditingValue(item.id, "markupType", type)}
-                isEditing={isEditing}
-                testIdPrefix={`input-markup-value-${item.id}`}
-                variant="mobile"
-              />
+                  {/* Markup Controls */}
+                  <DiscountMarkupControl
+                    label="Markup"
+                    editingValue={editingValues[item.id]?.markupValue}
+                    originalValue={item.markupValue}
+                    type={currentMarkupType}
+                    onValueChange={(value) => updateEditingValue(item.id, "markupValue", value)}
+                    onTypeChange={(type) => updateEditingValue(item.id, "markupType", type)}
+                    isEditing={isEditing}
+                    testIdPrefix={`input-markup-value-${item.id}`}
+                    variant="mobile"
+                  />
 
-              {/* Margin Display */}
-              <div className="bg-green-50 border border-green-200 rounded-md p-3">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm font-medium text-green-800">Margin:</span>
-                  <span className="text-sm font-semibold text-green-600">{formatCurrency(margin)}</span>
+                  {/* Margin Display */}
+                  <div className="bg-green-50 border border-green-200 rounded-md p-3">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm font-medium text-green-800">Margin:</span>
+                      <span className="text-sm font-semibold text-green-600">{formatCurrency(margin)}</span>
+                    </div>
+                  </div>
+                </>
+              )}
+              {!showAdvancedFields && (
+                <div className="text-center py-4 text-gray-500">
+                  <p className="text-sm">Advanced fields hidden</p>
+                  <p className="text-xs">Use "Show Advanced" toggle to see discount, markup, and margin details</p>
                 </div>
-              </div>
+              )}
             </CollapsibleContent>
           </Collapsible>
         </div>
@@ -978,7 +1005,32 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
     <Card className="mb-6">
       <CardHeader className="border-b border-gray-200">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
-          <CardTitle>Line Items</CardTitle>
+          <div className="flex items-center gap-4">
+            <CardTitle>Line Items</CardTitle>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={toggleAdvancedFields}
+              className={`flex items-center gap-2 transition-colors ${
+                showAdvancedFields 
+                  ? 'border-edg-teal text-edg-teal bg-edg-teal bg-opacity-10' 
+                  : 'border-gray-300 text-gray-600 hover:border-gray-400'
+              }`}
+              data-testid="button-toggle-advanced-fields"
+            >
+              {showAdvancedFields ? (
+                <>
+                  <EyeOff className="h-4 w-4" />
+                  Hide Advanced
+                </>
+              ) : (
+                <>
+                  <Eye className="h-4 w-4" />
+                  Show Advanced
+                </>
+              )}
+            </Button>
+          </div>
           <div className="mt-3 sm:mt-0 flex space-x-2">
             <Dialog open={showProductDialog} onOpenChange={setShowProductDialog}>
               <DialogTrigger asChild>
@@ -1292,51 +1344,53 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                   </div>
 
                   {/* Advanced Controls */}
-                  <div className="space-y-3 pt-3 border-t border-blue-200">
-                    <div className="grid grid-cols-2 gap-4">
-                      <DiscountMarkupControl
-                        label="Discount"
-                        editingValue={newItem.discountValue}
-                        originalValue={0}
-                        type={newItem.discountType}
-                        onValueChange={(value) => setNewItem({ ...newItem, discountValue: value })}
-                        onTypeChange={(type) => setNewItem({ ...newItem, discountType: type })}
-                        isEditing={true}
-                        testIdPrefix="input-discount-new-mobile"
-                        variant="mobile"
-                      />
-                      <DiscountMarkupControl
-                        label="Markup"
-                        editingValue={newItem.markupValue}
-                        originalValue={0}
-                        type={newItem.markupType}
-                        onValueChange={(value) => setNewItem({ ...newItem, markupValue: value })}
-                        onTypeChange={(type) => setNewItem({ ...newItem, markupType: type })}
-                        isEditing={true}
-                        testIdPrefix="input-markup-new-mobile"
-                        variant="mobile"
-                      />
-                    </div>
+                  {showAdvancedFields && (
+                    <div className="space-y-3 pt-3 border-t border-blue-200">
+                      <div className="grid grid-cols-2 gap-4">
+                        <DiscountMarkupControl
+                          label="Discount"
+                          editingValue={newItem.discountValue}
+                          originalValue={0}
+                          type={newItem.discountType}
+                          onValueChange={(value) => setNewItem({ ...newItem, discountValue: value })}
+                          onTypeChange={(type) => setNewItem({ ...newItem, discountType: type })}
+                          isEditing={true}
+                          testIdPrefix="input-discount-new-mobile"
+                          variant="mobile"
+                        />
+                        <DiscountMarkupControl
+                          label="Markup"
+                          editingValue={newItem.markupValue}
+                          originalValue={0}
+                          type={newItem.markupType}
+                          onValueChange={(value) => setNewItem({ ...newItem, markupValue: value })}
+                          onTypeChange={(type) => setNewItem({ ...newItem, markupType: type })}
+                          isEditing={true}
+                          testIdPrefix="input-markup-new-mobile"
+                          variant="mobile"
+                        />
+                      </div>
 
-                    {/* Margin Display */}
-                    <div className="bg-green-50 border border-green-200 rounded-md p-3">
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm font-medium text-green-800">Margin:</span>
-                        <span className="text-sm font-semibold text-green-600">
-                          {formatCurrency(
-                            calculateLineItemMargin(
-                              newItem.quantity,
-                              newItem.unitPrice,
-                              newItem.markupType,
-                              newItem.markupValue,
-                              newItem.discountType,
-                              newItem.discountValue
-                            )
-                          )}
-                        </span>
+                      {/* Margin Display */}
+                      <div className="bg-green-50 border border-green-200 rounded-md p-3">
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm font-medium text-green-800">Margin:</span>
+                          <span className="text-sm font-semibold text-green-600">
+                            {formatCurrency(
+                              calculateLineItemMargin(
+                                newItem.quantity,
+                                newItem.unitPrice,
+                                newItem.markupType,
+                                newItem.markupValue,
+                                newItem.discountType,
+                                newItem.discountValue
+                              )
+                            )}
+                          </span>
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  )}
 
                   {/* Action Buttons */}
                   <div className="flex space-x-3 pt-4">
@@ -1393,15 +1447,21 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                 <th className="px-2 py-3 text-center text-xs font-medium text-edg-grey uppercase w-24">
                   Unit Price
                 </th>
-                <th className="px-2 py-3 text-center text-xs font-medium text-edg-grey uppercase w-28">
-                  Discount
-                </th>
-                <th className="px-2 py-3 text-center text-xs font-medium text-edg-grey uppercase w-28">
-                  Markup
-                </th>
-                <th className="px-2 py-3 text-right text-xs font-medium text-edg-grey uppercase w-20">
-                  Margin
-                </th>
+                {showAdvancedFields && (
+                  <th className="px-2 py-3 text-center text-xs font-medium text-edg-grey uppercase w-28">
+                    Discount
+                  </th>
+                )}
+                {showAdvancedFields && (
+                  <th className="px-2 py-3 text-center text-xs font-medium text-edg-grey uppercase w-28">
+                    Markup
+                  </th>
+                )}
+                {showAdvancedFields && (
+                  <th className="px-2 py-3 text-right text-xs font-medium text-edg-grey uppercase w-20">
+                    Margin
+                  </th>
+                )}
                 <th className="px-2 py-3 text-right text-xs font-medium text-edg-grey uppercase w-24">
                   Total
                 </th>
@@ -1532,35 +1592,41 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                         </div>
                       )}
                     </td>
-                    <td className="px-2 py-3 text-center">
-                      <DiscountMarkupControl
-                        label=""
-                        editingValue={editingValues[item.id]?.discountValue}
-                        originalValue={item.discountValue}
-                        type={currentDiscountType}
-                        onValueChange={(value) => updateEditingValue(item.id, "discountValue", value)}
-                        onTypeChange={(type) => updateEditingValue(item.id, "discountType", type)}
-                        isEditing={isEditing}
-                        testIdPrefix={`input-discount-value-${item.id}`}
-                        variant="desktop"
-                      />
-                    </td>
-                    <td className="px-2 py-3 text-center">
-                      <DiscountMarkupControl
-                        label=""
-                        editingValue={editingValues[item.id]?.markupValue}
-                        originalValue={item.markupValue}
-                        type={currentMarkupType}
-                        onValueChange={(value) => updateEditingValue(item.id, "markupValue", value)}
-                        onTypeChange={(type) => updateEditingValue(item.id, "markupType", type)}
-                        isEditing={isEditing}
-                        testIdPrefix={`input-markup-value-${item.id}`}
-                        variant="desktop"
-                      />
-                    </td>
-                    <td className="px-2 py-3 text-right text-sm font-medium text-success-green">
-                      {formatCurrency(margin)}
-                    </td>
+                    {showAdvancedFields && (
+                      <td className="px-2 py-3 text-center">
+                        <DiscountMarkupControl
+                          label=""
+                          editingValue={editingValues[item.id]?.discountValue}
+                          originalValue={item.discountValue}
+                          type={currentDiscountType}
+                          onValueChange={(value) => updateEditingValue(item.id, "discountValue", value)}
+                          onTypeChange={(type) => updateEditingValue(item.id, "discountType", type)}
+                          isEditing={isEditing}
+                          testIdPrefix={`input-discount-value-${item.id}`}
+                          variant="desktop"
+                        />
+                      </td>
+                    )}
+                    {showAdvancedFields && (
+                      <td className="px-2 py-3 text-center">
+                        <DiscountMarkupControl
+                          label=""
+                          editingValue={editingValues[item.id]?.markupValue}
+                          originalValue={item.markupValue}
+                          type={currentMarkupType}
+                          onValueChange={(value) => updateEditingValue(item.id, "markupValue", value)}
+                          onTypeChange={(type) => updateEditingValue(item.id, "markupType", type)}
+                          isEditing={isEditing}
+                          testIdPrefix={`input-markup-value-${item.id}`}
+                          variant="desktop"
+                        />
+                      </td>
+                    )}
+                    {showAdvancedFields && (
+                      <td className="px-2 py-3 text-right text-sm font-medium text-success-green">
+                        {formatCurrency(margin)}
+                      </td>
+                    )}
                     <td className="px-2 py-3 text-right text-sm font-medium text-edg-black">
                       {formatCurrency(total)}
                     </td>
@@ -1650,44 +1716,50 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                       data-testid="input-unit-price-new"
                     />
                   </td>
-                  <td className="px-2 py-3 text-center">
-                    <DiscountMarkupControl
-                      label=""
-                      editingValue={newItem.discountValue}
-                      originalValue={0}
-                      type={newItem.discountType}
-                      onValueChange={(value) => setNewItem({ ...newItem, discountValue: value })}
-                      onTypeChange={(type) => setNewItem({ ...newItem, discountType: type })}
-                      isEditing={true}
-                      testIdPrefix="input-discount-new"
-                      variant="desktop"
-                    />
-                  </td>
-                  <td className="px-2 py-3 text-center">
-                    <DiscountMarkupControl
-                      label=""
-                      editingValue={newItem.markupValue}
-                      originalValue={0}
-                      type={newItem.markupType}
-                      onValueChange={(value) => setNewItem({ ...newItem, markupValue: value })}
-                      onTypeChange={(type) => setNewItem({ ...newItem, markupType: type })}
-                      isEditing={true}
-                      testIdPrefix="input-markup-new"
-                      variant="desktop"
-                    />
-                  </td>
-                  <td className="px-2 py-3 text-right text-sm font-medium text-success-green">
-                    {formatCurrency(
-                      calculateLineItemMargin(
-                        newItem.quantity,
-                        newItem.unitPrice,
-                        newItem.markupType,
-                        newItem.markupValue,
-                        newItem.discountType,
-                        newItem.discountValue
-                      )
-                    )}
-                  </td>
+                  {showAdvancedFields && (
+                    <td className="px-2 py-3 text-center">
+                      <DiscountMarkupControl
+                        label=""
+                        editingValue={newItem.discountValue}
+                        originalValue={0}
+                        type={newItem.discountType}
+                        onValueChange={(value) => setNewItem({ ...newItem, discountValue: value })}
+                        onTypeChange={(type) => setNewItem({ ...newItem, discountType: type })}
+                        isEditing={true}
+                        testIdPrefix="input-discount-new"
+                        variant="desktop"
+                      />
+                    </td>
+                  )}
+                  {showAdvancedFields && (
+                    <td className="px-2 py-3 text-center">
+                      <DiscountMarkupControl
+                        label=""
+                        editingValue={newItem.markupValue}
+                        originalValue={0}
+                        type={newItem.markupType}
+                        onValueChange={(value) => setNewItem({ ...newItem, markupValue: value })}
+                        onTypeChange={(type) => setNewItem({ ...newItem, markupType: type })}
+                        isEditing={true}
+                        testIdPrefix="input-markup-new"
+                        variant="desktop"
+                      />
+                    </td>
+                  )}
+                  {showAdvancedFields && (
+                    <td className="px-2 py-3 text-right text-sm font-medium text-success-green">
+                      {formatCurrency(
+                        calculateLineItemMargin(
+                          newItem.quantity,
+                          newItem.unitPrice,
+                          newItem.markupType,
+                          newItem.markupValue,
+                          newItem.discountType,
+                          newItem.discountValue
+                        )
+                      )}
+                    </td>
+                  )}
                   <td className="px-2 py-3 text-right text-sm font-medium text-edg-black">
                     {formatCurrency(
                       calculateLineItemTotal(
@@ -1889,6 +1961,14 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
               Apply a discount to {selectedCount} selected line item{selectedCount === 1 ? '' : 's'}.
             </p>
             
+            {!showAdvancedFields && (
+              <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
+                <p className="text-sm text-blue-800">
+                  💡 <strong>Tip:</strong> Enable "Show Advanced" to see discount values in the table after applying.
+                </p>
+              </div>
+            )}
+            
             <div className="space-y-3">
               <label className="block text-sm font-medium text-gray-700">
                 Discount Value
@@ -1977,6 +2057,14 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
             <p className="text-sm text-gray-600">
               Apply a markup to {selectedCount} selected line item{selectedCount === 1 ? '' : 's'}.
             </p>
+            
+            {!showAdvancedFields && (
+              <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
+                <p className="text-sm text-blue-800">
+                  💡 <strong>Tip:</strong> Enable "Show Advanced" to see markup values in the table after applying.
+                </p>
+              </div>
+            )}
             
             <div className="space-y-3">
               <label className="block text-sm font-medium text-gray-700">
