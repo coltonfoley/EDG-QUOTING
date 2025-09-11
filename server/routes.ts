@@ -1064,6 +1064,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // IMPORTANT: Default route must come BEFORE /:id route to avoid conflicts
+  app.get('/api/proposal-templates/default', isAuthenticated, async (req, res) => {
+    try {
+      const template = await storage.getDefaultProposalTemplate();
+      if (!template) {
+        return res.status(404).json({ message: "No default proposal template found" });
+      }
+      res.json(template);
+    } catch (error) {
+      console.error("Error fetching default proposal template:", error);
+      res.status(500).json({ message: "Failed to fetch default proposal template" });
+    }
+  });
+
   app.put('/api/proposal-templates/:id', isAuthenticated, async (req: any, res) => {
     try {
       const currentUser = await storage.getUser(req.user?.id);
@@ -1074,6 +1088,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const id = parseInt(req.params.id);
       if (isNaN(id) || id <= 0) {
         return res.status(400).json({ message: "Invalid template ID. Must be a positive integer." });
+      }
+
+      // Additional security: Check if template exists and is accessible
+      const existingTemplate = await storage.getProposalTemplate(id);
+      if (!existingTemplate) {
+        return res.status(404).json({ message: "Proposal template not found" });
       }
 
       const validatedData = insertProposalTemplateSchema.partial().parse(req.body);
@@ -1093,19 +1113,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/proposal-templates/default', isAuthenticated, async (req, res) => {
-    try {
-      const template = await storage.getDefaultProposalTemplate();
-      if (!template) {
-        return res.status(404).json({ message: "No default proposal template found" });
-      }
-      res.json(template);
-    } catch (error) {
-      console.error("Error fetching default proposal template:", error);
-      res.status(500).json({ message: "Failed to fetch default proposal template" });
-    }
-  });
-
   app.delete('/api/proposal-templates/:id', isAuthenticated, async (req: any, res) => {
     try {
       const currentUser = await storage.getUser(req.user?.id);
@@ -1118,13 +1125,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Invalid template ID. Must be a positive integer." });
       }
 
+      // Additional security: Check if template exists before deletion
+      const templateToDelete = await storage.getProposalTemplate(id);
+      if (!templateToDelete) {
+        return res.status(404).json({ message: "Proposal template not found" });
+      }
+
+      // Business rule: Check if this is the last active template of its category
+      const allTemplates = await storage.getAllProposalTemplates(false); // only active ones
+      const templatesInSameCategory = allTemplates.filter(t => 
+        t.category === templateToDelete.category && t.id !== id
+      );
+
+      if (templatesInSameCategory.length === 0) {
+        return res.status(400).json({ 
+          message: `Cannot delete the last active template of category '${templateToDelete.category}'. Create another active template in this category first.`,
+          code: "LAST_TEMPLATE_IN_CATEGORY"
+        });
+      }
+
+      // If deleting a default template, automatically set another template as default
+      if (templateToDelete.isDefault && templatesInSameCategory.length > 0) {
+        const newDefault = templatesInSameCategory[0];
+        await storage.updateProposalTemplate(newDefault.id, { isDefault: true });
+      }
+
       const success = await storage.deleteProposalTemplate(id);
       
       if (!success) {
         return res.status(404).json({ message: "Proposal template not found" });
       }
       
-      res.json({ message: "Proposal template deleted successfully" });
+      const responseMessage = templateToDelete.isDefault ? 
+        `Template deleted successfully. '${templatesInSameCategory[0].name}' is now the default for category '${templateToDelete.category}'.` :
+        "Proposal template deleted successfully";
+      
+      res.json({ message: responseMessage });
     } catch (error) {
       console.error("Error deleting proposal template:", error);
       res.status(500).json({ message: "Failed to delete proposal template" });

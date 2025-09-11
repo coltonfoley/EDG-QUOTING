@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Link } from "wouter";
 import { AppHeader } from "@/components/app-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -217,16 +218,20 @@ export default function AdminPage() {
           
           {/* Admin Navigation Tabs */}
           <div className="flex space-x-1 mt-6 border-b">
-            <button className="px-4 py-2 text-sm font-medium text-edg-black border-b-2 border-edg-black bg-white">
+            <button 
+              className="px-4 py-2 text-sm font-medium text-edg-black border-b-2 border-edg-black bg-white"
+              data-testid="button-admin-users-active"
+            >
               Users & Access
             </button>
-            <a 
+            <Link 
               href="/admin/templates"
               className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-edg-black hover:border-b-2 hover:border-gray-300 transition-colors"
+              data-testid="link-admin-templates"
             >
               <FileText className="inline mr-2 h-4 w-4" />
               Templates
-            </a>
+            </Link>
           </div>
         </div>
 
