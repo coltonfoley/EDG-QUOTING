@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Trash2, Edit, Plus, Package, Search, Filter, X, ChevronDown, ChevronUp, Save, XCircle, Percent, DollarSign } from "lucide-react";
+import { Trash2, Edit, Plus, Package, Search, Filter, X, ChevronDown, ChevronUp, Save, XCircle, Percent, DollarSign, Check, CheckSquare, Square, Minus, Users, Tags } from "lucide-react";
 import { formatCurrency, calculateLineItemTotal, calculateLineItemMargin, applyDiscountToPrice } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -42,6 +42,16 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
   const [expandedCards, setExpandedCards] = useState<Record<number, boolean>>({});
   const [isMobile, setIsMobile] = useState(false);
 
+  // Bulk selection states
+  const [selectedItems, setSelectedItems] = useState<Set<number>>(new Set());
+  const [showBulkDeleteDialog, setShowBulkDeleteDialog] = useState(false);
+  const [showBulkDiscountDialog, setShowBulkDiscountDialog] = useState(false);
+  const [showBulkMarkupDialog, setShowBulkMarkupDialog] = useState(false);
+  const [bulkDiscountType, setBulkDiscountType] = useState<"percentage" | "dollar">("percentage");
+  const [bulkDiscountValue, setBulkDiscountValue] = useState("");
+  const [bulkMarkupType, setBulkMarkupType] = useState<"percentage" | "dollar">("percentage");
+  const [bulkMarkupValue, setBulkMarkupValue] = useState("");
+
   // Responsive detection
   useEffect(() => {
     const checkIsMobile = () => {
@@ -53,6 +63,18 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
     
     return () => window.removeEventListener('resize', checkIsMobile);
   }, []);
+
+  // Clear selected items when line items data changes to avoid stale IDs
+  useEffect(() => {
+    const validIds = new Set(lineItems.map(item => item.id));
+    const currentSelectedIds = Array.from(selectedItems);
+    const hasStaleIds = currentSelectedIds.some(id => !validIds.has(id));
+    
+    if (hasStaleIds) {
+      const validSelectedIds = currentSelectedIds.filter(id => validIds.has(id));
+      setSelectedItems(new Set(validSelectedIds));
+    }
+  }, [lineItems, selectedItems]);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -138,6 +160,199 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
       toast({ title: "Error", description: "Failed to calculate pricing", variant: "destructive" });
     },
   });
+
+  // Bulk operation mutations
+  const bulkDeleteLineItemsMutation = useMutation({
+    mutationFn: async (ids: number[]) => {
+      const response = await apiRequest("DELETE", "/api/line-items/bulk", { ids });
+      return response.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/quotes"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/quotes/${quoteId}`] });
+      setSelectedItems(new Set());
+      setShowBulkDeleteDialog(false);
+      toast({ title: `Successfully deleted ${data.deletedCount} line items` });
+    },
+    onError: (error: any) => {
+      console.error("Bulk delete error:", error);
+      let errorMessage = "Failed to delete line items";
+      if (error?.response?.status === 403) {
+        errorMessage = "Unauthorized: You can only delete your own line items";
+      } else if (error?.response?.status === 400) {
+        errorMessage = error?.response?.data?.message || "Invalid data provided";
+      }
+      toast({ title: "Error", description: errorMessage, variant: "destructive" });
+    },
+  });
+
+  const bulkUpdateLineItemsMutation = useMutation({
+    mutationFn: async ({ ids, updates }: { ids: number[]; updates: Record<string, any> }) => {
+      const response = await apiRequest("PUT", "/api/line-items/bulk", { ids, updates });
+      return response.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/quotes"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/quotes/${quoteId}`] });
+      setSelectedItems(new Set());
+      setShowBulkDiscountDialog(false);
+      setShowBulkMarkupDialog(false);
+      setBulkDiscountValue("");
+      setBulkMarkupValue("");
+      toast({ title: `Successfully updated ${data.updatedCount} line items` });
+    },
+    onError: (error: any) => {
+      console.error("Bulk update error:", error);
+      let errorMessage = "Failed to update line items";
+      if (error?.response?.status === 403) {
+        errorMessage = "Unauthorized: You can only update your own line items";
+      } else if (error?.response?.status === 400) {
+        errorMessage = error?.response?.data?.message || "Invalid data provided";
+      }
+      toast({ title: "Error", description: errorMessage, variant: "destructive" });
+    },
+  });
+
+  // Selection helper functions
+  const handleSelectItem = (itemId: number, checked: boolean) => {
+    setSelectedItems(prev => {
+      const newSet = new Set(prev);
+      if (checked) {
+        newSet.add(itemId);
+      } else {
+        newSet.delete(itemId);
+      }
+      return newSet;
+    });
+  };
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedItems(new Set(lineItems.map(item => item.id)));
+    } else {
+      setSelectedItems(new Set());
+    }
+  };
+
+  const clearSelection = () => {
+    setSelectedItems(new Set());
+  };
+
+  // Bulk operation handlers
+  const handleBulkDelete = () => {
+    if (selectedItems.size === 0) return;
+    setShowBulkDeleteDialog(true);
+  };
+
+  const confirmBulkDelete = () => {
+    if (selectedItems.size === 0) return;
+    bulkDeleteLineItemsMutation.mutate(Array.from(selectedItems));
+  };
+
+  const handleBulkDiscount = () => {
+    if (selectedItems.size === 0) return;
+    setBulkDiscountValue("");
+    setBulkDiscountType("percentage");
+    setShowBulkDiscountDialog(true);
+  };
+
+  const confirmBulkDiscount = () => {
+    if (selectedItems.size === 0 || !bulkDiscountValue) return;
+    
+    const discountValue = parseFloat(bulkDiscountValue);
+    
+    // Frontend validation with user feedback
+    if (isNaN(discountValue) || discountValue < 0) {
+      toast({ 
+        title: "Invalid discount value", 
+        description: "Discount value must be a positive number", 
+        variant: "destructive" 
+      });
+      return;
+    }
+    
+    if (bulkDiscountType === 'percentage' && discountValue > 100) {
+      toast({ 
+        title: "Invalid discount percentage", 
+        description: "Discount percentage cannot exceed 100%", 
+        variant: "destructive" 
+      });
+      return;
+    }
+    
+    if (bulkDiscountType === 'dollar' && discountValue > 10000) {
+      toast({ 
+        title: "Invalid discount amount", 
+        description: "Discount amount seems unusually high. Please verify.", 
+        variant: "destructive" 
+      });
+      return;
+    }
+    
+    const updates = {
+      discountType: bulkDiscountType,
+      discountValue: discountValue.toString()
+    };
+    bulkUpdateLineItemsMutation.mutate({
+      ids: Array.from(selectedItems),
+      updates
+    });
+  };
+
+  const handleBulkMarkup = () => {
+    if (selectedItems.size === 0) return;
+    setBulkMarkupValue("");
+    setBulkMarkupType("percentage");
+    setShowBulkMarkupDialog(true);
+  };
+
+  const confirmBulkMarkup = () => {
+    if (selectedItems.size === 0 || !bulkMarkupValue) return;
+    
+    const markupValue = parseFloat(bulkMarkupValue);
+    
+    // Frontend validation with user feedback
+    if (isNaN(markupValue) || markupValue < 0) {
+      toast({ 
+        title: "Invalid markup value", 
+        description: "Markup value must be a positive number", 
+        variant: "destructive" 
+      });
+      return;
+    }
+    
+    if (bulkMarkupType === 'percentage' && markupValue > 1000) {
+      toast({ 
+        title: "Invalid markup percentage", 
+        description: "Markup percentage cannot exceed 1000%", 
+        variant: "destructive" 
+      });
+      return;
+    }
+    
+    if (bulkMarkupType === 'dollar' && markupValue > 10000) {
+      toast({ 
+        title: "Invalid markup amount", 
+        description: "Markup amount seems unusually high. Please verify.", 
+        variant: "destructive" 
+      });
+      return;
+    }
+    
+    const updates = {
+      markupType: bulkMarkupType,
+      markupValue: markupValue.toString()
+    };
+    bulkUpdateLineItemsMutation.mutate({
+      ids: Array.from(selectedItems),
+      updates
+    });
+  };
+
+  // Computed values for selection state
+  const selectedCount = selectedItems.size;
+  const allSelected = lineItems.length > 0 && selectedItems.size === lineItems.length;
+  const someSelected = selectedItems.size > 0 && selectedItems.size < lineItems.length;
 
   const handleAddItem = () => {
     const itemData = {
@@ -547,13 +762,33 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
     );
 
     return (
-      <div key={item.id} className={`border rounded-lg p-4 mb-4 bg-white transition-shadow ${
+      <div key={item.id} className={`border rounded-lg p-4 mb-4 bg-white transition-shadow relative ${
         isEditing 
           ? 'border-edg-teal shadow-md bg-blue-50' 
+          : selectedItems.has(item.id)
+          ? 'border-blue-400 shadow-md bg-blue-50'
           : 'border-gray-200 hover:shadow-sm'
       }`}>
+        {/* Selection Checkbox - Top Right */}
+        <div className="absolute top-3 right-3">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => handleSelectItem(item.id, !selectedItems.has(item.id))}
+            className="p-1 h-8 w-8"
+            disabled={isEditing}
+            data-testid={`checkbox-mobile-${item.id}`}
+          >
+            {selectedItems.has(item.id) ? (
+              <CheckSquare className="h-5 w-5 text-edg-teal" />
+            ) : (
+              <Square className="h-5 w-5 text-gray-400" />
+            )}
+          </Button>
+        </div>
+
         {/* Main Info - Always Visible */}
-        <div className="space-y-3">
+        <div className="space-y-3 pr-10">{/* Add padding-right to avoid overlap with checkbox */}
           {/* Description */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
@@ -892,10 +1127,106 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
         </div>
       </CardHeader>
 
+      {/* Bulk Action Bar */}
+      {selectedCount > 0 && (
+        <div className="bg-blue-50 border-y border-blue-200 px-4 py-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <Users className="h-4 w-4 text-blue-600" />
+              <span className="text-sm font-medium text-blue-900">
+                {selectedCount} item{selectedCount === 1 ? '' : 's'} selected
+              </span>
+            </div>
+            
+            <div className="flex items-center space-x-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleBulkDiscount}
+                className="border-blue-300 text-blue-700 hover:bg-blue-100"
+                data-testid="button-bulk-discount"
+              >
+                <Percent className="h-4 w-4 mr-1" />
+                Apply Discount
+              </Button>
+              
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleBulkMarkup}
+                className="border-blue-300 text-blue-700 hover:bg-blue-100"
+                data-testid="button-bulk-markup"
+              >
+                <Tags className="h-4 w-4 mr-1" />
+                Apply Markup
+              </Button>
+              
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleBulkDelete}
+                className="border-red-300 text-red-600 hover:bg-red-50 hover:border-red-400"
+                data-testid="button-bulk-delete"
+              >
+                <Trash2 className="h-4 w-4 mr-1" />
+                Delete Selected
+              </Button>
+              
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={clearSelection}
+                className="text-gray-500 hover:text-gray-700"
+                data-testid="button-clear-selection"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <CardContent className="p-0">
         {isMobile ? (
           // Mobile Card Layout
           <div className="p-4 space-y-4">
+            {/* Mobile Select All Header */}
+            {lineItems.length > 0 && (
+              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border">
+                <div className="flex items-center space-x-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleSelectAll(!allSelected)}
+                    className="p-1 h-8 w-8"
+                    data-testid="button-select-all-mobile"
+                  >
+                    {allSelected ? (
+                      <CheckSquare className="h-5 w-5 text-edg-teal" />
+                    ) : someSelected ? (
+                      <Minus className="h-5 w-5 text-edg-teal" />
+                    ) : (
+                      <Square className="h-5 w-5 text-gray-400" />
+                    )}
+                  </Button>
+                  <span className="text-sm font-medium text-gray-700">
+                    Select All ({selectedCount} of {lineItems.length} selected)
+                  </span>
+                </div>
+                {selectedCount > 0 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={clearSelection}
+                    className="text-gray-500 hover:text-gray-700"
+                    data-testid="button-clear-selection-mobile"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+            )}
+            
             {lineItems.map(renderMobileCard)}
             
             {/* Mobile New Item Form */}
@@ -1036,7 +1367,24 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
             <table className="w-full table-fixed divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-3 py-3 text-left text-xs font-medium text-edg-grey uppercase w-60">
+                <th className="px-2 py-3 text-center text-xs font-medium text-edg-grey uppercase w-10">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleSelectAll(!allSelected)}
+                    className="p-1 h-6 w-6"
+                    data-testid="button-select-all"
+                  >
+                    {allSelected ? (
+                      <CheckSquare className="h-4 w-4 text-edg-teal" />
+                    ) : someSelected ? (
+                      <Minus className="h-4 w-4 text-edg-teal" />
+                    ) : (
+                      <Square className="h-4 w-4 text-gray-400" />
+                    )}
+                  </Button>
+                </th>
+                <th className="px-3 py-3 text-left text-xs font-medium text-edg-grey uppercase w-56">
                   Description
                 </th>
                 <th className="px-2 py-3 text-center text-xs font-medium text-edg-grey uppercase w-16">
@@ -1108,8 +1456,26 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                   <tr key={item.id} className={`${
                     isEditing 
                       ? 'bg-blue-50 border-l-4 border-edg-teal'
+                      : selectedItems.has(item.id)
+                      ? 'bg-blue-50 border-l-4 border-blue-400'
                       : 'hover:bg-gray-50'
                   }`}>
+                    <td className="px-2 py-3 text-center">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleSelectItem(item.id, !selectedItems.has(item.id))}
+                        className="p-1 h-6 w-6"
+                        disabled={isEditing}
+                        data-testid={`checkbox-${item.id}`}
+                      >
+                        {selectedItems.has(item.id) ? (
+                          <CheckSquare className="h-4 w-4 text-edg-teal" />
+                        ) : (
+                          <Square className="h-4 w-4 text-gray-400" />
+                        )}
+                      </Button>
+                    </td>
                     <td className="px-3 py-3">
                       <div>
                         {isEditing ? (
@@ -1250,6 +1616,9 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
 
               {showNewItemForm && (
                 <tr className="bg-blue-50">
+                  <td className="px-2 py-3 text-center">
+                    {/* Empty cell for checkbox column alignment */}
+                  </td>
                   <td className="px-3 py-3">
                     <Input
                       placeholder="Description"
@@ -1456,6 +1825,233 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Delete Confirmation Dialog */}
+      <Dialog open={showBulkDeleteDialog} onOpenChange={setShowBulkDeleteDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirm Bulk Delete</DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <p className="text-sm text-gray-600">
+              Are you sure you want to delete the following {selectedCount} line item{selectedCount === 1 ? '' : 's'}?
+            </p>
+            
+            <div className="bg-red-50 border border-red-200 rounded-md p-3 max-h-48 overflow-y-auto">
+              {lineItems
+                .filter(item => selectedItems.has(item.id))
+                .map(item => (
+                  <div key={item.id} className="text-sm text-red-800 py-1 border-b border-red-200 last:border-b-0">
+                    • {item.description}
+                  </div>
+                ))
+              }
+            </div>
+            
+            <p className="text-xs text-red-600">
+              This action cannot be undone.
+            </p>
+            
+            <div className="flex justify-end space-x-3 pt-4">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowBulkDeleteDialog(false)}
+                data-testid="button-cancel-bulk-delete"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={confirmBulkDelete}
+                disabled={bulkDeleteLineItemsMutation.isPending}
+                className="bg-red-600 hover:bg-red-700 text-white"
+                data-testid="button-confirm-bulk-delete"
+              >
+                {bulkDeleteLineItemsMutation.isPending ? "Deleting..." : `Delete ${selectedCount} Item${selectedCount === 1 ? '' : 's'}`}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Discount Dialog */}
+      <Dialog open={showBulkDiscountDialog} onOpenChange={setShowBulkDiscountDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Apply Bulk Discount</DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <p className="text-sm text-gray-600">
+              Apply a discount to {selectedCount} selected line item{selectedCount === 1 ? '' : 's'}.
+            </p>
+            
+            <div className="space-y-3">
+              <label className="block text-sm font-medium text-gray-700">
+                Discount Value
+              </label>
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                placeholder="0"
+                value={bulkDiscountValue}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  const numValue = parseFloat(value);
+                  
+                  // Allow empty string for user editing
+                  if (value === '' || (!isNaN(numValue) && numValue >= 0)) {
+                    setBulkDiscountValue(value);
+                  }
+                }}
+                className={`text-center ${
+                  bulkDiscountValue && (
+                    isNaN(parseFloat(bulkDiscountValue)) ||
+                    parseFloat(bulkDiscountValue) < 0 ||
+                    (bulkDiscountType === 'percentage' && parseFloat(bulkDiscountValue) > 100)
+                  ) ? 'border-red-300 focus:border-red-500' : ''
+                }`}
+                data-testid="input-bulk-discount-value"
+              />
+              
+              <div className="flex space-x-2">
+                <Button
+                  type="button"
+                  variant={bulkDiscountType === "percentage" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setBulkDiscountType("percentage")}
+                  className="flex-1"
+                  data-testid="button-bulk-discount-percentage"
+                >
+                  <Percent className="h-4 w-4 mr-1" />
+                  Percentage
+                </Button>
+                <Button
+                  type="button"
+                  variant={bulkDiscountType === "dollar" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setBulkDiscountType("dollar")}
+                  className="flex-1"
+                  data-testid="button-bulk-discount-dollar"
+                >
+                  <DollarSign className="h-4 w-4 mr-1" />
+                  Dollar
+                </Button>
+              </div>
+            </div>
+            
+            <div className="flex justify-end space-x-3 pt-4">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowBulkDiscountDialog(false)}
+                data-testid="button-cancel-bulk-discount"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={confirmBulkDiscount}
+                disabled={!bulkDiscountValue || bulkUpdateLineItemsMutation.isPending}
+                className="bg-edg-teal hover:bg-edg-teal/90 text-white"
+                data-testid="button-confirm-bulk-discount"
+              >
+                {bulkUpdateLineItemsMutation.isPending ? "Applying..." : "Apply Discount"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Markup Dialog */}
+      <Dialog open={showBulkMarkupDialog} onOpenChange={setShowBulkMarkupDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Apply Bulk Markup</DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <p className="text-sm text-gray-600">
+              Apply a markup to {selectedCount} selected line item{selectedCount === 1 ? '' : 's'}.
+            </p>
+            
+            <div className="space-y-3">
+              <label className="block text-sm font-medium text-gray-700">
+                Markup Value
+              </label>
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                placeholder="0"
+                value={bulkMarkupValue}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  const numValue = parseFloat(value);
+                  
+                  // Allow empty string for user editing
+                  if (value === '' || (!isNaN(numValue) && numValue >= 0)) {
+                    setBulkMarkupValue(value);
+                  }
+                }}
+                className={`text-center ${
+                  bulkMarkupValue && (
+                    isNaN(parseFloat(bulkMarkupValue)) ||
+                    parseFloat(bulkMarkupValue) < 0 ||
+                    (bulkMarkupType === 'percentage' && parseFloat(bulkMarkupValue) > 1000)
+                  ) ? 'border-red-300 focus:border-red-500' : ''
+                }`}
+                data-testid="input-bulk-markup-value"
+              />
+              
+              <div className="flex space-x-2">
+                <Button
+                  type="button"
+                  variant={bulkMarkupType === "percentage" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setBulkMarkupType("percentage")}
+                  className="flex-1"
+                  data-testid="button-bulk-markup-percentage"
+                >
+                  <Percent className="h-4 w-4 mr-1" />
+                  Percentage
+                </Button>
+                <Button
+                  type="button"
+                  variant={bulkMarkupType === "dollar" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setBulkMarkupType("dollar")}
+                  className="flex-1"
+                  data-testid="button-bulk-markup-dollar"
+                >
+                  <DollarSign className="h-4 w-4 mr-1" />
+                  Dollar
+                </Button>
+              </div>
+            </div>
+            
+            <div className="flex justify-end space-x-3 pt-4">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowBulkMarkupDialog(false)}
+                data-testid="button-cancel-bulk-markup"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={confirmBulkMarkup}
+                disabled={!bulkMarkupValue || bulkUpdateLineItemsMutation.isPending}
+                className="bg-edg-teal hover:bg-edg-teal/90 text-white"
+                data-testid="button-confirm-bulk-markup"
+              >
+                {bulkUpdateLineItemsMutation.isPending ? "Applying..." : "Apply Markup"}
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </Card>

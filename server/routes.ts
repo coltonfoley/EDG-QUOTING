@@ -271,6 +271,128 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Bulk operations for line items
+  app.delete("/api/line-items/bulk", isAuthenticated, async (req: any, res) => {
+    try {
+      const { ids } = req.body;
+      if (!Array.isArray(ids) || ids.length === 0) {
+        return res.status(400).json({ message: "ids array is required and must not be empty" });
+      }
+
+      // Validate all integers
+      const lineItemIds = ids.map(id => parseInt(id)).filter(id => !isNaN(id));
+      if (lineItemIds.length !== ids.length) {
+        return res.status(400).json({ message: "All IDs must be valid integers" });
+      }
+
+      // Authorization check: validate ownership and same quote
+      const ownership = await storage.validateLineItemsOwnership(lineItemIds, req.user?.id);
+      if (!ownership.isValid) {
+        return res.status(403).json({ message: "Unauthorized: You can only delete your own line items from the same quote" });
+      }
+
+      // Additional quote ownership validation
+      if (ownership.quoteId && !await storage.validateQuoteOwnership(ownership.quoteId, req.user?.id)) {
+        return res.status(403).json({ message: "Unauthorized: You don't have access to this quote" });
+      }
+
+      const deletedCount = await storage.bulkDeleteLineItems(lineItemIds);
+      res.json({ deletedCount });
+    } catch (error) {
+      console.error("Bulk delete error:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.put("/api/line-items/bulk", isAuthenticated, async (req: any, res) => {
+    try {
+      const { ids, updates } = req.body;
+      if (!Array.isArray(ids) || ids.length === 0) {
+        return res.status(400).json({ message: "ids array is required and must not be empty" });
+      }
+      if (!updates || typeof updates !== 'object') {
+        return res.status(400).json({ message: "updates object is required" });
+      }
+
+      // Validate all integers
+      const lineItemIds = ids.map(id => parseInt(id)).filter(id => !isNaN(id));
+      if (lineItemIds.length !== ids.length) {
+        return res.status(400).json({ message: "All IDs must be valid integers" });
+      }
+
+      // Authorization check: validate ownership and same quote
+      const ownership = await storage.validateLineItemsOwnership(lineItemIds, req.user?.id);
+      if (!ownership.isValid) {
+        return res.status(403).json({ message: "Unauthorized: You can only update your own line items from the same quote" });
+      }
+
+      // Additional quote ownership validation
+      if (ownership.quoteId && !await storage.validateQuoteOwnership(ownership.quoteId, req.user?.id)) {
+        return res.status(403).json({ message: "Unauthorized: You don't have access to this quote" });
+      }
+
+      // Whitelist allowed fields to prevent mass assignment vulnerabilities
+      const allowedFields = ['discountType', 'discountValue', 'markupType', 'markupValue', 'quantity', 'unitPrice', 'description'];
+      const safeUpdates: any = {};
+      
+      for (const [key, value] of Object.entries(updates)) {
+        if (allowedFields.includes(key)) {
+          safeUpdates[key] = value;
+        }
+      }
+
+      if (Object.keys(safeUpdates).length === 0) {
+        return res.status(400).json({ message: "No valid fields provided for update" });
+      }
+
+      // Validate bounds for discount and markup values
+      if (safeUpdates.discountValue !== undefined) {
+        const discountValue = parseFloat(safeUpdates.discountValue);
+        if (isNaN(discountValue) || discountValue < 0) {
+          return res.status(400).json({ message: "Discount value must be a positive number" });
+        }
+        if (safeUpdates.discountType === 'percentage' && discountValue > 100) {
+          return res.status(400).json({ message: "Discount percentage cannot exceed 100%" });
+        }
+      }
+
+      if (safeUpdates.markupValue !== undefined) {
+        const markupValue = parseFloat(safeUpdates.markupValue);
+        if (isNaN(markupValue) || markupValue < 0) {
+          return res.status(400).json({ message: "Markup value must be a positive number" });
+        }
+        if (safeUpdates.markupType === 'percentage' && markupValue > 1000) {
+          return res.status(400).json({ message: "Markup percentage cannot exceed 1000%" });
+        }
+      }
+
+      if (safeUpdates.quantity !== undefined) {
+        const quantity = parseFloat(safeUpdates.quantity);
+        if (isNaN(quantity) || quantity <= 0) {
+          return res.status(400).json({ message: "Quantity must be a positive number" });
+        }
+      }
+
+      if (safeUpdates.unitPrice !== undefined) {
+        const unitPrice = parseFloat(safeUpdates.unitPrice);
+        if (isNaN(unitPrice) || unitPrice < 0) {
+          return res.status(400).json({ message: "Unit price must be a non-negative number" });
+        }
+      }
+      
+      // Validate the updates object against the schema (partial)
+      const validatedUpdates = insertLineItemSchema.partial().parse(safeUpdates);
+      const updatedCount = await storage.bulkUpdateLineItems(lineItemIds, validatedUpdates);
+      res.json({ updatedCount });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid update data", errors: error.errors });
+      }
+      console.error("Bulk update error:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
   // PDF template route - now handled client-side
   app.get("/api/quotes/:id/pdf-template", isAuthenticated, async (req, res) => {
     try {

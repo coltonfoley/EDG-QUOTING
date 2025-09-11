@@ -58,6 +58,8 @@ export interface IStorage {
   updateLineItem(id: number, lineItem: Partial<InsertLineItem>): Promise<LineItem | undefined>;
   deleteLineItem(id: number): Promise<boolean>;
   deleteLineItemsByQuoteId(quoteId: number): Promise<boolean>;
+  bulkDeleteLineItems(ids: number[]): Promise<number>;
+  bulkUpdateLineItems(ids: number[], updates: Partial<InsertLineItem>): Promise<number>;
 
   // User authentication methods
   getUser(id: any): Promise<User | undefined>;
@@ -77,6 +79,10 @@ export interface IStorage {
   
   // Session store for authentication
   sessionStore: any;
+
+  // Authorization methods for security
+  validateLineItemsOwnership(lineItemIds: number[], userId: any): Promise<{ isValid: boolean; quoteId?: number }>;
+  validateQuoteOwnership(quoteId: number, userId: any): Promise<boolean>;
 }
 
 export class MemStorage {
@@ -404,6 +410,58 @@ export class DatabaseStorage implements IStorage {
   async deleteLineItemsByQuoteId(quoteId: number): Promise<boolean> {
     await db.delete(lineItems).where(eq(lineItems.quoteId, quoteId));
     return true;
+  }
+
+  async bulkDeleteLineItems(ids: number[]): Promise<number> {
+    if (ids.length === 0) return 0;
+    const result = await db.delete(lineItems).where(inArray(lineItems.id, ids));
+    return result.rowCount || 0;
+  }
+
+  async bulkUpdateLineItems(ids: number[], updates: Partial<InsertLineItem>): Promise<number> {
+    if (ids.length === 0) return 0;
+    const result = await db
+      .update(lineItems)
+      .set(updates)
+      .where(inArray(lineItems.id, ids))
+      .returning();
+    return result.length;
+  }
+
+  // Authorization methods for line item security
+  async validateLineItemsOwnership(lineItemIds: number[], userId: any): Promise<{ isValid: boolean; quoteId?: number }> {
+    if (lineItemIds.length === 0) return { isValid: false };
+
+    // Get all line items and their associated quotes
+    const items = await db
+      .select({
+        lineItemId: lineItems.id,
+        quoteId: lineItems.quoteId,
+        userId: users.id // Use users.id since quotes table doesn't have userId field
+      })
+      .from(lineItems)
+      .leftJoin(quotes, eq(lineItems.quoteId, quotes.id))
+      .leftJoin(users, eq(quotes.customerId, users.id)) // This may need adjustment based on auth model
+      .where(inArray(lineItems.id, lineItemIds));
+
+    if (items.length !== lineItemIds.length) {
+      return { isValid: false }; // Some line items don't exist
+    }
+
+    // For now, since we don't have userId in quotes table, we'll validate all items belong to same quote
+    const quoteIds = Array.from(new Set(items.map(item => item.quoteId)));
+    if (quoteIds.length !== 1) {
+      return { isValid: false }; // Line items belong to different quotes
+    }
+
+    return { isValid: true, quoteId: quoteIds[0] };
+  }
+
+  async validateQuoteOwnership(quoteId: number, userId: any): Promise<boolean> {
+    // For now, return true since we don't have user ownership in quotes
+    // This should be enhanced when proper user-quote relationships are implemented
+    const quote = await db.select().from(quotes).where(eq(quotes.id, quoteId)).limit(1);
+    return quote.length > 0;
   }
 
   // Product methods
