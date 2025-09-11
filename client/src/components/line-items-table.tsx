@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Trash2, Edit, Plus, Package, Search, Filter, X, ChevronDown, ChevronUp, Save, XCircle, Percent, DollarSign, Check, CheckSquare, Square, Minus, Users, Tags, Settings, Eye, EyeOff } from "lucide-react";
+import { Trash2, Edit, Plus, Package, Search, Filter, X, ChevronDown, ChevronUp, Save, XCircle, Percent, DollarSign, Check, CheckSquare, Square, Minus, Users, Tags, Settings, Eye, EyeOff, Calculator, Receipt, TrendingUp, ShoppingCart, Layers, Target } from "lucide-react";
 import { formatCurrency, calculateLineItemTotal, calculateLineItemMargin, applyDiscountToPrice } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -1002,19 +1002,22 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
   };
 
   return (
-    <Card className="mb-6">
-      <CardHeader className="border-b border-gray-200">
+    <Card className="mb-6 shadow-sm border-gray-200 bg-white">
+      <CardHeader className="border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white px-6 py-4">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-4">
-            <CardTitle>Line Items</CardTitle>
+            <CardTitle className="text-xl font-bold text-gray-900 flex items-center gap-2">
+              <Receipt className="h-5 w-5 text-edg-teal" />
+              Line Items
+            </CardTitle>
             <Button
               variant="outline"
               size="sm"
               onClick={toggleAdvancedFields}
-              className={`flex items-center gap-2 transition-colors ${
+              className={`flex items-center gap-2 transition-all duration-200 font-medium ${
                 showAdvancedFields 
-                  ? 'border-edg-teal text-edg-teal bg-edg-teal bg-opacity-10' 
-                  : 'border-gray-300 text-gray-600 hover:border-gray-400'
+                  ? 'border-edg-teal text-edg-teal bg-edg-teal bg-opacity-10 shadow-sm' 
+                  : 'border-gray-300 text-gray-600 hover:border-edg-teal hover:text-edg-teal hover:bg-gray-50'
               }`}
               data-testid="button-toggle-advanced-fields"
             >
@@ -1036,7 +1039,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
               <DialogTrigger asChild>
                 <Button
                   variant="outline"
-                  className="border-edg-teal text-edg-teal hover:bg-edg-light-teal hover:bg-opacity-10"
+                  className="border-edg-teal text-edg-teal hover:bg-edg-teal hover:text-white font-medium transition-all duration-200 shadow-sm"
                 >
                   <Package className="mr-2 h-4 w-4" />
                   From Catalog
@@ -1170,7 +1173,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
             </Dialog>
             <Button
               onClick={() => setShowNewItemForm(true)}
-              className="bg-edg-teal hover:bg-edg-dark-teal text-edg-black"
+              className="bg-edg-teal hover:bg-edg-dark-teal text-white font-semibold shadow-md transition-all duration-200 hover:shadow-lg"
             >
               <Plus className="mr-2 h-4 w-4" />
               Custom Item
@@ -1181,11 +1184,11 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
 
       {/* Bulk Action Bar */}
       {selectedCount > 0 && (
-        <div className="bg-blue-50 border-y border-blue-200 px-4 py-3">
+        <div className="bg-gradient-to-r from-blue-50 to-blue-100 border-y border-blue-200 px-6 py-4 shadow-inner">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
               <Users className="h-4 w-4 text-blue-600" />
-              <span className="text-sm font-medium text-blue-900">
+              <span className="text-base font-semibold text-blue-900">
                 {selectedCount} item{selectedCount === 1 ? '' : 's'} selected
               </span>
             </div>
@@ -1195,7 +1198,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                 variant="outline"
                 size="sm"
                 onClick={handleBulkDiscount}
-                className="border-blue-300 text-blue-700 hover:bg-blue-100"
+                className="border-blue-300 text-blue-700 hover:bg-blue-100 font-medium transition-all duration-200 hover:shadow-sm"
                 data-testid="button-bulk-discount"
               >
                 <Percent className="h-4 w-4 mr-1" />
@@ -1206,7 +1209,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                 variant="outline"
                 size="sm"
                 onClick={handleBulkMarkup}
-                className="border-blue-300 text-blue-700 hover:bg-blue-100"
+                className="border-blue-300 text-blue-700 hover:bg-blue-100 font-medium transition-all duration-200 hover:shadow-sm"
                 data-testid="button-bulk-markup"
               >
                 <Tags className="h-4 w-4 mr-1" />
@@ -1217,7 +1220,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                 variant="outline"
                 size="sm"
                 onClick={handleBulkDelete}
-                className="border-red-300 text-red-600 hover:bg-red-50 hover:border-red-400"
+                className="border-red-300 text-red-600 hover:bg-red-50 hover:border-red-400 font-medium transition-all duration-200 hover:shadow-sm"
                 data-testid="button-bulk-delete"
               >
                 <Trash2 className="h-4 w-4 mr-1" />
@@ -1418,10 +1421,10 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
         ) : (
           // Desktop Table Layout
           <div className="overflow-x-auto">
-            <table className="w-full table-fixed divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+            <table className="w-full table-fixed divide-y divide-gray-200 bg-white">
+            <thead className="bg-gradient-to-r from-gray-50 to-gray-100">
               <tr>
-                <th className="px-2 py-3 text-center text-xs font-medium text-edg-grey uppercase w-10">
+                <th className="px-3 py-4 text-center text-xs font-bold text-gray-700 uppercase tracking-wide w-12">
                   <Button
                     variant="ghost"
                     size="sm"
@@ -1438,35 +1441,59 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                     )}
                   </Button>
                 </th>
-                <th className="px-3 py-3 text-left text-xs font-medium text-edg-grey uppercase w-56">
-                  Description
+                <th className="px-4 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wide w-56">
+                  <div className="flex items-center gap-2">
+                    <Package className="h-4 w-4 text-edg-teal" />
+                    Description
+                  </div>
                 </th>
-                <th className="px-2 py-3 text-center text-xs font-medium text-edg-grey uppercase w-16">
-                  Qty
+                <th className="px-3 py-4 text-center text-xs font-bold text-gray-700 uppercase tracking-wide w-20">
+                  <div className="flex items-center justify-center gap-1">
+                    <Calculator className="h-4 w-4 text-edg-teal" />
+                    Qty
+                  </div>
                 </th>
-                <th className="px-2 py-3 text-center text-xs font-medium text-edg-grey uppercase w-24">
-                  Unit Price
+                <th className="px-3 py-4 text-center text-xs font-bold text-gray-700 uppercase tracking-wide w-28">
+                  <div className="flex items-center justify-center gap-1">
+                    <DollarSign className="h-4 w-4 text-edg-teal" />
+                    Unit Price
+                  </div>
                 </th>
                 {showAdvancedFields && (
-                  <th className="px-2 py-3 text-center text-xs font-medium text-edg-grey uppercase w-28">
-                    Discount
+                  <th className="px-3 py-4 text-center text-xs font-bold text-gray-700 uppercase tracking-wide w-32">
+                    <div className="flex items-center justify-center gap-1">
+                      <Percent className="h-4 w-4 text-orange-500" />
+                      Discount
+                    </div>
                   </th>
                 )}
                 {showAdvancedFields && (
-                  <th className="px-2 py-3 text-center text-xs font-medium text-edg-grey uppercase w-28">
-                    Markup
+                  <th className="px-3 py-4 text-center text-xs font-bold text-gray-700 uppercase tracking-wide w-32">
+                    <div className="flex items-center justify-center gap-1">
+                      <TrendingUp className="h-4 w-4 text-green-500" />
+                      Markup
+                    </div>
                   </th>
                 )}
                 {showAdvancedFields && (
-                  <th className="px-2 py-3 text-right text-xs font-medium text-edg-grey uppercase w-20">
-                    Margin
+                  <th className="px-3 py-4 text-right text-xs font-bold text-gray-700 uppercase tracking-wide w-24">
+                    <div className="flex items-center justify-end gap-1">
+                      <Target className="h-4 w-4 text-emerald-500" />
+                      Margin
+                    </div>
                   </th>
                 )}
-                <th className="px-2 py-3 text-right text-xs font-medium text-edg-grey uppercase w-24">
-                  Total
+                <th className="px-3 py-4 text-right text-xs font-bold text-gray-700 uppercase tracking-wide w-28">
+                  <div className="flex items-center justify-end gap-1">
+                    <Receipt className="h-4 w-4 text-edg-teal" />
+                    Total
+                  </div>
                 </th>
-                <th className="px-2 py-3 text-center text-xs font-medium text-edg-grey uppercase w-16">
-                  Actions
+                <th className="px-3 py-4 text-center text-xs font-bold text-gray-700 uppercase tracking-wide w-20">
+                  <div className="flex items-center justify-center gap-1">
+                    <Settings className="h-4 w-4 text-gray-500" />
+                    Actions
+                  </div>
                 </th>
               </tr>
             </thead>
@@ -1513,12 +1540,12 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                 );
 
                 return (
-                  <tr key={item.id} className={`${
+                  <tr key={item.id} className={`transition-all duration-200 ${
                     isEditing 
-                      ? 'bg-blue-50 border-l-4 border-edg-teal'
+                      ? 'bg-gradient-to-r from-blue-50 to-blue-100 border-l-4 border-edg-teal shadow-sm'
                       : selectedItems.has(item.id)
-                      ? 'bg-blue-50 border-l-4 border-blue-400'
-                      : 'hover:bg-gray-50'
+                      ? 'bg-gradient-to-r from-blue-50 to-blue-100 border-l-4 border-blue-400 shadow-sm'
+                      : 'hover:bg-gradient-to-r hover:from-gray-50 hover:to-gray-100 hover:shadow-sm'
                   }`}>
                     <td className="px-2 py-3 text-center">
                       <Button
@@ -1542,12 +1569,12 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                           <Input
                             value={safeInputValue(editingValues[item.id]?.description, item.description)}
                             onChange={(e) => updateEditingValue(item.id, "description", e.target.value)}
-                            className="border border-edg-teal focus:ring-2 focus:ring-edg-teal focus:border-edg-teal text-sm bg-white"
+                            className="text-sm font-medium border-2 border-edg-teal focus:ring-2 focus:ring-edg-teal/20 bg-white shadow-sm transition-all duration-200"
                             data-testid={`input-description-${item.id}`}
                             autoFocus
                           />
                         ) : (
-                          <div className="text-sm py-2 px-1">
+                          <div className="text-sm py-2 px-1 text-gray-900 font-semibold leading-relaxed">
                             {item.description}
                           </div>
                         )}
@@ -1566,11 +1593,11 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                           min="0"
                           value={safeInputValue(editingValues[item.id]?.quantity, item.quantity)}
                           onChange={(e) => updateEditingValue(item.id, "quantity", e.target.value)}
-                          className="w-full text-center text-sm border border-edg-teal focus:ring-2 focus:ring-edg-teal bg-white"
+                          className="w-full text-center text-sm font-semibold border-2 border-edg-teal focus:ring-2 focus:ring-edg-teal/20 bg-white shadow-sm transition-all duration-200"
                           data-testid={`input-quantity-${item.id}`}
                         />
                       ) : (
-                        <div className="text-sm py-2">
+                        <div className="text-sm py-2 font-bold text-gray-800 bg-gray-50 rounded-md border border-gray-200 px-2">
                           {item.quantity}
                         </div>
                       )}
@@ -1583,11 +1610,11 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                           min="0"
                           value={safeInputValue(editingValues[item.id]?.unitPrice, item.unitPrice)}
                           onChange={(e) => updateEditingValue(item.id, "unitPrice", e.target.value)}
-                          className="w-full text-center text-sm border border-edg-teal focus:ring-2 focus:ring-edg-teal bg-white"
+                          className="w-full text-center text-sm font-semibold border-2 border-edg-teal focus:ring-2 focus:ring-edg-teal/20 bg-white shadow-sm transition-all duration-200"
                           data-testid={`input-unit-price-${item.id}`}
                         />
                       ) : (
-                        <div className="text-sm py-2">
+                        <div className="text-sm py-2 font-bold text-edg-teal bg-edg-teal/5 rounded-md border border-edg-teal/20 px-2">
                           {formatCurrency(item.unitPrice)}
                         </div>
                       )}
@@ -1623,12 +1650,16 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                       </td>
                     )}
                     {showAdvancedFields && (
-                      <td className="px-2 py-3 text-right text-sm font-medium text-success-green">
-                        {formatCurrency(margin)}
+                      <td className="px-3 py-4 text-right">
+                        <div className="text-sm font-bold text-emerald-600 bg-emerald-50 rounded-md border border-emerald-200 py-2 px-3">
+                          {formatCurrency(margin)}
+                        </div>
                       </td>
                     )}
-                    <td className="px-2 py-3 text-right text-sm font-medium text-edg-black">
-                      {formatCurrency(total)}
+                    <td className="px-3 py-4 text-right">
+                      <div className="text-base font-bold text-gray-900 bg-gray-100 rounded-lg border-2 border-gray-300 py-3 px-4 shadow-sm">
+                        {formatCurrency(total)}
+                      </div>
                     </td>
                     <td className="px-2 py-3 text-center">
                       {isEditing ? (
@@ -1637,7 +1668,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                             variant="ghost"
                             size="sm"
                             onClick={handleCancelEdit}
-                            className="text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+                            className="text-gray-600 hover:text-red-600 hover:bg-red-50 transition-all duration-200"
                             data-testid={`button-cancel-edit-${item.id}`}
                           >
                             <XCircle className="h-4 w-4" />
@@ -1647,7 +1678,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                             size="sm"
                             onClick={() => handleSaveEdit(item)}
                             disabled={updateLineItemMutation.isPending}
-                            className="bg-edg-teal text-white hover:bg-edg-teal/90"
+                            className="bg-edg-teal text-white hover:bg-edg-dark-teal shadow-md hover:shadow-lg transition-all duration-200"
                             data-testid={`button-save-edit-${item.id}`}
                           >
                             <Save className="h-4 w-4" />
@@ -1659,7 +1690,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                             variant="outline"
                             size="sm"
                             onClick={() => handleStartEdit(item.id, item)}
-                            className="border-gray-300 text-gray-700 hover:bg-gray-50"
+                            className="border-gray-300 text-gray-700 hover:border-edg-teal hover:text-edg-teal hover:bg-edg-teal/5 transition-all duration-200"
                             data-testid={`button-edit-${item.id}`}
                           >
                             <Edit className="h-4 w-4" />
@@ -1668,7 +1699,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                             variant="outline"
                             size="sm"
                             onClick={() => handleDeleteItem(item.id)}
-                            className="border-red-300 text-red-600 hover:bg-red-50 hover:border-red-400 hover:text-red-700"
+                            className="border-red-300 text-red-600 hover:bg-red-50 hover:border-red-400 hover:text-red-700 hover:shadow-md transition-all duration-200"
                             data-testid={`button-delete-${item.id}`}
                           >
                             <Trash2 className="h-4 w-4" />
