@@ -1,32 +1,21 @@
 import type { QuoteWithDetails } from '@shared/schema';
+import { COMPANY_INFO, QUOTE_TERMS } from '@shared/companyConfig';
 import { formatCurrency, calculateQuoteTotals } from '../client/src/lib/utils';
 
 // Simple PDF content generator that creates HTML that can be converted to PDF
 export function generateQuotePDFContent(quote: QuoteWithDetails): string {
-  const companyInfo = {
-    name: "EDG Patio & Shade",
-    address: "123 Patio Drive, Shade City, SC 12345",
-    phone: "(555) 123-4567",
-    email: "info@edgpatioandshade.com",
-    license: "License #SC-12345",
-  };
-
-  const terms = {
-    validFor: "30 days",
-    paymentTerms: "50% deposit, 50% on completion",
-    warranty: "1 year limited warranty on workmanship",
-    additionalNotes: "Materials subject to availability. Permit costs not included.",
-  };
-
   const totals = calculateQuoteTotals(
     quote.lineItems.map(item => ({
       quantity: item.quantity,
       unitPrice: item.unitPrice,
       markupType: item.markupType,
       markupValue: item.markupValue,
+      discountType: item.discountType,
+      discountValue: item.discountValue,
     })),
     quote.taxRate ?? 0,
-    quote.discount ?? 0
+    quote.discount ?? 0,
+    quote.shipping ?? 0
   );
 
   return `
@@ -184,16 +173,16 @@ export function generateQuotePDFContent(quote: QuoteWithDetails): string {
 <body>
   <div class="header">
     <div class="company-info">
-      <h1>${companyInfo.name}</h1>
-      <p>${companyInfo.address}</p>
-      <p>${companyInfo.phone}</p>
-      <p>${companyInfo.email}</p>
-      <p>${companyInfo.license}</p>
+      <h1>${COMPANY_INFO.name}</h1>
+      <p>${COMPANY_INFO.address}</p>
+      <p>${COMPANY_INFO.phone}</p>
+      <p>${COMPANY_INFO.email}</p>
+      <p>${COMPANY_INFO.license}</p>
     </div>
     <div class="quote-info">
       <h2>QUOTE</h2>
       <p><strong>#${quote.quoteNumber}</strong></p>
-      <p>Date: ${new Date(quote.createdAt).toLocaleDateString()}</p>
+      <p>Date: ${quote.createdAt ? new Date(quote.createdAt).toLocaleDateString() : new Date().toLocaleDateString()}</p>
     </div>
   </div>
 
@@ -209,9 +198,9 @@ export function generateQuotePDFContent(quote: QuoteWithDetails): string {
     </div>
     <div class="project-info">
       <h3 class="section-title">Project Details:</h3>
-      <p><strong>Project:</strong> ${quote.projectName}</p>
-      <p><strong>Location:</strong> ${quote.projectAddress}</p>
-      ${quote.projectDescription ? `<p><strong>Description:</strong> ${quote.projectDescription}</p>` : ''}
+      <p><strong>Project:</strong> ${quote.projectName || 'N/A'}</p>
+      <p><strong>Location:</strong> ${quote.projectAddress || 'N/A'}</p>
+      ${quote.notes ? `<p><strong>Description:</strong> ${quote.notes}</p>` : ''}
     </div>
   </div>
 
@@ -227,13 +216,15 @@ export function generateQuotePDFContent(quote: QuoteWithDetails): string {
     </thead>
     <tbody>
       ${quote.lineItems.map(item => {
-        const lineTotal = item.quantity * item.unitPrice;
+        const qty = typeof item.quantity === 'string' ? parseFloat(item.quantity) : item.quantity;
+        const price = typeof item.unitPrice === 'string' ? parseFloat(item.unitPrice) : item.unitPrice;
+        const lineTotal = qty * price;
         return `
           <tr>
             <td>${item.description}</td>
             <td>${item.quantity}</td>
-            <td>${item.unit || 'ea'}</td>
-            <td>${formatCurrency(item.unitPrice)}</td>
+            <td>ea</td>
+            <td>${formatCurrency(price)}</td>
             <td>${formatCurrency(lineTotal)}</td>
           </tr>
         `;
@@ -248,17 +239,17 @@ export function generateQuotePDFContent(quote: QuoteWithDetails): string {
         <span>${formatCurrency(totals.subtotal)}</span>
       </div>
       
-      ${quote.discount && quote.discount > 0 ? `
+      ${quote.discount && (typeof quote.discount === 'string' ? parseFloat(quote.discount) > 0 : quote.discount > 0) ? `
         <div class="totals-row">
           <span>Discount:</span>
-          <span>-${formatCurrency(totals.discount)}</span>
+          <span>-${formatCurrency(totals.discountAmount)}</span>
         </div>
       ` : ''}
       
-      ${quote.taxRate && quote.taxRate > 0 ? `
+      ${quote.taxRate && (typeof quote.taxRate === 'string' ? parseFloat(quote.taxRate) > 0 : quote.taxRate > 0) ? `
         <div class="totals-row">
-          <span>Tax (${(quote.taxRate * 100).toFixed(1)}%):</span>
-          <span>${formatCurrency(totals.tax)}</span>
+          <span>Tax (${(typeof quote.taxRate === 'string' ? parseFloat(quote.taxRate) : quote.taxRate) * 100}%):</span>
+          <span>${formatCurrency(totals.taxAmount)}</span>
         </div>
       ` : ''}
       
@@ -271,10 +262,10 @@ export function generateQuotePDFContent(quote: QuoteWithDetails): string {
 
   <div class="terms-section">
     <h3>Terms & Conditions</h3>
-    <p><span class="terms-label">Valid For:</span> ${terms.validFor}</p>
-    <p><span class="terms-label">Payment Terms:</span> ${terms.paymentTerms}</p>
-    <p><span class="terms-label">Warranty:</span> ${terms.warranty}</p>
-    ${terms.additionalNotes ? `<p><span class="terms-label">Additional Notes:</span> ${terms.additionalNotes}</p>` : ''}
+    <p><span class="terms-label">Valid For:</span> ${QUOTE_TERMS.validFor}</p>
+    <p><span class="terms-label">Payment Terms:</span> ${QUOTE_TERMS.paymentTerms}</p>
+    <p><span class="terms-label">Warranty:</span> ${QUOTE_TERMS.warranty}</p>
+    ${QUOTE_TERMS.additionalNotes ? `<p><span class="terms-label">Additional Notes:</span> ${QUOTE_TERMS.additionalNotes}</p>` : ''}
     
     <p class="footer-note">
       This quote is subject to our standard terms and conditions. 
