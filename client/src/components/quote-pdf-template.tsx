@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -43,6 +43,7 @@ interface CompanyInfo {
 }
 
 export function QuotePDFTemplate({ quote, isOpen, onClose }: QuotePDFTemplateProps) {
+  const printWindowRef = useRef<Window | null>(null);
   const { toast } = useToast();
   const [isEditing, setIsEditing] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
@@ -477,9 +478,11 @@ export function QuotePDFTemplate({ quote, isOpen, onClose }: QuotePDFTemplatePro
 
         setImageLoadingDetails('Opening print dialog...');
 
-        // Open print window
-        const printWindow = window.open('', '_blank');
-        if (!printWindow) throw new Error('Could not open print window');
+        // Use the pre-opened print window
+        const printWindow = printWindowRef.current;
+        if (!printWindow || printWindow.closed) {
+          throw new Error('Print window was closed or blocked');
+        }
 
         // Create a complete HTML document for printing
         printWindow.document.write(`
@@ -586,6 +589,19 @@ export function QuotePDFTemplate({ quote, isOpen, onClose }: QuotePDFTemplatePro
   });
 
   const handleDownload = () => {
+    // Open print window immediately during user gesture to avoid popup blockers
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      toast({
+        title: "Popup Blocked",
+        description: "Please allow popups for this site and try again.",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    // Store the window reference for the mutation to use
+    printWindowRef.current = printWindow;
     generatePDFMutation.mutate();
   };
 
