@@ -1876,15 +1876,22 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                   <td className="px-2 py-3 text-center">
                     {/* Empty cell for checkbox column alignment */}
                   </td>
-                  <td className="px-3 py-3">
+                  <td className="px-3 py-3 text-center">
+                    {/* Empty cell for image column alignment */}
+                    <div className="w-8 h-8 rounded-md bg-gray-200 flex items-center justify-center mx-auto">
+                      <Package className="h-4 w-4 text-gray-400" />
+                    </div>
+                  </td>
+                  <td className="px-4 py-3">
                     <Input
                       placeholder="Description"
                       value={newItem.description}
                       onChange={(e) => setNewItem({ ...newItem, description: e.target.value })}
                       className="border border-gray-300 text-sm"
+                      data-testid="input-description-new"
                     />
                   </td>
-                  <td className="px-2 py-3 text-center">
+                  <td className="px-3 py-3 text-center">
                     <Input
                       type="number"
                       step="1"
@@ -1893,9 +1900,10 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                       onChange={(e) => setNewItem({ ...newItem, quantity: e.target.value })}
                       className="w-full text-center text-sm"
                       placeholder="1"
+                      data-testid="input-quantity-new"
                     />
                   </td>
-                  <td className="px-2 py-3 text-center">
+                  <td className="px-3 py-3 text-center">
                     <Input
                       type="number"
                       step="0.01"
