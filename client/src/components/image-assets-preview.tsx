@@ -9,14 +9,14 @@ import type { UploadedImage } from '@/components/image-uploader';
 import { useState, useMemo } from 'react';
 
 interface ImageAssetsPreviewProps {
-  projectImages?: ProjectImage[];
-  portfolioImages?: PortfolioImage[];
-  technicalDiagrams?: TechnicalDiagram[];
-  companyImages?: CompanyImage[];
-  uploadedProjectImages?: UploadedImage[];
-  uploadedPortfolioImages?: UploadedImage[];
-  uploadedTechnicalDiagrams?: UploadedImage[];
-  uploadedCompanyImages?: UploadedImage[];
+  projectImages?: ProjectImage[] | null;
+  portfolioImages?: PortfolioImage[] | null;
+  technicalDiagrams?: TechnicalDiagram[] | null;
+  companyImages?: CompanyImage[] | null;
+  uploadedProjectImages?: UploadedImage[] | null;
+  uploadedPortfolioImages?: UploadedImage[] | null;
+  uploadedTechnicalDiagrams?: UploadedImage[] | null;
+  uploadedCompanyImages?: UploadedImage[] | null;
   className?: string;
 }
 
@@ -279,9 +279,9 @@ export function ImageAssetsPreview({
   });
 
   // Function to merge and deduplicate images
-  const mergeImages = (dbImages: any[], uploadedImages: UploadedImage[]): UnifiedImage[] => {
-    const dbUnified = dbImages.map(convertDbToUnified);
-    const uploadedUnified = uploadedImages.map(convertUploadedToUnified);
+  const mergeImages = (dbImages: any[] | null, uploadedImages: UploadedImage[] | null): UnifiedImage[] => {
+    const dbUnified = (dbImages || []).map(convertDbToUnified);
+    const uploadedUnified = (uploadedImages || []).map(convertUploadedToUnified);
     
     // Create a Map to deduplicate by filename, prioritizing uploaded images for immediate feedback
     const imageMap = new Map<string, UnifiedImage>();
