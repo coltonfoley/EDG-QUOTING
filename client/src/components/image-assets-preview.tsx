@@ -2,7 +2,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Camera, Image, Wrench, Building, Eye, FileText, Download, Upload, Clock } from 'lucide-react';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Camera, Image, Wrench, Building, Eye, FileText, Download, Upload, Clock, ChevronDown, ChevronUp } from 'lucide-react';
 import { getProxiedImageUrl } from '@/lib/image-utils';
 import type { ProjectImage, PortfolioImage, TechnicalDiagram, CompanyImage } from '@shared/schema';
 import type { UploadedImage } from '@/components/image-uploader';
@@ -249,6 +250,9 @@ export function ImageAssetsPreview({
   uploadedCompanyImages = [],
   className = '' 
 }: ImageAssetsPreviewProps) {
+  // State for collapsible image assets preview section
+  const [isImageAssetsPreviewOpen, setIsImageAssetsPreviewOpen] = useState(false);
+
   // Helper function to convert UploadedImage to UnifiedImage format
   const convertUploadedToUnified = (uploadedImage: UploadedImage): UnifiedImage => ({
     filename: uploadedImage.metadata.filename || uploadedImage.file.name,
@@ -351,46 +355,64 @@ export function ImageAssetsPreview({
 
   return (
     <Card className={`mb-6 ${className}`} data-testid="image-assets-preview">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Image className="h-5 w-5" />
-          Image Assets
-          <Badge variant="outline" className="ml-auto">{totalImages} images</Badge>
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-8">
-        <ImageCategory
-          title="Project Photos"
-          icon={<Camera className="h-5 w-5 text-blue-600" />}
-          images={mergedProjectImages}
-          emptyMessage="No project photos uploaded"
-          category="Project"
-        />
+      <Collapsible open={isImageAssetsPreviewOpen} onOpenChange={setIsImageAssetsPreviewOpen}>
+        <CardHeader>
+          <CollapsibleTrigger asChild>
+            <Button 
+              variant="ghost" 
+              className="w-full justify-between p-0 h-auto hover:bg-transparent"
+              data-testid="toggle-image-assets-preview"
+            >
+              <CardTitle className="flex items-center gap-2">
+                <Image className="h-5 w-5" />
+                Image Assets
+                <Badge variant="outline" className="ml-2">{totalImages} images</Badge>
+              </CardTitle>
+              {isImageAssetsPreviewOpen ? (
+                <ChevronUp className="h-5 w-5" />
+              ) : (
+                <ChevronDown className="h-5 w-5" />
+              )}
+            </Button>
+          </CollapsibleTrigger>
+        </CardHeader>
         
-        <ImageCategory
-          title="Portfolio Showcase"
-          icon={<Image className="h-5 w-5 text-green-600" />}
-          images={mergedPortfolioImages}
-          emptyMessage="No portfolio images uploaded"
-          category="Portfolio"
-        />
-        
-        <ImageCategory
-          title="Technical Diagrams"
-          icon={<Wrench className="h-5 w-5 text-orange-600" />}
-          images={mergedTechnicalDiagrams}
-          emptyMessage="No technical diagrams uploaded"
-          category="Technical"
-        />
-        
-        <ImageCategory
-          title="Company Assets"
-          icon={<Building className="h-5 w-5 text-purple-600" />}
-          images={mergedCompanyImages}
-          emptyMessage="No company assets uploaded"
-          category="Company"
-        />
-      </CardContent>
+        <CollapsibleContent>
+          <CardContent className="space-y-8 pt-0">
+            <ImageCategory
+              title="Project Photos"
+              icon={<Camera className="h-5 w-5 text-blue-600" />}
+              images={mergedProjectImages}
+              emptyMessage="No project photos uploaded"
+              category="Project"
+            />
+            
+            <ImageCategory
+              title="Portfolio Showcase"
+              icon={<Image className="h-5 w-5 text-green-600" />}
+              images={mergedPortfolioImages}
+              emptyMessage="No portfolio images uploaded"
+              category="Portfolio"
+            />
+            
+            <ImageCategory
+              title="Technical Diagrams"
+              icon={<Wrench className="h-5 w-5 text-orange-600" />}
+              images={mergedTechnicalDiagrams}
+              emptyMessage="No technical diagrams uploaded"
+              category="Technical"
+            />
+            
+            <ImageCategory
+              title="Company Assets"
+              icon={<Building className="h-5 w-5 text-purple-600" />}
+              images={mergedCompanyImages}
+              emptyMessage="No company assets uploaded"
+              category="Company"
+            />
+          </CardContent>
+        </CollapsibleContent>
+      </Collapsible>
     </Card>
   );
 }
