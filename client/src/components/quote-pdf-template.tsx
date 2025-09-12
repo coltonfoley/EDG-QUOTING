@@ -15,6 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
 import type { QuoteWithDetails, ProposalTemplate } from "@shared/schema";
+import { COMPANY_INFO, QUOTE_TERMS } from "@shared/companyConfig";
 import logoPath from "@assets/my-logo.png_1753970984943.jpg";
 
 // Import template renderers
@@ -29,13 +30,7 @@ interface QuotePDFTemplateProps {
   onClose: () => void;
 }
 
-interface CompanyInfo {
-  name: string;
-  address: string;
-  phone: string;
-  email: string;
-  license: string;
-  logo?: string;
+interface CustomerInfo {
   customerName: string;
   customerCompany: string;
   customerEmail: string;
@@ -58,12 +53,7 @@ export function QuotePDFTemplate({ quote, isOpen, onClose }: QuotePDFTemplatePro
     enabled: isOpen,
   });
   
-  const [companyInfo, setCompanyInfo] = useState<CompanyInfo>({
-    name: "EDG Patio & Shade",
-    address: "123 Patio Drive, Shade City, SC 12345",
-    phone: "(555) 123-4567",
-    email: "info@edgpatioandshade.com",
-    license: "License #SC-12345",
+  const [customerInfo, setCustomerInfo] = useState<CustomerInfo>({
     customerName: quote.customer.name,
     customerCompany: quote.customer.company ?? "",
     customerEmail: quote.customer.email,
@@ -71,10 +61,10 @@ export function QuotePDFTemplate({ quote, isOpen, onClose }: QuotePDFTemplatePro
   });
 
   const [quoteTerms, setQuoteTerms] = useState({
-    validFor: "30 days",
-    paymentTerms: "50% deposit, 50% on completion",
-    warranty: "1 year limited warranty on workmanship",
-    additionalNotes: "Materials subject to availability. Permit costs not included.",
+    validFor: QUOTE_TERMS.validFor as string,
+    paymentTerms: QUOTE_TERMS.paymentTerms as string,
+    warranty: QUOTE_TERMS.warranty as string,
+    additionalNotes: QUOTE_TERMS.additionalNotes as string,
   });
 
   const totals = calculateQuoteTotals(
@@ -375,7 +365,7 @@ export function QuotePDFTemplate({ quote, isOpen, onClose }: QuotePDFTemplatePro
     const templateProps = {
       quote,
       template: selectedTemplate,
-      companyInfo,
+      companyInfo: { ...COMPANY_INFO, ...customerInfo },
       quoteTerms,
     };
     
@@ -851,63 +841,14 @@ export function QuotePDFTemplate({ quote, isOpen, onClose }: QuotePDFTemplatePro
           <div className="space-y-6 p-4">
             <Card>
               <CardContent className="p-4">
-                <h3 className="text-lg font-semibold mb-4">Company Information</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="companyName">Company Name</Label>
-                    <Input
-                      id="companyName"
-                      value={companyInfo.name}
-                      onChange={(e) => setCompanyInfo({ ...companyInfo, name: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="phone">Phone</Label>
-                    <Input
-                      id="phone"
-                      value={companyInfo.phone}
-                      onChange={(e) => setCompanyInfo({ ...companyInfo, phone: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="email">Email</Label>
-                    <Input
-                      id="email"
-                      value={companyInfo.email}
-                      onChange={(e) => setCompanyInfo({ ...companyInfo, email: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="license">License Number</Label>
-                    <Input
-                      id="license"
-                      value={companyInfo.license}
-                      onChange={(e) => setCompanyInfo({ ...companyInfo, license: e.target.value })}
-                    />
-                  </div>
-                  <div className="md:col-span-2">
-                    <Label htmlFor="address">Address</Label>
-                    <Textarea
-                      id="address"
-                      value={companyInfo.address}
-                      onChange={(e) => setCompanyInfo({ ...companyInfo, address: e.target.value })}
-                      rows={2}
-                    />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardContent className="p-4">
                 <h3 className="text-lg font-semibold mb-4">Customer Information</h3>
                 <div className="space-y-3">
                   <div>
                     <Label htmlFor="customerName" className="text-sm font-medium">Customer Name</Label>
                     <Input
                       id="customerName"
-                      value={companyInfo.customerName}
-                      onChange={(e) => setCompanyInfo({...companyInfo, customerName: e.target.value})}
+                      value={customerInfo.customerName}
+                      onChange={(e) => setCustomerInfo({...customerInfo, customerName: e.target.value})}
                       className="mt-1"
                     />
                   </div>
@@ -915,8 +856,8 @@ export function QuotePDFTemplate({ quote, isOpen, onClose }: QuotePDFTemplatePro
                     <Label htmlFor="customerCompany" className="text-sm font-medium">Company (Optional)</Label>
                     <Input
                       id="customerCompany"
-                      value={companyInfo.customerCompany || ""}
-                      onChange={(e) => setCompanyInfo({...companyInfo, customerCompany: e.target.value})}
+                      value={customerInfo.customerCompany || ""}
+                      onChange={(e) => setCustomerInfo({...customerInfo, customerCompany: e.target.value})}
                       className="mt-1"
                       placeholder="Company name"
                     />
@@ -925,8 +866,8 @@ export function QuotePDFTemplate({ quote, isOpen, onClose }: QuotePDFTemplatePro
                     <Label htmlFor="customerEmail" className="text-sm font-medium">Customer Email</Label>
                     <Input
                       id="customerEmail"
-                      value={companyInfo.customerEmail}
-                      onChange={(e) => setCompanyInfo({...companyInfo, customerEmail: e.target.value})}
+                      value={customerInfo.customerEmail}
+                      onChange={(e) => setCustomerInfo({...customerInfo, customerEmail: e.target.value})}
                       className="mt-1"
                     />
                   </div>
@@ -934,8 +875,8 @@ export function QuotePDFTemplate({ quote, isOpen, onClose }: QuotePDFTemplatePro
                     <Label htmlFor="customerPhone" className="text-sm font-medium">Customer Phone</Label>
                     <Input
                       id="customerPhone"
-                      value={companyInfo.customerPhone}
-                      onChange={(e) => setCompanyInfo({...companyInfo, customerPhone: e.target.value})}
+                      value={customerInfo.customerPhone}
+                      onChange={(e) => setCustomerInfo({...customerInfo, customerPhone: e.target.value})}
                       className="mt-1"
                     />
                   </div>
