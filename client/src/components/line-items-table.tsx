@@ -571,11 +571,11 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
       updateData.description = editedValues.description;
       hasChanges = true;
     }
-    if (editedValues.quantity !== undefined && parseFloat(editedValues.quantity as string) !== item.quantity) {
+    if (editedValues.quantity !== undefined && parseFloat(editedValues.quantity as string) !== Number(item.quantity)) {
       updateData.quantity = parseFloat(editedValues.quantity as string) || 0;
       hasChanges = true;
     }
-    if (editedValues.unitPrice !== undefined && parseFloat(editedValues.unitPrice as string) !== item.unitPrice) {
+    if (editedValues.unitPrice !== undefined && parseFloat(editedValues.unitPrice as string) !== Number(item.unitPrice)) {
       updateData.unitPrice = parseFloat(editedValues.unitPrice as string) || 0;
       hasChanges = true;
     }
@@ -583,7 +583,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
       updateData.discountType = editedValues.discountType;
       hasChanges = true;
     }
-    if (editedValues.discountValue !== undefined && parseFloat(editedValues.discountValue as string) !== item.discountValue) {
+    if (editedValues.discountValue !== undefined && parseFloat(editedValues.discountValue as string) !== Number(item.discountValue)) {
       updateData.discountValue = parseFloat(editedValues.discountValue as string) || 0;
       hasChanges = true;
     }
@@ -591,7 +591,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
       updateData.markupType = editedValues.markupType;
       hasChanges = true;
     }
-    if (editedValues.markupValue !== undefined && parseFloat(editedValues.markupValue as string) !== item.markupValue) {
+    if (editedValues.markupValue !== undefined && parseFloat(editedValues.markupValue as string) !== Number(item.markupValue)) {
       updateData.markupValue = parseFloat(editedValues.markupValue as string) || 0;
       hasChanges = true;
     }
@@ -879,13 +879,13 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
       : item.markupValue;
     const currentMarkupType = editingValues[item.id]?.markupType !== undefined 
       ? editingValues[item.id].markupType as "percentage" | "dollar"
-      : item.markupType;
+      : item.markupType as "percentage" | "dollar";
     const currentDiscountValue = editingValues[item.id]?.discountValue !== undefined 
       ? (editingValues[item.id].discountValue === '' ? 0 : parseFloat(editingValues[item.id].discountValue as string) || 0)
       : item.discountValue;
     const currentDiscountType = editingValues[item.id]?.discountType !== undefined 
       ? editingValues[item.id].discountType as "percentage" | "dollar"
-      : item.discountType;
+      : item.discountType as "percentage" | "dollar";
     
     const total = calculateLineItemTotal(
       currentQuantity,
@@ -1108,7 +1108,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                   <DiscountMarkupControl
                     label="Discount"
                     editingValue={editingValues[item.id]?.discountValue}
-                    originalValue={item.discountValue}
+                    originalValue={Number(item.discountValue)}
                     type={currentDiscountType}
                     onValueChange={(value) => updateEditingValue(item.id, "discountValue", value)}
                     onTypeChange={(type) => updateEditingValue(item.id, "discountType", type)}
@@ -1121,7 +1121,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                   <DiscountMarkupControl
                     label="Markup"
                     editingValue={editingValues[item.id]?.markupValue}
-                    originalValue={item.markupValue}
+                    originalValue={Number(item.markupValue)}
                     type={currentMarkupType}
                     onValueChange={(value) => updateEditingValue(item.id, "markupValue", value)}
                     onTypeChange={(type) => updateEditingValue(item.id, "markupType", type)}
@@ -1670,13 +1670,13 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                   : item.markupValue;
                 const currentMarkupType = editingValues[item.id]?.markupType !== undefined 
                   ? editingValues[item.id].markupType as "percentage" | "dollar"
-                  : item.markupType;
+                  : item.markupType as "percentage" | "dollar";
                 const currentDiscountValue = editingValues[item.id]?.discountValue !== undefined 
                   ? (editingValues[item.id].discountValue === '' ? 0 : parseFloat(editingValues[item.id].discountValue as string) || 0)
                   : item.discountValue;
                 const currentDiscountType = editingValues[item.id]?.discountType !== undefined 
                   ? editingValues[item.id].discountType as "percentage" | "dollar"
-                  : item.discountType;
+                  : item.discountType as "percentage" | "dollar";
                 
                 const total = calculateLineItemTotal(
                   currentQuantity,
@@ -1784,7 +1784,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                         <DiscountMarkupControl
                           label=""
                           editingValue={editingValues[item.id]?.discountValue}
-                          originalValue={item.discountValue}
+                          originalValue={Number(item.discountValue)}
                           type={currentDiscountType}
                           onValueChange={(value) => updateEditingValue(item.id, "discountValue", value)}
                           onTypeChange={(type) => updateEditingValue(item.id, "discountType", type)}
@@ -1799,7 +1799,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                         <DiscountMarkupControl
                           label=""
                           editingValue={editingValues[item.id]?.markupValue}
-                          originalValue={item.markupValue}
+                          originalValue={Number(item.markupValue)}
                           type={currentMarkupType}
                           onValueChange={(value) => updateEditingValue(item.id, "markupValue", value)}
                           onTypeChange={(type) => updateEditingValue(item.id, "markupType", type)}
