@@ -41,7 +41,7 @@ export function ImageUploader({
   title,
   description,
   maxFiles = 10,
-  maxFileSize = 10 * 1024 * 1024, // 10MB
+  maxFileSize = 50 * 1024 * 1024, // 50MB
   allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'application/pdf'],
   onImagesChange,
   initialImages = [],
