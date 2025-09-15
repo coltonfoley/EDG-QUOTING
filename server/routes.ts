@@ -1,7 +1,11 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertCustomerSchema, insertQuoteSchema, insertLineItemSchema, insertProductSchema, insertContractTemplateSchema, insertProposalTemplateSchema, insertPricingTableSchema, insertProductAccessorySchema, insertLeadSchema, insertTaskSchema, insertLeadActivitySchema, insertAccountSchema, insertAccountRoleSchema, insertContactSchema, insertContactRoleSchema, insertOpportunitySchema, insertActivitySchema } from "@shared/schema";
+import { 
+  insertCustomerSchema, insertQuoteSchema, insertLineItemSchema, insertProductSchema, insertContractTemplateSchema, insertProposalTemplateSchema, insertPricingTableSchema, insertProductAccessorySchema, insertLeadSchema, insertTaskSchema, insertLeadActivitySchema, insertAccountSchema, insertAccountRoleSchema, insertContactSchema, insertContactRoleSchema, insertOpportunitySchema, insertActivitySchema,
+  // Project management insert schemas
+  insertProjectSchema, insertProjectMilestoneSchema, insertProjectTaskSchema, insertProjectTaskDependencySchema, insertProjectTaskAssignmentSchema, insertProjectCrewSchema, insertProjectEquipmentSchema, insertProjectBudgetLineSchema, insertProjectScheduleEventSchema, insertProjectProgressSchema, insertProjectTimeEntrySchema, insertProjectMaterialSchema, insertProjectChangeOrderSchema, insertProjectPurchaseOrderSchema, insertProjectMaterialReceiptSchema, insertProjectLineItemLinkSchema, insertProjectFinancialSchema
+} from "@shared/schema";
 import { z } from "zod";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import multer from "multer";
@@ -35,6 +39,247 @@ const upload = multer({
     }
   },
 });
+
+// ========================================
+// PROJECT AUTHORIZATION MIDDLEWARE
+// ========================================
+
+// Middleware to validate project ownership or access permissions
+const validateProjectAccess = (requiredPermission: 'read' | 'write' | 'admin' = 'read') => {
+  return async (req: any, res: any, next: any) => {
+    try {
+      const projectId = parseInt(req.params.id || req.params.projectId);
+      const userId = req.user?.id;
+
+      if (!userId) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      if (!projectId || isNaN(projectId)) {
+        return res.status(400).json({ message: "Valid project ID required" });
+      }
+
+      const access = await storage.validateProjectAccess(projectId, userId, requiredPermission);
+      
+      if (!access.isValid) {
+        return res.status(403).json({ 
+          message: "Insufficient permissions to access this project",
+          required: requiredPermission 
+        });
+      }
+
+      // Attach access information to request for downstream use
+      req.projectAccess = access;
+      req.projectId = projectId;
+      next();
+    } catch (error) {
+      console.error(`Project authorization error:`, error);
+      res.status(500).json({ message: "Authorization check failed" });
+    }
+  };
+};
+
+// Middleware for validating project task access
+const validateProjectTaskAccess = async (req: any, res: any, next: any) => {
+  try {
+    const taskId = parseInt(req.params.id);
+    const userId = req.user?.id;
+
+    if (!userId) {
+      return res.status(401).json({ message: "Authentication required" });
+    }
+
+    if (!taskId || isNaN(taskId)) {
+      return res.status(400).json({ message: "Valid task ID required" });
+    }
+
+    const access = await storage.validateProjectTaskAccess(taskId, userId);
+    
+    if (!access.isValid) {
+      return res.status(403).json({ message: "Insufficient permissions to access this task" });
+    }
+
+    req.taskAccess = access;
+    req.taskId = taskId;
+    next();
+  } catch (error) {
+    console.error(`Task authorization error:`, error);
+    res.status(500).json({ message: "Task authorization check failed" });
+  }
+};
+
+// Middleware for validating project milestone access
+const validateProjectMilestoneAccess = async (req: any, res: any, next: any) => {
+  try {
+    const milestoneId = parseInt(req.params.id);
+    const userId = req.user?.id;
+
+    if (!userId) {
+      return res.status(401).json({ message: "Authentication required" });
+    }
+
+    if (!milestoneId || isNaN(milestoneId)) {
+      return res.status(400).json({ message: "Valid milestone ID required" });
+    }
+
+    const access = await storage.validateProjectMilestoneAccess(milestoneId, userId);
+    
+    if (!access.isValid) {
+      return res.status(403).json({ message: "Insufficient permissions to access this milestone" });
+    }
+
+    req.milestoneAccess = access;
+    req.milestoneId = milestoneId;
+    next();
+  } catch (error) {
+    console.error(`Milestone authorization error:`, error);
+    res.status(500).json({ message: "Milestone authorization check failed" });
+  }
+};
+
+// Middleware for validating project crew access
+const validateProjectCrewAccess = async (req: any, res: any, next: any) => {
+  try {
+    const crewId = parseInt(req.params.id);
+    const userId = req.user?.id;
+
+    if (!userId) {
+      return res.status(401).json({ message: "Authentication required" });
+    }
+
+    if (!crewId || isNaN(crewId)) {
+      return res.status(400).json({ message: "Valid crew ID required" });
+    }
+
+    const access = await storage.validateProjectCrewAccess(crewId, userId);
+    
+    if (!access.isValid) {
+      return res.status(403).json({ message: "Insufficient permissions to access this crew assignment" });
+    }
+
+    req.crewAccess = access;
+    req.crewId = crewId;
+    next();
+  } catch (error) {
+    console.error(`Crew authorization error:`, error);
+    res.status(500).json({ message: "Crew authorization check failed" });
+  }
+};
+
+// Middleware for validating project equipment access
+const validateProjectEquipmentAccess = async (req: any, res: any, next: any) => {
+  try {
+    const equipmentId = parseInt(req.params.id);
+    const userId = req.user?.id;
+
+    if (!userId) {
+      return res.status(401).json({ message: "Authentication required" });
+    }
+
+    if (!equipmentId || isNaN(equipmentId)) {
+      return res.status(400).json({ message: "Valid equipment ID required" });
+    }
+
+    const access = await storage.validateProjectEquipmentAccess(equipmentId, userId);
+    
+    if (!access.isValid) {
+      return res.status(403).json({ message: "Insufficient permissions to access this equipment allocation" });
+    }
+
+    req.equipmentAccess = access;
+    req.equipmentId = equipmentId;
+    next();
+  } catch (error) {
+    console.error(`Equipment authorization error:`, error);
+    res.status(500).json({ message: "Equipment authorization check failed" });
+  }
+};
+
+// Middleware for validating project material access
+const validateProjectMaterialAccess = async (req: any, res: any, next: any) => {
+  try {
+    const materialId = parseInt(req.params.id);
+    const userId = req.user?.id;
+
+    if (!userId) {
+      return res.status(401).json({ message: "Authentication required" });
+    }
+
+    if (!materialId || isNaN(materialId)) {
+      return res.status(400).json({ message: "Valid material ID required" });
+    }
+
+    const access = await storage.validateProjectMaterialAccess(materialId, userId);
+    
+    if (!access.isValid) {
+      return res.status(403).json({ message: "Insufficient permissions to access this material" });
+    }
+
+    req.materialAccess = access;
+    req.materialId = materialId;
+    next();
+  } catch (error) {
+    console.error(`Material authorization error:`, error);
+    res.status(500).json({ message: "Material authorization check failed" });
+  }
+};
+
+// Middleware for validating project financial access
+const validateProjectFinancialAccess = async (req: any, res: any, next: any) => {
+  try {
+    const projectId = parseInt(req.params.id || req.params.projectId);
+    const userId = req.user?.id;
+
+    if (!userId) {
+      return res.status(401).json({ message: "Authentication required" });
+    }
+
+    if (!projectId || isNaN(projectId)) {
+      return res.status(400).json({ message: "Valid project ID required" });
+    }
+
+    const access = await storage.validateProjectFinancialAccess(projectId, userId);
+    
+    if (!access.isValid) {
+      return res.status(403).json({ message: "Insufficient permissions to access financial data" });
+    }
+
+    req.financialAccess = access;
+    req.projectId = projectId;
+    next();
+  } catch (error) {
+    console.error(`Financial authorization error:`, error);
+    res.status(500).json({ message: "Financial authorization check failed" });
+  }
+};
+
+// Helper middleware for validating account access
+const validateAccountAccess = async (req: any, res: any, next: any) => {
+  try {
+    const accountId = parseInt(req.params.accountId || req.params.id);
+    const userId = req.user?.id;
+
+    if (!userId) {
+      return res.status(401).json({ message: "Authentication required" });
+    }
+
+    if (!accountId || isNaN(accountId)) {
+      return res.status(400).json({ message: "Valid account ID required" });
+    }
+
+    const hasAccess = await storage.validateAccountAccess(accountId, userId);
+    
+    if (!hasAccess) {
+      return res.status(403).json({ message: "Insufficient permissions to access this account" });
+    }
+
+    req.accountId = accountId;
+    next();
+  } catch (error) {
+    console.error(`Account authorization error:`, error);
+    res.status(500).json({ message: "Account authorization check failed" });
+  }
+};
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
@@ -2664,6 +2909,1047 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error deleting activity:", error);
       res.status(500).json({ message: "Failed to delete activity" });
+    }
+  });
+
+  // ======================
+  // PROJECT MANAGEMENT API ROUTES
+  // ======================
+
+  // ======================
+  // CORE PROJECT ENDPOINTS
+  // ======================
+
+  // Get all projects with filtering
+  app.get("/api/projects", isAuthenticated, async (req, res) => {
+    try {
+      const { status, accountId, managerId } = req.query;
+      const userId = req.user?.id;
+      let projects;
+
+      // Apply role-based filtering for project access
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(401).json({ message: "User not found" });
+      }
+
+      // If account ID filter is provided, validate account access
+      if (accountId) {
+        const hasAccountAccess = await storage.validateAccountAccess(parseInt(accountId as string), userId);
+        if (!hasAccountAccess) {
+          return res.status(403).json({ message: "Insufficient permissions to access this account's projects" });
+        }
+        projects = await storage.getProjectsByAccountId(parseInt(accountId as string));
+      } else if (managerId) {
+        // Only allow viewing projects by manager if user is admin or the manager themselves
+        if (user.role !== 'admin' && managerId !== userId) {
+          return res.status(403).json({ message: "Insufficient permissions to view projects by manager" });
+        }
+        projects = await storage.getProjectsByProjectManager(managerId as string);
+      } else if (status) {
+        // For status filtering, only show projects the user has access to
+        if (user.role === 'admin') {
+          projects = await storage.getProjectsByStatus(status as string);
+        } else {
+          // Filter by status but only for user's projects
+          projects = await storage.getProjectsByProjectManager(userId);
+          projects = projects.filter(p => p.status === status);
+        }
+      } else {
+        // Get all projects based on user role
+        if (user.role === 'admin') {
+          projects = await storage.getAllProjects();
+        } else {
+          // Regular users only see projects they manage
+          projects = await storage.getProjectsByProjectManager(userId);
+        }
+      }
+
+      res.json(projects);
+    } catch (error) {
+      console.error("Error fetching projects:", error);
+      res.status(500).json({ message: "Failed to fetch projects" });
+    }
+  });
+
+  // Create new project
+  app.post("/api/projects", isAuthenticated, async (req, res) => {
+    try {
+      const projectData = insertProjectSchema.parse(req.body);
+      const userId = req.user?.id;
+      
+      // Validate account access if accountId is provided
+      if (projectData.accountId) {
+        const hasAccountAccess = await storage.validateAccountAccess(projectData.accountId, userId);
+        if (!hasAccountAccess) {
+          return res.status(403).json({ message: "Insufficient permissions to create project for this account" });
+        }
+      }
+      
+      // Set project manager to current user if not specified and user is not admin
+      const user = await storage.getUser(userId);
+      if (!projectData.projectManagerId && user?.role !== 'admin') {
+        projectData.projectManagerId = userId;
+      }
+      
+      const project = await storage.createProject(projectData);
+      res.status(201).json(project);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          message: "Invalid project data", 
+          errors: error.errors 
+        });
+      }
+      console.error("Error creating project:", error);
+      res.status(500).json({ message: "Failed to create project" });
+    }
+  });
+
+  // Get project details
+  app.get("/api/projects/:id", isAuthenticated, validateProjectAccess('read'), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const project = await storage.getProject(id);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+      res.json(project);
+    } catch (error) {
+      console.error("Error fetching project:", error);
+      res.status(500).json({ message: "Failed to fetch project" });
+    }
+  });
+
+  // Update project
+  app.put("/api/projects/:id", isAuthenticated, validateProjectAccess('write'), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const projectData = insertProjectSchema.partial().parse(req.body);
+      const project = await storage.updateProject(id, projectData);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+      res.json(project);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          message: "Invalid project data", 
+          errors: error.errors 
+        });
+      }
+      console.error("Error updating project:", error);
+      res.status(500).json({ message: "Failed to update project" });
+    }
+  });
+
+  // Delete project
+  app.delete("/api/projects/:id", isAuthenticated, validateProjectAccess('admin'), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const deleted = await storage.deleteProject(id);
+      if (!deleted) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting project:", error);
+      res.status(500).json({ message: "Failed to delete project" });
+    }
+  });
+
+  // Convert quote to project
+  app.post("/api/projects/convert-from-quote", isAuthenticated, async (req, res) => {
+    try {
+      const { quoteId, projectData } = req.body;
+      const userId = req.user?.id;
+      
+      if (!quoteId) {
+        return res.status(400).json({ message: "Quote ID is required" });
+      }
+
+      // Validate quote ownership
+      const hasQuoteAccess = await storage.validateQuoteOwnership(quoteId, userId);
+      if (!hasQuoteAccess) {
+        return res.status(403).json({ message: "Insufficient permissions to access this quote" });
+      }
+
+      // Validate account access if specified
+      if (projectData?.accountId) {
+        const hasAccountAccess = await storage.validateAccountAccess(projectData.accountId, userId);
+        if (!hasAccountAccess) {
+          return res.status(403).json({ message: "Insufficient permissions to create project for this account" });
+        }
+      }
+
+      const result = await storage.convertQuoteToProject(quoteId, projectData);
+      
+      if (!result.project) {
+        return res.status(400).json({ message: "Failed to convert quote to project" });
+      }
+
+      res.status(201).json(result.project);
+    } catch (error) {
+      console.error("Error converting quote to project:", error);
+      res.status(500).json({ message: "Failed to convert quote to project" });
+    }
+  });
+
+  // Get project with full details (dashboard data)
+  app.get("/api/projects/:id/dashboard", isAuthenticated, validateProjectAccess('read'), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const dashboard = await storage.getProjectWithDetails(id);
+      if (!dashboard) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+      res.json(dashboard);
+    } catch (error) {
+      console.error("Error fetching project dashboard:", error);
+      res.status(500).json({ message: "Failed to fetch project dashboard" });
+    }
+  });
+
+  // ======================
+  // PROJECT MILESTONES
+  // ======================
+
+  // Get project milestones
+  app.get("/api/projects/:id/milestones", isAuthenticated, validateProjectAccess('read'), async (req, res) => {
+    try {
+      const projectId = parseInt(req.params.id);
+      const milestones = await storage.getProjectMilestones(projectId);
+      res.json(milestones);
+    } catch (error) {
+      console.error("Error fetching milestones:", error);
+      res.status(500).json({ message: "Failed to fetch milestones" });
+    }
+  });
+
+  // Create milestone
+  app.post("/api/projects/:id/milestones", isAuthenticated, validateProjectAccess('write'), async (req, res) => {
+    try {
+      const projectId = parseInt(req.params.id);
+      const milestoneData = insertProjectMilestoneSchema.parse({
+        ...req.body,
+        projectId
+      });
+      const milestone = await storage.createProjectMilestone(milestoneData);
+      res.status(201).json(milestone);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          message: "Invalid milestone data", 
+          errors: error.errors 
+        });
+      }
+      console.error("Error creating milestone:", error);
+      res.status(500).json({ message: "Failed to create milestone" });
+    }
+  });
+
+  // Update milestone
+  app.put("/api/milestones/:id", isAuthenticated, validateProjectMilestoneAccess, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      
+      // Additional authorization check for write permissions
+      const milestoneAccess = req.milestoneAccess;
+      if (milestoneAccess?.projectId) {
+        const projectAccess = await storage.validateProjectAccess(milestoneAccess.projectId, req.user?.id, 'write');
+        if (!projectAccess.isValid) {
+          return res.status(403).json({ message: "Insufficient permissions to update milestone" });
+        }
+      }
+      
+      const milestoneData = insertProjectMilestoneSchema.partial().parse(req.body);
+      const milestone = await storage.updateProjectMilestone(id, milestoneData);
+      if (!milestone) {
+        return res.status(404).json({ message: "Milestone not found" });
+      }
+      res.json(milestone);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          message: "Invalid milestone data", 
+          errors: error.errors 
+        });
+      }
+      console.error("Error updating milestone:", error);
+      res.status(500).json({ message: "Failed to update milestone" });
+    }
+  });
+
+  // Delete milestone
+  app.delete("/api/milestones/:id", isAuthenticated, validateProjectMilestoneAccess, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      
+      // Additional authorization check for write permissions
+      const milestoneAccess = req.milestoneAccess;
+      if (milestoneAccess?.projectId) {
+        const projectAccess = await storage.validateProjectAccess(milestoneAccess.projectId, req.user?.id, 'write');
+        if (!projectAccess.isValid) {
+          return res.status(403).json({ message: "Insufficient permissions to delete milestone" });
+        }
+      }
+      
+      const deleted = await storage.deleteProjectMilestone(id);
+      if (!deleted) {
+        return res.status(404).json({ message: "Milestone not found" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting milestone:", error);
+      res.status(500).json({ message: "Failed to delete milestone" });
+    }
+  });
+
+  // ======================
+  // PROJECT TASKS
+  // ======================
+
+  // Get project tasks (hierarchical)
+  app.get("/api/projects/:id/tasks", isAuthenticated, validateProjectAccess('read'), async (req, res) => {
+    try {
+      const projectId = parseInt(req.params.id);
+      const tasks = await storage.getProjectTasks(projectId);
+      res.json(tasks);
+    } catch (error) {
+      console.error("Error fetching tasks:", error);
+      res.status(500).json({ message: "Failed to fetch tasks" });
+    }
+  });
+
+  // Create task
+  app.post("/api/projects/:id/tasks", isAuthenticated, validateProjectAccess('write'), async (req, res) => {
+    try {
+      const projectId = parseInt(req.params.id);
+      const taskData = insertProjectTaskSchema.parse({
+        ...req.body,
+        projectId
+      });
+      const task = await storage.createProjectTask(taskData);
+      res.status(201).json(task);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          message: "Invalid task data", 
+          errors: error.errors 
+        });
+      }
+      console.error("Error creating task:", error);
+      res.status(500).json({ message: "Failed to create task" });
+    }
+  });
+
+  // Update task
+  app.put("/api/tasks/:id", isAuthenticated, validateProjectTaskAccess, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      
+      // Additional authorization check for write permissions
+      const taskAccess = req.taskAccess;
+      if (taskAccess?.projectId) {
+        const projectAccess = await storage.validateProjectAccess(taskAccess.projectId, req.user?.id, 'write');
+        if (!projectAccess.isValid) {
+          return res.status(403).json({ message: "Insufficient permissions to update task" });
+        }
+      }
+      
+      const taskData = insertProjectTaskSchema.partial().parse(req.body);
+      const task = await storage.updateProjectTask(id, taskData);
+      if (!task) {
+        return res.status(404).json({ message: "Task not found" });
+      }
+      res.json(task);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          message: "Invalid task data", 
+          errors: error.errors 
+        });
+      }
+      console.error("Error updating task:", error);
+      res.status(500).json({ message: "Failed to update task" });
+    }
+  });
+
+  // Delete task
+  app.delete("/api/tasks/:id", isAuthenticated, validateProjectTaskAccess, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      
+      // Additional authorization check for write permissions
+      const taskAccess = req.taskAccess;
+      if (taskAccess?.projectId) {
+        const projectAccess = await storage.validateProjectAccess(taskAccess.projectId, req.user?.id, 'write');
+        if (!projectAccess.isValid) {
+          return res.status(403).json({ message: "Insufficient permissions to delete task" });
+        }
+      }
+      
+      const deleted = await storage.deleteProjectTask(id);
+      if (!deleted) {
+        return res.status(404).json({ message: "Task not found" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting task:", error);
+      res.status(500).json({ message: "Failed to delete task" });
+    }
+  });
+
+  // Assign crew/user to task
+  app.post("/api/tasks/:id/assignments", isAuthenticated, validateProjectTaskAccess, async (req, res) => {
+    try {
+      const taskId = parseInt(req.params.id);
+      
+      // Additional authorization check for write permissions
+      const taskAccess = req.taskAccess;
+      if (taskAccess?.projectId) {
+        const projectAccess = await storage.validateProjectAccess(taskAccess.projectId, req.user?.id, 'write');
+        if (!projectAccess.isValid) {
+          return res.status(403).json({ message: "Insufficient permissions to create task assignment" });
+        }
+      }
+      
+      const assignmentData = insertProjectTaskAssignmentSchema.parse({
+        ...req.body,
+        taskId
+      });
+      const assignment = await storage.createProjectTaskAssignment(assignmentData);
+      res.status(201).json(assignment);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          message: "Invalid assignment data", 
+          errors: error.errors 
+        });
+      }
+      console.error("Error creating assignment:", error);
+      res.status(500).json({ message: "Failed to create assignment" });
+    }
+  });
+
+  // Remove task assignment
+  app.delete("/api/task-assignments/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const userId = req.user?.id;
+      
+      if (!userId) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      
+      // Get assignment to validate project access
+      const assignment = await storage.getProjectTaskAssignment(id);
+      if (!assignment) {
+        return res.status(404).json({ message: "Assignment not found" });
+      }
+      
+      // Validate task and project access
+      const taskAccess = await storage.validateProjectTaskAccess(assignment.taskId, userId);
+      if (!taskAccess.isValid || !taskAccess.projectId) {
+        return res.status(403).json({ message: "Insufficient permissions to delete assignment" });
+      }
+      
+      // Validate project write access
+      const projectAccess = await storage.validateProjectAccess(taskAccess.projectId, userId, 'write');
+      if (!projectAccess.isValid) {
+        return res.status(403).json({ message: "Insufficient permissions to delete assignment" });
+      }
+      
+      const deleted = await storage.deleteProjectTaskAssignment(id);
+      if (!deleted) {
+        return res.status(404).json({ message: "Assignment not found" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting assignment:", error);
+      res.status(500).json({ message: "Failed to delete assignment" });
+    }
+  });
+
+  // Add task dependency
+  app.post("/api/tasks/:id/dependencies", isAuthenticated, validateProjectTaskAccess, async (req, res) => {
+    try {
+      const taskId = parseInt(req.params.id);
+      
+      // Additional authorization check for write permissions
+      const taskAccess = req.taskAccess;
+      if (taskAccess?.projectId) {
+        const projectAccess = await storage.validateProjectAccess(taskAccess.projectId, req.user?.id, 'write');
+        if (!projectAccess.isValid) {
+          return res.status(403).json({ message: "Insufficient permissions to create task dependency" });
+        }
+      }
+      
+      const dependencyData = insertProjectTaskDependencySchema.parse({
+        ...req.body,
+        taskId
+      });
+      const dependency = await storage.createProjectTaskDependency(dependencyData);
+      res.status(201).json(dependency);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          message: "Invalid dependency data", 
+          errors: error.errors 
+        });
+      }
+      console.error("Error creating dependency:", error);
+      res.status(500).json({ message: "Failed to create dependency" });
+    }
+  });
+
+  // Remove task dependency
+  app.delete("/api/task-dependencies/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const userId = req.user?.id;
+      
+      if (!userId) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      
+      // Get dependency to validate project access
+      const dependency = await storage.getProjectTaskDependency(id);
+      if (!dependency) {
+        return res.status(404).json({ message: "Dependency not found" });
+      }
+      
+      // Validate task and project access
+      const taskAccess = await storage.validateProjectTaskAccess(dependency.taskId, userId);
+      if (!taskAccess.isValid || !taskAccess.projectId) {
+        return res.status(403).json({ message: "Insufficient permissions to delete dependency" });
+      }
+      
+      // Validate project write access
+      const projectAccess = await storage.validateProjectAccess(taskAccess.projectId, userId, 'write');
+      if (!projectAccess.isValid) {
+        return res.status(403).json({ message: "Insufficient permissions to delete dependency" });
+      }
+      
+      const deleted = await storage.deleteProjectTaskDependency(id);
+      if (!deleted) {
+        return res.status(404).json({ message: "Dependency not found" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting dependency:", error);
+      res.status(500).json({ message: "Failed to delete dependency" });
+    }
+  });
+
+  // ======================
+  // RESOURCE MANAGEMENT
+  // ======================
+
+  // Get project crew
+  app.get("/api/projects/:id/crew", isAuthenticated, validateProjectAccess('read'), async (req, res) => {
+    try {
+      const projectId = parseInt(req.params.id);
+      const crew = await storage.getProjectCrew(projectId);
+      res.json(crew);
+    } catch (error) {
+      console.error("Error fetching crew:", error);
+      res.status(500).json({ message: "Failed to fetch crew" });
+    }
+  });
+
+  // Add crew member
+  app.post("/api/projects/:id/crew", isAuthenticated, validateProjectAccess('write'), async (req, res) => {
+    try {
+      const projectId = parseInt(req.params.id);
+      const crewData = insertProjectCrewSchema.parse({
+        ...req.body,
+        projectId
+      });
+      const crew = await storage.createProjectCrewMember(crewData);
+      res.status(201).json(crew);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          message: "Invalid crew data", 
+          errors: error.errors 
+        });
+      }
+      console.error("Error adding crew member:", error);
+      res.status(500).json({ message: "Failed to add crew member" });
+    }
+  });
+
+  // Update crew assignment
+  app.put("/api/crew/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const userId = req.user?.id;
+      
+      if (!userId) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      
+      // Get crew member to validate project access
+      const crewMember = await storage.getProjectCrewMember(id);
+      if (!crewMember) {
+        return res.status(404).json({ message: "Crew assignment not found" });
+      }
+      
+      // Validate project write access
+      const projectAccess = await storage.validateProjectAccess(crewMember.projectId, userId, 'write');
+      if (!projectAccess.isValid) {
+        return res.status(403).json({ message: "Insufficient permissions to update crew assignment" });
+      }
+      
+      const crewData = insertProjectCrewSchema.partial().parse(req.body);
+      const crew = await storage.updateProjectCrewMember(id, crewData);
+      if (!crew) {
+        return res.status(404).json({ message: "Crew assignment not found" });
+      }
+      res.json(crew);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          message: "Invalid crew data", 
+          errors: error.errors 
+        });
+      }
+      console.error("Error updating crew assignment:", error);
+      res.status(500).json({ message: "Failed to update crew assignment" });
+    }
+  });
+
+  // Get project equipment
+  app.get("/api/projects/:id/equipment", isAuthenticated, validateProjectAccess('read'), async (req, res) => {
+    try {
+      const projectId = parseInt(req.params.id);
+      const equipment = await storage.getProjectEquipment(projectId);
+      res.json(equipment);
+    } catch (error) {
+      console.error("Error fetching equipment:", error);
+      res.status(500).json({ message: "Failed to fetch equipment" });
+    }
+  });
+
+  // Allocate equipment
+  app.post("/api/projects/:id/equipment", isAuthenticated, validateProjectAccess('write'), async (req, res) => {
+    try {
+      const projectId = parseInt(req.params.id);
+      const equipmentData = insertProjectEquipmentSchema.parse({
+        ...req.body,
+        projectId
+      });
+      const equipment = await storage.createProjectEquipment(equipmentData);
+      res.status(201).json(equipment);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          message: "Invalid equipment data", 
+          errors: error.errors 
+        });
+      }
+      console.error("Error allocating equipment:", error);
+      res.status(500).json({ message: "Failed to allocate equipment" });
+    }
+  });
+
+  // Update equipment status
+  app.put("/api/equipment/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const userId = req.user?.id;
+      
+      if (!userId) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      
+      // Get equipment to validate project access
+      const equipment = await storage.getProjectEquipmentItem(id);
+      if (!equipment) {
+        return res.status(404).json({ message: "Equipment allocation not found" });
+      }
+      
+      // Validate project write access
+      const projectAccess = await storage.validateProjectAccess(equipment.projectId, userId, 'write');
+      if (!projectAccess.isValid) {
+        return res.status(403).json({ message: "Insufficient permissions to update equipment" });
+      }
+      
+      const equipmentData = insertProjectEquipmentSchema.partial().parse(req.body);
+      const updatedEquipment = await storage.updateProjectEquipment(id, equipmentData);
+      if (!updatedEquipment) {
+        return res.status(404).json({ message: "Equipment allocation not found" });
+      }
+      res.json(updatedEquipment);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          message: "Invalid equipment data", 
+          errors: error.errors 
+        });
+      }
+      console.error("Error updating equipment:", error);
+      res.status(500).json({ message: "Failed to update equipment" });
+    }
+  });
+
+  // ======================
+  // FINANCIAL ENDPOINTS
+  // ======================
+
+  // Get budget lines
+  app.get("/api/projects/:id/budget", isAuthenticated, validateProjectAccess('read'), async (req, res) => {
+    try {
+      const projectId = parseInt(req.params.id);
+      const budget = await storage.getProjectBudgetLines(projectId);
+      res.json(budget);
+    } catch (error) {
+      console.error("Error fetching budget:", error);
+      res.status(500).json({ message: "Failed to fetch budget" });
+    }
+  });
+
+  // Create budget line
+  app.post("/api/projects/:id/budget", isAuthenticated, validateProjectAccess('write'), async (req, res) => {
+    try {
+      const projectId = parseInt(req.params.id);
+      const budgetData = insertProjectBudgetLineSchema.parse({
+        ...req.body,
+        projectId
+      });
+      const budget = await storage.createProjectBudgetLine(budgetData);
+      res.status(201).json(budget);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          message: "Invalid budget data", 
+          errors: error.errors 
+        });
+      }
+      console.error("Error creating budget line:", error);
+      res.status(500).json({ message: "Failed to create budget line" });
+    }
+  });
+
+  // Update budget line
+  app.put("/api/budget-lines/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const userId = req.user?.id;
+      
+      if (!userId) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      
+      // Get budget line to validate project access
+      const budgetLine = await storage.getProjectBudgetLine(id);
+      if (!budgetLine) {
+        return res.status(404).json({ message: "Budget line not found" });
+      }
+      
+      // Validate project write access
+      const projectAccess = await storage.validateProjectAccess(budgetLine.projectId, userId, 'write');
+      if (!projectAccess.isValid) {
+        return res.status(403).json({ message: "Insufficient permissions to update budget line" });
+      }
+      
+      const budgetData = insertProjectBudgetLineSchema.partial().parse(req.body);
+      const budget = await storage.updateProjectBudgetLine(id, budgetData);
+      if (!budget) {
+        return res.status(404).json({ message: "Budget line not found" });
+      }
+      res.json(budget);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          message: "Invalid budget data", 
+          errors: error.errors 
+        });
+      }
+      console.error("Error updating budget line:", error);
+      res.status(500).json({ message: "Failed to update budget line" });
+    }
+  });
+
+  // Get financial summary
+  app.get("/api/projects/:id/financials", isAuthenticated, validateProjectAccess('read'), async (req, res) => {
+    try {
+      const projectId = parseInt(req.params.id);
+      const financials = await storage.getProjectFinancial(projectId);
+      res.json(financials);
+    } catch (error) {
+      console.error("Error fetching financials:", error);
+      res.status(500).json({ message: "Failed to fetch financials" });
+    }
+  });
+
+  // Create change order
+  app.post("/api/projects/:id/change-orders", isAuthenticated, validateProjectAccess('write'), async (req, res) => {
+    try {
+      const projectId = parseInt(req.params.id);
+      const changeOrderData = insertProjectChangeOrderSchema.parse({
+        ...req.body,
+        projectId
+      });
+      const changeOrder = await storage.createProjectChangeOrder(changeOrderData);
+      res.status(201).json(changeOrder);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          message: "Invalid change order data", 
+          errors: error.errors 
+        });
+      }
+      console.error("Error creating change order:", error);
+      res.status(500).json({ message: "Failed to create change order" });
+    }
+  });
+
+  // Approve change order
+  app.put("/api/change-orders/:id/approve", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const { approvedBy, approvalType } = req.body;
+      
+      const changeOrder = await storage.approveProjectChangeOrder(id, approvedBy);
+      if (!changeOrder) {
+        return res.status(404).json({ message: "Change order not found" });
+      }
+      res.json(changeOrder);
+    } catch (error) {
+      console.error("Error approving change order:", error);
+      res.status(500).json({ message: "Failed to approve change order" });
+    }
+  });
+
+  // ======================
+  // TIME & PROGRESS ENDPOINTS
+  // ======================
+
+  // Get time entries
+  app.get("/api/projects/:id/time-entries", isAuthenticated, async (req, res) => {
+    try {
+      const projectId = parseInt(req.params.id);
+      const timeEntries = await storage.getProjectTimeEntries(projectId);
+      res.json(timeEntries);
+    } catch (error) {
+      console.error("Error fetching time entries:", error);
+      res.status(500).json({ message: "Failed to fetch time entries" });
+    }
+  });
+
+  // Create time entry
+  app.post("/api/projects/:id/time-entries", isAuthenticated, async (req, res) => {
+    try {
+      const projectId = parseInt(req.params.id);
+      const timeEntryData = insertProjectTimeEntrySchema.parse({
+        ...req.body,
+        projectId
+      });
+      const timeEntry = await storage.createProjectTimeEntry(timeEntryData);
+      res.status(201).json(timeEntry);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          message: "Invalid time entry data", 
+          errors: error.errors 
+        });
+      }
+      console.error("Error creating time entry:", error);
+      res.status(500).json({ message: "Failed to create time entry" });
+    }
+  });
+
+  // Approve time entry
+  app.put("/api/time-entries/:id/approve", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const { approvedBy } = req.body;
+      
+      const timeEntry = await storage.approveProjectTimeEntry(id, approvedBy);
+      if (!timeEntry) {
+        return res.status(404).json({ message: "Time entry not found" });
+      }
+      res.json(timeEntry);
+    } catch (error) {
+      console.error("Error approving time entry:", error);
+      res.status(500).json({ message: "Failed to approve time entry" });
+    }
+  });
+
+  // Get progress entries
+  app.get("/api/projects/:id/progress", isAuthenticated, async (req, res) => {
+    try {
+      const projectId = parseInt(req.params.id);
+      const { startDate, endDate } = req.query;
+      
+      let progress;
+      if (startDate && endDate) {
+        progress = await storage.getProjectProgressByDate(
+          projectId,
+          new Date(startDate as string),
+          new Date(endDate as string)
+        );
+      } else {
+        progress = await storage.getProjectProgress(projectId);
+      }
+      
+      res.json(progress);
+    } catch (error) {
+      console.error("Error fetching progress:", error);
+      res.status(500).json({ message: "Failed to fetch progress" });
+    }
+  });
+
+  // Create progress entry
+  app.post("/api/projects/:id/progress", isAuthenticated, async (req, res) => {
+    try {
+      const projectId = parseInt(req.params.id);
+      const progressData = insertProjectProgressSchema.parse({
+        ...req.body,
+        projectId
+      });
+      const progress = await storage.createProjectProgressEntry(progressData);
+      res.status(201).json(progress);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          message: "Invalid progress data", 
+          errors: error.errors 
+        });
+      }
+      console.error("Error creating progress entry:", error);
+      res.status(500).json({ message: "Failed to create progress entry" });
+    }
+  });
+
+  // ======================
+  // ADDITIONAL MANAGEMENT ENDPOINTS
+  // ======================
+
+  // Get project materials
+  app.get("/api/projects/:id/materials", isAuthenticated, async (req, res) => {
+    try {
+      const projectId = parseInt(req.params.id);
+      const materials = await storage.getProjectMaterials(projectId);
+      res.json(materials);
+    } catch (error) {
+      console.error("Error fetching materials:", error);
+      res.status(500).json({ message: "Failed to fetch materials" });
+    }
+  });
+
+  // Create material
+  app.post("/api/projects/:id/materials", isAuthenticated, async (req, res) => {
+    try {
+      const projectId = parseInt(req.params.id);
+      const materialData = insertProjectMaterialSchema.parse({
+        ...req.body,
+        projectId
+      });
+      const material = await storage.createProjectMaterial(materialData);
+      res.status(201).json(material);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          message: "Invalid material data", 
+          errors: error.errors 
+        });
+      }
+      console.error("Error creating material:", error);
+      res.status(500).json({ message: "Failed to create material" });
+    }
+  });
+
+  // Get project purchase orders
+  app.get("/api/projects/:id/purchase-orders", isAuthenticated, async (req, res) => {
+    try {
+      const projectId = parseInt(req.params.id);
+      const purchaseOrders = await storage.getProjectPurchaseOrders(projectId);
+      res.json(purchaseOrders);
+    } catch (error) {
+      console.error("Error fetching purchase orders:", error);
+      res.status(500).json({ message: "Failed to fetch purchase orders" });
+    }
+  });
+
+  // Create purchase order
+  app.post("/api/projects/:id/purchase-orders", isAuthenticated, async (req, res) => {
+    try {
+      const projectId = parseInt(req.params.id);
+      const purchaseOrderData = insertProjectPurchaseOrderSchema.parse({
+        ...req.body,
+        projectId
+      });
+      const purchaseOrder = await storage.createProjectPurchaseOrder(purchaseOrderData);
+      res.status(201).json(purchaseOrder);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          message: "Invalid purchase order data", 
+          errors: error.errors 
+        });
+      }
+      console.error("Error creating purchase order:", error);
+      res.status(500).json({ message: "Failed to create purchase order" });
+    }
+  });
+
+  // Get schedule events
+  app.get("/api/projects/:id/schedule", isAuthenticated, async (req, res) => {
+    try {
+      const projectId = parseInt(req.params.id);
+      const { startDate, endDate } = req.query;
+      
+      let events;
+      if (startDate && endDate) {
+        events = await storage.getScheduleEventsByDateRange(
+          new Date(startDate as string),
+          new Date(endDate as string)
+        );
+      } else {
+        events = await storage.getProjectScheduleEvents(projectId);
+      }
+      
+      res.json(events);
+    } catch (error) {
+      console.error("Error fetching schedule:", error);
+      res.status(500).json({ message: "Failed to fetch schedule" });
+    }
+  });
+
+  // Create schedule event
+  app.post("/api/projects/:id/schedule", isAuthenticated, async (req, res) => {
+    try {
+      const projectId = parseInt(req.params.id);
+      const scheduleData = insertProjectScheduleEventSchema.parse({
+        ...req.body,
+        projectId
+      });
+      const scheduleEvent = await storage.createProjectScheduleEvent(scheduleData);
+      res.status(201).json(scheduleEvent);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          message: "Invalid schedule data", 
+          errors: error.errors 
+        });
+      }
+      console.error("Error creating schedule event:", error);
+      res.status(500).json({ message: "Failed to create schedule event" });
+    }
+  });
+
+  // Get project profitability report
+  app.get("/api/projects/:id/profitability", isAuthenticated, async (req, res) => {
+    try {
+      const projectId = parseInt(req.params.id);
+      const report = await storage.getProjectProfitabilityReport(projectId);
+      res.json(report);
+    } catch (error) {
+      console.error("Error fetching profitability report:", error);
+      res.status(500).json({ message: "Failed to fetch profitability report" });
     }
   });
 

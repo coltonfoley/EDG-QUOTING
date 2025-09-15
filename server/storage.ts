@@ -109,6 +109,18 @@ export interface IStorage {
   validateLineItemsOwnership(lineItemIds: number[], userId: any): Promise<{ isValid: boolean; quoteId?: number }>;
   validateQuoteOwnership(quoteId: number, userId: any): Promise<boolean>;
 
+  // Project authorization methods
+  validateProjectOwnership(projectId: number, userId: any): Promise<boolean>;
+  validateProjectAccess(projectId: number, userId: any, requiredPermission?: 'read' | 'write' | 'admin'): Promise<{ isValid: boolean; userRole?: string; isProjectManager?: boolean; isAccountOwner?: boolean }>;
+  validateAccountAccess(accountId: number, userId: any): Promise<boolean>;
+  validateProjectResourceAccess(projectId: number, userId: any): Promise<boolean>;
+  validateProjectTaskAccess(taskId: number, userId: any): Promise<{ isValid: boolean; projectId?: number }>;
+  validateProjectMilestoneAccess(milestoneId: number, userId: any): Promise<{ isValid: boolean; projectId?: number }>;
+  validateProjectCrewAccess(crewId: number, userId: any): Promise<{ isValid: boolean; projectId?: number }>;
+  validateProjectEquipmentAccess(equipmentId: number, userId: any): Promise<{ isValid: boolean; projectId?: number }>;
+  validateProjectMaterialAccess(materialId: number, userId: any): Promise<{ isValid: boolean; projectId?: number }>;
+  validateProjectFinancialAccess(projectId: number, userId: any): Promise<{ isValid: boolean; canViewFinancials?: boolean; canEditFinancials?: boolean }>;
+
   // CRM Lead management methods
   getAllLeads(): Promise<Lead[]>;
   getLead(id: number): Promise<Lead | undefined>;
@@ -823,6 +835,219 @@ export class DatabaseStorage implements IStorage {
     // This should be enhanced when proper user-quote relationships are implemented
     const quote = await db.select().from(quotes).where(eq(quotes.id, quoteId)).limit(1);
     return quote.length > 0;
+  }
+
+  // ========================================
+  // PROJECT AUTHORIZATION METHODS
+  // ========================================
+
+  async validateProjectOwnership(projectId: number, userId: any): Promise<boolean> {
+    if (!projectId || !userId) return false;
+
+    const [project] = await db
+      .select({ 
+        id: projects.id, 
+        projectManagerId: projects.projectManagerId, 
+        accountId: projects.accountId 
+      })
+      .from(projects)
+      .where(eq(projects.id, projectId))
+      .limit(1);
+
+    if (!project) return false;
+
+    // Check if user is the project manager
+    if (project.projectManagerId === userId) return true;
+
+    // Check if user has admin role
+    const user = await this.getUser(userId);
+    if (user?.role === 'admin') return true;
+
+    // Check if user has access through account relationship
+    return await this.validateAccountAccess(project.accountId, userId);
+  }
+
+  async validateProjectAccess(projectId: number, userId: any, requiredPermission: 'read' | 'write' | 'admin' = 'read'): Promise<{ isValid: boolean; userRole?: string; isProjectManager?: boolean; isAccountOwner?: boolean }> {
+    if (!projectId || !userId) {
+      return { isValid: false };
+    }
+
+    const [result] = await db
+      .select({
+        projectId: projects.id,
+        projectManagerId: projects.projectManagerId,
+        accountId: projects.accountId,
+        userRole: users.role,
+        userId: users.id
+      })
+      .from(projects)
+      .leftJoin(users, eq(users.id, userId))
+      .where(eq(projects.id, projectId))
+      .limit(1);
+
+    if (!result || !result.projectId) {
+      return { isValid: false };
+    }
+
+    const isProjectManager = result.projectManagerId === userId;
+    const isAdmin = result.userRole === 'admin';
+    const isAccountOwner = await this.validateAccountAccess(result.accountId, userId);
+
+    // Permission hierarchy
+    const hasReadAccess = isProjectManager || isAdmin || isAccountOwner;
+    const hasWriteAccess = isProjectManager || isAdmin;
+    const hasAdminAccess = isAdmin;
+
+    let isValid = false;
+    switch (requiredPermission) {
+      case 'read':
+        isValid = hasReadAccess;
+        break;
+      case 'write':
+        isValid = hasWriteAccess;
+        break;
+      case 'admin':
+        isValid = hasAdminAccess;
+        break;
+    }
+
+    return {
+      isValid,
+      userRole: result.userRole,
+      isProjectManager,
+      isAccountOwner
+    };
+  }
+
+  async validateAccountAccess(accountId: number, userId: any): Promise<boolean> {
+    if (!accountId || !userId) return false;
+
+    // Check if user has admin role (admins can access all accounts)
+    const user = await this.getUser(userId);
+    if (user?.role === 'admin') return true;
+
+    // For now, we'll check if the account exists and allow access
+    // This should be enhanced based on your specific account ownership model
+    const [account] = await db
+      .select({ id: accounts.id })
+      .from(accounts)
+      .where(eq(accounts.id, accountId))
+      .limit(1);
+
+    return !!account;
+  }
+
+  async validateProjectResourceAccess(projectId: number, userId: any): Promise<boolean> {
+    // Resources require write access to the project
+    const access = await this.validateProjectAccess(projectId, userId, 'write');
+    return access.isValid;
+  }
+
+  async validateProjectTaskAccess(taskId: number, userId: any): Promise<{ isValid: boolean; projectId?: number }> {
+    if (!taskId || !userId) return { isValid: false };
+
+    const [task] = await db
+      .select({ id: projectTasks.id, projectId: projectTasks.projectId })
+      .from(projectTasks)
+      .where(eq(projectTasks.id, taskId))
+      .limit(1);
+
+    if (!task) return { isValid: false };
+
+    const projectAccess = await this.validateProjectAccess(task.projectId, userId, 'read');
+    return { 
+      isValid: projectAccess.isValid, 
+      projectId: task.projectId 
+    };
+  }
+
+  async validateProjectMilestoneAccess(milestoneId: number, userId: any): Promise<{ isValid: boolean; projectId?: number }> {
+    if (!milestoneId || !userId) return { isValid: false };
+
+    const [milestone] = await db
+      .select({ id: projectMilestones.id, projectId: projectMilestones.projectId })
+      .from(projectMilestones)
+      .where(eq(projectMilestones.id, milestoneId))
+      .limit(1);
+
+    if (!milestone) return { isValid: false };
+
+    const projectAccess = await this.validateProjectAccess(milestone.projectId, userId, 'read');
+    return { 
+      isValid: projectAccess.isValid, 
+      projectId: milestone.projectId 
+    };
+  }
+
+  async validateProjectCrewAccess(crewId: number, userId: any): Promise<{ isValid: boolean; projectId?: number }> {
+    if (!crewId || !userId) return { isValid: false };
+
+    const [crew] = await db
+      .select({ id: projectCrew.id, projectId: projectCrew.projectId })
+      .from(projectCrew)
+      .where(eq(projectCrew.id, crewId))
+      .limit(1);
+
+    if (!crew) return { isValid: false };
+
+    const projectAccess = await this.validateProjectAccess(crew.projectId, userId, 'write');
+    return { 
+      isValid: projectAccess.isValid, 
+      projectId: crew.projectId 
+    };
+  }
+
+  async validateProjectEquipmentAccess(equipmentId: number, userId: any): Promise<{ isValid: boolean; projectId?: number }> {
+    if (!equipmentId || !userId) return { isValid: false };
+
+    const [equipment] = await db
+      .select({ id: projectEquipment.id, projectId: projectEquipment.projectId })
+      .from(projectEquipment)
+      .where(eq(projectEquipment.id, equipmentId))
+      .limit(1);
+
+    if (!equipment) return { isValid: false };
+
+    const projectAccess = await this.validateProjectAccess(equipment.projectId, userId, 'write');
+    return { 
+      isValid: projectAccess.isValid, 
+      projectId: equipment.projectId 
+    };
+  }
+
+  async validateProjectMaterialAccess(materialId: number, userId: any): Promise<{ isValid: boolean; projectId?: number }> {
+    if (!materialId || !userId) return { isValid: false };
+
+    const [material] = await db
+      .select({ id: projectMaterials.id, projectId: projectMaterials.projectId })
+      .from(projectMaterials)
+      .where(eq(projectMaterials.id, materialId))
+      .limit(1);
+
+    if (!material) return { isValid: false };
+
+    const projectAccess = await this.validateProjectAccess(material.projectId, userId, 'read');
+    return { 
+      isValid: projectAccess.isValid, 
+      projectId: material.projectId 
+    };
+  }
+
+  async validateProjectFinancialAccess(projectId: number, userId: any): Promise<{ isValid: boolean; canViewFinancials?: boolean; canEditFinancials?: boolean }> {
+    if (!projectId || !userId) return { isValid: false };
+
+    const access = await this.validateProjectAccess(projectId, userId, 'read');
+    if (!access.isValid) return { isValid: false };
+
+    // Financial access rules
+    const canViewFinancials = access.isProjectManager || access.userRole === 'admin';
+    const canEditFinancials = access.userRole === 'admin';
+
+    return {
+      isValid: canViewFinancials,
+      canViewFinancials,
+      canEditFinancials
+    };
   }
 
   // Product methods
