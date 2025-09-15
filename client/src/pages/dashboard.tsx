@@ -26,7 +26,7 @@ import {
   Filter,
   Download
 } from "lucide-react";
-import { BarChart, Bar, XAxis, YAxis, PieChart as RechartsPieChart, Cell, LineChart, Line, ResponsiveContainer, Area, AreaChart } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, PieChart as RechartsPieChart, Pie, Cell, LineChart, Line, ResponsiveContainer, Area, AreaChart } from "recharts";
 import { Link } from "wouter";
 import { format, subDays, subMonths, startOfMonth, endOfMonth, eachMonthOfInterval } from "date-fns";
 import { formatCurrency } from "@/lib/utils";
@@ -646,7 +646,7 @@ export default function DashboardPage() {
                             name
                           ]}
                         />
-                        <RechartsPieChart.Pie
+                        <Pie
                           data={chartData.pipelineChart}
                           dataKey="value"
                           nameKey="name"
@@ -658,7 +658,7 @@ export default function DashboardPage() {
                           {chartData.pipelineChart.map((entry, index) => (
                             <Cell key={`cell-${index}`} fill={entry.color} />
                           ))}
-                        </RechartsPieChart.Pie>
+                        </Pie>
                       </RechartsPieChart>
                     </ChartContainer>
                   )}
@@ -735,7 +735,7 @@ export default function DashboardPage() {
                     <ChartContainer config={chartConfig} className="h-[250px]">
                       <RechartsPieChart>
                         <ChartTooltip content={<ChartTooltipContent />} />
-                        <RechartsPieChart.Pie
+                        <Pie
                           data={chartData.sourceChart}
                           dataKey="value"
                           nameKey="source"
@@ -747,7 +747,7 @@ export default function DashboardPage() {
                           {chartData.sourceChart.map((entry, index) => (
                             <Cell key={`cell-${index}`} fill={entry.color} />
                           ))}
-                        </RechartsPieChart.Pie>
+                        </Pie>
                       </RechartsPieChart>
                     </ChartContainer>
                   )}

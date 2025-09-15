@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { QuickActionsMenu } from "@/components/workflow/quick-actions-menu";
 import { KeyboardShortcuts, useCommonShortcuts } from "@/components/workflow/keyboard-shortcuts";
@@ -39,6 +39,11 @@ function GlobalSearchDialog() {
   const { data: contacts = [] } = useQuery<Contact[]>({ queryKey: ["/api/contacts"] });
   const { data: opportunities = [] } = useQuery<Opportunity[]>({ queryKey: ["/api/opportunities"] });
   
+  // Memoize arrays to prevent infinite loops
+  const stableAccounts = useMemo(() => accounts, [accounts.length, accounts.map(a => a.id).join(',')]);
+  const stableContacts = useMemo(() => contacts, [contacts.length, contacts.map(c => c.id).join(',')]);
+  const stableOpportunities = useMemo(() => opportunities, [opportunities.length, opportunities.map(o => o.id).join(',')]);
+  
   useEffect(() => {
     if (!searchQuery.trim()) {
       setResults([]);
@@ -49,7 +54,7 @@ function GlobalSearchDialog() {
     const searchResults: GlobalSearchResult[] = [];
     
     // Search accounts
-    accounts.forEach(account => {
+    stableAccounts.forEach(account => {
       const matches = account.name.toLowerCase().includes(query) ||
                      (account.email && account.email.toLowerCase().includes(query)) ||
                      (account.phone && account.phone.toLowerCase().includes(query));
@@ -66,7 +71,7 @@ function GlobalSearchDialog() {
     });
     
     // Search contacts
-    contacts.forEach(contact => {
+    stableContacts.forEach(contact => {
       const fullName = `${contact.firstName} ${contact.lastName}`;
       const matches = fullName.toLowerCase().includes(query) ||
                      (contact.email && contact.email.toLowerCase().includes(query)) ||
@@ -74,7 +79,7 @@ function GlobalSearchDialog() {
                      (contact.title && contact.title.toLowerCase().includes(query));
       
       if (matches) {
-        const account = accounts.find(a => a.id === contact.accountId);
+        const account = stableAccounts.find(a => a.id === contact.accountId);
         searchResults.push({
           type: 'contact',
           id: contact.id,
@@ -86,13 +91,13 @@ function GlobalSearchDialog() {
     });
     
     // Search opportunities
-    opportunities.forEach(opportunity => {
+    stableOpportunities.forEach(opportunity => {
       const matches = opportunity.name.toLowerCase().includes(query) ||
                      (opportunity.notes && opportunity.notes.toLowerCase().includes(query)) ||
                      (opportunity.source && opportunity.source.toLowerCase().includes(query));
       
       if (matches) {
-        const account = accounts.find(a => a.id === opportunity.accountId);
+        const account = stableAccounts.find(a => a.id === opportunity.accountId);
         searchResults.push({
           type: 'opportunity',
           id: opportunity.id,
@@ -104,7 +109,7 @@ function GlobalSearchDialog() {
     });
     
     setResults(searchResults.slice(0, 10)); // Limit to 10 results
-  }, [searchQuery, accounts, contacts, opportunities]);
+  }, [searchQuery, stableAccounts, stableContacts, stableOpportunities]);
   
   const handleResultClick = (url: string) => {
     setIsOpen(false);
