@@ -37,8 +37,20 @@ import {
   MoreHorizontal,
   User,
   Briefcase,
-  Activity as ActivityIcon
+  Activity as ActivityIcon,
+  List,
+  KanbanSquare,
+  GitBranch,
+  Timer
 } from "lucide-react";
+
+// Import new task management components
+import TaskList from "@/components/tasks/task-list";
+import TaskBoard from "@/components/tasks/task-board";
+import TaskAssignmentManager from "@/components/tasks/task-assignment";
+import TaskDependenciesManager from "@/components/tasks/task-dependencies";
+import TaskProgressTracker from "@/components/tasks/task-progress";
+import TaskFormModal from "@/components/tasks/task-form";
 import { format, formatDistanceToNow } from "date-fns";
 import { formatCurrency } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
@@ -60,6 +72,11 @@ export default function ProjectDetailsPage() {
   const [match, params] = useRoute("/project-details/:id");
   const projectId = params?.id ? parseInt(params.id) : null;
   const [activeTab, setActiveTab] = useState("overview");
+  const [taskView, setTaskView] = useState("list"); // list, board, assignments, dependencies, progress
+  const [selectedTask, setSelectedTask] = useState<ProjectTask | null>(null);
+  const [isTaskFormOpen, setIsTaskFormOpen] = useState(false);
+  const [editingTask, setEditingTask] = useState<ProjectTask | null>(null);
+  const [parentTaskId, setParentTaskId] = useState<number | null>(null);
   const { toast } = useToast();
   const { isAuthenticated } = useAuth();
 
@@ -393,94 +410,257 @@ export default function ProjectDetailsPage() {
 
               {/* Tasks Tab */}
               <TabsContent value="tasks" className="space-y-6">
-                <div className="flex justify-between items-center">
-                  <h3 className="text-lg font-semibold text-edg-black">Project Tasks</h3>
-                  <Button size="sm" data-testid="button-add-task">
-                    <Plus className="mr-2 h-4 w-4" />
-                    Add Task
-                  </Button>
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                  <div className="flex items-center space-x-4">
+                    <h3 className="text-lg font-semibold text-edg-black">Project Tasks</h3>
+                    <Badge variant="outline">{tasks.length} tasks</Badge>
+                  </div>
+                  
+                  <div className="flex items-center space-x-2">
+                    {/* Task View Toggle */}
+                    <div className="flex items-center bg-gray-100 rounded-lg p-1">
+                      <Button
+                        variant={taskView === "list" ? "default" : "ghost"}
+                        size="sm"
+                        onClick={() => setTaskView("list")}
+                        data-testid="task-view-list"
+                      >
+                        <List className="h-4 w-4 mr-1" />
+                        List
+                      </Button>
+                      <Button
+                        variant={taskView === "board" ? "default" : "ghost"}
+                        size="sm"
+                        onClick={() => setTaskView("board")}
+                        data-testid="task-view-board"
+                      >
+                        <KanbanSquare className="h-4 w-4 mr-1" />
+                        Board
+                      </Button>
+                      <Button
+                        variant={taskView === "assignments" ? "default" : "ghost"}
+                        size="sm"
+                        onClick={() => setTaskView("assignments")}
+                        data-testid="task-view-assignments"
+                      >
+                        <Users className="h-4 w-4 mr-1" />
+                        Team
+                      </Button>
+                      <Button
+                        variant={taskView === "dependencies" ? "default" : "ghost"}
+                        size="sm"
+                        onClick={() => setTaskView("dependencies")}
+                        data-testid="task-view-dependencies"
+                      >
+                        <GitBranch className="h-4 w-4 mr-1" />
+                        Dependencies
+                      </Button>
+                      <Button
+                        variant={taskView === "progress" ? "default" : "ghost"}
+                        size="sm"
+                        onClick={() => setTaskView("progress")}
+                        data-testid="task-view-progress"
+                      >
+                        <Timer className="h-4 w-4 mr-1" />
+                        Progress
+                      </Button>
+                    </div>
+                    
+                    <Button 
+                      size="sm" 
+                      onClick={() => {
+                        setEditingTask(null);
+                        setParentTaskId(null);
+                        setIsTaskFormOpen(true);
+                      }}
+                      data-testid="button-add-task"
+                    >
+                      <Plus className="mr-2 h-4 w-4" />
+                      Add Task
+                    </Button>
+                  </div>
                 </div>
-                
-                <Card>
-                  <CardContent className="p-0">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Task</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead>Priority</TableHead>
-                          <TableHead>Assigned To</TableHead>
-                          <TableHead>Due Date</TableHead>
-                          <TableHead>Progress</TableHead>
-                          <TableHead></TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {tasks.length === 0 ? (
-                          <TableRow>
-                            <TableCell colSpan={7} className="text-center py-8 text-edg-grey">
-                              No tasks found for this project
-                            </TableCell>
-                          </TableRow>
-                        ) : (
-                          tasks.map((task) => (
-                            <TableRow key={task.id}>
-                              <TableCell>
-                                <div>
-                                  <p className="font-medium text-edg-black">{task.title}</p>
-                                  {task.description && (
-                                    <p className="text-sm text-edg-grey">{task.description}</p>
-                                  )}
-                                </div>
-                              </TableCell>
-                              <TableCell>
-                                <Badge className={getTaskStatusBadge(task.status)}>
-                                  {task.status.replace('_', ' ')}
-                                </Badge>
-                              </TableCell>
-                              <TableCell>
-                                <Badge className={getPriorityBadge(task.priority)}>
-                                  {task.priority}
-                                </Badge>
-                              </TableCell>
-                              <TableCell>
-                                {task.assignedTo ? (
-                                  <div className="flex items-center">
-                                    <Avatar className="h-6 w-6 mr-2">
-                                      <AvatarFallback>U</AvatarFallback>
-                                    </Avatar>
-                                    <span className="text-sm">Assigned</span>
-                                  </div>
-                                ) : (
-                                  <span className="text-sm text-edg-grey">Unassigned</span>
-                                )}
-                              </TableCell>
-                              <TableCell>
-                                {task.estimatedEndDate ? (
-                                  <span className="text-sm">
-                                    {format(new Date(task.estimatedEndDate), 'MMM dd')}
-                                  </span>
-                                ) : (
-                                  <span className="text-sm text-edg-grey">No date</span>
-                                )}
-                              </TableCell>
-                              <TableCell>
-                                <div className="w-16">
-                                  <Progress value={task.completionPercentage || 0} className="h-2" />
-                                </div>
-                              </TableCell>
-                              <TableCell>
-                                <Button variant="ghost" size="sm" data-testid={`button-view-task-${task.id}`}>
-                                  <Eye className="h-4 w-4" />
-                                </Button>
-                              </TableCell>
-                            </TableRow>
-                          ))
-                        )}
-                      </TableBody>
-                    </Table>
-                  </CardContent>
-                </Card>
+
+                {/* Task Views */}
+                {taskView === "list" && (
+                  <TaskList
+                    projectId={projectId!}
+                    onTaskSelect={setSelectedTask}
+                    onCreateTask={(parentId) => {
+                      setParentTaskId(parentId || null);
+                      setEditingTask(null);
+                      setIsTaskFormOpen(true);
+                    }}
+                  />
+                )}
+
+                {taskView === "board" && (
+                  <TaskBoard
+                    projectId={projectId!}
+                    onTaskSelect={setSelectedTask}
+                    onCreateTask={() => {
+                      setParentTaskId(null);
+                      setEditingTask(null);
+                      setIsTaskFormOpen(true);
+                    }}
+                    onEditTask={(task) => {
+                      setEditingTask(task);
+                      setIsTaskFormOpen(true);
+                    }}
+                  />
+                )}
+
+                {taskView === "assignments" && selectedTask && (
+                  <div className="space-y-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="text-lg font-medium">Task Assignments</h4>
+                        <p className="text-sm text-gray-600">
+                          Manage team assignments for: <span className="font-medium">{selectedTask.title}</span>
+                        </p>
+                      </div>
+                      <Button 
+                        variant="outline" 
+                        onClick={() => setSelectedTask(null)}
+                        data-testid="button-clear-task-selection"
+                      >
+                        View All Tasks
+                      </Button>
+                    </div>
+                    <TaskAssignmentManager
+                      taskId={selectedTask.id}
+                      projectId={projectId!}
+                    />
+                  </div>
+                )}
+
+                {taskView === "assignments" && !selectedTask && (
+                  <Card>
+                    <CardContent className="text-center py-12">
+                      <Users className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+                      <h4 className="text-lg font-medium mb-2">Select a Task</h4>
+                      <p className="text-gray-600 mb-4">
+                        Choose a task from the list or board view to manage its assignments
+                      </p>
+                      <div className="flex justify-center space-x-2">
+                        <Button variant="outline" onClick={() => setTaskView("list")}>
+                          View Task List
+                        </Button>
+                        <Button variant="outline" onClick={() => setTaskView("board")}>
+                          View Task Board
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {taskView === "dependencies" && selectedTask && (
+                  <div className="space-y-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="text-lg font-medium">Task Dependencies</h4>
+                        <p className="text-sm text-gray-600">
+                          Manage dependencies for: <span className="font-medium">{selectedTask.title}</span>
+                        </p>
+                      </div>
+                      <Button 
+                        variant="outline" 
+                        onClick={() => setSelectedTask(null)}
+                        data-testid="button-clear-task-selection-deps"
+                      >
+                        View All Tasks
+                      </Button>
+                    </div>
+                    <TaskDependenciesManager
+                      taskId={selectedTask.id}
+                      projectId={projectId!}
+                    />
+                  </div>
+                )}
+
+                {taskView === "dependencies" && !selectedTask && (
+                  <Card>
+                    <CardContent className="text-center py-12">
+                      <GitBranch className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+                      <h4 className="text-lg font-medium mb-2">Select a Task</h4>
+                      <p className="text-gray-600 mb-4">
+                        Choose a task to manage its dependencies and view the dependency graph
+                      </p>
+                      <div className="flex justify-center space-x-2">
+                        <Button variant="outline" onClick={() => setTaskView("list")}>
+                          View Task List
+                        </Button>
+                        <Button variant="outline" onClick={() => setTaskView("board")}>
+                          View Task Board
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {taskView === "progress" && selectedTask && (
+                  <div className="space-y-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="text-lg font-medium">Task Progress</h4>
+                        <p className="text-sm text-gray-600">
+                          Track progress for: <span className="font-medium">{selectedTask.title}</span>
+                        </p>
+                      </div>
+                      <Button 
+                        variant="outline" 
+                        onClick={() => setSelectedTask(null)}
+                        data-testid="button-clear-task-selection-progress"
+                      >
+                        View All Tasks
+                      </Button>
+                    </div>
+                    <TaskProgressTracker
+                      taskId={selectedTask.id}
+                      projectId={projectId!}
+                      task={selectedTask}
+                    />
+                  </div>
+                )}
+
+                {taskView === "progress" && !selectedTask && (
+                  <Card>
+                    <CardContent className="text-center py-12">
+                      <Timer className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+                      <h4 className="text-lg font-medium mb-2">Select a Task</h4>
+                      <p className="text-gray-600 mb-4">
+                        Choose a task to track its progress, log time, and add updates
+                      </p>
+                      <div className="flex justify-center space-x-2">
+                        <Button variant="outline" onClick={() => setTaskView("list")}>
+                          View Task List
+                        </Button>
+                        <Button variant="outline" onClick={() => setTaskView("board")}>
+                          View Task Board
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Task Form Modal */}
+                <TaskFormModal
+                  isOpen={isTaskFormOpen}
+                  onOpenChange={setIsTaskFormOpen}
+                  projectId={projectId!}
+                  parentTaskId={parentTaskId}
+                  editTask={editingTask}
+                  onSuccess={(task) => {
+                    setSelectedTask(task);
+                    // Auto-switch to appropriate view after creating/editing
+                    if (taskView === "assignments" || taskView === "dependencies" || taskView === "progress") {
+                      // Stay in current view but select the new/edited task
+                    } else {
+                      // Switch to list view to see the new task
+                      setTaskView("list");
+                    }
+                  }}
+                />
               </TabsContent>
 
               {/* Schedule Tab */}
