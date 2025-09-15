@@ -50,6 +50,15 @@ interface DashboardStats {
   quarterlyGrowth: number;
   totalActivities: number;
   avgOpportunitiesPerAccount: number;
+  // Business partnership data
+  businessPartners: {
+    vendors: number;
+    contractors: number;
+    suppliers: number;
+    clients: number;
+    leads: number;
+  };
+  totalBusinessPartners: number;
 }
 
 interface ChartData {
@@ -79,6 +88,18 @@ export default function DashboardPage() {
   const { data: opportunities = [], isLoading: opportunitiesLoading } = useQuery<Opportunity[]>({
     queryKey: ["/api/opportunities"],
     enabled: isAuthenticated,
+  });
+
+  // Fetch account roles for business partnership data
+  const { data: accountRoles = [], isLoading: accountRolesLoading } = useQuery<any[]>({
+    queryKey: ["/api/account-roles"],
+    enabled: isAuthenticated,
+    retry: false, // Don't retry if endpoint doesn't exist
+    meta: {
+      errorHandler: () => {
+        // Silently handle missing endpoint - will use empty array
+      }
+    }
   });
 
   const { data: recentActivities = [], isLoading: activitiesLoading } = useQuery<Activity[]>({
@@ -210,6 +231,30 @@ export default function DashboardPage() {
     
     const quarterlyGrowth = lastQuarterRevenue > 0 ? 
       ((monthlyRevenue - lastQuarterRevenue) / lastQuarterRevenue) * 100 : 0;
+
+    // Calculate business partnership breakdown
+    const businessPartners = accountRoles.reduce((acc, role) => {
+      switch (role.role) {
+        case 'vendor':
+          acc.vendors += 1;
+          break;
+        case 'contractor':
+          acc.contractors += 1;
+          break;
+        case 'supplier':
+          acc.suppliers += 1;
+          break;
+        case 'client':
+          acc.clients += 1;
+          break;
+        case 'lead':
+          acc.leads += 1;
+          break;
+      }
+      return acc;
+    }, { vendors: 0, contractors: 0, suppliers: 0, clients: 0, leads: 0 });
+
+    const totalBusinessPartners = Object.values(businessPartners).reduce((sum, count) => sum + count, 0);
     
     return {
       totalAccounts: accounts.length,
@@ -234,8 +279,10 @@ export default function DashboardPage() {
       avgOpportunitiesPerAccount: accounts.length > 0 
         ? filteredOpportunities.length / accounts.length 
         : 0,
+      businessPartners,
+      totalBusinessPartners,
     };
-  }, [filteredOpportunities, accounts, contacts, recentActivities]);
+  }, [filteredOpportunities, accounts, contacts, recentActivities, accountRoles]);
 
   // Stage labels definition
   const stageLabels = {
@@ -377,7 +424,7 @@ export default function DashboardPage() {
     );
   }
 
-  const isLoading = accountsLoading || contactsLoading || opportunitiesLoading;
+  const isLoading = accountsLoading || contactsLoading || opportunitiesLoading || accountRolesLoading;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -387,8 +434,8 @@ export default function DashboardPage() {
         {/* Header */}
         <div className="flex flex-col lg:flex-row lg:justify-between lg:items-start mb-8 space-y-4 lg:space-y-0">
           <div>
-            <h2 className="text-3xl font-bold text-edg-black">Business Analytics Dashboard</h2>
-            <p className="text-edg-grey mt-2">Comprehensive insights into your business performance and activities</p>
+            <h2 className="text-3xl font-bold text-edg-black">CRM Command Center</h2>
+            <p className="text-edg-grey mt-2">Manage your customer relationships, track opportunities, and grow your business with comprehensive insights</p>
           </div>
           
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center space-y-3 sm:space-y-0 sm:space-x-4">
@@ -404,10 +451,19 @@ export default function DashboardPage() {
               </SelectContent>
             </Select>
             
-            <Button variant="outline" data-testid="button-export-data">
-              <Download className="mr-2 h-4 w-4" />
-              Export
-            </Button>
+            <Link href="/accounts">
+              <Button variant="outline" data-testid="button-create-account">
+                <Building2 className="mr-2 h-4 w-4" />
+                Create Account
+              </Button>
+            </Link>
+            
+            <Link href="/contacts">
+              <Button variant="outline" data-testid="button-add-contact">
+                <Users className="mr-2 h-4 w-4" />
+                Add Contact
+              </Button>
+            </Link>
             
             <Link href="/opportunities">
               <Button variant="outline" data-testid="button-view-pipeline">
@@ -587,6 +643,104 @@ export default function DashboardPage() {
                   )}
                   <p className="text-xs text-muted-foreground">
                     Recent activities tracked
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Business Partnership Metrics Row */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Business Partners</CardTitle>
+                  <Building2 className="h-4 w-4 text-indigo-600" />
+                </CardHeader>
+                <CardContent>
+                  {isLoading ? (
+                    <Skeleton className="h-8 w-16" />
+                  ) : (
+                    <div className="text-2xl font-bold" data-testid="metric-business-partners">
+                      {stats.totalBusinessPartners}
+                    </div>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    Total partnerships
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Vendors</CardTitle>
+                  <Users className="h-4 w-4 text-purple-600" />
+                </CardHeader>
+                <CardContent>
+                  {isLoading ? (
+                    <Skeleton className="h-8 w-12" />
+                  ) : (
+                    <div className="text-2xl font-bold" data-testid="metric-vendors">
+                      {stats.businessPartners.vendors}
+                    </div>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    Vendor partnerships
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Contractors</CardTitle>
+                  <Building2 className="h-4 w-4 text-orange-600" />
+                </CardHeader>
+                <CardContent>
+                  {isLoading ? (
+                    <Skeleton className="h-8 w-12" />
+                  ) : (
+                    <div className="text-2xl font-bold" data-testid="metric-contractors">
+                      {stats.businessPartners.contractors}
+                    </div>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    Contractor partners
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Suppliers</CardTitle>
+                  <TrendingUp className="h-4 w-4 text-green-600" />
+                </CardHeader>
+                <CardContent>
+                  {isLoading ? (
+                    <Skeleton className="h-8 w-12" />
+                  ) : (
+                    <div className="text-2xl font-bold" data-testid="metric-suppliers">
+                      {stats.businessPartners.suppliers}
+                    </div>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    Supplier relationships
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Active Leads</CardTitle>
+                  <Target className="h-4 w-4 text-blue-600" />
+                </CardHeader>
+                <CardContent>
+                  {isLoading ? (
+                    <Skeleton className="h-8 w-12" />
+                  ) : (
+                    <div className="text-2xl font-bold" data-testid="metric-leads">
+                      {stats.businessPartners.leads}
+                    </div>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    Potential leads
                   </p>
                 </CardContent>
               </Card>
@@ -993,6 +1147,49 @@ export default function DashboardPage() {
                     Create Quote
                   </Button>
                 </Link>
+              </CardContent>
+            </Card>
+
+            {/* Recent Activities */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Recent Activities</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {isLoading ? (
+                  <div className="space-y-3">
+                    {[...Array(4)].map((_, i) => (
+                      <div key={i} className="flex items-center space-x-3">
+                        <Skeleton className="h-8 w-8 rounded" />
+                        <div className="space-y-1 flex-1">
+                          <Skeleton className="h-3 w-32" />
+                          <Skeleton className="h-3 w-24" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : recentActivities.length > 0 ? (
+                  <div className="space-y-3">
+                    {recentActivities.map((activity) => (
+                      <div key={activity.id} className="flex items-center space-x-3 p-3 border rounded-lg">
+                        <div className="p-1 bg-blue-100 rounded-full">
+                          <ActivityIcon className="h-3 w-3 text-blue-600" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">{activity.summary}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {activity.type.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())} • {format(new Date(activity.createdAt), "MMM d")}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-4">
+                    <ActivityIcon className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+                    <p className="text-sm text-gray-500">No recent activities</p>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
