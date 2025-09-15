@@ -160,6 +160,28 @@ export interface IStorage {
   createActivity(activity: InsertActivity): Promise<Activity>;
   updateActivity(id: number, activity: Partial<InsertActivity>): Promise<Activity | undefined>;
   deleteActivity(id: number): Promise<boolean>;
+
+  // Data Migration methods
+  migrateCustomersToAccountsAndContacts(): Promise<{ 
+    success: boolean; 
+    migratedCustomers: number; 
+    createdAccounts: number; 
+    createdContacts: number; 
+    errors: string[] 
+  }>;
+  migrateQuotesToOpportunities(): Promise<{ 
+    success: boolean; 
+    migratedQuotes: number; 
+    createdOpportunities: number; 
+    errors: string[] 
+  }>;
+  getMigrationStatus(): Promise<{
+    customersNeedMigration: number;
+    quotesNeedMigration: number;
+    totalAccounts: number;
+    totalContacts: number;
+    totalOpportunities: number;
+  }>;
 }
 
 export class MemStorage {
@@ -1583,6 +1605,332 @@ export class DatabaseStorage implements IStorage {
   async deleteActivity(id: number): Promise<boolean> {
     const result = await db.delete(activities).where(eq(activities.id, id));
     return (result.rowCount || 0) > 0;
+  }
+
+  // Data Migration methods implementation
+  async getMigrationStatus(): Promise<{
+    customersNeedMigration: number;
+    quotesNeedMigration: number;
+    totalAccounts: number;
+    totalContacts: number;
+    totalOpportunities: number;
+  }> {
+    // Get counts of existing customers that don't have corresponding accounts
+    const allCustomers = await db.select().from(customers);
+    const allAccounts = await db.select().from(accounts);
+    const allContacts = await db.select().from(contacts);
+    const allOpportunities = await db.select().from(opportunities);
+    
+    // Get quotes that don't have corresponding opportunities
+    const quotesWithoutOpportunities = await db
+      .select()
+      .from(quotes)
+      .where(sql`${quotes.opportunityId} IS NULL`);
+
+    return {
+      customersNeedMigration: allCustomers.length,
+      quotesNeedMigration: quotesWithoutOpportunities.length,
+      totalAccounts: allAccounts.length,
+      totalContacts: allContacts.length,
+      totalOpportunities: allOpportunities.length,
+    };
+  }
+
+  async migrateCustomersToAccountsAndContacts(): Promise<{ 
+    success: boolean; 
+    migratedCustomers: number; 
+    createdAccounts: number; 
+    createdContacts: number; 
+    errors: string[] 
+  }> {
+    const errors: string[] = [];
+    let migratedCustomers = 0;
+    let createdAccounts = 0;
+    let createdContacts = 0;
+
+    try {
+      const allCustomers = await db.select().from(customers);
+      
+      console.log(`🔄 Starting migration of ${allCustomers.length} customers...`);
+
+      for (const customer of allCustomers) {
+        try {
+          // Determine account type and name
+          const hasCompany = customer.company && customer.company.trim() !== '';
+          const accountType = hasCompany ? 'company' : 'individual';
+          const accountName = hasCompany ? customer.company! : customer.name;
+
+          // Create account
+          const accountData: InsertAccount = {
+            name: accountName,
+            type: accountType,
+            email: customer.email,
+            phone: customer.phone,
+            billingAddress: null, // Customer schema doesn't have address
+            shippingAddress: null,
+            tags: null
+          };
+
+          const [newAccount] = await db
+            .insert(accounts)
+            .values(accountData)
+            .returning();
+          
+          createdAccounts++;
+
+          // Add client role to account
+          await db.insert(accountRoles).values({
+            accountId: newAccount.id,
+            role: 'client'
+          });
+
+          // Create contact - parse first/last name from customer name
+          const nameParts = customer.name.trim().split(' ');
+          const firstName = nameParts[0] || customer.name;
+          const lastName = nameParts.slice(1).join(' ') || '';
+
+          const contactData: InsertContact = {
+            accountId: newAccount.id,
+            firstName: firstName,
+            lastName: lastName,
+            email: customer.email,
+            phone: customer.phone,
+            title: null // Customer schema doesn't have title
+          };
+
+          const [newContact] = await db
+            .insert(contacts)
+            .values(contactData)
+            .returning();
+          
+          createdContacts++;
+
+          // Add client role to contact
+          await db.insert(contactRoles).values({
+            contactId: newContact.id,
+            role: 'client'
+          });
+
+          migratedCustomers++;
+          console.log(`✅ Migrated customer ${customer.id}: ${customer.name} → Account ${newAccount.id} + Contact ${newContact.id}`);
+
+        } catch (error) {
+          const errorMsg = `Failed to migrate customer ${customer.id} (${customer.name}): ${error}`;
+          console.error(`❌ ${errorMsg}`);
+          errors.push(errorMsg);
+        }
+      }
+
+      const success = errors.length === 0;
+      console.log(`🎯 Customer migration completed: ${migratedCustomers}/${allCustomers.length} migrated`);
+      
+      return {
+        success,
+        migratedCustomers,
+        createdAccounts,
+        createdContacts,
+        errors
+      };
+
+    } catch (error) {
+      const errorMsg = `Critical error during customer migration: ${error}`;
+      console.error(`💥 ${errorMsg}`);
+      errors.push(errorMsg);
+      
+      return {
+        success: false,
+        migratedCustomers,
+        createdAccounts,
+        createdContacts,
+        errors
+      };
+    }
+  }
+
+  async migrateQuotesToOpportunities(): Promise<{ 
+    success: boolean; 
+    migratedQuotes: number; 
+    createdOpportunities: number; 
+    errors: string[] 
+  }> {
+    const errors: string[] = [];
+    let migratedQuotes = 0;
+    let createdOpportunities = 0;
+
+    try {
+      // Get quotes that don't have corresponding opportunities
+      const quotesToMigrate = await db
+        .select()
+        .from(quotes)
+        .where(sql`${quotes.opportunityId} IS NULL`);
+      
+      console.log(`🔄 Starting migration of ${quotesToMigrate.length} quotes to opportunities...`);
+
+      for (const quote of quotesToMigrate) {
+        try {
+          // Find the corresponding customer for this quote
+          const [customer] = await db
+            .select()
+            .from(customers)
+            .where(eq(customers.id, quote.customerId));
+
+          if (!customer) {
+            const errorMsg = `Cannot find customer ${quote.customerId} for quote ${quote.id}`;
+            console.error(`❌ ${errorMsg}`);
+            errors.push(errorMsg);
+            continue;
+          }
+
+          // Find the corresponding account for this customer
+          // We'll match by name and email since customers were migrated first
+          let matchingAccount = await db
+            .select()
+            .from(accounts)
+            .where(eq(accounts.email, customer.email));
+
+          if (matchingAccount.length === 0) {
+            // Try to find by name if email doesn't match
+            matchingAccount = await db
+              .select()
+              .from(accounts)
+              .where(sql`LOWER(${accounts.name}) = LOWER(${customer.name}) OR LOWER(${accounts.name}) = LOWER(${customer.company})`);
+          }
+
+          if (matchingAccount.length === 0) {
+            const errorMsg = `Cannot find matching account for customer ${customer.name} (${customer.email})`;
+            console.error(`❌ ${errorMsg}`);
+            errors.push(errorMsg);
+            continue;
+          }
+
+          const account = matchingAccount[0];
+
+          // Find primary contact for this account
+          const [primaryContact] = await db
+            .select()
+            .from(contacts)
+            .where(eq(contacts.accountId, account.id))
+            .limit(1);
+
+          // Map quote status to opportunity stage
+          const getOpportunityStage = (quoteStatus: string) => {
+            switch (quoteStatus) {
+              case 'draft': return 'estimating';
+              case 'sent': return 'proposal_sent';
+              case 'approved': return 'contract_signed';
+              case 'rejected': return 'closed_lost';
+              default: return 'inquiry';
+            }
+          };
+
+          // Calculate quote total for opportunity amount
+          const quoteLineItems = await db
+            .select()
+            .from(lineItems)
+            .where(eq(lineItems.quoteId, quote.id));
+
+          let totalAmount = 0;
+          for (const item of quoteLineItems) {
+            const quantity = parseFloat(item.quantity);
+            const unitPrice = parseFloat(item.unitPrice);
+            const markupValue = parseFloat(item.markupValue || '0');
+            const discountValue = parseFloat(item.discountValue || '0');
+
+            let itemTotal = quantity * unitPrice;
+            
+            // Apply markup
+            if (item.markupType === 'percentage') {
+              itemTotal = itemTotal * (1 + markupValue / 100);
+            } else {
+              itemTotal = itemTotal + markupValue;
+            }
+            
+            // Apply discount
+            if (item.discountType === 'percentage') {
+              itemTotal = itemTotal * (1 - discountValue / 100);
+            } else {
+              itemTotal = itemTotal - discountValue;
+            }
+            
+            totalAmount += itemTotal;
+          }
+
+          // Add tax and shipping
+          const taxRate = parseFloat(quote.taxRate || '0');
+          const shipping = parseFloat(quote.shipping || '0');
+          totalAmount = totalAmount * (1 + taxRate / 100) + shipping;
+
+          // Create opportunity
+          const opportunityData: InsertOpportunity = {
+            accountId: account.id,
+            primaryContactId: primaryContact?.id || null,
+            name: quote.projectName || `Quote ${quote.quoteNumber}`,
+            stage: getOpportunityStage(quote.status),
+            amount: totalAmount.toFixed(2),
+            expectedCloseDate: quote.estimatedStartDate ? 
+              (typeof quote.estimatedStartDate === 'string' ? new Date(quote.estimatedStartDate) : quote.estimatedStartDate) : null,
+            source: 'existing_quote',
+            assignedTo: null, // Could be mapped if user assignment exists
+            notes: quote.notes || null
+          };
+
+          const [newOpportunity] = await db
+            .insert(opportunities)
+            .values(opportunityData)
+            .returning();
+          
+          createdOpportunities++;
+
+          // Update quote to link to opportunity
+          await db
+            .update(quotes)
+            .set({ opportunityId: newOpportunity.id })
+            .where(eq(quotes.id, quote.id));
+
+          // Create activity for quote creation
+          await db.insert(activities).values({
+            entityType: 'opportunity',
+            entityId: newOpportunity.id,
+            type: 'quote_sent',
+            summary: `Quote ${quote.quoteNumber} created`,
+            description: `Quote ${quote.quoteNumber} migrated from existing system. Project: ${quote.projectName || 'N/A'}`,
+            dueAt: null,
+            completedAt: quote.createdAt || new Date(),
+            assignedTo: null
+          });
+
+          migratedQuotes++;
+          console.log(`✅ Migrated quote ${quote.id}: ${quote.quoteNumber} → Opportunity ${newOpportunity.id}`);
+
+        } catch (error) {
+          const errorMsg = `Failed to migrate quote ${quote.id} (${quote.quoteNumber}): ${error}`;
+          console.error(`❌ ${errorMsg}`);
+          errors.push(errorMsg);
+        }
+      }
+
+      const success = errors.length === 0;
+      console.log(`🎯 Quote migration completed: ${migratedQuotes}/${quotesToMigrate.length} migrated`);
+      
+      return {
+        success,
+        migratedQuotes,
+        createdOpportunities,
+        errors
+      };
+
+    } catch (error) {
+      const errorMsg = `Critical error during quote migration: ${error}`;
+      console.error(`💥 ${errorMsg}`);
+      errors.push(errorMsg);
+      
+      return {
+        success: false,
+        migratedQuotes,
+        createdOpportunities,
+        errors
+      };
+    }
   }
 }
 

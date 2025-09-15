@@ -37,7 +37,7 @@ import { isUnauthorizedError } from "@/lib/authUtils";
 import { useAuth } from "@/hooks/useAuth";
 import { RoleManager } from "@/components/forms/role-manager";
 import { ActivityFeed } from "@/components/forms/activity-feed";
-import type { Opportunity, Account, Contact, User, InsertOpportunity } from "@shared/schema";
+import type { Opportunity, Account, Contact, User as UserType, InsertOpportunity } from "@shared/schema";
 
 interface OpportunityWithDetails extends Opportunity {
   account?: Account;

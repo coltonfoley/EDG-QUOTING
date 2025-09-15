@@ -942,6 +942,76 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Data Migration endpoints for converting customers to CRM structure
+  app.get("/api/migration/status", isAuthenticated, async (req: any, res) => {
+    try {
+      const currentUser = await storage.getUser(req.user?.id);
+      if (currentUser?.role !== 'admin') {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+
+      const status = await storage.getMigrationStatus();
+      res.json(status);
+    } catch (error) {
+      console.error("Error getting migration status:", error);
+      res.status(500).json({ message: "Failed to get migration status" });
+    }
+  });
+
+  app.post("/api/migration/customers", isAuthenticated, async (req: any, res) => {
+    try {
+      const currentUser = await storage.getUser(req.user?.id);
+      if (currentUser?.role !== 'admin') {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+
+      console.log("🚀 Starting customer migration...");
+      const result = await storage.migrateCustomersToAccountsAndContacts();
+      
+      res.json({
+        success: result.success,
+        message: result.success ? 
+          `Successfully migrated ${result.migratedCustomers} customers to accounts and contacts` :
+          `Migration completed with errors: ${result.errors.length} errors`,
+        data: result
+      });
+    } catch (error) {
+      console.error("Error during customer migration:", error);
+      res.status(500).json({ 
+        success: false,
+        message: "Failed to migrate customers",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  app.post("/api/migration/quotes", isAuthenticated, async (req: any, res) => {
+    try {
+      const currentUser = await storage.getUser(req.user?.id);
+      if (currentUser?.role !== 'admin') {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+
+      console.log("🚀 Starting quote migration...");
+      const result = await storage.migrateQuotesToOpportunities();
+      
+      res.json({
+        success: result.success,
+        message: result.success ? 
+          `Successfully migrated ${result.migratedQuotes} quotes to opportunities` :
+          `Migration completed with errors: ${result.errors.length} errors`,
+        data: result
+      });
+    } catch (error) {
+      console.error("Error during quote migration:", error);
+      res.status(500).json({ 
+        success: false,
+        message: "Failed to migrate quotes",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
   // Price list upload endpoint
   app.post('/api/admin/upload-price-list', isAuthenticated, upload.single('file'), async (req: any, res) => {
     try {
