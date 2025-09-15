@@ -25,6 +25,7 @@ import BusinessPartnersPage from "@/pages/business-partners";
 import ProjectsPage from "@/pages/projects";
 import ProjectDashboardPage from "@/pages/project-dashboard";
 import ProjectDetailsPage from "@/pages/project-details";
+import NewProjectPage from "@/pages/new-project";
 import SchedulePage from "@/pages/schedule";
 
 function Router() {
@@ -82,7 +83,7 @@ function Router() {
           <Route path="/projects" component={ProjectsPage} />
           <Route path="/project-dashboard" component={ProjectDashboardPage} />
           <Route path="/project-details/:id" component={ProjectDetailsPage} />
-          <Route path="/projects/new" component={ProjectDetailsPage} />
+          <Route path="/projects/new" component={NewProjectPage} />
           <Route path="/projects/:id/edit" component={ProjectDetailsPage} />
           <Route path="/schedule" component={SchedulePage} />
           <Route path="/admin" component={AdminPage} />
