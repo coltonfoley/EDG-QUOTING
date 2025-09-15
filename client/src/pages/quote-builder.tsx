@@ -17,8 +17,8 @@ import type { UploadedImage } from "@/components/image-uploader";
 
 export default function QuoteBuilder() {
   const { id } = useParams();
-  const isNewQuote = !id;
-  const quoteId = id ? parseInt(id) : undefined;
+  const isNewQuote = !id || id === 'new';
+  const quoteId = (id && id !== 'new') ? parseInt(id) : undefined;
   
   // Parse query string for opportunityId (from Create Quote button in opportunities)
   const [opportunityId, setOpportunityId] = useState<number | null>(null);
