@@ -14,6 +14,7 @@ import AuthPage from "@/pages/auth-page";
 import AdminPage from "@/pages/admin";
 import AdminTemplatesPage from "@/pages/admin-templates";
 import ContractsPage from "@/pages/contracts";
+import CRMPage from "@/pages/crm";
 
 function Router() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -38,6 +39,7 @@ function Router() {
           <Route path="/quotes/:id" component={QuoteBuilder} />
           <Route path="/products" component={Products} />
           <Route path="/contracts" component={ContractsPage} />
+          <Route path="/crm" component={CRMPage} />
           <Route path="/admin" component={AdminPage} />
           <Route path="/admin/templates" component={AdminTemplatesPage} />
         </>
