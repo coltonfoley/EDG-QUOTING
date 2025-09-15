@@ -20,9 +20,7 @@ import DashboardPage from "@/pages/dashboard";
 import AccountsPage from "@/pages/accounts";
 import ContactsPage from "@/pages/contacts";
 import OpportunitiesPage from "@/pages/opportunities";
-import VendorsPage from "@/pages/vendors";
-import ContractorsPage from "@/pages/contractors";
-import SuppliersPage from "@/pages/suppliers";
+import BusinessPartnersPage from "@/pages/business-partners";
 
 function Router() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -55,9 +53,26 @@ function Router() {
           <Route path="/accounts" component={AccountsPage} />
           <Route path="/contacts" component={ContactsPage} />
           <Route path="/opportunities" component={OpportunitiesPage} />
-          <Route path="/vendors" component={VendorsPage} />
-          <Route path="/contractors" component={ContractorsPage} />
-          <Route path="/suppliers" component={SuppliersPage} />
+          <Route path="/business-partners" component={BusinessPartnersPage} />
+          {/* Redirect old partner routes to consolidated page */}
+          <Route path="/vendors">
+            {() => {
+              window.location.replace('/business-partners');
+              return null;
+            }}
+          </Route>
+          <Route path="/contractors">
+            {() => {
+              window.location.replace('/business-partners');
+              return null;
+            }}
+          </Route>
+          <Route path="/suppliers">
+            {() => {
+              window.location.replace('/business-partners');
+              return null;
+            }}
+          </Route>
           <Route path="/admin" component={AdminPage} />
           <Route path="/admin/templates" component={AdminTemplatesPage} />
         </>
