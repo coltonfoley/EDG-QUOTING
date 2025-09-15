@@ -530,7 +530,7 @@ export function LeadDetailModal({ leadId, open, onClose, users = [] }: LeadDetai
             </DialogTitle>
             <div className="flex items-center space-x-2">
               <Badge className={getStatusColor(lead.status)} data-testid="lead-status-badge">
-                {lead.status.charAt(0).toUpperCase() + lead.status.slice(1)}
+                {lead.status ? lead.status.charAt(0).toUpperCase() + lead.status.slice(1) : 'Unknown'}
               </Badge>
               <Button
                 variant="ghost"
