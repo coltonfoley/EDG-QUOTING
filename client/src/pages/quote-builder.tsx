@@ -1,6 +1,6 @@
 import { useParams } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { AppHeader } from "@/components/app-header";
 import { QuoteHeader } from "@/components/quote-header";
 import { ImageAssetsPreview } from "@/components/image-assets-preview";
@@ -19,6 +19,19 @@ export default function QuoteBuilder() {
   const { id } = useParams();
   const isNewQuote = !id;
   const quoteId = id ? parseInt(id) : undefined;
+  
+  // Parse query string for opportunityId (from Create Quote button in opportunities)
+  const [opportunityId, setOpportunityId] = useState<number | null>(null);
+  
+  useEffect(() => {
+    if (isNewQuote) {
+      const params = new URLSearchParams(window.location.search);
+      const oppId = params.get('opportunityId');
+      if (oppId) {
+        setOpportunityId(parseInt(oppId));
+      }
+    }
+  }, [isNewQuote]);
   
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -57,6 +70,7 @@ export default function QuoteBuilder() {
         ...data,
         customerId: customer.id,
         quoteNumber: generateQuoteNumber(),
+        ...(opportunityId && { opportunityId: opportunityId }),
       };
       delete quoteData.customerName;
       delete quoteData.customerEmail;
@@ -168,6 +182,7 @@ export default function QuoteBuilder() {
     id: 0,
     quoteNumber: "",
     customerId: 0,
+    opportunityId: opportunityId,
     projectName: "",
     projectAddress: "",
     estimatedStartDate: "",

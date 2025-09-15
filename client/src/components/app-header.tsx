@@ -1,4 +1,4 @@
-import { Bell, LogOut, Users } from "lucide-react";
+import { Bell, LogOut, Users, Building2, UserCheck, Target, Truck, HardHat, Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import logoPath from "@assets/my-logo.png_1753970984943.jpg";
@@ -30,13 +30,41 @@ export function AppHeader() {
               <img src={logoPath} alt="EDG Patio & Shade" className="h-8 mr-3" />
               <span className="text-sm text-edg-grey">Estimator</span>
             </div>
-            <nav className="hidden md:flex space-x-6">
+            <nav className="hidden lg:flex space-x-4">
               <Link href="/" className={`text-sm font-medium transition-colors hover:text-edg-teal ${
                 location === '/' 
                   ? 'text-edg-teal border-b-2 border-edg-teal pb-4' 
                   : 'text-edg-grey'
               }`}>
                 Home
+              </Link>
+              <Link href="/dashboard" className={`text-sm font-medium transition-colors hover:text-edg-teal ${
+                location.startsWith('/dashboard')
+                  ? 'text-edg-teal border-b-2 border-edg-teal pb-4' 
+                  : 'text-edg-grey'
+              }`}>
+                Dashboard
+              </Link>
+              <Link href="/accounts" className={`text-sm font-medium transition-colors hover:text-edg-teal ${
+                location.startsWith('/accounts')
+                  ? 'text-edg-teal border-b-2 border-edg-teal pb-4' 
+                  : 'text-edg-grey'
+              }`}>
+                Accounts
+              </Link>
+              <Link href="/contacts" className={`text-sm font-medium transition-colors hover:text-edg-teal ${
+                location.startsWith('/contacts')
+                  ? 'text-edg-teal border-b-2 border-edg-teal pb-4' 
+                  : 'text-edg-grey'
+              }`}>
+                Contacts
+              </Link>
+              <Link href="/opportunities" className={`text-sm font-medium transition-colors hover:text-edg-teal ${
+                location.startsWith('/opportunities')
+                  ? 'text-edg-teal border-b-2 border-edg-teal pb-4' 
+                  : 'text-edg-grey'
+              }`}>
+                Opportunities
               </Link>
               <Link href="/quotes" className={`text-sm font-medium transition-colors hover:text-edg-teal ${
                 location.startsWith('/quotes')
@@ -45,12 +73,26 @@ export function AppHeader() {
               }`}>
                 Quotes
               </Link>
-              <Link href="/crm" className={`text-sm font-medium transition-colors hover:text-edg-teal ${
-                location.startsWith('/crm')
+              <Link href="/vendors" className={`text-sm font-medium transition-colors hover:text-edg-teal ${
+                location.startsWith('/vendors') 
                   ? 'text-edg-teal border-b-2 border-edg-teal pb-4' 
                   : 'text-edg-grey'
               }`}>
-                CRM
+                Vendors
+              </Link>
+              <Link href="/contractors" className={`text-sm font-medium transition-colors hover:text-edg-teal ${
+                location.startsWith('/contractors') 
+                  ? 'text-edg-teal border-b-2 border-edg-teal pb-4' 
+                  : 'text-edg-grey'
+              }`}>
+                Contractors
+              </Link>
+              <Link href="/suppliers" className={`text-sm font-medium transition-colors hover:text-edg-teal ${
+                location.startsWith('/suppliers') 
+                  ? 'text-edg-teal border-b-2 border-edg-teal pb-4' 
+                  : 'text-edg-grey'
+              }`}>
+                Suppliers
               </Link>
               <Link href="/products" className={`text-sm font-medium transition-colors hover:text-edg-teal ${
                 location.startsWith('/products') 
