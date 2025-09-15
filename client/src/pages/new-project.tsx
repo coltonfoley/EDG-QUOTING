@@ -17,7 +17,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { insertProjectSchema } from "@shared/schema";
-import type { Quote, Account, Contact, User } from "@shared/schema";
+import type { QuoteWithDetails, Account, Contact, User } from "@shared/schema";
 import { ArrowLeft, CalendarIcon, Building2, Users, DollarSign, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -50,7 +50,7 @@ export default function NewProjectPage() {
   const { isAuthenticated } = useAuth();
 
   // Fetch supporting data
-  const { data: quotes = [] } = useQuery<Quote[]>({
+  const { data: quotes = [] } = useQuery<QuoteWithDetails[]>({
     queryKey: ["/api/quotes"],
     enabled: isAuthenticated,
   });
@@ -91,10 +91,9 @@ export default function NewProjectPage() {
     watchedAccountId ? contact.accountId === watchedAccountId : false
   );
 
-  // Filter quotes by selected account (if any)
-  const accountQuotes = quotes.filter(quote => 
-    watchedAccountId ? quote.accountId === watchedAccountId : true
-  );
+  // For now, show all quotes since customers don't directly map to accounts
+  // TODO: Implement customer-to-account mapping when needed
+  const accountQuotes = quotes;
 
   // Auto-populate fields when quote is selected
   const selectedQuote = quotes.find(q => q.id === watchedQuoteId);
@@ -106,28 +105,58 @@ export default function NewProjectPage() {
     return `PRJ-${year}-${randomId}`;
   };
 
+  // Calculate quote total
+  const calculateQuoteTotal = (quote?: QuoteWithDetails): string => {
+    if (!quote?.lineItems || !Array.isArray(quote.lineItems) || quote.lineItems.length === 0) return "0";
+    try {
+      const total = quote.lineItems.reduce((sum, item) => {
+        if (!item) return sum;
+        const qty = parseFloat(item.quantity?.toString() || "0");
+        const price = parseFloat(item.unitPrice?.toString() || "0");
+        const markup = parseFloat(item.markupValue?.toString() || "0");
+        if (isNaN(qty) || isNaN(price) || isNaN(markup)) return sum;
+        
+        const baseTotal = qty * price;
+        const itemTotal = item.markupType === 'percentage' 
+          ? baseTotal + (baseTotal * (markup / 100))
+          : baseTotal + markup;
+        return sum + itemTotal;
+      }, 0);
+      return total.toString();
+    } catch (error) {
+      console.error("Error calculating quote total:", error);
+      return "0";
+    }
+  };
+
   // Create project mutation
   const createProjectMutation = useMutation({
     mutationFn: async (data: FormData) => {
       const projectData = {
         ...data,
         projectNumber: generateProjectNumber(),
-        accountId: data.accountId || selectedQuote?.accountId,
-        quoteId: data.quoteId,
+        accountId: data.accountId, // Must be explicitly selected since customer doesn't have accountId
         estimatedStartDate: data.estimatedStartDate?.toISOString(),
         estimatedEndDate: data.estimatedEndDate?.toISOString(),
-        estimatedTotalCost: data.estimatedTotalCost || selectedQuote?.total?.toString(),
+        estimatedTotalCost: data.estimatedTotalCost || calculateQuoteTotal(selectedQuote),
       };
       
-      return await apiRequest("/api/projects", {
-        method: "POST",
-        body: JSON.stringify(projectData),
-      });
+      // Use convert-from-quote endpoint if a quote is selected
+      if (data.quoteId) {
+        const response = await apiRequest("POST", "/api/projects/convert-from-quote", {
+          quoteId: data.quoteId,
+          projectData
+        });
+        return await response.json();
+      } else {
+        const response = await apiRequest("POST", "/api/projects", projectData);
+        return await response.json();
+      }
     },
-    onSuccess: (project) => {
+    onSuccess: (project: any) => {
       toast({
         title: "Project Created",
-        description: `Project "${project.name}" has been created successfully.`,
+        description: `Project "${project.name || 'New Project'}" has been created successfully.`,
       });
       queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
       setLocation(`/project-details/${project.id}`);
@@ -150,6 +179,14 @@ export default function NewProjectPage() {
       });
       return;
     }
+    if (!data.accountId) {
+      toast({
+        title: "Account Required",
+        description: "Please select a client account for this project.",
+        variant: "destructive",
+      });
+      return;
+    }
     createProjectMutation.mutate(data);
   };
 
@@ -157,15 +194,20 @@ export default function NewProjectPage() {
   const handleQuoteSelect = (quoteId: string) => {
     const quote = quotes.find(q => q.id === parseInt(quoteId));
     if (quote) {
-      form.setValue("accountId", quote.accountId);
-      form.setValue("name", quote.projectName || `${quote.customerName} Project`);
+      // Note: Customer objects don't have accountId, so we'll need to manually select the account
+      // Generate project name with fallbacks
+      const projectName = quote.projectName || 
+        (quote.customer?.name ? `${quote.customer.name} Project` : `Project from Quote ${quote.quoteNumber || quote.id}`);
+      form.setValue("name", projectName);
+      
       form.setValue("projectAddress", quote.projectAddress || "");
-      form.setValue("estimatedTotalCost", quote.total?.toString() || "");
+      form.setValue("estimatedTotalCost", calculateQuoteTotal(quote));
+      
       if (quote.estimatedStartDate) {
         try {
           form.setValue("estimatedStartDate", new Date(quote.estimatedStartDate));
         } catch (e) {
-          // Invalid date, skip
+          console.warn("Invalid start date in quote:", quote.estimatedStartDate);
         }
       }
     }
@@ -220,7 +262,7 @@ export default function NewProjectPage() {
                           <SelectContent>
                             {accountQuotes.map((quote) => (
                               <SelectItem key={quote.id} value={quote.id.toString()}>
-                                {quote.quoteNumber} - {quote.customerName}
+                                {quote.quoteNumber} - {quote.customer?.name || 'Unknown Customer'}
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -235,11 +277,11 @@ export default function NewProjectPage() {
                     name="accountId"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Client Account</FormLabel>
+                        <FormLabel>Client Account *</FormLabel>
                         <Select onValueChange={(value) => field.onChange(parseInt(value))} value={field.value?.toString()}>
                           <FormControl>
                             <SelectTrigger data-testid="select-account">
-                              <SelectValue placeholder="Select client account" />
+                              <SelectValue placeholder="Select client account (required)" />
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>

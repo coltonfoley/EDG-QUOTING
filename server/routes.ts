@@ -2952,6 +2952,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           projects = await storage.getProjectsByStatus(status as string);
         } else {
           // Filter by status but only for user's projects
+          if (!userId) {
+            return res.status(401).json({ message: "Authentication required" });
+          }
           projects = await storage.getProjectsByProjectManager(userId);
           projects = projects.filter(p => p.status === status);
         }
@@ -2961,6 +2964,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           projects = await storage.getAllProjects();
         } else {
           // Regular users only see projects they manage
+          if (!userId) {
+            return res.status(401).json({ message: "Authentication required" });
+          }
           projects = await storage.getProjectsByProjectManager(userId);
         }
       }

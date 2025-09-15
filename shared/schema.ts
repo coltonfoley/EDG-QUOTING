@@ -364,11 +364,11 @@ export const projectMilestones = pgTable("project_milestones", {
   index("idx_project_milestones_project_display").on(table.projectId, table.displayOrder),
 ]);
 
-// Hierarchical project tasks with dependency support
+// Hierarchical project tasks with dependency support  
 export const projectTasks = pgTable("project_tasks", {
   id: serial("id").primaryKey(),
   projectId: integer("project_id").notNull().references(() => projects.id, { onDelete: 'cascade' }),
-  parentTaskId: integer("parent_task_id").references(() => projectTasks.id, { onDelete: 'cascade' }), // self-referencing foreign key
+  parentTaskId: integer("parent_task_id"), // self-referencing foreign key handled below
   milestoneId: integer("milestone_id").references(() => projectMilestones.id, { onDelete: 'set null' }), // optional milestone link
   taskNumber: text("task_number"), // human-readable task identifier
   title: text("title").notNull(), // task name
