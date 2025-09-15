@@ -25,6 +25,7 @@ import BusinessPartnersPage from "@/pages/business-partners";
 import ProjectsPage from "@/pages/projects";
 import ProjectDashboardPage from "@/pages/project-dashboard";
 import ProjectDetailsPage from "@/pages/project-details";
+import SchedulePage from "@/pages/schedule";
 
 function Router() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -83,6 +84,7 @@ function Router() {
           <Route path="/project-details/:id" component={ProjectDetailsPage} />
           <Route path="/projects/new" component={ProjectDetailsPage} />
           <Route path="/projects/:id/edit" component={ProjectDetailsPage} />
+          <Route path="/schedule" component={SchedulePage} />
           <Route path="/admin" component={AdminPage} />
           <Route path="/admin/templates" component={AdminTemplatesPage} />
         </>

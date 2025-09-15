@@ -35,7 +35,7 @@ import type {
   ProjectTaskWithDetails, 
   ProjectTask, 
   InsertProjectTask,
-  User,
+  User as UserType,
   ProjectCrew
 } from "@shared/schema";
 
@@ -49,7 +49,7 @@ interface TaskBoardProps {
 
 interface TaskCardProps {
   task: ProjectTaskWithDetails;
-  users: User[];
+  users: UserType[];
   crew: ProjectCrew[];
   isDragging?: boolean;
 }
@@ -58,7 +58,7 @@ interface ColumnProps {
   title: string;
   status: string;
   tasks: ProjectTaskWithDetails[];
-  users: User[];
+  users: UserType[];
   crew: ProjectCrew[];
   onTaskSelect?: (task: ProjectTask) => void;
   onEditTask?: (task: ProjectTask) => void;
@@ -332,7 +332,7 @@ export const TaskBoard = ({ projectId, onTaskSelect, onCreateTask, onEditTask, o
   });
 
   // Fetch users for assignments
-  const { data: users = [] } = useQuery<User[]>({
+  const { data: users = [] } = useQuery<UserType[]>({
     queryKey: ['/api/users'],
   });
 

@@ -39,7 +39,7 @@ import type {
   InsertProjectTask,
   ProjectCrew,
   ProjectMilestone,
-  User
+  User as UserType
 } from "@shared/schema";
 
 interface TaskListProps {
@@ -57,7 +57,7 @@ interface TaskListItemProps {
   onUpdateTask: (taskId: number, updates: Partial<InsertProjectTask>) => void;
   onCreateSubtask: (parentTaskId: number) => void;
   onTaskSelect?: (task: ProjectTask) => void;
-  users: User[];
+  users: UserType[];
   crew: ProjectCrew[];
   milestones: ProjectMilestone[];
 }
@@ -404,7 +404,7 @@ export const TaskList = ({ projectId, onTaskSelect, onCreateTask, showCreateButt
   });
 
   // Fetch users for assignments
-  const { data: users = [] } = useQuery<User[]>({
+  const { data: users = [] } = useQuery<UserType[]>({
     queryKey: ['/api/users'],
   });
 

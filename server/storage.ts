@@ -2770,19 +2770,167 @@ export class DatabaseStorage implements IStorage {
     return (result.rowCount || 0) > 0;
   }
 
-  async checkResourceAvailability(resourceType: string, resourceId: number, startDate: Date, endDate: Date): Promise<{ isAvailable: boolean; conflictingEvents?: ProjectScheduleEvent[] }> {
-    const conflictingEvents = await db.select().from(projectScheduleEvents).where(
-      and(
-        eq(projectScheduleEvents.resourceType, resourceType),
-        eq(projectScheduleEvents.resourceId, resourceId),
-        sql`${projectScheduleEvents.startDateTime} < ${endDate}`,
-        sql`${projectScheduleEvents.endDateTime} > ${startDate}`
-      )
+  async checkResourceAvailability(resourceType: string, resourceId: number, startDate: Date, endDate: Date, excludeEventId?: number): Promise<{ isAvailable: boolean; conflictingEvents?: ProjectScheduleEvent[] }> {
+    let conflictQuery = and(
+      eq(projectScheduleEvents.resourceType, resourceType),
+      eq(projectScheduleEvents.resourceId, resourceId),
+      sql`${projectScheduleEvents.startDateTime} < ${endDate}`,
+      sql`${projectScheduleEvents.endDateTime} > ${startDate}`,
+      ne(projectScheduleEvents.status, 'cancelled')
     );
+
+    // Exclude specific event when updating
+    if (excludeEventId) {
+      conflictQuery = and(conflictQuery, ne(projectScheduleEvents.id, excludeEventId));
+    }
+
+    const conflictingEvents = await db.select().from(projectScheduleEvents).where(conflictQuery);
 
     return {
       isAvailable: conflictingEvents.length === 0,
       conflictingEvents: conflictingEvents.length > 0 ? conflictingEvents : undefined
+    };
+  }
+
+  async validateScheduleEventConflicts(eventData: InsertProjectScheduleEvent, excludeEventId?: number): Promise<{ 
+    isValid: boolean; 
+    conflicts: Array<{ type: 'resource_conflict' | 'availability_conflict'; details: any }>; 
+  }> {
+    const conflicts: Array<{ type: 'resource_conflict' | 'availability_conflict'; details: any }> = [];
+    
+    // Check resource availability
+    const resourceCheck = await this.checkResourceAvailability(
+      eventData.resourceType,
+      eventData.resourceId,
+      new Date(eventData.startDateTime),
+      new Date(eventData.endDateTime),
+      excludeEventId
+    );
+
+    if (!resourceCheck.isAvailable && resourceCheck.conflictingEvents) {
+      conflicts.push({
+        type: 'resource_conflict',
+        details: {
+          resourceType: eventData.resourceType,
+          resourceId: eventData.resourceId,
+          conflictingEvents: resourceCheck.conflictingEvents.map(event => ({
+            id: event.id,
+            title: event.title,
+            startDateTime: event.startDateTime,
+            endDateTime: event.endDateTime,
+            projectId: event.projectId
+          }))
+        }
+      });
+    }
+
+    // Check crew member availability and time-off
+    if (eventData.resourceType === 'crew_member') {
+      const crewAvailability = await this.checkCrewMemberAvailability(
+        eventData.resourceId,
+        new Date(eventData.startDateTime),
+        new Date(eventData.endDateTime)
+      );
+      
+      if (!crewAvailability.isAvailable) {
+        conflicts.push({
+          type: 'availability_conflict',
+          details: {
+            resourceType: 'crew_member',
+            resourceId: eventData.resourceId,
+            reason: crewAvailability.unavailableReason,
+            conflictingPeriods: crewAvailability.conflictingPeriods
+          }
+        });
+      }
+    }
+
+    // Check equipment maintenance periods
+    if (eventData.resourceType === 'equipment') {
+      const equipmentAvailability = await this.checkEquipmentAvailability(
+        eventData.resourceId,
+        new Date(eventData.startDateTime),
+        new Date(eventData.endDateTime)
+      );
+      
+      if (!equipmentAvailability.isAvailable) {
+        conflicts.push({
+          type: 'availability_conflict',
+          details: {
+            resourceType: 'equipment',
+            resourceId: eventData.resourceId,
+            reason: equipmentAvailability.unavailableReason,
+            maintenancePeriods: equipmentAvailability.maintenancePeriods
+          }
+        });
+      }
+    }
+
+    return {
+      isValid: conflicts.length === 0,
+      conflicts
+    };
+  }
+
+  async checkCrewMemberAvailability(crewMemberId: number, startDate: Date, endDate: Date): Promise<{
+    isAvailable: boolean;
+    unavailableReason?: string;
+    conflictingPeriods?: Array<{ start: Date; end: Date; reason: string }>;
+  }> {
+    // Get crew member details to check work hour limits
+    const crewMember = await this.getProjectCrew(crewMemberId);
+    if (!crewMember) {
+      return {
+        isAvailable: false,
+        unavailableReason: 'Crew member not found'
+      };
+    }
+
+    // Check for time-off requests (this would be from a time-off table in a real implementation)
+    // For now, we'll simulate this check
+    const conflictingPeriods: Array<{ start: Date; end: Date; reason: string }> = [];
+
+    // Check work hour limits per day/week
+    const eventDurationHours = (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60);
+    const maxHoursPerDay = parseFloat(crewMember.maxHoursPerWeek || '40') / 5; // Assume 5-day work week
+
+    if (eventDurationHours > maxHoursPerDay) {
+      return {
+        isAvailable: false,
+        unavailableReason: `Event duration (${eventDurationHours}h) exceeds daily limit (${maxHoursPerDay}h)`,
+        conflictingPeriods
+      };
+    }
+
+    return {
+      isAvailable: conflictingPeriods.length === 0,
+      unavailableReason: conflictingPeriods.length > 0 ? 'Time-off conflicts detected' : undefined,
+      conflictingPeriods: conflictingPeriods.length > 0 ? conflictingPeriods : undefined
+    };
+  }
+
+  async checkEquipmentAvailability(equipmentId: number, startDate: Date, endDate: Date): Promise<{
+    isAvailable: boolean;
+    unavailableReason?: string;
+    maintenancePeriods?: Array<{ start: Date; end: Date; reason: string }>;
+  }> {
+    // Get equipment details
+    const equipment = await this.getProjectEquipment(equipmentId);
+    if (!equipment) {
+      return {
+        isAvailable: false,
+        unavailableReason: 'Equipment not found'
+      };
+    }
+
+    // Check for maintenance periods (this would be from a maintenance schedule table in a real implementation)
+    // For now, we'll simulate this check
+    const maintenancePeriods: Array<{ start: Date; end: Date; reason: string }> = [];
+
+    return {
+      isAvailable: maintenancePeriods.length === 0,
+      unavailableReason: maintenancePeriods.length > 0 ? 'Maintenance conflicts detected' : undefined,
+      maintenancePeriods: maintenancePeriods.length > 0 ? maintenancePeriods : undefined
     };
   }
 

@@ -39,7 +39,7 @@ import { insertProjectTaskSchema } from "@shared/schema";
 import type { 
   ProjectTask,
   InsertProjectTask,
-  User,
+  User as UserType,
   ProjectCrew,
   ProjectMilestone,
   ProjectTaskWithDetails
@@ -154,7 +154,7 @@ export const TaskFormModal = ({
     enabled: !!projectId && isOpen,
   });
 
-  const { data: users = [] } = useQuery<User[]>({
+  const { data: users = [] } = useQuery<UserType[]>({
     queryKey: ['/api/users'],
     enabled: isOpen,
   });
