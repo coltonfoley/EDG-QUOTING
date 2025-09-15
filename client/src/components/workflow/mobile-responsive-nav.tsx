@@ -17,7 +17,10 @@ import {
   Package, 
   Settings,
   Bell,
-  Search
+  Search,
+  ClipboardList,
+  TrendingUp,
+  Calendar
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
@@ -79,6 +82,16 @@ export function MobileResponsiveNav() {
       href: "/quotes",
       label: "Quotes",
       icon: <FileText className="h-5 w-5" />
+    },
+    {
+      href: "/project-dashboard",
+      label: "Project Dashboard",
+      icon: <TrendingUp className="h-5 w-5" />
+    },
+    {
+      href: "/projects",
+      label: "Projects",
+      icon: <ClipboardList className="h-5 w-5" />
     },
     {
       href: "/vendors",

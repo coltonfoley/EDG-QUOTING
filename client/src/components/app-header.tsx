@@ -1,4 +1,4 @@
-import { Bell, LogOut, Users, Building2, UserCheck, Target, Truck, HardHat, Package, Search, Command, FileText, Settings, Shield } from "lucide-react";
+import { Bell, LogOut, Users, Building2, UserCheck, Target, Truck, HardHat, Package, Search, Command, FileText, Settings, Shield, ClipboardList, TrendingUp, Calendar } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
@@ -326,6 +326,49 @@ export function AppHeader() {
                     <Link href="/contracts" className="flex items-center gap-2 w-full" data-testid="link-contracts">
                       <Truck className="h-4 w-4" />
                       Contracts
+                    </Link>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              
+              {/* Projects Dropdown */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button 
+                    variant="ghost" 
+                    className={`text-sm font-medium transition-colors hover:text-edg-teal h-auto p-0 border-b-2 pb-4 ${
+                      location.startsWith('/projects') || location.startsWith('/project-dashboard') || location.startsWith('/project-details')
+                        ? 'text-edg-teal border-edg-teal' 
+                        : 'text-edg-grey border-transparent'
+                    }`}
+                    data-testid="dropdown-projects"
+                  >
+                    <ClipboardList className="mr-1 h-4 w-4" />
+                    Projects
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-56">
+                  <DropdownMenuLabel className="flex items-center gap-2">
+                    <ClipboardList className="h-4 w-4" />
+                    Project Management
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem asChild>
+                    <Link href="/project-dashboard" className="flex items-center gap-2 w-full" data-testid="link-project-dashboard">
+                      <TrendingUp className="h-4 w-4" />
+                      Dashboard
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/projects" className="flex items-center gap-2 w-full" data-testid="link-projects">
+                      <Building2 className="h-4 w-4" />
+                      All Projects
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/projects/new" className="flex items-center gap-2 w-full" data-testid="link-new-project">
+                      <Calendar className="h-4 w-4" />
+                      New Project
                     </Link>
                   </DropdownMenuItem>
                 </DropdownMenuContent>
