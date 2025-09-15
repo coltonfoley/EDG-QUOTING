@@ -77,8 +77,14 @@ import type {
 } from "@shared/schema";
 
 export default function ProjectDetailsPage() {
-  const [match, params] = useRoute("/project-details/:id");
-  const projectId = params?.id ? parseInt(params.id) : null;
+  // Handle both /projects/new and /projects/:id/edit routes
+  const [newMatch, newParams] = useRoute("/projects/new");
+  const [editMatch, editParams] = useRoute("/projects/:id/edit");
+  const [detailsMatch, detailsParams] = useRoute("/project-details/:id");
+  
+  const isNewProject = !!newMatch;
+  const projectId = editParams?.id ? parseInt(editParams.id) : 
+                   detailsParams?.id ? parseInt(detailsParams.id) : null;
   const [activeTab, setActiveTab] = useState("overview");
   const [taskView, setTaskView] = useState("list"); // list, board, assignments, dependencies, progress
   const [selectedTask, setSelectedTask] = useState<ProjectTask | null>(null);
@@ -90,55 +96,56 @@ export default function ProjectDetailsPage() {
   const { toast } = useToast();
   const { isAuthenticated } = useAuth();
 
-  // Fetch main project data
+  // Fetch main project data (only for existing projects, not new ones)
   const { data: project, isLoading: projectLoading, error } = useQuery<ProjectWithDetails>({
     queryKey: ["/api/projects", projectId],
-    enabled: isAuthenticated && !!projectId,
+    enabled: isAuthenticated && !!projectId && !isNewProject,
   });
 
   // Fetch project tasks
   const { data: tasks = [], isLoading: tasksLoading } = useQuery<ProjectTask[]>({
     queryKey: ["/api/projects", projectId, "tasks"],
-    enabled: isAuthenticated && !!projectId,
+    enabled: isAuthenticated && !!projectId && !isNewProject,
   });
 
   // Fetch project milestones
   const { data: milestones = [], isLoading: milestonesLoading } = useQuery<ProjectMilestone[]>({
     queryKey: ["/api/projects", projectId, "milestones"],
-    enabled: isAuthenticated && !!projectId,
+    enabled: isAuthenticated && !!projectId && !isNewProject,
   });
 
   // Fetch project crew
   const { data: crew = [], isLoading: crewLoading } = useQuery<ProjectCrew[]>({
     queryKey: ["/api/projects", projectId, "crew"],
-    enabled: isAuthenticated && !!projectId,
+    enabled: isAuthenticated && !!projectId && !isNewProject,
   });
 
   // Fetch project equipment
   const { data: equipment = [], isLoading: equipmentLoading } = useQuery<ProjectEquipment[]>({
     queryKey: ["/api/projects", projectId, "equipment"],
-    enabled: isAuthenticated && !!projectId,
+    enabled: isAuthenticated && !!projectId && !isNewProject,
   });
 
   // Fetch budget lines
   const { data: budgetLines = [], isLoading: budgetLoading } = useQuery<ProjectBudgetLine[]>({
     queryKey: ["/api/projects", projectId, "budget"],
-    enabled: isAuthenticated && !!projectId,
+    enabled: isAuthenticated && !!projectId && !isNewProject,
   });
 
   // Fetch project financials
   const { data: financials } = useQuery<ProjectFinancial>({
     queryKey: ["/api/projects", projectId, "financials"],
-    enabled: isAuthenticated && !!projectId,
+    enabled: isAuthenticated && !!projectId && !isNewProject,
   });
 
   // Fetch progress entries
   const { data: progressEntries = [] } = useQuery<ProjectProgress[]>({
     queryKey: ["/api/projects", projectId, "progress"],
-    enabled: isAuthenticated && !!projectId,
+    enabled: isAuthenticated && !!projectId && !isNewProject,
   });
 
-  if (!match || !projectId) {
+  // Show "Project Not Found" only for existing projects that don't exist, not for new projects
+  if (!isNewProject && (!projectId || (error && error.message?.includes('404')))) {
     return (
       <div className="min-h-screen bg-gray-50">
         <AppHeader />
@@ -178,7 +185,8 @@ export default function ProjectDetailsPage() {
     );
   }
 
-  if (error || !project) {
+  // Only show error for existing projects, not new ones
+  if (!isNewProject && (error || !project)) {
     return (
       <div className="min-h-screen bg-gray-50">
         <AppHeader />
@@ -188,6 +196,31 @@ export default function ProjectDetailsPage() {
             <p className="text-edg-grey mt-2">There was an error loading the project details.</p>
             <Link href="/projects">
               <Button className="mt-4">Back to Projects</Button>
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show new project creation form
+  if (isNewProject) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <AppHeader />
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="mb-6">
+            <Link href="/projects" className="inline-flex items-center text-edg-blue hover:text-edg-blue-dark">
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back to Projects
+            </Link>
+          </div>
+          
+          <div className="text-center">
+            <h1 className="text-3xl font-bold text-edg-black mb-2">Create New Project</h1>
+            <p className="text-edg-grey mb-8">Project creation form coming soon!</p>
+            <Link href="/projects">
+              <Button>Back to Projects</Button>
             </Link>
           </div>
         </div>
