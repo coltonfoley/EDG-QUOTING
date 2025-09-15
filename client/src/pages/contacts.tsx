@@ -26,7 +26,8 @@ import {
   Eye,
   Edit,
   UserCheck,
-  Briefcase
+  Briefcase,
+  Trash2
 } from "lucide-react";
 import { Link } from "wouter";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -51,6 +52,8 @@ export default function ContactsPage() {
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
   const [detailSheetOpen, setDetailSheetOpen] = useState(false);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [contactToDelete, setContactToDelete] = useState<Contact | null>(null);
   
   const { toast } = useToast();
   const { isAuthenticated, isLoading: authLoading } = useAuth();
@@ -161,6 +164,30 @@ export default function ContactsPage() {
     },
   });
 
+  // Delete contact mutation
+  const deleteContactMutation = useMutation({
+    mutationFn: async (id: number) => {
+      return await apiRequest("DELETE", `/api/contacts/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/contacts"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/contacts/roles"] });
+      toast({
+        title: "Contact deleted",
+        description: "Contact has been successfully deleted.",
+      });
+      setDeleteDialogOpen(false);
+      setContactToDelete(null);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete contact. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
   // Filter contacts based on search and filters
   const filteredContacts = useMemo(() => {
     let filtered = enrichedContacts;
@@ -208,6 +235,17 @@ export default function ContactsPage() {
   const handleEditContact = (contact: Contact) => {
     setSelectedContact(contact);
     setEditDialogOpen(true);
+  };
+
+  const handleDeleteContact = (contact: Contact) => {
+    setContactToDelete(contact);
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmDeleteContact = () => {
+    if (contactToDelete) {
+      deleteContactMutation.mutate(contactToDelete.id);
+    }
   };
 
   // Handle authentication errors
@@ -394,6 +432,15 @@ export default function ContactsPage() {
                         >
                           <Edit className="h-4 w-4" />
                         </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDeleteContact(contact)}
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                          data-testid={`button-delete-contact-${contact.id}`}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
                       </div>
                     </div>
 
@@ -538,6 +585,15 @@ export default function ContactsPage() {
                               data-testid={`button-edit-contact-${contact.id}`}
                             >
                               <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDeleteContact(contact)}
+                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                              data-testid={`button-delete-contact-${contact.id}`}
+                            >
+                              <Trash2 className="h-4 w-4" />
                             </Button>
                           </div>
                         </div>
@@ -735,6 +791,41 @@ export default function ContactsPage() {
           )}
         </SheetContent>
       </Sheet>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete Contact</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-sm text-gray-600">
+              Are you sure you want to delete{" "}
+              <span className="font-semibold">
+                {contactToDelete ? `${contactToDelete.firstName} ${contactToDelete.lastName}` : "this contact"}
+              </span>
+              ? This action cannot be undone.
+            </p>
+          </div>
+          <div className="flex justify-end space-x-3">
+            <Button
+              variant="outline"
+              onClick={() => setDeleteDialogOpen(false)}
+              data-testid="button-cancel-delete"
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={confirmDeleteContact}
+              disabled={deleteContactMutation.isPending}
+              data-testid="button-confirm-delete"
+            >
+              {deleteContactMutation.isPending ? "Deleting..." : "Delete Contact"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
