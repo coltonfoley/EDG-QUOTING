@@ -104,7 +104,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const normalizedPath = await objectStorageService.trySetObjectEntityAclPolicy(
         objectPath,
         {
-          owner: userId,
+          owner: userId.toString(),
           visibility: "public", // Images in quotes should be publicly accessible
         }
       );
@@ -130,7 +130,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const objectFile = await objectStorageService.getObjectEntityFile(`/objects/${req.params.objectPath}`);
       const canAccess = await objectStorageService.canAccessObjectEntity({
         objectFile,
-        userId: userId,
+        userId: userId?.toString(),
         requestedPermission: ObjectPermission.READ,
       });
       if (!canAccess) {
@@ -271,12 +271,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/quotes/:id", isAuthenticated, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ message: "Invalid quote ID" });
+      }
       const quote = await storage.getQuoteWithDetails(id);
       if (!quote) {
         return res.status(404).json({ message: "Quote not found" });
       }
       res.json(quote);
     } catch (error) {
+      console.error("Error fetching quote:", error);
       res.status(500).json({ message: "Internal server error" });
     }
   });
@@ -300,6 +304,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put("/api/quotes/:id", isAuthenticated, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ message: "Invalid quote ID" });
+      }
       const quoteData = insertQuoteSchema.partial().parse(req.body);
       const quote = await storage.updateQuote(id, quoteData);
       if (!quote) {

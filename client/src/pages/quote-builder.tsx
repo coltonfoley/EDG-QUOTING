@@ -17,8 +17,8 @@ import type { UploadedImage } from "@/components/image-uploader";
 
 export default function QuoteBuilder() {
   const { id } = useParams();
-  const isNewQuote = !id;
-  const quoteId = id ? parseInt(id) : undefined;
+  const isNewQuote = !id || id === "new";
+  const quoteId = id && id !== "new" && !isNaN(parseInt(id)) ? parseInt(id) : undefined;
   
   const { toast } = useToast();
   const queryClient = useQueryClient();
