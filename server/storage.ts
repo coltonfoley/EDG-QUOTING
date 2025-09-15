@@ -1,4 +1,4 @@
-import { customers, quotes, lineItems, products, users, contractTemplates, proposalTemplates, pricingTables, productAccessories, leads, tasks, leadActivities, type Customer, type Quote, type LineItem, type Product, type User, type ContractTemplate, type ProposalTemplate, type PricingTable, type ProductAccessory, type Lead, type Task, type LeadActivity, type InsertCustomer, type InsertQuote, type InsertLineItem, type InsertProduct, type InsertUser, type InsertContractTemplate, type InsertProposalTemplate, type InsertPricingTable, type InsertProductAccessory, type InsertLead, type InsertTask, type InsertLeadActivity, type QuoteWithDetails, type ProductWithDetails } from "@shared/schema";
+import { customers, quotes, lineItems, products, users, contractTemplates, proposalTemplates, pricingTables, productAccessories, leads, tasks, leadActivities, accounts, accountRoles, contacts, contactRoles, opportunities, activities, type Customer, type Quote, type LineItem, type Product, type User, type ContractTemplate, type ProposalTemplate, type PricingTable, type ProductAccessory, type Lead, type Task, type LeadActivity, type Account, type AccountRole, type Contact, type ContactRole, type Opportunity, type Activity, type InsertCustomer, type InsertQuote, type InsertLineItem, type InsertProduct, type InsertUser, type InsertContractTemplate, type InsertProposalTemplate, type InsertPricingTable, type InsertProductAccessory, type InsertLead, type InsertTask, type InsertLeadActivity, type InsertAccount, type InsertAccountRole, type InsertContact, type InsertContactRole, type InsertOpportunity, type InsertActivity, type QuoteWithDetails, type ProductWithDetails } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, inArray, sql, and, ne, lt } from "drizzle-orm";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
@@ -120,6 +120,46 @@ export interface IStorage {
   getLeadActivities(leadId: number): Promise<LeadActivity[]>;
   createLeadActivity(activity: InsertLeadActivity): Promise<LeadActivity>;
   getRecentActivities(limit?: number): Promise<LeadActivity[]>;
+
+  // Comprehensive CRM Account methods
+  getAllAccounts(): Promise<Account[]>;
+  getAccount(id: number): Promise<Account | undefined>;
+  getAccountByEmail(email: string): Promise<Account | undefined>;
+  createAccount(account: InsertAccount): Promise<Account>;
+  updateAccount(id: number, account: Partial<InsertAccount>): Promise<Account | undefined>;
+  deleteAccount(id: number): Promise<boolean>;
+
+  // Account Role methods
+  getAccountRoles(accountId: number): Promise<AccountRole[]>;
+  addAccountRole(role: InsertAccountRole): Promise<AccountRole>;
+  removeAccountRole(accountId: number, role: string): Promise<boolean>;
+
+  // Contact methods
+  getAllContacts(): Promise<Contact[]>;
+  getContact(id: number): Promise<Contact | undefined>;
+  getContactsByAccountId(accountId: number): Promise<Contact[]>;
+  createContact(contact: InsertContact): Promise<Contact>;
+  updateContact(id: number, contact: Partial<InsertContact>): Promise<Contact | undefined>;
+  deleteContact(id: number): Promise<boolean>;
+
+  // Contact Role methods
+  getContactRoles(contactId: number): Promise<ContactRole[]>;
+  addContactRole(role: InsertContactRole): Promise<ContactRole>;
+  removeContactRole(contactId: number, role: string): Promise<boolean>;
+
+  // Opportunity methods
+  getAllOpportunities(): Promise<Opportunity[]>;
+  getOpportunity(id: number): Promise<Opportunity | undefined>;
+  getOpportunitiesByAccountId(accountId: number): Promise<Opportunity[]>;
+  createOpportunity(opportunity: InsertOpportunity): Promise<Opportunity>;
+  updateOpportunity(id: number, opportunity: Partial<InsertOpportunity>): Promise<Opportunity | undefined>;
+  deleteOpportunity(id: number): Promise<boolean>;
+
+  // Activity methods
+  getActivitiesByEntity(entityType: string, entityId: number): Promise<Activity[]>;
+  createActivity(activity: InsertActivity): Promise<Activity>;
+  updateActivity(id: number, activity: Partial<InsertActivity>): Promise<Activity | undefined>;
+  deleteActivity(id: number): Promise<boolean>;
 }
 
 export class MemStorage {
@@ -235,6 +275,7 @@ export class MemStorage {
       docusignStatus: insertQuote.docusignStatus || null,
       docusignSentDate: insertQuote.docusignSentDate || null,
       docusignViewUrl: insertQuote.docusignViewUrl || null,
+      opportunityId: insertQuote.opportunityId ?? null,
       createdAt: new Date(),
     };
     this.quotes.set(id, quote);
@@ -1279,7 +1320,7 @@ export class DatabaseStorage implements IStorage {
             company: quote.customerCompany || undefined,
             status: leadStatus,
             source: 'Website', // Default source for existing quotes
-            value: leadValue,
+            value: leadValue?.toString() || null,
             notes: notes.join(' | '),
             customerId: quote.customerId,
           };
@@ -1299,6 +1340,249 @@ export class DatabaseStorage implements IStorage {
     }
 
     return { imported, duplicates, errors };
+  }
+
+  // Comprehensive CRM Account methods
+  async getAllAccounts(): Promise<Account[]> {
+    return await db.select().from(accounts).orderBy(desc(accounts.createdAt));
+  }
+
+  async getAccount(id: number): Promise<Account | undefined> {
+    const [account] = await db.select().from(accounts).where(eq(accounts.id, id));
+    return account || undefined;
+  }
+
+  async getAccountByEmail(email: string): Promise<Account | undefined> {
+    const [account] = await db.select().from(accounts).where(eq(accounts.email, email));
+    return account || undefined;
+  }
+
+  async createAccount(insertAccount: InsertAccount): Promise<Account> {
+    const [account] = await db
+      .insert(accounts)
+      .values(insertAccount)
+      .returning();
+    return account;
+  }
+
+  async updateAccount(id: number, accountData: Partial<InsertAccount>): Promise<Account | undefined> {
+    const [updated] = await db
+      .update(accounts)
+      .set(accountData)
+      .where(eq(accounts.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteAccount(id: number): Promise<boolean> {
+    const result = await db.delete(accounts).where(eq(accounts.id, id));
+    return (result.rowCount || 0) > 0;
+  }
+
+  // Account Role methods
+  async getAccountRoles(accountId: number): Promise<AccountRole[]> {
+    return await db.select().from(accountRoles).where(eq(accountRoles.accountId, accountId)).orderBy(accountRoles.role);
+  }
+
+  async addAccountRole(role: InsertAccountRole): Promise<AccountRole> {
+    const [accountRole] = await db
+      .insert(accountRoles)
+      .values(role)
+      .returning();
+    return accountRole;
+  }
+
+  async removeAccountRole(accountId: number, role: string): Promise<boolean> {
+    const result = await db
+      .delete(accountRoles)
+      .where(and(
+        eq(accountRoles.accountId, accountId),
+        eq(accountRoles.role, role)
+      ));
+    return (result.rowCount || 0) > 0;
+  }
+
+  // Contact methods
+  async getAllContacts(): Promise<Contact[]> {
+    return await db.select().from(contacts).orderBy(desc(contacts.createdAt));
+  }
+
+  async getContact(id: number): Promise<Contact | undefined> {
+    const [contact] = await db.select().from(contacts).where(eq(contacts.id, id));
+    return contact || undefined;
+  }
+
+  async getContactsByAccountId(accountId: number): Promise<Contact[]> {
+    return await db.select().from(contacts).where(eq(contacts.accountId, accountId)).orderBy(contacts.firstName, contacts.lastName);
+  }
+
+  async createContact(insertContact: InsertContact): Promise<Contact> {
+    const [contact] = await db
+      .insert(contacts)
+      .values(insertContact)
+      .returning();
+    return contact;
+  }
+
+  async updateContact(id: number, contactData: Partial<InsertContact>): Promise<Contact | undefined> {
+    const [updated] = await db
+      .update(contacts)
+      .set(contactData)
+      .where(eq(contacts.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteContact(id: number): Promise<boolean> {
+    const result = await db.delete(contacts).where(eq(contacts.id, id));
+    return (result.rowCount || 0) > 0;
+  }
+
+  // Contact Role methods
+  async getContactRoles(contactId: number): Promise<ContactRole[]> {
+    return await db.select().from(contactRoles).where(eq(contactRoles.contactId, contactId)).orderBy(contactRoles.role);
+  }
+
+  async addContactRole(role: InsertContactRole): Promise<ContactRole> {
+    const [contactRole] = await db
+      .insert(contactRoles)
+      .values(role)
+      .returning();
+    return contactRole;
+  }
+
+  async removeContactRole(contactId: number, role: string): Promise<boolean> {
+    const result = await db
+      .delete(contactRoles)
+      .where(and(
+        eq(contactRoles.contactId, contactId),
+        eq(contactRoles.role, role)
+      ));
+    return (result.rowCount || 0) > 0;
+  }
+
+  // Opportunity methods
+  async getAllOpportunities(): Promise<Opportunity[]> {
+    return await db.select().from(opportunities).orderBy(desc(opportunities.createdAt));
+  }
+
+  async getOpportunity(id: number): Promise<Opportunity | undefined> {
+    const [opportunity] = await db.select().from(opportunities).where(eq(opportunities.id, id));
+    return opportunity || undefined;
+  }
+
+  async getOpportunitiesByAccountId(accountId: number): Promise<Opportunity[]> {
+    return await db.select().from(opportunities).where(eq(opportunities.accountId, accountId)).orderBy(desc(opportunities.createdAt));
+  }
+
+  async createOpportunity(insertOpportunity: InsertOpportunity): Promise<Opportunity> {
+    // Convert expectedCloseDate string to Date if necessary
+    const opportunityData = {
+      ...insertOpportunity,
+      expectedCloseDate: insertOpportunity.expectedCloseDate ? 
+        (typeof insertOpportunity.expectedCloseDate === 'string' ? new Date(insertOpportunity.expectedCloseDate) : insertOpportunity.expectedCloseDate) : null
+    };
+    
+    const [opportunity] = await db
+      .insert(opportunities)
+      .values(opportunityData)
+      .returning();
+    return opportunity;
+  }
+
+  async updateOpportunity(id: number, opportunityData: Partial<InsertOpportunity>): Promise<Opportunity | undefined> {
+    // Prepare update data with proper type conversion
+    const updateData: any = {};
+    
+    if (opportunityData.accountId !== undefined) updateData.accountId = opportunityData.accountId;
+    if (opportunityData.primaryContactId !== undefined) updateData.primaryContactId = opportunityData.primaryContactId;
+    if (opportunityData.name !== undefined) updateData.name = opportunityData.name;
+    if (opportunityData.stage !== undefined) updateData.stage = opportunityData.stage;
+    if (opportunityData.amount !== undefined) updateData.amount = opportunityData.amount;
+    if (opportunityData.source !== undefined) updateData.source = opportunityData.source;
+    if (opportunityData.assignedTo !== undefined) updateData.assignedTo = opportunityData.assignedTo;
+    if (opportunityData.notes !== undefined) updateData.notes = opportunityData.notes;
+    
+    // Handle expectedCloseDate conversion properly
+    if (opportunityData.expectedCloseDate !== undefined) {
+      updateData.expectedCloseDate = opportunityData.expectedCloseDate ? 
+        (typeof opportunityData.expectedCloseDate === 'string' ? new Date(opportunityData.expectedCloseDate) : opportunityData.expectedCloseDate) : null;
+    }
+    
+    const [updated] = await db
+      .update(opportunities)
+      .set(updateData)
+      .where(eq(opportunities.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteOpportunity(id: number): Promise<boolean> {
+    const result = await db.delete(opportunities).where(eq(opportunities.id, id));
+    return (result.rowCount || 0) > 0;
+  }
+
+  // Activity methods
+  async getActivitiesByEntity(entityType: string, entityId: number): Promise<Activity[]> {
+    return await db
+      .select()
+      .from(activities)
+      .where(and(
+        eq(activities.entityType, entityType),
+        eq(activities.entityId, entityId)
+      ))
+      .orderBy(desc(activities.createdAt));
+  }
+
+  async createActivity(insertActivity: InsertActivity): Promise<Activity> {
+    // Convert date fields to Date objects if necessary
+    const activityData = {
+      ...insertActivity,
+      dueAt: insertActivity.dueAt ? 
+        (typeof insertActivity.dueAt === 'string' ? new Date(insertActivity.dueAt) : insertActivity.dueAt) : null,
+      completedAt: insertActivity.completedAt ? 
+        (typeof insertActivity.completedAt === 'string' ? new Date(insertActivity.completedAt) : insertActivity.completedAt) : null
+    };
+    
+    const [activity] = await db
+      .insert(activities)
+      .values(activityData)
+      .returning();
+    return activity;
+  }
+
+  async updateActivity(id: number, activityData: Partial<InsertActivity>): Promise<Activity | undefined> {
+    // Prepare update data with proper type conversion
+    const updateData: any = {};
+    
+    if (activityData.entityType !== undefined) updateData.entityType = activityData.entityType;
+    if (activityData.entityId !== undefined) updateData.entityId = activityData.entityId;
+    if (activityData.type !== undefined) updateData.type = activityData.type;
+    if (activityData.summary !== undefined) updateData.summary = activityData.summary;
+    if (activityData.description !== undefined) updateData.description = activityData.description;
+    if (activityData.assignedTo !== undefined) updateData.assignedTo = activityData.assignedTo;
+    
+    // Handle date field conversions properly
+    if (activityData.dueAt !== undefined) {
+      updateData.dueAt = activityData.dueAt ? 
+        (typeof activityData.dueAt === 'string' ? new Date(activityData.dueAt) : activityData.dueAt) : null;
+    }
+    if (activityData.completedAt !== undefined) {
+      updateData.completedAt = activityData.completedAt ? 
+        (typeof activityData.completedAt === 'string' ? new Date(activityData.completedAt) : activityData.completedAt) : null;
+    }
+    
+    const [updated] = await db
+      .update(activities)
+      .set(updateData)
+      .where(eq(activities.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteActivity(id: number): Promise<boolean> {
+    const result = await db.delete(activities).where(eq(activities.id, id));
+    return (result.rowCount || 0) > 0;
   }
 }
 
