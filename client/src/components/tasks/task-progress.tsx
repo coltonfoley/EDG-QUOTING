@@ -42,7 +42,7 @@ import type {
   ProjectProgress,
   InsertProjectTimeEntry,
   InsertProjectProgress,
-  User,
+  User as UserType,
   ProjectMilestone
 } from "@shared/schema";
 
@@ -87,8 +87,8 @@ const TimeEntryCard = ({
   onEdit,
   onDelete 
 }: { 
-  entry: ProjectTimeEntry & { user?: User }, 
-  users: User[],
+  entry: ProjectTimeEntry & { user?: UserType }, 
+  users: UserType[],
   onEdit?: (entry: ProjectTimeEntry) => void,
   onDelete?: (entryId: number) => void
 }) => {
@@ -174,7 +174,7 @@ const ProgressEntryCard = ({
   onEdit,
   onDelete 
 }: { 
-  entry: ProjectProgress & { user?: User }, 
+  entry: ProjectProgress & { user?: UserType }, 
   onView?: (entry: ProjectProgress) => void,
   onEdit?: (entry: ProjectProgress) => void,
   onDelete?: (entryId: number) => void
@@ -306,7 +306,7 @@ export const TaskProgressTracker = ({ taskId, projectId, task, onProgressUpdate 
   });
 
   // Fetch users for time entry attribution
-  const { data: users = [] } = useQuery<User[]>({
+  const { data: users = [] } = useQuery<UserType[]>({
     queryKey: ['/api/users'],
   });
 

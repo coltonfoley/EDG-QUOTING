@@ -51,6 +51,14 @@ import TaskAssignmentManager from "@/components/tasks/task-assignment";
 import TaskDependenciesManager from "@/components/tasks/task-dependencies";
 import TaskProgressTracker from "@/components/tasks/task-progress";
 import TaskFormModal from "@/components/tasks/task-form";
+
+// Import scheduling components
+import ScheduleDashboard from "@/components/scheduling/schedule-dashboard";
+import ResourceCalendar from "@/components/scheduling/resource-calendar";
+import CrewAllocation from "@/components/scheduling/crew-allocation";
+import ScheduleEventsManager from "@/components/scheduling/schedule-events";
+import ResourceAvailabilityTracker from "@/components/scheduling/resource-availability";
+import EquipmentSchedule from "@/components/scheduling/equipment-schedule";
 import { format, formatDistanceToNow } from "date-fns";
 import { formatCurrency } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
@@ -77,6 +85,8 @@ export default function ProjectDetailsPage() {
   const [isTaskFormOpen, setIsTaskFormOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<ProjectTask | null>(null);
   const [parentTaskId, setParentTaskId] = useState<number | null>(null);
+  const [scheduleView, setScheduleView] = useState("dashboard"); // dashboard, calendar, crew, events, availability, equipment
+  const [selectedResourceId, setSelectedResourceId] = useState<number | null>(null);
   const { toast } = useToast();
   const { isAuthenticated } = useAuth();
 
@@ -665,100 +675,198 @@ export default function ProjectDetailsPage() {
 
               {/* Schedule Tab */}
               <TabsContent value="schedule" className="space-y-6">
-                <div className="flex justify-between items-center">
-                  <h3 className="text-lg font-semibold text-edg-black">Project Schedule</h3>
-                  <Button size="sm" data-testid="button-add-event">
-                    <Plus className="mr-2 h-4 w-4" />
-                    Add Event
-                  </Button>
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                  <div className="flex items-center space-x-4">
+                    <h3 className="text-lg font-semibold text-edg-black">Project Scheduling</h3>
+                    <Badge variant="outline">{crew.length + equipment.length} resources</Badge>
+                  </div>
+                  
+                  <div className="flex items-center space-x-2">
+                    {/* Schedule View Toggle */}
+                    <div className="flex items-center bg-gray-100 rounded-lg p-1">
+                      <Button
+                        variant={scheduleView === "dashboard" ? "default" : "ghost"}
+                        size="sm"
+                        onClick={() => setScheduleView("dashboard")}
+                        data-testid="schedule-view-dashboard"
+                      >
+                        <Target className="h-4 w-4 mr-1" />
+                        Dashboard
+                      </Button>
+                      <Button
+                        variant={scheduleView === "calendar" ? "default" : "ghost"}
+                        size="sm"
+                        onClick={() => setScheduleView("calendar")}
+                        data-testid="schedule-view-calendar"
+                      >
+                        <Calendar className="h-4 w-4 mr-1" />
+                        Calendar
+                      </Button>
+                      <Button
+                        variant={scheduleView === "crew" ? "default" : "ghost"}
+                        size="sm"
+                        onClick={() => setScheduleView("crew")}
+                        data-testid="schedule-view-crew"
+                      >
+                        <Users className="h-4 w-4 mr-1" />
+                        Crew
+                      </Button>
+                      <Button
+                        variant={scheduleView === "events" ? "default" : "ghost"}
+                        size="sm"
+                        onClick={() => setScheduleView("events")}
+                        data-testid="schedule-view-events"
+                      >
+                        <Clock className="h-4 w-4 mr-1" />
+                        Events
+                      </Button>
+                      <Button
+                        variant={scheduleView === "availability" ? "default" : "ghost"}
+                        size="sm"
+                        onClick={() => setScheduleView("availability")}
+                        data-testid="schedule-view-availability"
+                      >
+                        <CheckCircle2 className="h-4 w-4 mr-1" />
+                        Availability
+                      </Button>
+                      <Button
+                        variant={scheduleView === "equipment" ? "default" : "ghost"}
+                        size="sm"
+                        onClick={() => setScheduleView("equipment")}
+                        data-testid="schedule-view-equipment"
+                      >
+                        <Wrench className="h-4 w-4 mr-1" />
+                        Equipment
+                      </Button>
+                    </div>
+                  </div>
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="flex items-center">
-                        <Calendar className="mr-2 h-5 w-5" />
-                        Milestones
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-4">
-                        {milestones.length === 0 ? (
-                          <p className="text-center text-edg-grey py-8">No milestones defined</p>
-                        ) : (
-                          milestones.map((milestone) => (
-                            <div key={milestone.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                              <div className="flex items-center space-x-3">
-                                <div className={`w-3 h-3 rounded-full ${
-                                  milestone.status === 'completed' ? 'bg-green-500' :
-                                  milestone.status === 'in_progress' ? 'bg-blue-500' :
-                                  milestone.status === 'overdue' ? 'bg-red-500' :
-                                  'bg-gray-300'
-                                }`} />
-                                <div>
-                                  <p className="font-medium text-edg-black">{milestone.name}</p>
-                                  <p className="text-sm text-edg-grey">
-                                    Due: {format(new Date(milestone.targetDate), 'MMM dd, yyyy')}
-                                  </p>
-                                </div>
-                              </div>
-                              <Badge className={`${
-                                milestone.status === 'completed' ? 'bg-green-100 text-green-800' :
-                                milestone.status === 'overdue' ? 'bg-red-100 text-red-800' :
-                                milestone.status === 'in_progress' ? 'bg-blue-100 text-blue-800' :
-                                'bg-gray-100 text-gray-800'
-                              }`}>
-                                {milestone.status.replace('_', ' ')}
-                              </Badge>
-                            </div>
-                          ))
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
+                {/* Schedule Views */}
+                {scheduleView === "dashboard" && (
+                  <ScheduleDashboard
+                    projectId={projectId!}
+                    showAllProjects={false}
+                    onNavigateToSchedule={(view, resourceId) => {
+                      setScheduleView(view);
+                      if (resourceId) {
+                        setSelectedResourceId(resourceId);
+                      }
+                    }}
+                    onCreateScheduleEvent={() => setScheduleView("events")}
+                    onManageResource={(resourceType, resourceId) => {
+                      setSelectedResourceId(resourceId);
+                      setScheduleView(resourceType === 'crew_member' ? 'crew' : 'equipment');
+                    }}
+                  />
+                )}
 
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="flex items-center">
-                        <Clock className="mr-2 h-5 w-5" />
-                        Timeline Overview
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-4">
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="text-center p-3 bg-blue-50 rounded-lg">
-                            <p className="text-sm font-medium text-blue-600">Planned Start</p>
-                            <p className="text-lg font-bold text-blue-600">
-                              {project.estimatedStartDate 
-                                ? format(new Date(project.estimatedStartDate), 'MMM dd')
-                                : 'TBD'
-                              }
-                            </p>
-                          </div>
-                          <div className="text-center p-3 bg-green-50 rounded-lg">
-                            <p className="text-sm font-medium text-green-600">Planned End</p>
-                            <p className="text-lg font-bold text-green-600">
-                              {project.estimatedEndDate 
-                                ? format(new Date(project.estimatedEndDate), 'MMM dd')
-                                : 'TBD'
-                              }
-                            </p>
-                          </div>
-                        </div>
-                        
-                        {project.actualStartDate && (
-                          <div className="text-center p-3 bg-gray-50 rounded-lg">
-                            <p className="text-sm font-medium text-edg-grey">Actual Start</p>
-                            <p className="text-lg font-bold text-edg-black">
-                              {format(new Date(project.actualStartDate), 'MMM dd, yyyy')}
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
+                {scheduleView === "calendar" && (
+                  <ResourceCalendar
+                    projectId={projectId!}
+                    showAllProjects={false}
+                    selectedResourceTypes={['crew_member', 'equipment', 'vehicle', 'external_contractor']}
+                    onEventClick={(event) => {
+                      console.log('Event clicked:', event);
+                      // Handle event details view
+                    }}
+                    onEventCreate={() => setScheduleView("events")}
+                    onEventUpdate={(event) => {
+                      console.log('Event updated:', event);
+                      toast({
+                        title: "Event Updated",
+                        description: "Schedule event has been updated successfully."
+                      });
+                    }}
+                  />
+                )}
+
+                {scheduleView === "crew" && (
+                  <CrewAllocation
+                    projectId={projectId!}
+                    showAllProjects={false}
+                    onCrewMemberClick={(crewMember) => {
+                      setSelectedResourceId(crewMember.id);
+                      console.log('Crew member clicked:', crewMember);
+                    }}
+                    onAssignmentUpdate={(assignment) => {
+                      console.log('Assignment updated:', assignment);
+                      toast({
+                        title: "Assignment Updated",
+                        description: "Crew assignment has been updated successfully."
+                      });
+                    }}
+                  />
+                )}
+
+                {scheduleView === "events" && (
+                  <ScheduleEventsManager
+                    projectId={projectId!}
+                    showAllProjects={false}
+                    preSelectedResource={selectedResourceId ? {
+                      id: selectedResourceId,
+                      type: crew.find(c => c.id === selectedResourceId) ? 'crew_member' : 'equipment'
+                    } : undefined}
+                    onEventCreated={(event) => {
+                      console.log('Event created:', event);
+                      toast({
+                        title: "Event Created",
+                        description: "Schedule event has been created successfully."
+                      });
+                    }}
+                    onEventUpdated={(event) => {
+                      console.log('Event updated:', event);
+                      toast({
+                        title: "Event Updated", 
+                        description: "Schedule event has been updated successfully."
+                      });
+                    }}
+                    onEventDeleted={(eventId) => {
+                      console.log('Event deleted:', eventId);
+                      toast({
+                        title: "Event Deleted",
+                        description: "Schedule event has been deleted successfully."
+                      });
+                    }}
+                  />
+                )}
+
+                {scheduleView === "availability" && (
+                  <ResourceAvailabilityTracker
+                    projectId={projectId!}
+                    selectedResourceId={selectedResourceId}
+                    showAllResources={!selectedResourceId}
+                    onAvailabilityUpdate={(resourceId, availability) => {
+                      console.log('Availability updated:', resourceId, availability);
+                      toast({
+                        title: "Availability Updated",
+                        description: "Resource availability has been updated successfully."
+                      });
+                    }}
+                  />
+                )}
+
+                {scheduleView === "equipment" && (
+                  <EquipmentSchedule
+                    projectId={projectId!}
+                    showAllProjects={false}
+                    selectedEquipmentId={selectedResourceId}
+                    onEquipmentScheduled={(equipmentId, event) => {
+                      console.log('Equipment scheduled:', equipmentId, event);
+                      toast({
+                        title: "Equipment Scheduled",
+                        description: "Equipment has been scheduled successfully."
+                      });
+                    }}
+                    onMaintenanceScheduled={(equipmentId, maintenance) => {
+                      console.log('Maintenance scheduled:', equipmentId, maintenance);
+                      toast({
+                        title: "Maintenance Scheduled",
+                        description: "Equipment maintenance has been scheduled successfully."
+                      });
+                    }}
+                  />
+                )}
               </TabsContent>
 
               {/* Progress Tab */}

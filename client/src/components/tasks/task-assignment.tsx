@@ -35,7 +35,7 @@ import type {
   ProjectTask,
   ProjectTaskAssignment,
   InsertProjectTaskAssignment,
-  User,
+  User as UserType,
   ProjectCrew
 } from "@shared/schema";
 
@@ -82,7 +82,7 @@ const AssignmentCard = ({
   onDelete 
 }: { 
   assignment: ProjectTaskAssignment, 
-  users: User[], 
+  users: UserType[], 
   crew: ProjectCrew[], 
   onEdit: (assignment: ProjectTaskAssignment) => void,
   onDelete: (assignmentId: number) => void 
@@ -308,7 +308,7 @@ export const TaskAssignmentManager = ({ taskId, projectId, onAssignmentChange }:
   });
 
   // Fetch users for assignments
-  const { data: users = [] } = useQuery<User[]>({
+  const { data: users = [] } = useQuery<UserType[]>({
     queryKey: ['/api/users'],
   });
 

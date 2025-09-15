@@ -371,6 +371,13 @@ export function AppHeader() {
                       New Project
                     </Link>
                   </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem asChild>
+                    <Link href="/schedule" className="flex items-center gap-2 w-full" data-testid="link-schedule">
+                      <Calendar className="h-4 w-4" />
+                      Scheduling
+                    </Link>
+                  </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
               
