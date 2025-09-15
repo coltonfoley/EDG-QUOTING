@@ -714,7 +714,7 @@ export function LeadDetailModal({ leadId, open, onClose, users = [] }: LeadDetai
                                     </SelectTrigger>
                                   </FormControl>
                                   <SelectContent>
-                                    <SelectItem value="">Unassigned</SelectItem>
+                                    <SelectItem value="unassigned">Unassigned</SelectItem>
                                     {users.map((user) => (
                                       <SelectItem key={user.id} value={user.id}>
                                         {user.firstName && user.lastName
@@ -1031,7 +1031,7 @@ export function LeadDetailModal({ leadId, open, onClose, users = [] }: LeadDetai
                                         </SelectTrigger>
                                       </FormControl>
                                       <SelectContent>
-                                        <SelectItem value="">Unassigned</SelectItem>
+                                        <SelectItem value="unassigned">Unassigned</SelectItem>
                                         {users.map((user) => (
                                           <SelectItem key={user.id} value={user.id}>
                                             {user.firstName && user.lastName
@@ -1597,7 +1597,7 @@ export function LeadDetailModal({ leadId, open, onClose, users = [] }: LeadDetai
                               <SelectValue placeholder="Assign to user" />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="">Unassigned</SelectItem>
+                              <SelectItem value="unassigned">Unassigned</SelectItem>
                               {users.map((user) => (
                                 <SelectItem key={user.id} value={user.id}>
                                   {user.firstName && user.lastName
