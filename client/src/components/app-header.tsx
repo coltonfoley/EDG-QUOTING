@@ -311,6 +311,12 @@ export function AppHeader() {
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem asChild>
+                    <Link href="/quotes" className="flex items-center gap-2 w-full" data-testid="link-quotes">
+                      <FileText className="h-4 w-4" />
+                      Quotes & Estimates
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
                     <Link href="/products" className="flex items-center gap-2 w-full" data-testid="link-products">
                       <Package className="h-4 w-4" />
                       Products
