@@ -1,4 +1,4 @@
-import { Bell, LogOut, Users, Building2, UserCheck, Target, Truck, HardHat, Package, Search, Command } from "lucide-react";
+import { Bell, LogOut, Users, Building2, UserCheck, Target, Truck, HardHat, Package, Search, Command, FileText, Settings, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
@@ -229,78 +229,145 @@ export function AppHeader() {
               <img src={logoPath} alt="EDG Patio & Shade" className="h-8 mr-3" />
               <span className="text-sm text-edg-grey">Estimator</span>
             </div>
-            <nav className="hidden lg:flex space-x-4">
-              <Link href="/" className={`text-sm font-medium transition-colors hover:text-edg-teal ${
-                location === '/' 
-                  ? 'text-edg-teal border-b-2 border-edg-teal pb-4' 
-                  : 'text-edg-grey'
-              }`}>
-                Home
-              </Link>
+            <nav className="hidden lg:flex space-x-6">
+              {/* Dashboard */}
               <Link href="/dashboard" className={`text-sm font-medium transition-colors hover:text-edg-teal ${
-                location.startsWith('/dashboard')
+                location.startsWith('/dashboard') || location === '/'
                   ? 'text-edg-teal border-b-2 border-edg-teal pb-4' 
                   : 'text-edg-grey'
-              }`}>
+              }`} data-testid="link-dashboard">
                 Dashboard
               </Link>
-              <Link href="/accounts" className={`text-sm font-medium transition-colors hover:text-edg-teal ${
-                location.startsWith('/accounts')
-                  ? 'text-edg-teal border-b-2 border-edg-teal pb-4' 
-                  : 'text-edg-grey'
-              }`}>
-                Accounts
-              </Link>
-              <Link href="/contacts" className={`text-sm font-medium transition-colors hover:text-edg-teal ${
-                location.startsWith('/contacts')
-                  ? 'text-edg-teal border-b-2 border-edg-teal pb-4' 
-                  : 'text-edg-grey'
-              }`}>
-                Contacts
-              </Link>
-              <Link href="/opportunities" className={`text-sm font-medium transition-colors hover:text-edg-teal ${
-                location.startsWith('/opportunities')
-                  ? 'text-edg-teal border-b-2 border-edg-teal pb-4' 
-                  : 'text-edg-grey'
-              }`}>
-                Opportunities
-              </Link>
-              <Link href="/quotes" className={`text-sm font-medium transition-colors hover:text-edg-teal ${
-                location.startsWith('/quotes')
-                  ? 'text-edg-teal border-b-2 border-edg-teal pb-4' 
-                  : 'text-edg-grey'
-              }`}>
-                Quotes
-              </Link>
-              <Link href="/business-partners" className={`text-sm font-medium transition-colors hover:text-edg-teal ${
-                location.startsWith('/business-partners') || location.startsWith('/vendors') || location.startsWith('/contractors') || location.startsWith('/suppliers')
-                  ? 'text-edg-teal border-b-2 border-edg-teal pb-4' 
-                  : 'text-edg-grey'
-              }`}>
-                Business Partners
-              </Link>
-              <Link href="/products" className={`text-sm font-medium transition-colors hover:text-edg-teal ${
-                location.startsWith('/products') 
-                  ? 'text-edg-teal border-b-2 border-edg-teal pb-4' 
-                  : 'text-edg-grey'
-              }`}>
-                Products
-              </Link>
-              <Link href="/contracts" className={`text-sm font-medium transition-colors hover:text-edg-teal ${
-                location.startsWith('/contracts') 
-                  ? 'text-edg-teal border-b-2 border-edg-teal pb-4' 
-                  : 'text-edg-grey'
-              }`}>
-                Contracts
-              </Link>
+              
+              {/* CRM Dropdown */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button 
+                    variant="ghost" 
+                    className={`text-sm font-medium transition-colors hover:text-edg-teal h-auto p-0 border-b-2 pb-4 ${
+                      location.startsWith('/accounts') || location.startsWith('/contacts') || location.startsWith('/opportunities') || location.startsWith('/business-partners') || location.startsWith('/vendors') || location.startsWith('/contractors') || location.startsWith('/suppliers')
+                        ? 'text-edg-teal border-edg-teal' 
+                        : 'text-edg-grey border-transparent'
+                    }`}
+                    data-testid="dropdown-crm"
+                  >
+                    <Users className="mr-1 h-4 w-4" />
+                    CRM
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-56">
+                  <DropdownMenuLabel className="flex items-center gap-2">
+                    <Users className="h-4 w-4" />
+                    Customer Relations
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem asChild>
+                    <Link href="/accounts" className="flex items-center gap-2 w-full" data-testid="link-accounts">
+                      <Building2 className="h-4 w-4" />
+                      Accounts
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/contacts" className="flex items-center gap-2 w-full" data-testid="link-contacts">
+                      <UserCheck className="h-4 w-4" />
+                      Contacts
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/opportunities" className="flex items-center gap-2 w-full" data-testid="link-opportunities">
+                      <Target className="h-4 w-4" />
+                      Opportunities
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/business-partners" className="flex items-center gap-2 w-full" data-testid="link-business-partners">
+                      <HardHat className="h-4 w-4" />
+                      Business Partners
+                    </Link>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              
+              {/* Sales Dropdown */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button 
+                    variant="ghost" 
+                    className={`text-sm font-medium transition-colors hover:text-edg-teal h-auto p-0 border-b-2 pb-4 ${
+                      location.startsWith('/quotes') || location.startsWith('/products') || location.startsWith('/contracts')
+                        ? 'text-edg-teal border-edg-teal' 
+                        : 'text-edg-grey border-transparent'
+                    }`}
+                    data-testid="dropdown-sales"
+                  >
+                    <Target className="mr-1 h-4 w-4" />
+                    Sales
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-56">
+                  <DropdownMenuLabel className="flex items-center gap-2">
+                    <Target className="h-4 w-4" />
+                    Sales Operations
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem asChild>
+                    <Link href="/quotes" className="flex items-center gap-2 w-full" data-testid="link-quotes">
+                      <FileText className="h-4 w-4" />
+                      Quotes
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/products" className="flex items-center gap-2 w-full" data-testid="link-products">
+                      <Package className="h-4 w-4" />
+                      Products
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/contracts" className="flex items-center gap-2 w-full" data-testid="link-contracts">
+                      <Truck className="h-4 w-4" />
+                      Contracts
+                    </Link>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              
+              {/* Admin Dropdown - Only show to admins */}
               {user?.role === 'admin' && (
-                <Link href="/admin" className={`text-sm font-medium transition-colors hover:text-edg-teal ${
-                  location.startsWith('/admin') 
-                    ? 'text-edg-teal border-b-2 border-edg-teal pb-4' 
-                    : 'text-edg-grey'
-                }`}>
-                  Admin
-                </Link>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button 
+                      variant="ghost" 
+                      className={`text-sm font-medium transition-colors hover:text-edg-teal h-auto p-0 border-b-2 pb-4 ${
+                        location.startsWith('/admin')
+                          ? 'text-edg-teal border-edg-teal' 
+                          : 'text-edg-grey border-transparent'
+                      }`}
+                      data-testid="dropdown-admin"
+                    >
+                      <Settings className="mr-1 h-4 w-4" />
+                      Admin
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-56">
+                    <DropdownMenuLabel className="flex items-center gap-2">
+                      <Shield className="h-4 w-4" />
+                      Administration
+                    </DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem asChild>
+                      <Link href="/admin" className="flex items-center gap-2 w-full" data-testid="link-admin-users">
+                        <Users className="h-4 w-4" />
+                        User Management
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link href="/admin/templates" className="flex items-center gap-2 w-full" data-testid="link-admin-templates">
+                        <FileText className="h-4 w-4" />
+                        Templates
+                      </Link>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               )}
             </nav>
           </div>
