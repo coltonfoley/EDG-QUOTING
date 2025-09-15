@@ -17,8 +17,8 @@ import type { UploadedImage } from "@/components/image-uploader";
 
 export default function QuoteBuilder() {
   const { id } = useParams();
-  const isNewQuote = !id;
-  const quoteId = id ? parseInt(id) : undefined;
+  const isNewQuote = !id || id === "new";
+  const quoteId = id && id !== "new" ? parseInt(id) : undefined;
   
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -220,47 +220,31 @@ export default function QuoteBuilder() {
           uploadedCompanyImages={uploadStates.companyImages}
         />
 
-        {currentQuote.id > 0 && (
-          <>
-            <LineItemsTable
-              quoteId={currentQuote.id}
-              lineItems={currentQuote.lineItems}
-            />
+        {/* Line Items Table - Show for both new and existing quotes */}
+        <LineItemsTable
+          quoteId={currentQuote.id || 0}
+          lineItems={currentQuote.lineItems}
+        />
 
-            <QuoteSummary
-              quote={currentQuote}
-              onUpdateQuote={handleUpdateQuote}
-            />
+        {/* Quote Summary - Show for both new and existing quotes */}
+        <QuoteSummary
+          quote={currentQuote}
+          onUpdateQuote={handleUpdateQuote}
+        />
 
-            {/* Additional Save Button at Bottom */}
-            <div className="flex justify-end mt-8 pb-8">
-              <Button 
-                type="submit" 
-                form="quote-form" 
-                className="bg-edg-black hover:bg-edg-grey text-edg-white px-8 py-3 text-lg"
-                disabled={createQuoteMutation.isPending || updateQuoteMutation.isPending}
-              >
-                <Save className="mr-2 h-5 w-5" />
-                {isNewQuote ? "Save New Quote" : "Save Changes"}
-              </Button>
-            </div>
-          </>
-        )}
+        {/* Save Button - Show for both new and existing quotes */}
+        <div className="flex justify-end mt-8 pb-8">
+          <Button 
+            type="submit" 
+            form="quote-form" 
+            className="bg-edg-black hover:bg-edg-grey text-edg-white px-8 py-3 text-lg"
+            disabled={createQuoteMutation.isPending || updateQuoteMutation.isPending}
+          >
+            <Save className="mr-2 h-5 w-5" />
+            {isNewQuote ? "Create Quote" : "Save Changes"}
+          </Button>
+        </div>
 
-        {/* Save Button for New Quotes (when no line items yet) */}
-        {isNewQuote && currentQuote.id === 0 && (
-          <div className="flex justify-center mt-8">
-            <Button 
-              type="submit" 
-              form="quote-form" 
-              className="bg-edg-black hover:bg-edg-grey text-edg-white px-8 py-3 text-lg"
-              disabled={createQuoteMutation.isPending}
-            >
-              <Save className="mr-2 h-5 w-5" />
-              Create Quote
-            </Button>
-          </div>
-        )}
       </div>
     </div>
   );
