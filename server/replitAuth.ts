@@ -35,12 +35,34 @@ export function setupAuth(app: Express) {
     resave: false,
     saveUninitialized: false,
     store: storage.sessionStore,
+    cookie: {
+      secure: false, // Set to false for development (HTTP)
+      httpOnly: true,
+      maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
+      sameSite: 'lax', // Add sameSite for better cookie handling
+    },
+    name: 'sessionId',
   };
+
+  console.log('🔧 Setting up authentication with session store:', !!storage.sessionStore);
 
   app.set("trust proxy", 1);
   app.use(session(sessionSettings));
   app.use(passport.initialize());
   app.use(passport.session());
+
+  // Add session debugging middleware
+  app.use((req: any, res, next) => {
+    if (req.path.startsWith('/api/')) {
+      console.log(`🔒 Auth Debug - ${req.method} ${req.path}:`);
+      console.log(`  - Session ID: ${req.sessionID || 'none'}`);
+      console.log(`  - Is Authenticated: ${req.isAuthenticated ? req.isAuthenticated() : false}`);
+      console.log(`  - User: ${req.user ? req.user.id : 'none'}`);
+      console.log(`  - Cookies:`, Object.keys(req.cookies || {}));
+      console.log(`  - Session Keys:`, req.session ? Object.keys(req.session) : 'no session');
+    }
+    next();
+  });
 
   passport.use(
     new LocalStrategy(async (username, password, done) => {
@@ -58,7 +80,7 @@ export function setupAuth(app: Express) {
   );
 
   passport.serializeUser((user, done) => done(null, user.id));
-  passport.deserializeUser(async (id: number, done) => {
+  passport.deserializeUser(async (id: string, done) => {
     try {
       const user = await storage.getUser(id);
       done(null, user);
