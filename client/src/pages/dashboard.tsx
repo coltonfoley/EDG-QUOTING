@@ -6,6 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from "@/components/ui/chart";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { 
   Building2, 
   Users, 
@@ -18,12 +20,18 @@ import {
   Activity as ActivityIcon,
   Calendar,
   CheckCircle2,
-  AlertTriangle
+  AlertTriangle,
+  BarChart3,
+  PieChart,
+  Filter,
+  Download
 } from "lucide-react";
+import { BarChart, Bar, XAxis, YAxis, PieChart as RechartsPieChart, Cell, LineChart, Line, ResponsiveContainer, Area, AreaChart } from "recharts";
 import { Link } from "wouter";
-import { format } from "date-fns";
+import { format, subDays, subMonths, startOfMonth, endOfMonth, eachMonthOfInterval } from "date-fns";
 import { formatCurrency } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
+import { useState, useMemo } from "react";
 import type { Account, Contact, Opportunity, Activity } from "@shared/schema";
 
 interface DashboardStats {
@@ -35,10 +43,27 @@ interface DashboardStats {
   wonOpportunities: number;
   conversionRate: number;
   averageDealSize: number;
+  // Advanced analytics
+  dealVelocity: number; // average days to close
+  winRate: number;
+  monthlyRevenue: number;
+  quarterlyGrowth: number;
+  totalActivities: number;
+  avgOpportunitiesPerAccount: number;
+}
+
+interface ChartData {
+  pipelineChart: Array<{name: string; value: number; amount: number; color: string}>;
+  revenueChart: Array<{month: string; revenue: number; deals: number}>;
+  conversionChart: Array<{stage: string; conversion: number; count: number}>;
+  activityChart: Array<{type: string; count: number}>;
+  sourceChart: Array<{source: string; value: number; color: string}>;
 }
 
 export default function DashboardPage() {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const [timeRange, setTimeRange] = useState("30d");
+  const [activeTab, setActiveTab] = useState("overview");
 
   // Fetch dashboard data
   const { data: accounts = [], isLoading: accountsLoading } = useQuery<Account[]>({
@@ -113,34 +138,106 @@ export default function DashboardPage() {
     enabled: isAuthenticated && accounts.length > 0 && contacts.length > 0 && opportunities.length > 0,
   });
 
-  // Calculate dashboard statistics
-  const stats: DashboardStats = {
-    totalAccounts: accounts.length,
-    totalContacts: contacts.length,
-    totalOpportunities: opportunities.length,
-    totalPipelineValue: opportunities.reduce((sum, opp) => {
+  // Filter data based on time range
+  const filteredOpportunities = useMemo(() => {
+    const now = new Date();
+    let cutoffDate: Date;
+    
+    switch (timeRange) {
+      case "7d":
+        cutoffDate = subDays(now, 7);
+        break;
+      case "30d":
+        cutoffDate = subDays(now, 30);
+        break;
+      case "90d":
+        cutoffDate = subDays(now, 90);
+        break;
+      case "1y":
+        cutoffDate = subDays(now, 365);
+        break;
+      default:
+        return opportunities;
+    }
+    
+    return opportunities.filter(opp => new Date(opp.createdAt) >= cutoffDate);
+  }, [opportunities, timeRange]);
+
+  // Calculate advanced dashboard statistics
+  const stats: DashboardStats = useMemo(() => {
+    const totalPipelineValue = filteredOpportunities.reduce((sum, opp) => {
       return sum + (opp.amount ? parseFloat(opp.amount.toString()) : 0);
-    }, 0),
-    activeOpportunities: opportunities.filter(opp => 
+    }, 0);
+    
+    const activeOpportunities = filteredOpportunities.filter(opp => 
       !['project_complete', 'closed_lost'].includes(opp.stage)
-    ).length,
-    wonOpportunities: opportunities.filter(opp => 
+    );
+    
+    const wonOpportunities = filteredOpportunities.filter(opp => 
       ['contract_signed', 'project_complete'].includes(opp.stage)
-    ).length,
-    conversionRate: opportunities.length > 0 
-      ? (opportunities.filter(opp => opp.stage === 'project_complete').length / opportunities.length) * 100 
-      : 0,
-    averageDealSize: opportunities.length > 0 
-      ? opportunities.reduce((sum, opp) => sum + (opp.amount ? parseFloat(opp.amount.toString()) : 0), 0) / opportunities.length
-      : 0,
-  };
+    );
+    
+    const closedOpportunities = filteredOpportunities.filter(opp => 
+      ['project_complete', 'closed_lost'].includes(opp.stage)
+    );
+    
+    // Deal velocity calculation (average days to close)
+    const dealVelocity = closedOpportunities.length > 0 ? 
+      closedOpportunities.reduce((sum, opp) => {
+        const created = new Date(opp.createdAt);
+        const updated = new Date(opp.updatedAt);
+        return sum + Math.floor((updated.getTime() - created.getTime()) / (1000 * 60 * 60 * 24));
+      }, 0) / closedOpportunities.length : 0;
+    
+    // Monthly revenue (completed deals this month)
+    const thisMonth = startOfMonth(new Date());
+    const monthlyRevenue = filteredOpportunities
+      .filter(opp => 
+        opp.stage === 'project_complete' && 
+        new Date(opp.updatedAt) >= thisMonth
+      )
+      .reduce((sum, opp) => sum + (opp.amount ? parseFloat(opp.amount.toString()) : 0), 0);
+    
+    // Quarterly growth calculation
+    const threeMonthsAgo = subMonths(new Date(), 3);
+    const lastQuarterRevenue = opportunities
+      .filter(opp => 
+        opp.stage === 'project_complete' && 
+        new Date(opp.updatedAt) >= threeMonthsAgo &&
+        new Date(opp.updatedAt) < thisMonth
+      )
+      .reduce((sum, opp) => sum + (opp.amount ? parseFloat(opp.amount.toString()) : 0), 0);
+    
+    const quarterlyGrowth = lastQuarterRevenue > 0 ? 
+      ((monthlyRevenue - lastQuarterRevenue) / lastQuarterRevenue) * 100 : 0;
+    
+    return {
+      totalAccounts: accounts.length,
+      totalContacts: contacts.length,
+      totalOpportunities: filteredOpportunities.length,
+      totalPipelineValue,
+      activeOpportunities: activeOpportunities.length,
+      wonOpportunities: wonOpportunities.length,
+      conversionRate: filteredOpportunities.length > 0 
+        ? (wonOpportunities.length / filteredOpportunities.length) * 100 
+        : 0,
+      averageDealSize: filteredOpportunities.length > 0 
+        ? totalPipelineValue / filteredOpportunities.length 
+        : 0,
+      dealVelocity: Math.round(dealVelocity),
+      winRate: closedOpportunities.length > 0 
+        ? (wonOpportunities.length / closedOpportunities.length) * 100 
+        : 0,
+      monthlyRevenue,
+      quarterlyGrowth,
+      totalActivities: recentActivities.length,
+      avgOpportunitiesPerAccount: accounts.length > 0 
+        ? filteredOpportunities.length / accounts.length 
+        : 0,
+    };
+  }, [filteredOpportunities, accounts, contacts, recentActivities]);
 
-  // Pipeline breakdown by stage
-  const pipelineByStage = opportunities.reduce((acc, opp) => {
-    acc[opp.stage] = (acc[opp.stage] || 0) + 1;
-    return acc;
-  }, {} as Record<string, number>);
-
+  // Stage labels definition
   const stageLabels = {
     inquiry: "Inquiry",
     estimating: "Estimating", 
@@ -149,6 +246,104 @@ export default function DashboardPage() {
     project_complete: "Project Complete",
     closed_lost: "Closed Lost"
   };
+
+  // Pipeline breakdown by stage
+  const pipelineByStage = filteredOpportunities.reduce((acc, opp) => {
+    acc[opp.stage] = (acc[opp.stage] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+
+  // Generate chart data
+  const chartData: ChartData = useMemo(() => {
+    const stageColors = {
+      inquiry: "#94a3b8",
+      estimating: "#3b82f6", 
+      proposal_sent: "#eab308",
+      contract_signed: "#22c55e",
+      project_complete: "#10b981",
+      closed_lost: "#ef4444"
+    };
+    
+    // Pipeline distribution chart
+    const pipelineChart = Object.entries(stageLabels).map(([stage, label]) => ({
+      name: label,
+      value: pipelineByStage[stage] || 0,
+      amount: filteredOpportunities
+        .filter(opp => opp.stage === stage)
+        .reduce((sum, opp) => sum + (opp.amount ? parseFloat(opp.amount.toString()) : 0), 0),
+      color: stageColors[stage as keyof typeof stageColors]
+    }));
+    
+    // Revenue trends chart (last 6 months)
+    const last6Months = eachMonthOfInterval({
+      start: subMonths(new Date(), 5),
+      end: new Date()
+    });
+    
+    const revenueChart = last6Months.map(month => {
+      const monthStart = startOfMonth(month);
+      const monthEnd = endOfMonth(month);
+      
+      const monthOpps = opportunities.filter(opp => {
+        const updatedDate = new Date(opp.updatedAt);
+        return opp.stage === 'project_complete' &&
+               updatedDate >= monthStart && 
+               updatedDate <= monthEnd;
+      });
+      
+      return {
+        month: format(month, 'MMM yyyy'),
+        revenue: monthOpps.reduce((sum, opp) => sum + (opp.amount ? parseFloat(opp.amount.toString()) : 0), 0),
+        deals: monthOpps.length
+      };
+    });
+    
+    // Conversion funnel chart
+    const stages = ['inquiry', 'estimating', 'proposal_sent', 'contract_signed', 'project_complete'];
+    const conversionChart = stages.map((stage, index) => {
+      const stageCount = pipelineByStage[stage] || 0;
+      const prevStageCount = index > 0 ? (pipelineByStage[stages[index - 1]] || 0) : filteredOpportunities.length;
+      
+      return {
+        stage: stageLabels[stage as keyof typeof stageLabels],
+        conversion: prevStageCount > 0 ? (stageCount / prevStageCount) * 100 : 0,
+        count: stageCount
+      };
+    });
+    
+    // Activity distribution chart
+    const activityTypes = recentActivities.reduce((acc, activity) => {
+      acc[activity.type] = (acc[activity.type] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+    
+    const activityChart = Object.entries(activityTypes).map(([type, count]) => ({
+      type: type.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()),
+      count
+    }));
+    
+    // Opportunity source distribution
+    const sources = filteredOpportunities.reduce((acc, opp) => {
+      const source = opp.source || 'Unknown';
+      acc[source] = (acc[source] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+    
+    const sourceColors = ['#3b82f6', '#ef4444', '#22c55e', '#eab308', '#8b5cf6', '#f97316'];
+    const sourceChart = Object.entries(sources).map(([source, value], index) => ({
+      source: source.charAt(0).toUpperCase() + source.slice(1),
+      value,
+      color: sourceColors[index % sourceColors.length]
+    }));
+    
+    return {
+      pipelineChart,
+      revenueChart,
+      conversionChart,
+      activityChart,
+      sourceChart
+    };
+  }, [filteredOpportunities, opportunities, pipelineByStage, recentActivities]);
 
   // Recent opportunities (last 10)
   const recentOpportunities = opportunities
@@ -160,6 +355,19 @@ export default function DashboardPage() {
     .filter(opp => opp.expectedCloseDate && new Date(opp.expectedCloseDate) >= new Date())
     .sort((a, b) => new Date(a.expectedCloseDate!).getTime() - new Date(b.expectedCloseDate!).getTime())
     .slice(0, 5);
+
+  // Chart configuration
+  const chartConfig = {
+    pipeline: {
+      label: "Pipeline Value",
+    },
+    revenue: {
+      label: "Revenue",
+    },
+    activity: {
+      label: "Activities",
+    },
+  };
 
   if (authLoading) {
     return (
@@ -179,105 +387,482 @@ export default function DashboardPage() {
         {/* Header */}
         <div className="flex flex-col lg:flex-row lg:justify-between lg:items-start mb-8 space-y-4 lg:space-y-0">
           <div>
-            <h2 className="text-3xl font-bold text-edg-black">Dashboard</h2>
-            <p className="text-edg-grey mt-2">Overview of your business metrics and activities</p>
+            <h2 className="text-3xl font-bold text-edg-black">Business Analytics Dashboard</h2>
+            <p className="text-edg-grey mt-2">Comprehensive insights into your business performance and activities</p>
           </div>
           
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center space-y-3 sm:space-y-0 sm:space-x-4">
+            <Select value={timeRange} onValueChange={setTimeRange}>
+              <SelectTrigger className="w-[120px]" data-testid="select-time-range">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="7d">Last 7 days</SelectItem>
+                <SelectItem value="30d">Last 30 days</SelectItem>
+                <SelectItem value="90d">Last 90 days</SelectItem>
+                <SelectItem value="1y">Last year</SelectItem>
+              </SelectContent>
+            </Select>
+            
+            <Button variant="outline" data-testid="button-export-data">
+              <Download className="mr-2 h-4 w-4" />
+              Export
+            </Button>
+            
             <Link href="/opportunities">
               <Button variant="outline" data-testid="button-view-pipeline">
                 <Target className="mr-2 h-4 w-4" />
                 View Pipeline
               </Button>
             </Link>
-            <Link href="/accounts">
-              <Button className="bg-edg-black hover:bg-edg-grey text-edg-white" data-testid="button-manage-accounts">
-                <Building2 className="mr-2 h-4 w-4" />
-                Manage Accounts
+            
+            <Link href="/opportunities">
+              <Button data-testid="button-new-opportunity">
+                <Plus className="mr-2 h-4 w-4" />
+                New Opportunity
               </Button>
             </Link>
           </div>
         </div>
 
-        {/* Key Metrics */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Accounts</CardTitle>
-              <Building2 className="h-4 w-4 text-edg-teal" />
-            </CardHeader>
-            <CardContent>
-              {isLoading ? (
-                <Skeleton className="h-8 w-16" />
-              ) : (
-                <div className="text-2xl font-bold" data-testid="metric-total-accounts">
-                  {stats.totalAccounts}
-                </div>
-              )}
-              <p className="text-xs text-muted-foreground">
-                +{contacts.length} contacts
-              </p>
-            </CardContent>
-          </Card>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+          <TabsList className="grid w-full grid-cols-4">
+            <TabsTrigger value="overview" data-testid="tab-overview">Overview</TabsTrigger>
+            <TabsTrigger value="analytics" data-testid="tab-analytics">Analytics</TabsTrigger>
+            <TabsTrigger value="performance" data-testid="tab-performance">Performance</TabsTrigger>
+            <TabsTrigger value="pipeline" data-testid="tab-pipeline">Pipeline</TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="overview" className="space-y-6">
+            {/* Enhanced Key Metrics Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Total Accounts</CardTitle>
+                  <Building2 className="h-4 w-4 text-edg-teal" />
+                </CardHeader>
+                <CardContent>
+                  {isLoading ? (
+                    <Skeleton className="h-8 w-16" />
+                  ) : (
+                    <div className="text-2xl font-bold" data-testid="metric-total-accounts">
+                      {stats.totalAccounts}
+                    </div>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    {stats.avgOpportunitiesPerAccount.toFixed(1)} opps per account
+                  </p>
+                </CardContent>
+              </Card>
 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Active Opportunities</CardTitle>
-              <Target className="h-4 w-4 text-blue-600" />
-            </CardHeader>
-            <CardContent>
-              {isLoading ? (
-                <Skeleton className="h-8 w-16" />
-              ) : (
-                <div className="text-2xl font-bold" data-testid="metric-active-opportunities">
-                  {stats.activeOpportunities}
-                </div>
-              )}
-              <p className="text-xs text-muted-foreground">
-                of {stats.totalOpportunities} total
-              </p>
-            </CardContent>
-          </Card>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Pipeline Value</CardTitle>
+                  <DollarSign className="h-4 w-4 text-green-600" />
+                </CardHeader>
+                <CardContent>
+                  {isLoading ? (
+                    <Skeleton className="h-8 w-24" />
+                  ) : (
+                    <div className="text-2xl font-bold" data-testid="metric-pipeline-value">
+                      {formatCurrency(stats.totalPipelineValue)}
+                    </div>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    {formatCurrency(stats.averageDealSize)} avg deal
+                  </p>
+                </CardContent>
+              </Card>
 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Pipeline Value</CardTitle>
-              <DollarSign className="h-4 w-4 text-green-600" />
-            </CardHeader>
-            <CardContent>
-              {isLoading ? (
-                <Skeleton className="h-8 w-24" />
-              ) : (
-                <div className="text-2xl font-bold" data-testid="metric-pipeline-value">
-                  {formatCurrency(stats.totalPipelineValue)}
-                </div>
-              )}
-              <p className="text-xs text-muted-foreground">
-                {formatCurrency(stats.averageDealSize)} avg deal
-              </p>
-            </CardContent>
-          </Card>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Win Rate</CardTitle>
+                  <TrendingUp className="h-4 w-4 text-purple-600" />
+                </CardHeader>
+                <CardContent>
+                  {isLoading ? (
+                    <Skeleton className="h-8 w-16" />
+                  ) : (
+                    <div className="text-2xl font-bold" data-testid="metric-win-rate">
+                      {stats.winRate.toFixed(1)}%
+                    </div>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    {stats.wonOpportunities} of {stats.activeOpportunities + stats.wonOpportunities} closed
+                  </p>
+                </CardContent>
+              </Card>
 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Conversion Rate</CardTitle>
-              <TrendingUp className="h-4 w-4 text-purple-600" />
-            </CardHeader>
-            <CardContent>
-              {isLoading ? (
-                <Skeleton className="h-8 w-16" />
-              ) : (
-                <div className="text-2xl font-bold" data-testid="metric-conversion-rate">
-                  {stats.conversionRate.toFixed(1)}%
-                </div>
-              )}
-              <p className="text-xs text-muted-foreground">
-                {stats.wonOpportunities} won deals
-              </p>
-            </CardContent>
-          </Card>
-        </div>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Deal Velocity</CardTitle>
+                  <Clock className="h-4 w-4 text-orange-600" />
+                </CardHeader>
+                <CardContent>
+                  {isLoading ? (
+                    <Skeleton className="h-8 w-16" />
+                  ) : (
+                    <div className="text-2xl font-bold" data-testid="metric-deal-velocity">
+                      {stats.dealVelocity} days
+                    </div>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    Average time to close
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
+            
+            {/* Additional Metrics Row */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Monthly Revenue</CardTitle>
+                  <DollarSign className="h-4 w-4 text-green-600" />
+                </CardHeader>
+                <CardContent>
+                  {isLoading ? (
+                    <Skeleton className="h-8 w-20" />
+                  ) : (
+                    <div className="text-2xl font-bold" data-testid="metric-monthly-revenue">
+                      {formatCurrency(stats.monthlyRevenue)}
+                    </div>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    This month closed deals
+                  </p>
+                </CardContent>
+              </Card>
+              
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Quarterly Growth</CardTitle>
+                  <TrendingUp className="h-4 w-4 text-blue-600" />
+                </CardHeader>
+                <CardContent>
+                  {isLoading ? (
+                    <Skeleton className="h-8 w-16" />
+                  ) : (
+                    <div className="text-2xl font-bold" data-testid="metric-quarterly-growth">
+                      {stats.quarterlyGrowth >= 0 ? '+' : ''}{stats.quarterlyGrowth.toFixed(1)}%
+                    </div>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    vs previous quarter
+                  </p>
+                </CardContent>
+              </Card>
+              
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Active Contacts</CardTitle>
+                  <Users className="h-4 w-4 text-blue-600" />
+                </CardHeader>
+                <CardContent>
+                  {isLoading ? (
+                    <Skeleton className="h-8 w-16" />
+                  ) : (
+                    <div className="text-2xl font-bold" data-testid="metric-total-contacts">
+                      {stats.totalContacts}
+                    </div>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    Across {stats.totalAccounts} accounts
+                  </p>
+                </CardContent>
+              </Card>
+              
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Total Activities</CardTitle>
+                  <ActivityIcon className="h-4 w-4 text-purple-600" />
+                </CardHeader>
+                <CardContent>
+                  {isLoading ? (
+                    <Skeleton className="h-8 w-16" />
+                  ) : (
+                    <div className="text-2xl font-bold" data-testid="metric-total-activities">
+                      {stats.totalActivities}
+                    </div>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    Recent activities tracked
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+          
+          <TabsContent value="analytics" className="space-y-6">
+            {/* Revenue Analytics Chart */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <BarChart3 className="h-5 w-5" />
+                    Revenue Trends
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {isLoading ? (
+                    <Skeleton className="h-[300px] w-full" />
+                  ) : (
+                    <ChartContainer config={chartConfig} className="h-[300px]">
+                      <AreaChart data={chartData.revenueChart}>
+                        <XAxis dataKey="month" />
+                        <YAxis />
+                        <ChartTooltip content={<ChartTooltipContent />} />
+                        <Area 
+                          type="monotone" 
+                          dataKey="revenue" 
+                          stroke="#3b82f6" 
+                          fill="#3b82f6" 
+                          fillOpacity={0.2}
+                        />
+                      </AreaChart>
+                    </ChartContainer>
+                  )}
+                </CardContent>
+              </Card>
+              
+              {/* Pipeline Distribution Chart */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <PieChart className="h-5 w-5" />
+                    Pipeline Distribution
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {isLoading ? (
+                    <Skeleton className="h-[300px] w-full" />
+                  ) : (
+                    <ChartContainer config={chartConfig} className="h-[300px]">
+                      <RechartsPieChart>
+                        <ChartTooltip 
+                          content={<ChartTooltipContent />} 
+                          formatter={(value, name) => [
+                            `${value} opportunities`,
+                            name
+                          ]}
+                        />
+                        <RechartsPieChart.Pie
+                          data={chartData.pipelineChart}
+                          dataKey="value"
+                          nameKey="name"
+                          cx="50%"
+                          cy="50%"
+                          outerRadius={100}
+                          label={({ name, value }) => `${name}: ${value}`}
+                        >
+                          {chartData.pipelineChart.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.color} />
+                          ))}
+                        </RechartsPieChart.Pie>
+                      </RechartsPieChart>
+                    </ChartContainer>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+            
+            {/* Conversion Funnel */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Target className="h-5 w-5" />
+                  Sales Conversion Funnel
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {isLoading ? (
+                  <Skeleton className="h-[200px] w-full" />
+                ) : (
+                  <ChartContainer config={chartConfig} className="h-[200px]">
+                    <BarChart data={chartData.conversionChart} layout="horizontal">
+                      <XAxis type="number" domain={[0, 100]} />
+                      <YAxis dataKey="stage" type="category" width={120} />
+                      <ChartTooltip 
+                        content={<ChartTooltipContent />}
+                        formatter={(value) => [`${value.toFixed(1)}%`, 'Conversion Rate']}
+                      />
+                      <Bar dataKey="conversion" fill="#3b82f6" />
+                    </BarChart>
+                  </ChartContainer>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+          
+          <TabsContent value="performance" className="space-y-6">
+            {/* Activity Analytics */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <ActivityIcon className="h-5 w-5" />
+                    Activity Distribution
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {isLoading ? (
+                    <Skeleton className="h-[250px] w-full" />
+                  ) : (
+                    <ChartContainer config={chartConfig} className="h-[250px]">
+                      <BarChart data={chartData.activityChart}>
+                        <XAxis dataKey="type" />
+                        <YAxis />
+                        <ChartTooltip content={<ChartTooltipContent />} />
+                        <Bar dataKey="count" fill="#8b5cf6" />
+                      </BarChart>
+                    </ChartContainer>
+                  )}
+                </CardContent>
+              </Card>
+              
+              {/* Opportunity Sources */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Users className="h-5 w-5" />
+                    Lead Sources
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {isLoading ? (
+                    <Skeleton className="h-[250px] w-full" />
+                  ) : (
+                    <ChartContainer config={chartConfig} className="h-[250px]">
+                      <RechartsPieChart>
+                        <ChartTooltip content={<ChartTooltipContent />} />
+                        <RechartsPieChart.Pie
+                          data={chartData.sourceChart}
+                          dataKey="value"
+                          nameKey="source"
+                          cx="50%"
+                          cy="50%"
+                          outerRadius={80}
+                          label={({ source, value }) => `${source}: ${value}`}
+                        >
+                          {chartData.sourceChart.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.color} />
+                          ))}
+                        </RechartsPieChart.Pie>
+                      </RechartsPieChart>
+                    </ChartContainer>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+            
+            {/* Performance Metrics */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-center">Business Health Score</CardTitle>
+                </CardHeader>
+                <CardContent className="text-center">
+                  {isLoading ? (
+                    <Skeleton className="h-16 w-16 rounded-full mx-auto" />
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="text-4xl font-bold text-green-600" data-testid="health-score">
+                        {Math.round((stats.winRate + stats.conversionRate) / 2)}%
+                      </div>
+                      <p className="text-sm text-muted-foreground">Overall Performance</p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+              
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-center">Activity Score</CardTitle>
+                </CardHeader>
+                <CardContent className="text-center">
+                  {isLoading ? (
+                    <Skeleton className="h-16 w-16 rounded-full mx-auto" />
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="text-4xl font-bold text-blue-600" data-testid="activity-score">
+                        {Math.min(100, Math.round((stats.totalActivities / Math.max(1, stats.totalOpportunities)) * 20))}%
+                      </div>
+                      <p className="text-sm text-muted-foreground">Engagement Level</p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+              
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-center">Pipeline Health</CardTitle>
+                </CardHeader>
+                <CardContent className="text-center">
+                  {isLoading ? (
+                    <Skeleton className="h-16 w-16 rounded-full mx-auto" />
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="text-4xl font-bold text-purple-600" data-testid="pipeline-health">
+                        {Math.round((stats.activeOpportunities / Math.max(1, stats.totalOpportunities)) * 100)}%
+                      </div>
+                      <p className="text-sm text-muted-foreground">Active Pipeline</p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+          
+          <TabsContent value="pipeline" className="space-y-6">
+            {/* Pipeline Overview */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Target className="h-5 w-5" />
+                  Pipeline Stage Analysis
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {isLoading ? (
+                  <div className="space-y-4">
+                    {[...Array(6)].map((_, i) => (
+                      <div key={i} className="flex items-center justify-between">
+                        <Skeleton className="h-4 w-24" />
+                        <Skeleton className="h-4 w-16" />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {Object.entries(stageLabels).map(([stage, label]) => {
+                      const count = pipelineByStage[stage] || 0;
+                      const amount = filteredOpportunities
+                        .filter(opp => opp.stage === stage)
+                        .reduce((sum, opp) => sum + (opp.amount ? parseFloat(opp.amount.toString()) : 0), 0);
+                      const percentage = stats.totalOpportunities > 0 ? (count / stats.totalOpportunities) * 100 : 0;
+                      
+                      return (
+                        <div key={stage} className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-medium">{label}</span>
+                            <div className="text-right">
+                              <span className="text-sm text-muted-foreground">{count} opportunities</span>
+                              <div className="text-xs text-muted-foreground">{formatCurrency(amount)}</div>
+                            </div>
+                          </div>
+                          <Progress value={percentage} className="h-2" data-testid={`progress-${stage}`} />
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
 
+        {/* Legacy Content Below Tabs for Additional Information */}
+        <div className="mt-8">
         {/* Main Content */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Pipeline Overview */}
@@ -489,6 +1074,7 @@ export default function DashboardPage() {
             </Card>
           </div>
         </div>
+      </div>
       </div>
     </div>
   );

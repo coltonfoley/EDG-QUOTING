@@ -1,6 +1,10 @@
-import { Bell, LogOut, Users, Building2, UserCheck, Target, Truck, HardHat, Package } from "lucide-react";
+import { Bell, LogOut, Users, Building2, UserCheck, Target, Truck, HardHat, Package, Search, Command } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
 import logoPath from "@assets/my-logo.png_1753970984943.jpg";
 import { 
   DropdownMenu,
@@ -12,10 +16,200 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
+import { useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { QuickActionsMenu } from "@/components/workflow/quick-actions-menu";
+import { KeyboardShortcuts, useCommonShortcuts } from "@/components/workflow/keyboard-shortcuts";
+import type { Account, Contact, Opportunity } from "@shared/schema";
+
+interface GlobalSearchResult {
+  type: 'account' | 'contact' | 'opportunity';
+  id: number;
+  title: string;
+  subtitle: string;
+  url: string;
+}
+
+function GlobalSearchDialog() {
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isOpen, setIsOpen] = useState(false);
+  const [results, setResults] = useState<GlobalSearchResult[]>([]);
+  
+  const { data: accounts = [] } = useQuery<Account[]>({ queryKey: ["/api/accounts"] });
+  const { data: contacts = [] } = useQuery<Contact[]>({ queryKey: ["/api/contacts"] });
+  const { data: opportunities = [] } = useQuery<Opportunity[]>({ queryKey: ["/api/opportunities"] });
+  
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setResults([]);
+      return;
+    }
+    
+    const query = searchQuery.toLowerCase();
+    const searchResults: GlobalSearchResult[] = [];
+    
+    // Search accounts
+    accounts.forEach(account => {
+      const matches = account.name.toLowerCase().includes(query) ||
+                     (account.email && account.email.toLowerCase().includes(query)) ||
+                     (account.phone && account.phone.toLowerCase().includes(query));
+      
+      if (matches) {
+        searchResults.push({
+          type: 'account',
+          id: account.id,
+          title: account.name,
+          subtitle: account.type === 'company' ? 'Company' : 'Individual',
+          url: `/accounts?id=${account.id}`
+        });
+      }
+    });
+    
+    // Search contacts
+    contacts.forEach(contact => {
+      const fullName = `${contact.firstName} ${contact.lastName}`;
+      const matches = fullName.toLowerCase().includes(query) ||
+                     (contact.email && contact.email.toLowerCase().includes(query)) ||
+                     (contact.phone && contact.phone.toLowerCase().includes(query)) ||
+                     (contact.title && contact.title.toLowerCase().includes(query));
+      
+      if (matches) {
+        const account = accounts.find(a => a.id === contact.accountId);
+        searchResults.push({
+          type: 'contact',
+          id: contact.id,
+          title: fullName,
+          subtitle: account ? `Contact at ${account.name}` : 'Contact',
+          url: `/contacts?id=${contact.id}`
+        });
+      }
+    });
+    
+    // Search opportunities
+    opportunities.forEach(opportunity => {
+      const matches = opportunity.name.toLowerCase().includes(query) ||
+                     (opportunity.notes && opportunity.notes.toLowerCase().includes(query)) ||
+                     (opportunity.source && opportunity.source.toLowerCase().includes(query));
+      
+      if (matches) {
+        const account = accounts.find(a => a.id === opportunity.accountId);
+        searchResults.push({
+          type: 'opportunity',
+          id: opportunity.id,
+          title: opportunity.name,
+          subtitle: account ? `Opportunity for ${account.name}` : 'Opportunity',
+          url: `/opportunities?id=${opportunity.id}`
+        });
+      }
+    });
+    
+    setResults(searchResults.slice(0, 10)); // Limit to 10 results
+  }, [searchQuery, accounts, contacts, opportunities]);
+  
+  const handleResultClick = (url: string) => {
+    setIsOpen(false);
+    setSearchQuery("");
+    window.location.href = url;
+  };
+  
+  const getResultIcon = (type: string) => {
+    switch (type) {
+      case 'account': return <Building2 className="h-4 w-4" />;
+      case 'contact': return <Users className="h-4 w-4" />;
+      case 'opportunity': return <Target className="h-4 w-4" />;
+      default: return <Search className="h-4 w-4" />;
+    }
+  };
+  
+  const getResultBadgeColor = (type: string) => {
+    switch (type) {
+      case 'account': return 'bg-blue-100 text-blue-800';
+      case 'contact': return 'bg-green-100 text-green-800';
+      case 'opportunity': return 'bg-purple-100 text-purple-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
+  };
+  
+  return (
+    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+      <DialogTrigger asChild>
+        <Button variant="ghost" size="icon" className="text-edg-grey hover:text-edg-black" data-testid="button-global-search">
+          <Search className="h-5 w-5" />
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-[600px]">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Command className="h-5 w-5" />
+            Global Search
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+            <Input
+              placeholder="Search accounts, contacts, opportunities..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10"
+              data-testid="input-global-search"
+              autoFocus
+            />
+          </div>
+          
+          {results.length > 0 && (
+            <div className="space-y-2 max-h-96 overflow-y-auto">
+              {results.map((result, index) => (
+                <Card 
+                  key={`${result.type}-${result.id}`} 
+                  className="cursor-pointer hover:bg-gray-50 transition-colors"
+                  onClick={() => handleResultClick(result.url)}
+                  data-testid={`search-result-${index}`}
+                >
+                  <CardContent className="p-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-3">
+                        {getResultIcon(result.type)}
+                        <div>
+                          <div className="font-medium text-sm">{result.title}</div>
+                          <div className="text-xs text-gray-500">{result.subtitle}</div>
+                        </div>
+                      </div>
+                      <Badge className={`text-xs ${getResultBadgeColor(result.type)}`}>
+                        {result.type.charAt(0).toUpperCase() + result.type.slice(1)}
+                      </Badge>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+          
+          {searchQuery.trim() && results.length === 0 && (
+            <div className="text-center py-8 text-gray-500">
+              <Search className="h-12 w-12 mx-auto mb-2 text-gray-300" />
+              <p>No results found for "{searchQuery}"</p>
+              <p className="text-sm">Try searching with different keywords</p>
+            </div>
+          )}
+          
+          {!searchQuery.trim() && (
+            <div className="text-center py-8 text-gray-500">
+              <Command className="h-12 w-12 mx-auto mb-2 text-gray-300" />
+              <p>Start typing to search across all CRM data</p>
+              <p className="text-sm">Search accounts, contacts, and opportunities</p>
+            </div>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 export function AppHeader() {
   const [location] = useLocation();
   const { user, logoutMutation } = useAuth();
+  const shortcuts = useCommonShortcuts();
 
   const handleLogout = () => {
     logoutMutation.mutate();
@@ -120,6 +314,18 @@ export function AppHeader() {
             </nav>
           </div>
           <div className="flex items-center space-x-4">
+            <GlobalSearchDialog />
+            
+            <QuickActionsMenu 
+              onGlobalSearch={() => {
+                // Trigger global search dialog
+                const searchButton = document.querySelector('[data-testid="button-global-search"]') as HTMLButtonElement;
+                searchButton?.click();
+              }}
+            />
+            
+            <KeyboardShortcuts shortcuts={shortcuts} enabled={true} />
+            
             <Button variant="ghost" size="icon" className="text-edg-grey hover:text-edg-black">
               <Bell className="h-5 w-5" />
             </Button>
