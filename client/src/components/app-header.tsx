@@ -272,26 +272,12 @@ export function AppHeader() {
               }`}>
                 Quotes
               </Link>
-              <Link href="/vendors" className={`text-sm font-medium transition-colors hover:text-edg-teal ${
-                location.startsWith('/vendors') 
+              <Link href="/business-partners" className={`text-sm font-medium transition-colors hover:text-edg-teal ${
+                location.startsWith('/business-partners') || location.startsWith('/vendors') || location.startsWith('/contractors') || location.startsWith('/suppliers')
                   ? 'text-edg-teal border-b-2 border-edg-teal pb-4' 
                   : 'text-edg-grey'
               }`}>
-                Vendors
-              </Link>
-              <Link href="/contractors" className={`text-sm font-medium transition-colors hover:text-edg-teal ${
-                location.startsWith('/contractors') 
-                  ? 'text-edg-teal border-b-2 border-edg-teal pb-4' 
-                  : 'text-edg-grey'
-              }`}>
-                Contractors
-              </Link>
-              <Link href="/suppliers" className={`text-sm font-medium transition-colors hover:text-edg-teal ${
-                location.startsWith('/suppliers') 
-                  ? 'text-edg-teal border-b-2 border-edg-teal pb-4' 
-                  : 'text-edg-grey'
-              }`}>
-                Suppliers
+                Business Partners
               </Link>
               <Link href="/products" className={`text-sm font-medium transition-colors hover:text-edg-teal ${
                 location.startsWith('/products') 
