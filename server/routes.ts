@@ -104,7 +104,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const normalizedPath = await objectStorageService.trySetObjectEntityAclPolicy(
         objectPath,
         {
-          owner: userId,
+          owner: String(userId),
           visibility: "public", // Images in quotes should be publicly accessible
         }
       );
@@ -130,7 +130,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const objectFile = await objectStorageService.getObjectEntityFile(`/objects/${req.params.objectPath}`);
       const canAccess = await objectStorageService.canAccessObjectEntity({
         objectFile,
-        userId: userId,
+        userId: String(userId),
         requestedPermission: ObjectPermission.READ,
       });
       if (!canAccess) {
