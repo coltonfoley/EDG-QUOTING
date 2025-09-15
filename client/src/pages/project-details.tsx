@@ -91,6 +91,7 @@ export default function ProjectDetailsPage() {
   
   // Only parse numeric IDs for existing projects
   const projectId = rawId && /^\d+$/.test(rawId) ? parseInt(rawId, 10) : null;
+
   const [activeTab, setActiveTab] = useState("overview");
   const [taskView, setTaskView] = useState("list"); // list, board, assignments, dependencies, progress
   const [selectedTask, setSelectedTask] = useState<ProjectTask | null>(null);
@@ -150,8 +151,9 @@ export default function ProjectDetailsPage() {
     enabled: isAuthenticated && !!projectId && !isNewProject,
   });
 
-  // Show "Project Not Found" only for numeric project IDs that don't exist
   const isNumericDetails = projectMatch && rawId && /^\d+$/.test(rawId);
+
+  // Show "Project Not Found" only for numeric project IDs that don't exist
   if (!isNewProject && isNumericDetails && (error || (!project && !projectLoading))) {
     return (
       <div className="min-h-screen bg-gray-50">
