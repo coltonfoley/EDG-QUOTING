@@ -32,7 +32,8 @@ import {
   MapPin,
   Target,
   Zap,
-  PieChart
+  PieChart,
+  FileText
 } from "lucide-react";
 import { format, startOfWeek, endOfWeek, addDays, differenceInDays, isAfter, isBefore } from "date-fns";
 import { cn } from "@/lib/utils";
