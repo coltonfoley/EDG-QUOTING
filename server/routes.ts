@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertCustomerSchema, insertQuoteSchema, insertLineItemSchema, insertProductSchema, insertContractTemplateSchema, insertProposalTemplateSchema, insertPricingTableSchema, insertProductAccessorySchema, insertLeadSchema, insertTaskSchema, insertLeadActivitySchema } from "@shared/schema";
+import { insertCustomerSchema, insertQuoteSchema, insertLineItemSchema, insertProductSchema, insertContractTemplateSchema, insertProposalTemplateSchema, insertPricingTableSchema, insertProductAccessorySchema, insertLeadSchema, insertTaskSchema, insertLeadActivitySchema, insertAccountSchema, insertAccountRoleSchema, insertContactSchema, insertContactRoleSchema, insertOpportunitySchema, insertActivitySchema } from "@shared/schema";
 import { z } from "zod";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import multer from "multer";
@@ -2047,6 +2047,553 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching recent activities:", error);
       res.status(500).json({ message: "Failed to fetch recent activities" });
+    }
+  });
+
+  // ================================
+  // COMPREHENSIVE CRM API ROUTES
+  // ================================
+
+  // ================================
+  // ACCOUNT ROUTES
+  // ================================
+
+  // Get all accounts
+  app.get("/api/accounts", isAuthenticated, async (req, res) => {
+    try {
+      const accounts = await storage.getAllAccounts();
+      res.json(accounts);
+    } catch (error) {
+      console.error("Error fetching accounts:", error);
+      res.status(500).json({ message: "Failed to fetch accounts" });
+    }
+  });
+
+  // Get account by ID
+  app.get("/api/accounts/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const account = await storage.getAccount(id);
+      if (!account) {
+        return res.status(404).json({ message: "Account not found" });
+      }
+      res.json(account);
+    } catch (error) {
+      console.error("Error fetching account:", error);
+      res.status(500).json({ message: "Failed to fetch account" });
+    }
+  });
+
+  // Create new account
+  app.post("/api/accounts", isAuthenticated, async (req, res) => {
+    try {
+      const accountData = insertAccountSchema.parse(req.body);
+      
+      // Check if account already exists by email if provided
+      if (accountData.email) {
+        const existingAccount = await storage.getAccountByEmail(accountData.email);
+        if (existingAccount) {
+          return res.status(409).json({ message: "Account with this email already exists" });
+        }
+      }
+      
+      const account = await storage.createAccount(accountData);
+      res.status(201).json(account);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          message: "Invalid account data", 
+          errors: error.errors 
+        });
+      }
+      console.error("Error creating account:", error);
+      res.status(500).json({ message: "Failed to create account" });
+    }
+  });
+
+  // Update account
+  app.put("/api/accounts/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const accountData = insertAccountSchema.partial().parse(req.body);
+      
+      const account = await storage.updateAccount(id, accountData);
+      if (!account) {
+        return res.status(404).json({ message: "Account not found" });
+      }
+      res.json(account);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          message: "Invalid account data", 
+          errors: error.errors 
+        });
+      }
+      console.error("Error updating account:", error);
+      res.status(500).json({ message: "Failed to update account" });
+    }
+  });
+
+  // Delete account
+  app.delete("/api/accounts/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const deleted = await storage.deleteAccount(id);
+      if (!deleted) {
+        return res.status(404).json({ message: "Account not found" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting account:", error);
+      res.status(500).json({ message: "Failed to delete account" });
+    }
+  });
+
+  // Get account roles
+  app.get("/api/accounts/:id/roles", isAuthenticated, async (req, res) => {
+    try {
+      const accountId = parseInt(req.params.id);
+      
+      // Verify account exists
+      const account = await storage.getAccount(accountId);
+      if (!account) {
+        return res.status(404).json({ message: "Account not found" });
+      }
+      
+      const roles = await storage.getAccountRoles(accountId);
+      res.json(roles);
+    } catch (error) {
+      console.error("Error fetching account roles:", error);
+      res.status(500).json({ message: "Failed to fetch account roles" });
+    }
+  });
+
+  // Add account role
+  app.post("/api/accounts/:id/roles", isAuthenticated, async (req, res) => {
+    try {
+      const accountId = parseInt(req.params.id);
+      
+      // Verify account exists
+      const account = await storage.getAccount(accountId);
+      if (!account) {
+        return res.status(404).json({ message: "Account not found" });
+      }
+      
+      const roleData = insertAccountRoleSchema.parse({
+        ...req.body,
+        accountId
+      });
+      
+      const role = await storage.addAccountRole(roleData);
+      res.status(201).json(role);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          message: "Invalid role data", 
+          errors: error.errors 
+        });
+      }
+      console.error("Error adding account role:", error);
+      res.status(500).json({ message: "Failed to add account role" });
+    }
+  });
+
+  // Remove account role
+  app.delete("/api/accounts/:id/roles/:role", isAuthenticated, async (req, res) => {
+    try {
+      const accountId = parseInt(req.params.id);
+      const role = req.params.role;
+      
+      const removed = await storage.removeAccountRole(accountId, role);
+      if (!removed) {
+        return res.status(404).json({ message: "Account role not found" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error removing account role:", error);
+      res.status(500).json({ message: "Failed to remove account role" });
+    }
+  });
+
+  // ================================
+  // CONTACT ROUTES
+  // ================================
+
+  // Get all contacts
+  app.get("/api/contacts", isAuthenticated, async (req, res) => {
+    try {
+      const contacts = await storage.getAllContacts();
+      res.json(contacts);
+    } catch (error) {
+      console.error("Error fetching contacts:", error);
+      res.status(500).json({ message: "Failed to fetch contacts" });
+    }
+  });
+
+  // Get contact by ID
+  app.get("/api/contacts/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const contact = await storage.getContact(id);
+      if (!contact) {
+        return res.status(404).json({ message: "Contact not found" });
+      }
+      res.json(contact);
+    } catch (error) {
+      console.error("Error fetching contact:", error);
+      res.status(500).json({ message: "Failed to fetch contact" });
+    }
+  });
+
+  // Get contacts by account ID
+  app.get("/api/accounts/:accountId/contacts", isAuthenticated, async (req, res) => {
+    try {
+      const accountId = parseInt(req.params.accountId);
+      
+      // Verify account exists
+      const account = await storage.getAccount(accountId);
+      if (!account) {
+        return res.status(404).json({ message: "Account not found" });
+      }
+      
+      const contacts = await storage.getContactsByAccountId(accountId);
+      res.json(contacts);
+    } catch (error) {
+      console.error("Error fetching contacts for account:", error);
+      res.status(500).json({ message: "Failed to fetch contacts for account" });
+    }
+  });
+
+  // Create new contact
+  app.post("/api/contacts", isAuthenticated, async (req, res) => {
+    try {
+      const contactData = insertContactSchema.parse(req.body);
+      
+      // Verify account exists
+      const account = await storage.getAccount(contactData.accountId);
+      if (!account) {
+        return res.status(400).json({ message: "Account not found" });
+      }
+      
+      const contact = await storage.createContact(contactData);
+      res.status(201).json(contact);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          message: "Invalid contact data", 
+          errors: error.errors 
+        });
+      }
+      console.error("Error creating contact:", error);
+      res.status(500).json({ message: "Failed to create contact" });
+    }
+  });
+
+  // Update contact
+  app.put("/api/contacts/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const contactData = insertContactSchema.partial().parse(req.body);
+      
+      const contact = await storage.updateContact(id, contactData);
+      if (!contact) {
+        return res.status(404).json({ message: "Contact not found" });
+      }
+      res.json(contact);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          message: "Invalid contact data", 
+          errors: error.errors 
+        });
+      }
+      console.error("Error updating contact:", error);
+      res.status(500).json({ message: "Failed to update contact" });
+    }
+  });
+
+  // Delete contact
+  app.delete("/api/contacts/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const deleted = await storage.deleteContact(id);
+      if (!deleted) {
+        return res.status(404).json({ message: "Contact not found" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting contact:", error);
+      res.status(500).json({ message: "Failed to delete contact" });
+    }
+  });
+
+  // Get contact roles
+  app.get("/api/contacts/:id/roles", isAuthenticated, async (req, res) => {
+    try {
+      const contactId = parseInt(req.params.id);
+      
+      // Verify contact exists
+      const contact = await storage.getContact(contactId);
+      if (!contact) {
+        return res.status(404).json({ message: "Contact not found" });
+      }
+      
+      const roles = await storage.getContactRoles(contactId);
+      res.json(roles);
+    } catch (error) {
+      console.error("Error fetching contact roles:", error);
+      res.status(500).json({ message: "Failed to fetch contact roles" });
+    }
+  });
+
+  // Add contact role
+  app.post("/api/contacts/:id/roles", isAuthenticated, async (req, res) => {
+    try {
+      const contactId = parseInt(req.params.id);
+      
+      // Verify contact exists
+      const contact = await storage.getContact(contactId);
+      if (!contact) {
+        return res.status(404).json({ message: "Contact not found" });
+      }
+      
+      const roleData = insertContactRoleSchema.parse({
+        ...req.body,
+        contactId
+      });
+      
+      const role = await storage.addContactRole(roleData);
+      res.status(201).json(role);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          message: "Invalid role data", 
+          errors: error.errors 
+        });
+      }
+      console.error("Error adding contact role:", error);
+      res.status(500).json({ message: "Failed to add contact role" });
+    }
+  });
+
+  // Remove contact role
+  app.delete("/api/contacts/:id/roles/:role", isAuthenticated, async (req, res) => {
+    try {
+      const contactId = parseInt(req.params.id);
+      const role = req.params.role;
+      
+      const removed = await storage.removeContactRole(contactId, role);
+      if (!removed) {
+        return res.status(404).json({ message: "Contact role not found" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error removing contact role:", error);
+      res.status(500).json({ message: "Failed to remove contact role" });
+    }
+  });
+
+  // ================================
+  // OPPORTUNITY ROUTES
+  // ================================
+
+  // Get all opportunities (pipeline data)
+  app.get("/api/opportunities", isAuthenticated, async (req, res) => {
+    try {
+      const opportunities = await storage.getAllOpportunities();
+      res.json(opportunities);
+    } catch (error) {
+      console.error("Error fetching opportunities:", error);
+      res.status(500).json({ message: "Failed to fetch opportunities" });
+    }
+  });
+
+  // Get opportunity by ID
+  app.get("/api/opportunities/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const opportunity = await storage.getOpportunity(id);
+      if (!opportunity) {
+        return res.status(404).json({ message: "Opportunity not found" });
+      }
+      res.json(opportunity);
+    } catch (error) {
+      console.error("Error fetching opportunity:", error);
+      res.status(500).json({ message: "Failed to fetch opportunity" });
+    }
+  });
+
+  // Get opportunities by account ID
+  app.get("/api/accounts/:accountId/opportunities", isAuthenticated, async (req, res) => {
+    try {
+      const accountId = parseInt(req.params.accountId);
+      
+      // Verify account exists
+      const account = await storage.getAccount(accountId);
+      if (!account) {
+        return res.status(404).json({ message: "Account not found" });
+      }
+      
+      const opportunities = await storage.getOpportunitiesByAccountId(accountId);
+      res.json(opportunities);
+    } catch (error) {
+      console.error("Error fetching opportunities for account:", error);
+      res.status(500).json({ message: "Failed to fetch opportunities for account" });
+    }
+  });
+
+  // Create new opportunity
+  app.post("/api/opportunities", isAuthenticated, async (req, res) => {
+    try {
+      const opportunityData = insertOpportunitySchema.parse(req.body);
+      
+      // Verify account exists
+      const account = await storage.getAccount(opportunityData.accountId);
+      if (!account) {
+        return res.status(400).json({ message: "Account not found" });
+      }
+      
+      // Verify primary contact exists if provided
+      if (opportunityData.primaryContactId) {
+        const contact = await storage.getContact(opportunityData.primaryContactId);
+        if (!contact) {
+          return res.status(400).json({ message: "Primary contact not found" });
+        }
+      }
+      
+      const opportunity = await storage.createOpportunity(opportunityData);
+      res.status(201).json(opportunity);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          message: "Invalid opportunity data", 
+          errors: error.errors 
+        });
+      }
+      console.error("Error creating opportunity:", error);
+      res.status(500).json({ message: "Failed to create opportunity" });
+    }
+  });
+
+  // Update opportunity (including stage changes)
+  app.put("/api/opportunities/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const opportunityData = insertOpportunitySchema.partial().parse(req.body);
+      
+      const opportunity = await storage.updateOpportunity(id, opportunityData);
+      if (!opportunity) {
+        return res.status(404).json({ message: "Opportunity not found" });
+      }
+      res.json(opportunity);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          message: "Invalid opportunity data", 
+          errors: error.errors 
+        });
+      }
+      console.error("Error updating opportunity:", error);
+      res.status(500).json({ message: "Failed to update opportunity" });
+    }
+  });
+
+  // Delete opportunity
+  app.delete("/api/opportunities/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const deleted = await storage.deleteOpportunity(id);
+      if (!deleted) {
+        return res.status(404).json({ message: "Opportunity not found" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting opportunity:", error);
+      res.status(500).json({ message: "Failed to delete opportunity" });
+    }
+  });
+
+  // ================================
+  // ACTIVITY ROUTES
+  // ================================
+
+  // Get activities for entity
+  app.get("/api/activities", isAuthenticated, async (req, res) => {
+    try {
+      const { entityType, entityId } = req.query;
+      
+      if (!entityType || !entityId) {
+        return res.status(400).json({ message: "entityType and entityId are required" });
+      }
+      
+      const activities = await storage.getActivitiesByEntity(
+        entityType as string,
+        parseInt(entityId as string)
+      );
+      res.json(activities);
+    } catch (error) {
+      console.error("Error fetching activities:", error);
+      res.status(500).json({ message: "Failed to fetch activities" });
+    }
+  });
+
+  // Create new activity
+  app.post("/api/activities", isAuthenticated, async (req, res) => {
+    try {
+      const activityData = insertActivitySchema.parse({
+        ...req.body,
+        assignedTo: req.body.assignedTo || req.user?.id
+      });
+      
+      const activity = await storage.createActivity(activityData);
+      res.status(201).json(activity);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          message: "Invalid activity data", 
+          errors: error.errors 
+        });
+      }
+      console.error("Error creating activity:", error);
+      res.status(500).json({ message: "Failed to create activity" });
+    }
+  });
+
+  // Update activity
+  app.put("/api/activities/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const activityData = insertActivitySchema.partial().parse(req.body);
+      
+      const activity = await storage.updateActivity(id, activityData);
+      if (!activity) {
+        return res.status(404).json({ message: "Activity not found" });
+      }
+      res.json(activity);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          message: "Invalid activity data", 
+          errors: error.errors 
+        });
+      }
+      console.error("Error updating activity:", error);
+      res.status(500).json({ message: "Failed to update activity" });
+    }
+  });
+
+  // Delete activity
+  app.delete("/api/activities/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const deleted = await storage.deleteActivity(id);
+      if (!deleted) {
+        return res.status(404).json({ message: "Activity not found" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting activity:", error);
+      res.status(500).json({ message: "Failed to delete activity" });
     }
   });
 
