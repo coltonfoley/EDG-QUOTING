@@ -21,6 +21,10 @@ import AccountsPage from "@/pages/accounts";
 import ContactsPage from "@/pages/contacts";
 import OpportunitiesPage from "@/pages/opportunities";
 import BusinessPartnersPage from "@/pages/business-partners";
+// Project Management Pages
+import ProjectsPage from "@/pages/projects";
+import ProjectDashboardPage from "@/pages/project-dashboard";
+import ProjectDetailsPage from "@/pages/project-details";
 
 function Router() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -73,6 +77,12 @@ function Router() {
               return null;
             }}
           </Route>
+          {/* Project Management System */}
+          <Route path="/projects" component={ProjectsPage} />
+          <Route path="/project-dashboard" component={ProjectDashboardPage} />
+          <Route path="/project-details/:id" component={ProjectDetailsPage} />
+          <Route path="/projects/new" component={ProjectDetailsPage} />
+          <Route path="/projects/:id/edit" component={ProjectDetailsPage} />
           <Route path="/admin" component={AdminPage} />
           <Route path="/admin/templates" component={AdminTemplatesPage} />
         </>
