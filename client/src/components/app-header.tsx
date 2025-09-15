@@ -1,4 +1,4 @@
-import { Bell, LogOut } from "lucide-react";
+import { Bell, LogOut, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import logoPath from "@assets/my-logo.png_1753970984943.jpg";
@@ -44,6 +44,13 @@ export function AppHeader() {
                   : 'text-edg-grey'
               }`}>
                 Quotes
+              </Link>
+              <Link href="/crm" className={`text-sm font-medium transition-colors hover:text-edg-teal ${
+                location.startsWith('/crm')
+                  ? 'text-edg-teal border-b-2 border-edg-teal pb-4' 
+                  : 'text-edg-grey'
+              }`}>
+                CRM
               </Link>
               <Link href="/products" className={`text-sm font-medium transition-colors hover:text-edg-teal ${
                 location.startsWith('/products') 
