@@ -77,14 +77,20 @@ import type {
 } from "@shared/schema";
 
 export default function ProjectDetailsPage() {
-  // Handle both /projects/new and /projects/:id/edit routes
+  // Handle all possible routes that lead to this component
   const [newMatch, newParams] = useRoute("/projects/new");
   const [editMatch, editParams] = useRoute("/projects/:id/edit");
   const [detailsMatch, detailsParams] = useRoute("/project-details/:id");
+  const [projectMatch, projectParams] = useRoute("/projects/:id");
   
-  const isNewProject = !!newMatch;
-  const projectId = editParams?.id ? parseInt(editParams.id) : 
-                   detailsParams?.id ? parseInt(detailsParams.id) : null;
+  // Get the raw ID from any of the routes
+  const rawId = projectParams?.id || editParams?.id || detailsParams?.id;
+  
+  // Determine if this is a new project (explicit /new route or /projects/new via :id)
+  const isNewProject = !!newMatch || (!!projectMatch && rawId === 'new');
+  
+  // Only parse numeric IDs for existing projects
+  const projectId = rawId && /^\d+$/.test(rawId) ? parseInt(rawId, 10) : null;
   const [activeTab, setActiveTab] = useState("overview");
   const [taskView, setTaskView] = useState("list"); // list, board, assignments, dependencies, progress
   const [selectedTask, setSelectedTask] = useState<ProjectTask | null>(null);
@@ -144,8 +150,9 @@ export default function ProjectDetailsPage() {
     enabled: isAuthenticated && !!projectId && !isNewProject,
   });
 
-  // Show "Project Not Found" only for existing projects that don't exist, not for new projects
-  if (!isNewProject && (!projectId || (error && error.message?.includes('404')))) {
+  // Show "Project Not Found" only for numeric project IDs that don't exist
+  const isNumericDetails = projectMatch && rawId && /^\d+$/.test(rawId);
+  if (!isNewProject && isNumericDetails && (error || (!project && !projectLoading))) {
     return (
       <div className="min-h-screen bg-gray-50">
         <AppHeader />
@@ -261,6 +268,11 @@ export default function ProjectDetailsPage() {
     };
     return styles[status as keyof typeof styles] || "bg-gray-100 text-gray-600";
   };
+
+  // This code should only run for existing projects with valid project data
+  if (!project) {
+    return null; // This should not happen due to early returns above, but prevents TypeScript errors
+  }
 
   // Calculate project metrics
   const completedTasks = tasks.filter(t => t.status === 'completed').length;
