@@ -1225,6 +1225,81 @@ export class DatabaseStorage implements IStorage {
   async getRecentActivities(limit: number = 50): Promise<LeadActivity[]> {
     return await db.select().from(leadActivities).orderBy(desc(leadActivities.createdAt)).limit(limit);
   }
+
+  // Import leads from existing quotes
+  async importLeadsFromQuotes(): Promise<{ imported: number; duplicates: number; errors: string[] }> {
+    const errors: string[] = [];
+    let imported = 0;
+    let duplicates = 0;
+
+    try {
+      // Get all quotes with customer data
+      const quotesWithCustomers = await db
+        .select({
+          quoteId: quotes.id,
+          quoteNumber: quotes.quoteNumber,
+          projectName: quotes.projectName,
+          shipping: quotes.shipping,
+          status: quotes.status,
+          customerId: quotes.customerId,
+          customerName: customers.name,
+          customerEmail: customers.email,
+          customerPhone: customers.phone,
+          customerCompany: customers.company,
+        })
+        .from(quotes)
+        .leftJoin(customers, eq(quotes.customerId, customers.id));
+
+      // Get existing leads to check for duplicates
+      const existingLeads = await db.select().from(leads);
+      const existingEmails = new Set(existingLeads.map(lead => lead.email).filter(Boolean));
+
+      for (const quote of quotesWithCustomers) {
+        try {
+          // Skip if lead already exists with this email
+          if (quote.customerEmail && existingEmails.has(quote.customerEmail)) {
+            duplicates++;
+            continue;
+          }
+
+          // Map quote data to lead data
+          const leadValue = quote.shipping ? parseFloat(quote.shipping.toString()) : null;
+          const leadStatus = quote.status === 'draft' ? 'quoted' : 'new';
+          
+          // Create meaningful notes from project info
+          const notes = [];
+          if (quote.projectName) notes.push(`Project: ${quote.projectName}`);
+          if (quote.quoteNumber) notes.push(`Quote #${quote.quoteNumber}`);
+          notes.push('Imported from existing quote');
+          
+          const leadData: InsertLead = {
+            name: quote.customerName || 'Unknown Customer',
+            email: quote.customerEmail || undefined,
+            phone: quote.customerPhone || undefined,
+            company: quote.customerCompany || undefined,
+            status: leadStatus,
+            source: 'Website', // Default source for existing quotes
+            value: leadValue,
+            notes: notes.join(' | '),
+            customerId: quote.customerId,
+          };
+
+          await this.createLead(leadData);
+          imported++;
+
+        } catch (error) {
+          console.error(`Error importing lead for quote ${quote.quoteId}:`, error);
+          errors.push(`Failed to import quote ${quote.quoteNumber}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+      }
+
+    } catch (error) {
+      console.error('Error in importLeadsFromQuotes:', error);
+      errors.push(`Database error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+
+    return { imported, duplicates, errors };
+  }
 }
 
 export const storage = new DatabaseStorage();

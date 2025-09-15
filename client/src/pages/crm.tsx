@@ -15,7 +15,7 @@ import { z } from "zod";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Search, Users, DollarSign, TrendingUp, AlertCircle, UserPlus } from "lucide-react";
+import { Plus, Search, Users, DollarSign, TrendingUp, AlertCircle, UserPlus, Import } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { useAuth } from "@/hooks/useAuth";
@@ -101,6 +101,44 @@ export default function CRMPage() {
       toast({
         title: "Error",
         description: error.message || "Failed to create lead. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Import leads from quotes mutation
+  const importLeadsMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest("POST", "/api/leads/import-from-quotes", {});
+    },
+    onSuccess: (result: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/leads"] });
+      toast({
+        title: "Import Complete",
+        description: result.message || `Successfully imported ${result.imported} leads from quotes.`,
+      });
+      
+      // Show detailed results if there were errors or duplicates
+      if (result.duplicates > 0 || result.errors?.length > 0) {
+        let details = [];
+        if (result.duplicates > 0) details.push(`${result.duplicates} duplicates skipped`);
+        if (result.errors?.length > 0) details.push(`${result.errors.length} errors`);
+        
+        if (details.length > 0) {
+          setTimeout(() => {
+            toast({
+              title: "Import Details",
+              description: details.join(", "),
+              variant: "default",
+            });
+          }, 1500);
+        }
+      }
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Import Failed",
+        description: error.message || "Failed to import leads from quotes. Please try again.",
         variant: "destructive",
       });
     },
@@ -214,6 +252,18 @@ export default function CRMPage() {
                 data-testid="search-leads"
               />
             </div>
+
+            {/* Import from Quotes Button */}
+            <Button 
+              onClick={() => importLeadsMutation.mutate()} 
+              disabled={importLeadsMutation.isPending}
+              variant="outline" 
+              className="w-full sm:w-auto" 
+              data-testid="button-import-quotes"
+            >
+              <Import className="mr-2 h-4 w-4" />
+              {importLeadsMutation.isPending ? "Importing..." : "Import from Quotes"}
+            </Button>
 
             {/* Add Lead Button */}
             <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
