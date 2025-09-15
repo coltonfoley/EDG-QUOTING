@@ -80,7 +80,8 @@ export default function ContactsPage() {
       if (!contacts.length) return [];
       const rolePromises = contacts.map(async (contact) => {
         try {
-          const roles = await apiRequest("GET", `/api/contacts/${contact.id}/roles`, {});
+          const response = await apiRequest("GET", `/api/contacts/${contact.id}/roles`);
+          const roles = await response.json();
           return { contactId: contact.id, roles: roles.map((r: any) => r.role) };
         } catch (error) {
           console.error(`Failed to fetch roles for contact ${contact.id}:`, error);
