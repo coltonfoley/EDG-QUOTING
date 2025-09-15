@@ -45,6 +45,13 @@ export function AppHeader() {
               }`}>
                 Quotes
               </Link>
+              <Link href="/projects" className={`text-sm font-medium transition-colors hover:text-edg-teal ${
+                location.startsWith('/projects')
+                  ? 'text-edg-teal border-b-2 border-edg-teal pb-4' 
+                  : 'text-edg-grey'
+              }`}>
+                Projects
+              </Link>
               <Link href="/products" className={`text-sm font-medium transition-colors hover:text-edg-teal ${
                 location.startsWith('/products') 
                   ? 'text-edg-teal border-b-2 border-edg-teal pb-4' 
