@@ -112,7 +112,8 @@ export default function AccountsPage() {
       if (!accounts.length) return [];
       const rolePromises = accounts.map(async (account) => {
         try {
-          const roles = await apiRequest("GET", `/api/accounts/${account.id}/roles`, {});
+          const response = await apiRequest("GET", `/api/accounts/${account.id}/roles`);
+          const roles = await response.json();
           return { accountId: account.id, roles: roles.map((r: any) => r.role) };
         } catch (error) {
           console.error(`Failed to fetch roles for account ${account.id}:`, error);
