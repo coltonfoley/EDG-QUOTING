@@ -285,6 +285,14 @@ export default function ResourceAvailabilityTracker({
     });
   };
 
+  // Helper function to get resource name
+  const getResourceName = (resourceId: number): string => {
+    const crew = crewMembers.find(c => c.id === resourceId);
+    return crew?.externalContractorName || 
+           crew?.firstName ||
+           'Unknown Resource';
+  };
+
   // Generate calendar events for availability
   const availabilityCalendarEvents = useMemo(() => {
     return availabilityEntries
@@ -309,14 +317,7 @@ export default function ResourceAvailabilityTracker({
         notes: entry.notes,
         reason: entry.reason
       }));
-  }, [availabilityEntries, selectedResource, timeOffFilter, statusFilter]);
-
-  const getResourceName = (resourceId: number): string => {
-    const crew = crewMembers.find(c => c.id === resourceId);
-    return crew?.externalContractorName || 
-           `${crew?.user?.firstName || ''} ${crew?.user?.lastName || ''}`.trim() ||
-           'Unknown Resource';
-  };
+  }, [availabilityEntries, selectedResource, timeOffFilter, statusFilter, crewMembers]);
 
   // Filter availability status by selected resource
   const filteredAvailabilityStatus = selectedResource
