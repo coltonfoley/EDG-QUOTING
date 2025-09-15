@@ -280,6 +280,12 @@ export default function EquipmentSchedule({
     });
   }, [equipment, equipmentScheduleEvents, maintenanceEvents, dateRange]);
 
+  // Helper function to get equipment name
+  const getEquipmentName = (equipmentId: number): string => {
+    const equip = equipment.find(e => e.id === equipmentId);
+    return equip?.description || 'Unknown Equipment';
+  };
+
   // Create calendar events
   const calendarEvents = useMemo(() => {
     const scheduleCalendarEvents = equipmentScheduleEvents
@@ -328,12 +334,7 @@ export default function EquipmentSchedule({
       }));
 
     return [...scheduleCalendarEvents, ...maintenanceCalendarEvents];
-  }, [equipmentScheduleEvents, maintenanceEvents, selectedEquipment, statusFilter]);
-
-  const getEquipmentName = (equipmentId: number): string => {
-    const equip = equipment.find(e => e.id === equipmentId);
-    return equip?.name || 'Unknown Equipment';
-  };
+  }, [equipmentScheduleEvents, maintenanceEvents, selectedEquipment, statusFilter, equipment]);
 
   // Handle equipment scheduling
   const handleEquipmentSchedule = (scheduleData: Partial<EquipmentScheduleEvent>) => {
