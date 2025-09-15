@@ -16,6 +16,7 @@ async function hashPassword(password: string) {
 
 export interface IStorage {
   // Customer methods
+  getAllCustomers(): Promise<Customer[]>;
   getCustomer(id: number): Promise<Customer | undefined>;
   getCustomerByEmail(email: string): Promise<Customer | undefined>;
   createCustomer(customer: InsertCustomer): Promise<Customer>;
@@ -314,6 +315,12 @@ export class DatabaseStorage implements IStorage {
       tableName: "sessions",
     });
   }
+  
+  // Customer methods
+  async getAllCustomers(): Promise<Customer[]> {
+    return await db.select().from(customers).orderBy(desc(customers.id));
+  }
+
   async getCustomer(id: number): Promise<Customer | undefined> {
     const [user] = await db.select().from(customers).where(eq(customers.id, id));
     return user || undefined;
@@ -1006,41 +1013,99 @@ export class DatabaseStorage implements IStorage {
   }
 
   async convertLeadToCustomer(leadId: number): Promise<{ lead: Lead | undefined; customer: Customer | undefined }> {
-    const lead = await this.getLead(leadId);
-    if (!lead) {
-      return { lead: undefined, customer: undefined };
-    }
+    return await db.transaction(async (tx) => {
+      // Get lead data within transaction
+      const [lead] = await tx.select().from(leads).where(eq(leads.id, leadId));
+      if (!lead) {
+        return { lead: undefined, customer: undefined };
+      }
 
-    try {
-      // Create customer from lead data
-      const customerData: InsertCustomer = {
-        name: lead.name,
-        email: lead.email || "",
-        phone: lead.phone || "",
-        company: lead.company || null,
-      };
+      // Check if lead is already converted
+      if (lead.customerId) {
+        const [existingCustomer] = await tx.select().from(customers).where(eq(customers.id, lead.customerId));
+        return { lead, customer: existingCustomer || undefined };
+      }
 
-      const customer = await this.createCustomer(customerData);
+      let customer: Customer;
+      let wasExistingCustomer = false;
 
-      // Update lead status and link to customer
-      const updatedLead = await this.updateLead(leadId, {
-        status: "won",
-        customerId: customer.id,
-      });
+      // Implement get-or-create pattern with conflict handling
+      if (lead.email) {
+        try {
+          // First try to find existing customer
+          const [existingCustomer] = await tx.select().from(customers).where(eq(customers.email, lead.email));
+          if (existingCustomer) {
+            customer = existingCustomer;
+            wasExistingCustomer = true;
+            console.log(`✅ Using existing customer: ${customer.name} (ID: ${customer.id})`);
+          } else {
+            // Try to create new customer
+            const customerData: InsertCustomer = {
+              name: lead.name,
+              email: lead.email,
+              phone: lead.phone || "",
+              company: lead.company || null,
+            };
+            [customer] = await tx.insert(customers).values(customerData).returning();
+            console.log(`✅ Created new customer: ${customer.name} (ID: ${customer.id})`);
+          }
+        } catch (error: any) {
+          // Handle unique constraint violation (race condition)
+          if (error.code === '23505' && error.constraint === 'customers_email_unique') {
+            // Another transaction created the customer, fetch it
+            const [existingCustomer] = await tx.select().from(customers).where(eq(customers.email, lead.email));
+            if (existingCustomer) {
+              customer = existingCustomer;
+              wasExistingCustomer = true;
+              console.log(`✅ Using customer created by concurrent transaction: ${customer.name} (ID: ${customer.id})`);
+            } else {
+              throw new Error('Unique constraint violation but customer not found');
+            }
+          } else {
+            throw error;
+          }
+        }
+      } else {
+        // No email provided, create customer without email
+        const customerData: InsertCustomer = {
+          name: lead.name,
+          email: "",
+          phone: lead.phone || "",
+          company: lead.company || null,
+        };
+        [customer] = await tx.insert(customers).values(customerData).returning();
+        console.log(`✅ Created new customer (no email): ${customer.name} (ID: ${customer.id})`);
+      }
 
-      // Create lead activity for conversion
-      await this.createLeadActivity({
+      // Update lead status and link to customer within transaction
+      const [updatedLead] = await tx
+        .update(leads)
+        .set({
+          status: "won",
+          customerId: customer.id,
+          updatedAt: new Date()
+        })
+        .where(eq(leads.id, leadId))
+        .returning();
+
+      // Create lead activity for conversion within transaction
+      await tx.insert(leadActivities).values({
         leadId: leadId,
         activityType: "customer_converted",
-        description: `Lead converted to customer: ${customer.name}`,
+        description: wasExistingCustomer ? 
+          `Lead linked to existing customer: ${customer.name}` :
+          `Lead converted to customer: ${customer.name}`,
         userId: lead.assignedTo || undefined,
+        metadata: {
+          customerId: customer.id,
+          customerName: customer.name,
+          wasExistingCustomer
+        }
       });
 
-      return { lead: updatedLead, customer };
-    } catch (error) {
-      console.error("Error converting lead to customer:", error);
-      return { lead, customer: undefined };
-    }
+      console.log(`✅ Successfully converted lead ${leadId} to customer ${customer.id}`);
+      return { lead: updatedLead || undefined, customer };
+    });
   }
 
   // CRM Task management methods

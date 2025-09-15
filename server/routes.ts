@@ -205,6 +205,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Customer routes (protected)
+  app.get("/api/customers", isAuthenticated, async (req, res) => {
+    try {
+      const customers = await storage.getAllCustomers();
+      res.json(customers);
+    } catch (error) {
+      console.error("Error fetching customers:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
   app.get("/api/customers/:id", isAuthenticated, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
@@ -1700,58 +1710,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Convert lead to customer
-  app.post("/api/leads/:id/convert", isAuthenticated, async (req, res) => {
+  app.post("/api/leads/:id/convert-to-customer", isAuthenticated, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       
+      if (isNaN(id)) {
+        return res.status(400).json({ message: "Invalid lead ID" });
+      }
+
       const lead = await storage.getLead(id);
       if (!lead) {
         return res.status(404).json({ message: "Lead not found" });
       }
 
-      // Check if customer already exists
-      let customer;
-      if (lead.email) {
-        customer = await storage.getCustomerByEmail(lead.email);
-      }
-      
-      // Create customer if doesn't exist
-      if (!customer) {
-        const customerData = {
-          name: lead.name,
-          email: lead.email || '',
-          phone: lead.phone || '',
-          company: lead.company || undefined
-        };
-        customer = await storage.createCustomer(customerData);
-      }
-
-      // Update lead with customer reference and status
-      const updatedLead = await storage.updateLead(id, {
-        customerId: customer.id,
-        status: 'won'
-      });
-
-      // Log conversion activity
-      try {
-        await storage.createLeadActivity({
-          leadId: id,
-          activityType: 'customer_converted',
-          description: `Lead converted to customer: ${customer.name}`,
-          userId: req.user?.id,
-          metadata: { 
-            customerId: customer.id,
-            customerName: customer.name
-          }
+      // Validation: Check if lead is already converted
+      if (lead.customerId) {
+        const existingCustomer = await storage.getCustomer(lead.customerId);
+        return res.status(400).json({ 
+          message: "Lead is already converted to a customer",
+          customer: existingCustomer
         });
-      } catch (activityError) {
-        console.error("Failed to log conversion activity:", activityError);
+      }
+
+      // Validation: Ensure lead has required data for customer creation
+      if (!lead.email || lead.email.trim() === '') {
+        return res.status(400).json({ 
+          message: "Lead must have a valid email address to convert to customer" 
+        });
+      }
+
+      // Use transaction-like logic through the existing storage method
+      const result = await storage.convertLeadToCustomer(id);
+      
+      if (!result.customer) {
+        return res.status(500).json({ 
+          message: "Failed to convert lead to customer" 
+        });
       }
 
       res.json({
         message: "Lead converted to customer successfully",
-        lead: updatedLead,
-        customer
+        lead: result.lead,
+        customer: result.customer
       });
     } catch (error) {
       console.error("Error converting lead:", error);
