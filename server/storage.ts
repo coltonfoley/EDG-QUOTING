@@ -1,4 +1,4 @@
-import { customers, quotes, lineItems, products, users, contractTemplates, proposalTemplates, pricingTables, productAccessories, type Customer, type Quote, type LineItem, type Product, type User, type ContractTemplate, type ProposalTemplate, type PricingTable, type ProductAccessory, type InsertCustomer, type InsertQuote, type InsertLineItem, type InsertProduct, type InsertUser, type InsertContractTemplate, type InsertProposalTemplate, type InsertPricingTable, type InsertProductAccessory, type QuoteWithDetails, type ProductWithDetails } from "@shared/schema";
+import { customers, quotes, lineItems, products, users, contractTemplates, proposalTemplates, pricingTables, productAccessories, projects, type Customer, type Quote, type LineItem, type Product, type User, type ContractTemplate, type ProposalTemplate, type PricingTable, type ProductAccessory, type Project, type InsertCustomer, type InsertQuote, type InsertLineItem, type InsertProduct, type InsertUser, type InsertContractTemplate, type InsertProposalTemplate, type InsertPricingTable, type InsertProductAccessory, type InsertProject, type QuoteWithDetails, type ProductWithDetails, type ProjectWithDetails } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, inArray, sql, and, ne } from "drizzle-orm";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
@@ -86,6 +86,16 @@ export interface IStorage {
   getDefaultProposalTemplate(): Promise<ProposalTemplate | undefined>;
   getDefaultProposalTemplateByCategory(category: string): Promise<ProposalTemplate | undefined>;
   getProposalTemplatesByCategory(category: string, includeInactive?: boolean): Promise<ProposalTemplate[]>;
+  
+  // Project methods
+  getProject(id: number): Promise<Project | undefined>;
+  getProjectWithDetails(id: number): Promise<ProjectWithDetails | undefined>;
+  getAllProjects(): Promise<ProjectWithDetails[]>;
+  getProjectsByCustomerId(customerId: number): Promise<ProjectWithDetails[]>;
+  createProject(project: InsertProject): Promise<Project>;
+  updateProject(id: number, project: Partial<InsertProject>): Promise<Project | undefined>;
+  deleteProject(id: number): Promise<boolean>;
+  createProjectFromQuote(quoteId: number): Promise<Project>;
   
   // Session store for authentication
   sessionStore: any;
@@ -932,6 +942,212 @@ export class DatabaseStorage implements IStorage {
 
     const result = await db.execute(updateSql);
     return { updated: result.rowCount || 0 };
+  }
+
+  // Project methods
+  async getProject(id: number): Promise<Project | undefined> {
+    const [project] = await db.select().from(projects).where(eq(projects.id, id));
+    return project || undefined;
+  }
+
+  async getProjectWithDetails(id: number): Promise<ProjectWithDetails | undefined> {
+    try {
+      const result = await db
+        .select({
+          project: projects,
+          customer: customers,
+          quote: quotes,
+        })
+        .from(projects)
+        .innerJoin(customers, eq(projects.customerId, customers.id))
+        .innerJoin(quotes, eq(projects.quoteId, quotes.id))
+        .where(eq(projects.id, id))
+        .limit(1);
+
+      if (result.length === 0) return undefined;
+
+      const { project, customer, quote } = result[0];
+      return {
+        ...project,
+        customer,
+        quote,
+      };
+    } catch (error) {
+      console.error(`Error fetching project ${id} with details:`, error);
+      throw new Error(`Failed to fetch project details: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getAllProjects(): Promise<ProjectWithDetails[]> {
+    try {
+      const result = await db
+        .select({
+          project: projects,
+          customer: customers,
+          quote: quotes,
+        })
+        .from(projects)
+        .innerJoin(customers, eq(projects.customerId, customers.id))
+        .innerJoin(quotes, eq(projects.quoteId, quotes.id))
+        .orderBy(desc(projects.createdAt));
+
+      return result.map(({ project, customer, quote }) => ({
+        ...project,
+        customer,
+        quote,
+      }));
+    } catch (error) {
+      console.error('Error fetching all projects:', error);
+      throw new Error(`Failed to fetch projects: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getProjectsByCustomerId(customerId: number): Promise<ProjectWithDetails[]> {
+    try {
+      const result = await db
+        .select({
+          project: projects,
+          customer: customers,
+          quote: quotes,
+        })
+        .from(projects)
+        .innerJoin(customers, eq(projects.customerId, customers.id))
+        .innerJoin(quotes, eq(projects.quoteId, quotes.id))
+        .where(eq(projects.customerId, customerId))
+        .orderBy(desc(projects.createdAt));
+
+      return result.map(({ project, customer, quote }) => ({
+        ...project,
+        customer,
+        quote,
+      }));
+    } catch (error) {
+      console.error(`Error fetching projects for customer ${customerId}:`, error);
+      throw new Error(`Failed to fetch customer projects: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async createProject(insertProject: InsertProject): Promise<Project> {
+    const [project] = await db
+      .insert(projects)
+      .values(insertProject)
+      .returning();
+    return project;
+  }
+
+  async updateProject(id: number, projectData: Partial<InsertProject>): Promise<Project | undefined> {
+    const [updated] = await db
+      .update(projects)
+      .set({ ...projectData, updatedAt: new Date() })
+      .where(eq(projects.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteProject(id: number): Promise<boolean> {
+    const result = await db.delete(projects).where(eq(projects.id, id));
+    return (result.rowCount || 0) > 0;
+  }
+
+  async createProjectFromQuote(quoteId: number): Promise<Project> {
+    return await db.transaction(async (tx) => {
+      try {
+        // Step 1: Get and validate the quote
+        const [quote] = await tx.select().from(quotes).where(eq(quotes.id, quoteId));
+        if (!quote) {
+          throw new Error(`Quote with ID ${quoteId} not found`);
+        }
+
+        // Step 2: Apply approval gating - only convert approved quotes
+        if (quote.status !== "approved") {
+          throw new Error(`Quote ${quote.quoteNumber} must be approved before creating a project. Current status: ${quote.status}`);
+        }
+
+        // Step 3: Idempotency check - prevent duplicate projects from same quote
+        const [existingProject] = await tx
+          .select()
+          .from(projects)
+          .where(eq(projects.quoteId, quoteId))
+          .limit(1);
+        
+        if (existingProject) {
+          throw new Error(`Project already exists for Quote ${quote.quoteNumber}. Project Number: ${existingProject.projectNumber}`);
+        }
+
+        // Step 4: Get customer for validation and naming
+        const [customer] = await tx.select().from(customers).where(eq(customers.id, quote.customerId));
+        if (!customer) {
+          throw new Error(`Customer with ID ${quote.customerId} not found for quote ${quote.quoteNumber}`);
+        }
+
+        // Step 5: Get line items for precise total calculation
+        const quoteLineItems = await tx.select().from(lineItems).where(eq(lineItems.quoteId, quoteId));
+
+        // Step 6: Calculate contract value with precise decimal math
+        let contractValue = "0.00";
+        if (quoteLineItems.length > 0) {
+          // Calculate subtotal using precise decimal arithmetic
+          let subtotalCents = 0;
+          for (const item of quoteLineItems) {
+            const unitPriceCents = Math.round(parseFloat(item.unitPrice) * 100);
+            const quantityFloat = parseFloat(item.quantity);
+            // Convert quantity to integer cents by multiplying by 100
+            const quantityCents = Math.round(quantityFloat * 100);
+            subtotalCents += (unitPriceCents * quantityCents) / 100; // Divide by 100 to account for quantity scaling
+          }
+
+          const taxRateFloat = parseFloat(quote.taxRate || "0");
+          const discountFloat = parseFloat(quote.discount || "0"); 
+          const shippingFloat = parseFloat(quote.shipping || "0");
+
+          // Convert to cents for precise calculation
+          const discountCents = Math.round(discountFloat * 100);
+          const shippingCents = Math.round(shippingFloat * 100);
+          
+          // Calculate tax on subtotal
+          const taxCents = Math.round((subtotalCents * taxRateFloat) / 100);
+          
+          // Final total: subtotal - discount + tax + shipping
+          const totalCents = subtotalCents - discountCents + taxCents + shippingCents;
+          contractValue = (totalCents / 100).toFixed(2);
+        }
+
+        // Step 7: Generate unique project number
+        const timestamp = Date.now();
+        const quoteNumberSuffix = quote.quoteNumber.split('-').pop() || timestamp.toString();
+        const projectNumber = `P-${timestamp}-${quoteNumberSuffix}`;
+
+        // Step 8: Consistency check - ensure customerId matches
+        if (quote.customerId !== customer.id) {
+          throw new Error(`Data consistency error: Quote customer ID ${quote.customerId} does not match customer record ID ${customer.id}`);
+        }
+
+        // Step 9: Create project with validated data
+        const insertProject: InsertProject = {
+          projectNumber,
+          quoteId: quote.id,
+          customerId: quote.customerId, // Use quote's customerId for consistency
+          projectName: quote.projectName || `Project for ${customer.name}`,
+          projectAddress: quote.projectAddress || "",
+          estimatedStartDate: quote.estimatedStartDate || "",
+          contractValue,
+          status: "pending",
+          completionPercentage: "0.00",
+          actualCost: "0.00",
+          notes: `Project created from Quote ${quote.quoteNumber} on ${new Date().toISOString()}`,
+        };
+
+        const [project] = await tx
+          .insert(projects)
+          .values(insertProject)
+          .returning();
+
+        return project;
+      } catch (error) {
+        console.error(`Error creating project from quote ${quoteId}:`, error);
+        throw error; // Re-throw to rollback transaction
+      }
+    });
   }
 }
 
