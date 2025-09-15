@@ -15,6 +15,14 @@ import AdminPage from "@/pages/admin";
 import AdminTemplatesPage from "@/pages/admin-templates";
 import ContractsPage from "@/pages/contracts";
 import CRMPage from "@/pages/crm";
+// New CRM System Pages
+import DashboardPage from "@/pages/dashboard";
+import AccountsPage from "@/pages/accounts";
+import ContactsPage from "@/pages/contacts";
+import OpportunitiesPage from "@/pages/opportunities";
+import VendorsPage from "@/pages/vendors";
+import ContractorsPage from "@/pages/contractors";
+import SuppliersPage from "@/pages/suppliers";
 
 function Router() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -40,7 +48,16 @@ function Router() {
           <Route path="/quotes/:id" component={QuoteBuilder} />
           <Route path="/products" component={Products} />
           <Route path="/contracts" component={ContractsPage} />
-          <Route path="/crm" component={CRMPage} />
+          {/* Legacy CRM route - redirect to opportunities */}
+          <Route path="/crm" component={OpportunitiesPage} />
+          {/* New Comprehensive CRM System */}
+          <Route path="/dashboard" component={DashboardPage} />
+          <Route path="/accounts" component={AccountsPage} />
+          <Route path="/contacts" component={ContactsPage} />
+          <Route path="/opportunities" component={OpportunitiesPage} />
+          <Route path="/vendors" component={VendorsPage} />
+          <Route path="/contractors" component={ContractorsPage} />
+          <Route path="/suppliers" component={SuppliersPage} />
           <Route path="/admin" component={AdminPage} />
           <Route path="/admin/templates" component={AdminTemplatesPage} />
         </>
