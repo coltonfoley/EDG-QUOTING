@@ -17,7 +17,7 @@ export const sessions = pgTable(
 
 // User storage table for username/password authentication
 export const users = pgTable("users", {
-  id: serial("id").primaryKey(),
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   username: varchar("username").unique().notNull(),
   password: varchar("password").notNull(),
   email: varchar("email"),
@@ -170,6 +170,46 @@ export const lineItems = pgTable("line_items", {
   isAccessory: boolean("is_accessory").default(false),
 });
 
+// CRM Lead Management Tables
+export const leads = pgTable("leads", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  email: text("email"),
+  phone: text("phone"),
+  company: text("company"),
+  status: text("status").notNull().default("new"), // new, contacted, qualified, quoted, won, lost
+  source: text("source"), // web, referral, cold_call, trade_show, social_media, etc.
+  value: decimal("value", { precision: 12, scale: 2 }), // estimated project value
+  notes: text("notes"),
+  assignedTo: varchar("assigned_to").references(() => users.id), // foreign key to users table
+  customerId: integer("customer_id"), // optional link to customer when lead converts
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const tasks = pgTable("tasks", {
+  id: serial("id").primaryKey(),
+  leadId: integer("lead_id").notNull(), // foreign key to leads table
+  title: text("title").notNull(),
+  description: text("description"),
+  dueDate: timestamp("due_date"),
+  completed: boolean("completed").notNull().default(false),
+  priority: text("priority").notNull().default("medium"), // low, medium, high
+  assignedTo: varchar("assigned_to").references(() => users.id), // foreign key to users table
+  createdAt: timestamp("created_at").defaultNow(),
+  completedAt: timestamp("completed_at"),
+});
+
+export const leadActivities = pgTable("lead_activities", {
+  id: serial("id").primaryKey(),
+  leadId: integer("lead_id").notNull(), // foreign key to leads table
+  activityType: text("activity_type").notNull(), // status_change, task_completed, note_added, email_sent, call_made, meeting_scheduled, quote_sent, etc.
+  description: text("description").notNull(),
+  userId: varchar("user_id").references(() => users.id), // which user performed the activity
+  metadata: jsonb("metadata"), // additional activity-specific data
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 
 
 export const insertCustomerSchema = createInsertSchema(customers).omit({
@@ -290,6 +330,55 @@ export const insertProposalTemplateSchema = createInsertSchema(proposalTemplates
   }).default('pdf'),
 });
 
+// CRM insert schemas
+export const insertLeadSchema = createInsertSchema(leads).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  status: z.enum(['new', 'contacted', 'qualified', 'quoted', 'won', 'lost'], {
+    errorMap: () => ({ message: "Status must be one of: new, contacted, qualified, quoted, won, lost" }),
+  }).default('new'),
+  value: z.union([z.string(), z.number(), z.null()]).transform(val => val === null ? null : (typeof val === 'string' ? val : val.toString())).optional(),
+  name: z.string().min(1, "Lead name is required"),
+  email: z.string().email().optional().or(z.literal('')),
+  phone: z.string().optional(),
+  company: z.string().optional(),
+  source: z.string().optional(),
+  notes: z.string().optional(),
+  assignedTo: z.string().optional(),
+  customerId: z.number().int().positive().optional(),
+});
+
+export const insertTaskSchema = createInsertSchema(tasks).omit({
+  id: true,
+  createdAt: true,
+  completedAt: true,
+}).extend({
+  leadId: z.number().int().positive("Lead ID is required"),
+  title: z.string().min(1, "Task title is required"),
+  description: z.string().optional(),
+  dueDate: z.union([z.date(), z.string(), z.null()]).transform(val => val === null ? null : val).optional(),
+  completed: z.boolean().default(false),
+  priority: z.enum(['low', 'medium', 'high'], {
+    errorMap: () => ({ message: "Priority must be one of: low, medium, high" }),
+  }).default('medium'),
+  assignedTo: z.string().optional(),
+});
+
+export const insertLeadActivitySchema = createInsertSchema(leadActivities).omit({
+  id: true,
+  createdAt: true,
+}).extend({
+  leadId: z.number().int().positive("Lead ID is required"),
+  activityType: z.enum(['status_change', 'task_completed', 'note_added', 'email_sent', 'call_made', 'meeting_scheduled', 'quote_sent', 'customer_converted', 'other'], {
+    errorMap: () => ({ message: "Activity type must be one of: status_change, task_completed, note_added, email_sent, call_made, meeting_scheduled, quote_sent, customer_converted, other" }),
+  }),
+  description: z.string().min(1, "Activity description is required"),
+  userId: z.string().optional(),
+  metadata: z.record(z.any()).optional(),
+});
+
 
 
 export type Customer = typeof customers.$inferSelect;
@@ -300,6 +389,9 @@ export type ContractTemplate = typeof contractTemplates.$inferSelect;
 export type ProposalTemplate = typeof proposalTemplates.$inferSelect;
 export type PricingTable = typeof pricingTables.$inferSelect;
 export type ProductAccessory = typeof productAccessories.$inferSelect;
+export type Lead = typeof leads.$inferSelect;
+export type Task = typeof tasks.$inferSelect;
+export type LeadActivity = typeof leadActivities.$inferSelect;
 
 export type InsertCustomer = z.infer<typeof insertCustomerSchema>;
 export type InsertQuote = z.infer<typeof insertQuoteSchema>;
@@ -309,6 +401,9 @@ export type InsertContractTemplate = z.infer<typeof insertContractTemplateSchema
 export type InsertProposalTemplate = z.infer<typeof insertProposalTemplateSchema>;
 export type InsertPricingTable = z.infer<typeof insertPricingTableSchema>;
 export type InsertProductAccessory = z.infer<typeof insertProductAccessorySchema>;
+export type InsertLead = z.infer<typeof insertLeadSchema>;
+export type InsertTask = z.infer<typeof insertTaskSchema>;
+export type InsertLeadActivity = z.infer<typeof insertLeadActivitySchema>;
 
 export type QuoteWithDetails = Quote & {
   customer: Customer;
