@@ -1,6 +1,6 @@
-import { customers, quotes, lineItems, products, users, contractTemplates, proposalTemplates, pricingTables, productAccessories, type Customer, type Quote, type LineItem, type Product, type User, type ContractTemplate, type ProposalTemplate, type PricingTable, type ProductAccessory, type InsertCustomer, type InsertQuote, type InsertLineItem, type InsertProduct, type InsertUser, type InsertContractTemplate, type InsertProposalTemplate, type InsertPricingTable, type InsertProductAccessory, type QuoteWithDetails, type ProductWithDetails } from "@shared/schema";
+import { customers, quotes, lineItems, products, users, contractTemplates, proposalTemplates, pricingTables, productAccessories, leads, tasks, leadActivities, type Customer, type Quote, type LineItem, type Product, type User, type ContractTemplate, type ProposalTemplate, type PricingTable, type ProductAccessory, type Lead, type Task, type LeadActivity, type InsertCustomer, type InsertQuote, type InsertLineItem, type InsertProduct, type InsertUser, type InsertContractTemplate, type InsertProposalTemplate, type InsertPricingTable, type InsertProductAccessory, type InsertLead, type InsertTask, type InsertLeadActivity, type QuoteWithDetails, type ProductWithDetails } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, inArray, sql, and, ne } from "drizzle-orm";
+import { eq, desc, inArray, sql, and, ne, lt } from "drizzle-orm";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 import connectPg from "connect-pg-simple";
@@ -93,6 +93,32 @@ export interface IStorage {
   // Authorization methods for security
   validateLineItemsOwnership(lineItemIds: number[], userId: any): Promise<{ isValid: boolean; quoteId?: number }>;
   validateQuoteOwnership(quoteId: number, userId: any): Promise<boolean>;
+
+  // CRM Lead management methods
+  getAllLeads(): Promise<Lead[]>;
+  getLead(id: number): Promise<Lead | undefined>;
+  getLeadsByStatus(status: string): Promise<Lead[]>;
+  getLeadsByAssignedTo(userId: string): Promise<Lead[]>;
+  createLead(lead: InsertLead): Promise<Lead>;
+  updateLead(id: number, lead: Partial<InsertLead>): Promise<Lead | undefined>;
+  deleteLead(id: number): Promise<boolean>;
+  convertLeadToCustomer(leadId: number): Promise<{ lead: Lead | undefined; customer: Customer | undefined }>;
+
+  // CRM Task management methods
+  getAllTasks(): Promise<Task[]>;
+  getTask(id: number): Promise<Task | undefined>;
+  getTasksByLeadId(leadId: number): Promise<Task[]>;
+  getTasksByAssignedTo(userId: string): Promise<Task[]>;
+  getOverdueTasks(): Promise<Task[]>;
+  createTask(task: InsertTask): Promise<Task>;
+  updateTask(id: number, task: Partial<InsertTask>): Promise<Task | undefined>;
+  deleteTask(id: number): Promise<boolean>;
+  completeTask(id: number): Promise<Task | undefined>;
+
+  // CRM Lead Activity methods
+  getLeadActivities(leadId: number): Promise<LeadActivity[]>;
+  createLeadActivity(activity: InsertLeadActivity): Promise<LeadActivity>;
+  getRecentActivities(limit?: number): Promise<LeadActivity[]>;
 }
 
 export class MemStorage {
@@ -932,6 +958,193 @@ export class DatabaseStorage implements IStorage {
 
     const result = await db.execute(updateSql);
     return { updated: result.rowCount || 0 };
+  }
+
+  // CRM Lead management methods
+  async getAllLeads(): Promise<Lead[]> {
+    return await db.select().from(leads).orderBy(desc(leads.createdAt));
+  }
+
+  async getLead(id: number): Promise<Lead | undefined> {
+    const [lead] = await db.select().from(leads).where(eq(leads.id, id));
+    return lead || undefined;
+  }
+
+  async getLeadsByStatus(status: string): Promise<Lead[]> {
+    return await db.select().from(leads).where(eq(leads.status, status)).orderBy(desc(leads.createdAt));
+  }
+
+  async getLeadsByAssignedTo(userId: string): Promise<Lead[]> {
+    return await db.select().from(leads).where(eq(leads.assignedTo, userId)).orderBy(desc(leads.createdAt));
+  }
+
+  async createLead(insertLead: InsertLead): Promise<Lead> {
+    const [lead] = await db
+      .insert(leads)
+      .values(insertLead)
+      .returning();
+    return lead;
+  }
+
+  async updateLead(id: number, leadData: Partial<InsertLead>): Promise<Lead | undefined> {
+    const [updated] = await db
+      .update(leads)
+      .set({ ...leadData, updatedAt: new Date() })
+      .where(eq(leads.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteLead(id: number): Promise<boolean> {
+    // Delete associated tasks and activities first
+    await db.delete(tasks).where(eq(tasks.leadId, id));
+    await db.delete(leadActivities).where(eq(leadActivities.leadId, id));
+    
+    // Then delete the lead
+    const result = await db.delete(leads).where(eq(leads.id, id));
+    return (result.rowCount || 0) > 0;
+  }
+
+  async convertLeadToCustomer(leadId: number): Promise<{ lead: Lead | undefined; customer: Customer | undefined }> {
+    const lead = await this.getLead(leadId);
+    if (!lead) {
+      return { lead: undefined, customer: undefined };
+    }
+
+    try {
+      // Create customer from lead data
+      const customerData: InsertCustomer = {
+        name: lead.name,
+        email: lead.email || "",
+        phone: lead.phone || "",
+        company: lead.company || null,
+      };
+
+      const customer = await this.createCustomer(customerData);
+
+      // Update lead status and link to customer
+      const updatedLead = await this.updateLead(leadId, {
+        status: "won",
+        customerId: customer.id,
+      });
+
+      // Create lead activity for conversion
+      await this.createLeadActivity({
+        leadId: leadId,
+        activityType: "customer_converted",
+        description: `Lead converted to customer: ${customer.name}`,
+        userId: lead.assignedTo || undefined,
+      });
+
+      return { lead: updatedLead, customer };
+    } catch (error) {
+      console.error("Error converting lead to customer:", error);
+      return { lead, customer: undefined };
+    }
+  }
+
+  // CRM Task management methods
+  async getAllTasks(): Promise<Task[]> {
+    return await db.select().from(tasks).orderBy(desc(tasks.createdAt));
+  }
+
+  async getTask(id: number): Promise<Task | undefined> {
+    const [task] = await db.select().from(tasks).where(eq(tasks.id, id));
+    return task || undefined;
+  }
+
+  async getTasksByLeadId(leadId: number): Promise<Task[]> {
+    return await db.select().from(tasks).where(eq(tasks.leadId, leadId)).orderBy(desc(tasks.createdAt));
+  }
+
+  async getTasksByAssignedTo(userId: string): Promise<Task[]> {
+    return await db.select().from(tasks).where(eq(tasks.assignedTo, userId)).orderBy(desc(tasks.createdAt));
+  }
+
+  async getOverdueTasks(): Promise<Task[]> {
+    const now = new Date();
+    return await db
+      .select()
+      .from(tasks)
+      .where(
+        and(
+          lt(tasks.dueDate, now),
+          eq(tasks.completed, false)
+        )
+      )
+      .orderBy(tasks.dueDate);
+  }
+
+  async createTask(insertTask: InsertTask): Promise<Task> {
+    // Convert dueDate string to Date if necessary
+    const taskData = {
+      ...insertTask,
+      dueDate: insertTask.dueDate ? (typeof insertTask.dueDate === 'string' ? new Date(insertTask.dueDate) : insertTask.dueDate) : null
+    };
+    
+    const [task] = await db
+      .insert(tasks)
+      .values(taskData)
+      .returning();
+    return task;
+  }
+
+  async updateTask(id: number, taskData: Partial<InsertTask>): Promise<Task | undefined> {
+    // Convert and prepare data for database update
+    const updateData: any = {};
+    
+    if (taskData.title !== undefined) updateData.title = taskData.title;
+    if (taskData.leadId !== undefined) updateData.leadId = taskData.leadId;
+    if (taskData.description !== undefined) updateData.description = taskData.description;
+    if (taskData.completed !== undefined) updateData.completed = taskData.completed;
+    if (taskData.priority !== undefined) updateData.priority = taskData.priority;
+    if (taskData.assignedTo !== undefined) updateData.assignedTo = taskData.assignedTo;
+    
+    // Handle dueDate conversion properly
+    if (taskData.dueDate !== undefined) {
+      updateData.dueDate = taskData.dueDate ? (typeof taskData.dueDate === 'string' ? new Date(taskData.dueDate) : taskData.dueDate) : null;
+    }
+    
+    const [updated] = await db
+      .update(tasks)
+      .set(updateData)
+      .where(eq(tasks.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteTask(id: number): Promise<boolean> {
+    const result = await db.delete(tasks).where(eq(tasks.id, id));
+    return (result.rowCount || 0) > 0;
+  }
+
+  async completeTask(id: number): Promise<Task | undefined> {
+    const [updated] = await db
+      .update(tasks)
+      .set({ 
+        completed: true,
+        completedAt: new Date()
+      })
+      .where(eq(tasks.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  // CRM Lead Activity methods
+  async getLeadActivities(leadId: number): Promise<LeadActivity[]> {
+    return await db.select().from(leadActivities).where(eq(leadActivities.leadId, leadId)).orderBy(desc(leadActivities.createdAt));
+  }
+
+  async createLeadActivity(insertActivity: InsertLeadActivity): Promise<LeadActivity> {
+    const [activity] = await db
+      .insert(leadActivities)
+      .values(insertActivity)
+      .returning();
+    return activity;
+  }
+
+  async getRecentActivities(limit: number = 50): Promise<LeadActivity[]> {
+    return await db.select().from(leadActivities).orderBy(desc(leadActivities.createdAt)).limit(limit);
   }
 }
 
