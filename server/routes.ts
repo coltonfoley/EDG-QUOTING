@@ -1759,6 +1759,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Import leads from existing quotes
+  app.post("/api/leads/import-from-quotes", isAuthenticated, async (req, res) => {
+    try {
+      console.log("Starting lead import from quotes...");
+      const result = await storage.importLeadsFromQuotes();
+      
+      // Log the import activity for each imported lead
+      if (result.imported > 0) {
+        try {
+          const recentLeads = await storage.getAllLeads();
+          const importedLeads = recentLeads.slice(0, result.imported); // Get the most recent imported leads
+          
+          for (const lead of importedLeads) {
+            if (lead.notes && lead.notes.includes('Imported from existing quote')) {
+              try {
+                await storage.createLeadActivity({
+                  leadId: lead.id,
+                  activityType: 'note_added',
+                  description: `Lead imported from existing quotes system`,
+                  userId: req.user?.id,
+                  metadata: { 
+                    importSource: 'quotes',
+                    importedAt: new Date().toISOString()
+                  }
+                });
+              } catch (activityError) {
+                console.error(`Failed to log import activity for lead ${lead.id}:`, activityError);
+              }
+            }
+          }
+        } catch (activityError) {
+          console.error("Failed to log import activities:", activityError);
+          // Don't fail the import if activity logging fails
+        }
+      }
+      
+      console.log(`Import completed: ${result.imported} imported, ${result.duplicates} duplicates, ${result.errors.length} errors`);
+      
+      res.json({
+        success: true,
+        message: `Import completed: ${result.imported} lead(s) imported, ${result.duplicates} duplicate(s) skipped`,
+        imported: result.imported,
+        duplicates: result.duplicates,
+        errors: result.errors
+      });
+    } catch (error) {
+      console.error("Error importing leads from quotes:", error);
+      res.status(500).json({ 
+        success: false,
+        message: "Failed to import leads from quotes",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
   // ================================
   // CRM TASKS MANAGEMENT ROUTES
   // ================================
