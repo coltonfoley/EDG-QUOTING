@@ -33,7 +33,6 @@ function Router() {
         <>
           <Route path="/" component={Home} />
           <Route path="/quotes" component={Quotes} />
-          <Route path="/quote-builder" component={QuoteBuilder} />
           <Route path="/quotes/new" component={QuoteBuilder} />
           <Route path="/quotes/:id" component={QuoteBuilder} />
           <Route path="/products" component={Products} />
