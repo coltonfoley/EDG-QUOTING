@@ -1,6 +1,6 @@
 import { useParams } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { AppHeader } from "@/components/app-header";
 import { QuoteHeader } from "@/components/quote-header";
 import { ImageAssetsPreview } from "@/components/image-assets-preview";
@@ -17,21 +17,8 @@ import type { UploadedImage } from "@/components/image-uploader";
 
 export default function QuoteBuilder() {
   const { id } = useParams();
-  const isNewQuote = !id || id === 'new';
-  const quoteId = (id && id !== 'new') ? parseInt(id) : undefined;
-  
-  // Parse query string for opportunityId (from Create Quote button in opportunities)
-  const [opportunityId, setOpportunityId] = useState<number | null>(null);
-  
-  useEffect(() => {
-    if (isNewQuote) {
-      const params = new URLSearchParams(window.location.search);
-      const oppId = params.get('opportunityId');
-      if (oppId) {
-        setOpportunityId(parseInt(oppId));
-      }
-    }
-  }, [isNewQuote]);
+  const isNewQuote = !id;
+  const quoteId = id ? parseInt(id) : undefined;
   
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -70,7 +57,6 @@ export default function QuoteBuilder() {
         ...data,
         customerId: customer.id,
         quoteNumber: generateQuoteNumber(),
-        ...(opportunityId && { opportunityId: opportunityId }),
       };
       delete quoteData.customerName;
       delete quoteData.customerEmail;
@@ -182,7 +168,6 @@ export default function QuoteBuilder() {
     id: 0,
     quoteNumber: "",
     customerId: 0,
-    opportunityId: opportunityId,
     projectName: "",
     projectAddress: "",
     estimatedStartDate: "",
@@ -217,7 +202,6 @@ export default function QuoteBuilder() {
       
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <QuoteHeader
-          key={isNewQuote ? 'new-quote' : `quote-${currentQuote.id}`}
           quote={isNewQuote ? undefined : currentQuote}
           onSave={handleSaveQuote}
           isLoading={createQuoteMutation.isPending || updateQuoteMutation.isPending}

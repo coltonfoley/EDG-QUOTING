@@ -8,13 +8,6 @@
       "when": 1757522435037,
       "tag": "0000_lowly_anthem",
       "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1757970548338,
-      "tag": "0001_project_management",
-      "breakpoints": true
     }
   ]
 }

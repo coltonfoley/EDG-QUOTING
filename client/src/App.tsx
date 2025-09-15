@@ -14,19 +14,6 @@ import AuthPage from "@/pages/auth-page";
 import AdminPage from "@/pages/admin";
 import AdminTemplatesPage from "@/pages/admin-templates";
 import ContractsPage from "@/pages/contracts";
-import CRMPage from "@/pages/crm";
-// New CRM System Pages
-import DashboardPage from "@/pages/dashboard";
-import AccountsPage from "@/pages/accounts";
-import ContactsPage from "@/pages/contacts";
-import OpportunitiesPage from "@/pages/opportunities";
-import BusinessPartnersPage from "@/pages/business-partners";
-// Project Management Pages
-import ProjectsPage from "@/pages/projects";
-import ProjectDashboardPage from "@/pages/project-dashboard";
-import ProjectDetailsPage from "@/pages/project-details";
-import NewProjectPage from "@/pages/new-project";
-import SchedulePage from "@/pages/schedule";
 
 function Router() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -41,7 +28,6 @@ function Router() {
         <>
           <Route path="/" component={AuthPage} />
           <Route path="/auth" component={AuthPage} />
-          <Route path="/:rest*" component={AuthPage} />
         </>
       ) : (
         <>
@@ -52,40 +38,6 @@ function Router() {
           <Route path="/quotes/:id" component={QuoteBuilder} />
           <Route path="/products" component={Products} />
           <Route path="/contracts" component={ContractsPage} />
-          {/* Legacy CRM route - redirect to opportunities */}
-          <Route path="/crm" component={OpportunitiesPage} />
-          {/* New Comprehensive CRM System */}
-          <Route path="/dashboard" component={DashboardPage} />
-          <Route path="/accounts" component={AccountsPage} />
-          <Route path="/contacts" component={ContactsPage} />
-          <Route path="/opportunities" component={OpportunitiesPage} />
-          <Route path="/business-partners" component={BusinessPartnersPage} />
-          {/* Redirect old partner routes to consolidated page */}
-          <Route path="/vendors">
-            {() => {
-              window.location.replace('/business-partners');
-              return null;
-            }}
-          </Route>
-          <Route path="/contractors">
-            {() => {
-              window.location.replace('/business-partners');
-              return null;
-            }}
-          </Route>
-          <Route path="/suppliers">
-            {() => {
-              window.location.replace('/business-partners');
-              return null;
-            }}
-          </Route>
-          {/* Project Management System */}
-          <Route path="/projects" component={ProjectsPage} />
-          <Route path="/project-dashboard" component={ProjectDashboardPage} />
-          <Route path="/project-details/:id" component={ProjectDetailsPage} />
-          <Route path="/projects/new" component={NewProjectPage} />
-          <Route path="/projects/:id/edit" component={ProjectDetailsPage} />
-          <Route path="/schedule" component={SchedulePage} />
           <Route path="/admin" component={AdminPage} />
           <Route path="/admin/templates" component={AdminTemplatesPage} />
         </>

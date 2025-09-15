@@ -2,28 +2,10 @@ import 'dotenv/config';
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
-import cookieParser from "cookie-parser";
 
 const app = express();
-
-// Add cookie parser BEFORE any other middleware
-app.use(cookieParser());
-
-// Add debug middleware to log request details
-app.use((req, res, next) => {
-  console.log(`📥 ${req.method} ${req.path} - Content-Type: ${req.headers['content-type']}`);
-  if (req.method === 'POST' && req.path.startsWith('/api/')) {
-    console.log(`📝 Body preview:`, req.body ? JSON.stringify(req.body).substring(0, 100) : 'No body');
-  }
-  next();
-});
-
-// Configure body parsers with better error handling
-app.use(express.json({ 
-  limit: '10mb',
-  type: ['application/json', 'text/plain']
-}));
-app.use(express.urlencoded({ extended: false, limit: '10mb' }));
+app.use(express.json());
+app.use(express.urlencoded({ extended: false }));
 
 app.use((req, res, next) => {
   const start = Date.now();
