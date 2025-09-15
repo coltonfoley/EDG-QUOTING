@@ -277,7 +277,7 @@ export default function ScheduleDashboard({
       
       return {
         resourceId: crew.id,
-        resourceName: crew.externalContractorName || `${crew.user?.firstName} ${crew.user?.lastName}`,
+        resourceName: crew.externalContractorName || crew.firstName || `Crew ${crew.id}`,
         resourceType: 'crew_member',
         currentUtilization,
         targetUtilization,
@@ -339,7 +339,7 @@ export default function ScheduleDashboard({
       if (conflictingEvents.length > 0) {
         const resourceName = resourceType === 'crew_member' 
           ? crewMembers.find(c => c.id === parseInt(resourceId))?.externalContractorName || 'Unknown Crew'
-          : equipment.find(e => e.id === parseInt(resourceId))?.name || 'Unknown Equipment';
+          : equipment.find(e => e.id === parseInt(resourceId))?.description || 'Unknown Equipment';
           
         conflicts.push({
           id: resourceKey,
