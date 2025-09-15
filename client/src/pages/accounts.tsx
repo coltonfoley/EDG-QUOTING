@@ -4,6 +4,7 @@ import { AppHeader } from "@/components/app-header";
 import { AccountForm } from "@/components/forms/account-form";
 import { RoleManager } from "@/components/forms/role-manager";
 import { ActivityFeed } from "@/components/forms/activity-feed";
+import { AccountHealthScoring } from "@/components/business-intelligence/account-health-scoring";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -26,8 +27,19 @@ import {
   Eye,
   Edit,
   MoreHorizontal,
-  Filter
+  Filter,
+  Download,
+  ChevronDown,
+  X,
+  Save,
+  Grid,
+  List,
+  SlidersHorizontal,
+  FileText
 } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
@@ -41,15 +53,36 @@ interface AccountWithDetails extends Account {
   totalValue?: number;
 }
 
+interface SavedFilter {
+  id: string;
+  name: string;
+  filters: {
+    searchTerm: string;
+    filterByType: string;
+    filterByRole: string;
+    showOnlyWithOpportunities: boolean;
+    showOnlyWithRecentActivity: boolean;
+    minOpportunityCount: number;
+  };
+}
+
 export default function AccountsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterByType, setFilterByType] = useState<string>("all");
   const [filterByRole, setFilterByRole] = useState<string>("all");
+  const [showOnlyWithOpportunities, setShowOnlyWithOpportunities] = useState(false);
+  const [showOnlyWithRecentActivity, setShowOnlyWithRecentActivity] = useState(false);
+  const [minOpportunityCount, setMinOpportunityCount] = useState(0);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
   const [detailSheetOpen, setDetailSheetOpen] = useState(false);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [selectedAccountIds, setSelectedAccountIds] = useState<number[]>([]);
+  const [savedFilters, setSavedFilters] = useState<SavedFilter[]>([]);
+  const [saveFilterDialogOpen, setSaveFilterDialogOpen] = useState(false);
+  const [filterName, setFilterName] = useState("");
   
   const { toast } = useToast();
   const { isAuthenticated, isLoading: authLoading } = useAuth();
@@ -159,7 +192,7 @@ export default function AccountsPage() {
     },
   });
 
-  // Filter accounts based on search and filters
+  // Enhanced filtering with advanced options
   const filteredAccounts = useMemo(() => {
     let filtered = enrichedAccounts;
 
@@ -169,7 +202,9 @@ export default function AccountsPage() {
       filtered = filtered.filter(account =>
         account.name.toLowerCase().includes(term) ||
         (account.email && account.email.toLowerCase().includes(term)) ||
-        (account.phone && account.phone.toLowerCase().includes(term))
+        (account.phone && account.phone.toLowerCase().includes(term)) ||
+        (account.billingAddress && account.billingAddress.toLowerCase().includes(term)) ||
+        (account.shippingAddress && account.shippingAddress.toLowerCase().includes(term))
       );
     }
 
@@ -183,8 +218,125 @@ export default function AccountsPage() {
       filtered = filtered.filter(account => account.roles.includes(filterByRole));
     }
 
+    // Show only accounts with opportunities
+    if (showOnlyWithOpportunities) {
+      filtered = filtered.filter(account => account.opportunityCount && account.opportunityCount > 0);
+    }
+
+    // Show only accounts with recent activity (last 30 days)
+    if (showOnlyWithRecentActivity) {
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      filtered = filtered.filter(account => new Date(account.updatedAt) >= thirtyDaysAgo);
+    }
+
+    // Minimum opportunity count filter
+    if (minOpportunityCount > 0) {
+      filtered = filtered.filter(account => account.opportunityCount && account.opportunityCount >= minOpportunityCount);
+    }
+
     return filtered;
-  }, [enrichedAccounts, searchTerm, filterByType, filterByRole]);
+  }, [enrichedAccounts, searchTerm, filterByType, filterByRole, showOnlyWithOpportunities, showOnlyWithRecentActivity, minOpportunityCount]);
+
+  // Handle saved filters
+  const saveCurrentFilter = () => {
+    if (!filterName.trim()) return;
+    
+    const newFilter: SavedFilter = {
+      id: Date.now().toString(),
+      name: filterName,
+      filters: {
+        searchTerm,
+        filterByType,
+        filterByRole,
+        showOnlyWithOpportunities,
+        showOnlyWithRecentActivity,
+        minOpportunityCount,
+      }
+    };
+    
+    setSavedFilters(prev => [...prev, newFilter]);
+    setFilterName("");
+    setSaveFilterDialogOpen(false);
+    toast({
+      title: "Filter saved",
+      description: `Filter "${newFilter.name}" has been saved.`,
+    });
+  };
+
+  const applySavedFilter = (filter: SavedFilter) => {
+    setSearchTerm(filter.filters.searchTerm);
+    setFilterByType(filter.filters.filterByType);
+    setFilterByRole(filter.filters.filterByRole);
+    setShowOnlyWithOpportunities(filter.filters.showOnlyWithOpportunities);
+    setShowOnlyWithRecentActivity(filter.filters.showOnlyWithRecentActivity);
+    setMinOpportunityCount(filter.filters.minOpportunityCount);
+  };
+
+  const clearAllFilters = () => {
+    setSearchTerm("");
+    setFilterByType("all");
+    setFilterByRole("all");
+    setShowOnlyWithOpportunities(false);
+    setShowOnlyWithRecentActivity(false);
+    setMinOpportunityCount(0);
+  };
+
+  // Bulk operations
+  const handleSelectAll = () => {
+    if (selectedAccountIds.length === filteredAccounts.length) {
+      setSelectedAccountIds([]);
+    } else {
+      setSelectedAccountIds(filteredAccounts.map(account => account.id));
+    }
+  };
+
+  const handleSelectAccount = (accountId: number) => {
+    setSelectedAccountIds(prev => 
+      prev.includes(accountId) 
+        ? prev.filter(id => id !== accountId)
+        : [...prev, accountId]
+    );
+  };
+
+  // Export functionality
+  const exportAccounts = () => {
+    const csvData = filteredAccounts.map(account => ({
+      Name: account.name,
+      Type: account.type,
+      Email: account.email || '',
+      Phone: account.phone || '',
+      'Billing Address': account.billingAddress || '',
+      'Contact Count': account.contactCount || 0,
+      'Opportunity Count': account.opportunityCount || 0,
+      'Total Value': account.totalValue || 0,
+      Roles: account.roles.join(', '),
+      'Created Date': new Date(account.createdAt).toLocaleDateString(),
+    }));
+    
+    const csvString = [
+      Object.keys(csvData[0] || {}).join(','),
+      ...csvData.map(row => Object.values(row).map(val => `"${val}"`).join(','))
+    ].join('\n');
+    
+    const blob = new Blob([csvString], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `accounts-${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    toast({
+      title: "Export successful",
+      description: `Exported ${filteredAccounts.length} accounts to CSV.`,
+    });
+  };
+
+  const hasActiveFilters = searchTerm || filterByType !== 'all' || filterByRole !== 'all' || 
+                          showOnlyWithOpportunities || showOnlyWithRecentActivity || minOpportunityCount > 0;
 
   const handleCreateAccount = (data: InsertAccount) => {
     createAccountMutation.mutate(data);
@@ -233,100 +385,268 @@ export default function AccountsPage() {
       
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
-        <div className="flex flex-col lg:flex-row lg:justify-between lg:items-start mb-8 space-y-4 lg:space-y-0">
-          <div>
-            <h2 className="text-3xl font-bold text-edg-black">Account Management</h2>
-            <p className="text-edg-grey mt-2">Manage companies and individual accounts</p>
-          </div>
-          
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center space-y-3 sm:space-y-0 sm:space-x-4">
-            {/* View Mode Toggle */}
-            <div className="flex border rounded-lg p-1">
-              <Button
-                variant={viewMode === "grid" ? "default" : "ghost"}
-                size="sm"
-                onClick={() => setViewMode("grid")}
-                className="px-3"
-                data-testid="button-grid-view"
-              >
-                Grid
-              </Button>
-              <Button
-                variant={viewMode === "list" ? "default" : "ghost"}
-                size="sm"
-                onClick={() => setViewMode("list")}
-                className="px-3"
-                data-testid="button-list-view"
-              >
-                List
-              </Button>
+        <div className="flex flex-col gap-6">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div>
+              <h1 className="text-3xl font-bold text-edg-black">Accounts</h1>
+              <p className="text-edg-grey mt-1">Manage your business accounts and relationships</p>
+              {hasActiveFilters && (
+                <p className="text-sm text-blue-600 mt-1">
+                  {filteredAccounts.length} of {enrichedAccounts.length} accounts shown
+                </p>
+              )}
             </div>
-
-            {/* Create Account Button */}
-            <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-              <DialogTrigger asChild>
-                <Button className="bg-edg-black hover:bg-edg-grey text-edg-white" data-testid="button-create-account">
-                  <Plus className="mr-2 h-4 w-4" />
-                  Create Account
+            
+            <div className="flex items-center gap-3">
+              {selectedAccountIds.length > 0 && (
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-600">{selectedAccountIds.length} selected</span>
+                  <Button variant="outline" size="sm" data-testid="button-bulk-export">
+                    <Download className="mr-2 h-4 w-4" />
+                    Export Selected
+                  </Button>
+                </div>
+              )}
+              
+              <Button variant="outline" onClick={exportAccounts} data-testid="button-export-accounts">
+                <Download className="mr-2 h-4 w-4" />
+                Export All
+              </Button>
+              
+              {/* View Mode Toggle */}
+              <div className="flex border rounded-lg p-1">
+                <Button
+                  variant={viewMode === "grid" ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => setViewMode("grid")}
+                  className="px-3"
+                  data-testid="button-grid-view"
+                >
+                  <Grid className="h-4 w-4" />
                 </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-2xl">
-                <DialogHeader>
-                  <DialogTitle>Create New Account</DialogTitle>
-                </DialogHeader>
-                <AccountForm
-                  onSubmit={handleCreateAccount}
-                  onCancel={() => setCreateDialogOpen(false)}
-                  isLoading={createAccountMutation.isPending}
-                  submitLabel="Create Account"
-                />
-              </DialogContent>
-            </Dialog>
+                <Button
+                  variant={viewMode === "list" ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => setViewMode("list")}
+                  className="px-3"
+                  data-testid="button-list-view"
+                >
+                  <List className="h-4 w-4" />
+                </Button>
+              </div>
+              
+              <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button data-testid="button-create-account">
+                    <Plus className="mr-2 h-4 w-4" />
+                    New Account
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-[600px]">
+                  <DialogHeader>
+                    <DialogTitle>Create Account</DialogTitle>
+                  </DialogHeader>
+                  <AccountForm
+                    onSuccess={() => setCreateDialogOpen(false)}
+                    onCancel={() => setCreateDialogOpen(false)}
+                  />
+                </DialogContent>
+              </Dialog>
+            </div>
           </div>
         </div>
 
-        {/* Filters */}
+        {/* Enhanced Search and Filters */}
         <Card className="mb-6">
           <CardContent className="pt-6">
-            <div className="flex flex-col md:flex-row gap-4">
-              {/* Search */}
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-edg-grey h-4 w-4" />
-                <Input
-                  placeholder="Search accounts..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                  data-testid="input-search-accounts"
-                />
+            <div className="space-y-4">
+              {/* Main Search and Quick Filters */}
+              <div className="flex flex-col md:flex-row gap-4">
+                {/* Search */}
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-edg-grey h-4 w-4" />
+                  <Input
+                    placeholder="Search accounts by name, email, phone, address..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-10"
+                    data-testid="input-search-accounts"
+                  />
+                </div>
+                
+                {/* Quick Filters */}
+                <div className="flex gap-2">
+                  <Select value={filterByType} onValueChange={setFilterByType}>
+                    <SelectTrigger className="w-[140px]" data-testid="select-filter-type">
+                      <SelectValue placeholder="Type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Types</SelectItem>
+                      <SelectItem value="company">Company</SelectItem>
+                      <SelectItem value="individual">Individual</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  
+                  <Select value={filterByRole} onValueChange={setFilterByRole}>
+                    <SelectTrigger className="w-[140px]" data-testid="select-filter-role">
+                      <SelectValue placeholder="Role" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Roles</SelectItem>
+                      <SelectItem value="lead">Lead</SelectItem>
+                      <SelectItem value="client">Client</SelectItem>
+                      <SelectItem value="vendor">Vendor</SelectItem>
+                      <SelectItem value="contractor">Contractor</SelectItem>
+                      <SelectItem value="supplier">Supplier</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  
+                  {/* Advanced Filters Toggle */}
+                  <Collapsible open={filtersOpen} onOpenChange={setFiltersOpen}>
+                    <CollapsibleTrigger asChild>
+                      <Button variant="outline" data-testid="button-advanced-filters">
+                        <SlidersHorizontal className="mr-2 h-4 w-4" />
+                        Advanced
+                        <ChevronDown className={`ml-2 h-4 w-4 transition-transform ${filtersOpen ? 'rotate-180' : ''}`} />
+                      </Button>
+                    </CollapsibleTrigger>
+                  </Collapsible>
+                  
+                  {/* Clear Filters */}
+                  {hasActiveFilters && (
+                    <Button variant="ghost" onClick={clearAllFilters} data-testid="button-clear-filters">
+                      <X className="mr-2 h-4 w-4" />
+                      Clear
+                    </Button>
+                  )}
+                </div>
               </div>
-
-              {/* Type Filter */}
-              <Select value={filterByType} onValueChange={setFilterByType}>
-                <SelectTrigger className="w-full md:w-48" data-testid="select-filter-type">
-                  <SelectValue placeholder="Filter by type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Types</SelectItem>
-                  <SelectItem value="company">Company</SelectItem>
-                  <SelectItem value="individual">Individual</SelectItem>
-                </SelectContent>
-              </Select>
-
-              {/* Role Filter */}
-              <Select value={filterByRole} onValueChange={setFilterByRole}>
-                <SelectTrigger className="w-full md:w-48" data-testid="select-filter-role">
-                  <SelectValue placeholder="Filter by role" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Roles</SelectItem>
-                  <SelectItem value="lead">Lead</SelectItem>
-                  <SelectItem value="client">Client</SelectItem>
-                  <SelectItem value="vendor">Vendor</SelectItem>
-                  <SelectItem value="contractor">Contractor</SelectItem>
-                  <SelectItem value="supplier">Supplier</SelectItem>
-                </SelectContent>
-              </Select>
+              
+              {/* Advanced Filters */}
+              <Collapsible open={filtersOpen} onOpenChange={setFiltersOpen}>
+                <CollapsibleContent className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-4 bg-gray-50 rounded-lg">
+                    {/* Opportunity Filters */}
+                    <div className="space-y-3">
+                      <h4 className="font-medium text-sm">Opportunity Filters</h4>
+                      <div className="flex items-center space-x-2">
+                        <Checkbox 
+                          id="has-opportunities"
+                          checked={showOnlyWithOpportunities}
+                          onCheckedChange={setShowOnlyWithOpportunities}
+                          data-testid="checkbox-has-opportunities"
+                        />
+                        <label htmlFor="has-opportunities" className="text-sm">Has opportunities</label>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-sm">Min. opportunities:</label>
+                        <Input
+                          type="number"
+                          min="0"
+                          value={minOpportunityCount}
+                          onChange={(e) => setMinOpportunityCount(parseInt(e.target.value) || 0)}
+                          className="w-full"
+                          data-testid="input-min-opportunities"
+                        />
+                      </div>
+                    </div>
+                    
+                    {/* Activity Filters */}
+                    <div className="space-y-3">
+                      <h4 className="font-medium text-sm">Activity Filters</h4>
+                      <div className="flex items-center space-x-2">
+                        <Checkbox 
+                          id="recent-activity"
+                          checked={showOnlyWithRecentActivity}
+                          onCheckedChange={setShowOnlyWithRecentActivity}
+                          data-testid="checkbox-recent-activity"
+                        />
+                        <label htmlFor="recent-activity" className="text-sm">Active in last 30 days</label>
+                      </div>
+                    </div>
+                    
+                    {/* Saved Filters */}
+                    <div className="space-y-3">
+                      <h4 className="font-medium text-sm">Saved Filters</h4>
+                      <div className="flex gap-2">
+                        <Dialog open={saveFilterDialogOpen} onOpenChange={setSaveFilterDialogOpen}>
+                          <DialogTrigger asChild>
+                            <Button variant="outline" size="sm" data-testid="button-save-filter">
+                              <Save className="mr-2 h-4 w-4" />
+                              Save Current
+                            </Button>
+                          </DialogTrigger>
+                          <DialogContent className="sm:max-w-[400px]">
+                            <DialogHeader>
+                              <DialogTitle>Save Filter</DialogTitle>
+                            </DialogHeader>
+                            <div className="space-y-4">
+                              <Input
+                                placeholder="Filter name..."
+                                value={filterName}
+                                onChange={(e) => setFilterName(e.target.value)}
+                                data-testid="input-filter-name"
+                              />
+                              <div className="flex justify-end gap-2">
+                                <Button variant="outline" onClick={() => setSaveFilterDialogOpen(false)}>
+                                  Cancel
+                                </Button>
+                                <Button onClick={saveCurrentFilter} disabled={!filterName.trim()}>
+                                  Save
+                                </Button>
+                              </div>
+                            </div>
+                          </DialogContent>
+                        </Dialog>
+                      </div>
+                      
+                      {savedFilters.length > 0 && (
+                        <div className="space-y-1">
+                          {savedFilters.map(filter => (
+                            <Button
+                              key={filter.id}
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => applySavedFilter(filter)}
+                              className="w-full justify-start h-8"
+                              data-testid={`button-saved-filter-${filter.id}`}
+                            >
+                              <FileText className="mr-2 h-3 w-3" />
+                              {filter.name}
+                            </Button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
+              
+              {/* Bulk Actions Bar */}
+              {selectedAccountIds.length > 0 && (
+                <div className="flex items-center justify-between p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      checked={selectedAccountIds.length === filteredAccounts.length}
+                      onCheckedChange={handleSelectAll}
+                      data-testid="checkbox-select-all"
+                    />
+                    <span className="text-sm font-medium">
+                      {selectedAccountIds.length} of {filteredAccounts.length} accounts selected
+                    </span>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" data-testid="button-bulk-email">
+                      <Mail className="mr-2 h-4 w-4" />
+                      Send Email
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => setSelectedAccountIds([])} data-testid="button-deselect-all">
+                      <X className="mr-2 h-4 w-4" />
+                      Deselect All
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -651,8 +971,9 @@ export default function AccountsPage() {
               </Card>
 
               <Tabs defaultValue="roles" className="space-y-4">
-                <TabsList className="grid w-full grid-cols-3">
+                <TabsList className="grid w-full grid-cols-4">
                   <TabsTrigger value="roles">Roles</TabsTrigger>
+                  <TabsTrigger value="health">Health Score</TabsTrigger>
                   <TabsTrigger value="contacts">Contacts</TabsTrigger>
                   <TabsTrigger value="activities">Activities</TabsTrigger>
                 </TabsList>
@@ -667,6 +988,15 @@ export default function AccountsPage() {
                       queryClient.invalidateQueries({ queryKey: ["/api/accounts"] });
                       queryClient.invalidateQueries({ queryKey: ["/api/accounts/roles"] });
                     }}
+                  />
+                </TabsContent>
+
+                <TabsContent value="health">
+                  <AccountHealthScoring
+                    account={enrichedAccounts.find(acc => acc.id === selectedAccount.id) || selectedAccount as AccountWithDetails}
+                    contacts={contacts}
+                    opportunities={opportunities}
+                    allAccounts={enrichedAccounts}
                   />
                 </TabsContent>
 
