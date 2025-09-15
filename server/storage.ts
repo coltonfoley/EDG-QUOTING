@@ -313,7 +313,21 @@ export class DatabaseStorage implements IStorage {
       conString: process.env.DATABASE_URL,
       createTableIfMissing: false,
       tableName: "sessions",
+      schemaName: "public",
+      ttl: 1000 * 60 * 60 * 24 * 7, // 7 days in milliseconds
+      disableTouch: false,
     });
+    
+    // Add session store error handling
+    this.sessionStore.on('error', (error: any) => {
+      console.error('🚨 Session store error:', error);
+    });
+    
+    this.sessionStore.on('connect', () => {
+      console.log('✅ Session store connected successfully');
+    });
+    
+    console.log('🔧 Session store initialized with DATABASE_URL:', process.env.DATABASE_URL ? 'Present' : 'Missing');
   }
   
   // Customer methods
