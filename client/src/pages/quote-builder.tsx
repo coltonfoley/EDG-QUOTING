@@ -217,6 +217,7 @@ export default function QuoteBuilder() {
       
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <QuoteHeader
+          key={isNewQuote ? 'new-quote' : `quote-${currentQuote.id}`}
           quote={isNewQuote ? undefined : currentQuote}
           onSave={handleSaveQuote}
           isLoading={createQuoteMutation.isPending || updateQuoteMutation.isPending}
