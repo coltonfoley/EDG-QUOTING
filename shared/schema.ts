@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, decimal, timestamp, boolean, varchar, jsonb, index } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, decimal, timestamp, boolean, varchar, jsonb, index, unique } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { sql } from "drizzle-orm";
@@ -36,10 +36,91 @@ export const customers = pgTable("customers", {
   company: text("company"), // Company name for business clients
 });
 
+// Comprehensive CRM System Tables
+
+// Accounts - Companies or individuals  
+export const accounts = pgTable("accounts", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  type: text("type").notNull(), // 'company' | 'individual'
+  phone: text("phone"),
+  email: text("email"),
+  billingAddress: text("billing_address"),
+  shippingAddress: text("shipping_address"),
+  tags: jsonb("tags"), // Array of tags for categorization
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Account roles - accounts can have multiple roles
+export const accountRoles = pgTable("account_roles", {
+  id: serial("id").primaryKey(),
+  accountId: integer("account_id").notNull().references(() => accounts.id, { onDelete: 'cascade' }),
+  role: text("role").notNull(), // 'lead' | 'client' | 'vendor' | 'contractor' | 'supplier'
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  unique("unique_account_role").on(table.accountId, table.role),
+]);
+
+// Contacts - individual people within accounts
+export const contacts = pgTable("contacts", {
+  id: serial("id").primaryKey(),
+  accountId: integer("account_id").notNull().references(() => accounts.id, { onDelete: 'cascade' }),
+  firstName: text("first_name").notNull(),
+  lastName: text("last_name").notNull(),
+  email: text("email"),
+  phone: text("phone"),
+  title: text("title"), // job title/position
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Contact roles - contacts can have specific roles that may differ from account roles
+export const contactRoles = pgTable("contact_roles", {
+  id: serial("id").primaryKey(),
+  contactId: integer("contact_id").notNull().references(() => contacts.id, { onDelete: 'cascade' }),
+  role: text("role").notNull(), // 'lead' | 'client' | 'vendor' | 'contractor' | 'supplier'
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  unique("unique_contact_role").on(table.contactId, table.role),
+]);
+
+// Opportunities - sales opportunities/projects
+export const opportunities = pgTable("opportunities", {
+  id: serial("id").primaryKey(),
+  accountId: integer("account_id").notNull().references(() => accounts.id, { onDelete: 'cascade' }),
+  primaryContactId: integer("primary_contact_id").references(() => contacts.id, { onDelete: 'set null' }),
+  name: text("name").notNull(),
+  stage: text("stage").notNull().default("inquiry"), // 'inquiry' | 'estimating' | 'proposal_sent' | 'contract_signed' | 'project_complete' | 'closed_lost'
+  amount: decimal("amount", { precision: 12, scale: 2 }), // estimated/actual project value
+  expectedCloseDate: timestamp("expected_close_date"),
+  source: text("source"), // web, referral, cold_call, trade_show, social_media, etc.
+  assignedTo: varchar("assigned_to").references(() => users.id, { onDelete: 'set null' }),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Polymorphic activities table - can link to accounts, contacts, or opportunities
+export const activities = pgTable("activities", {
+  id: serial("id").primaryKey(),
+  entityType: text("entity_type").notNull(), // 'account' | 'contact' | 'opportunity'
+  entityId: integer("entity_id").notNull(),
+  type: text("type").notNull(), // 'call' | 'email' | 'meeting' | 'task' | 'note' | 'quote_sent' | 'proposal_sent' | 'contract_signed'
+  summary: text("summary").notNull(),
+  description: text("description"), // optional detailed description
+  dueAt: timestamp("due_at"), // for tasks/scheduled activities
+  completedAt: timestamp("completed_at"), // when completed
+  assignedTo: varchar("assigned_to").references(() => users.id, { onDelete: 'set null' }),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 export const quotes = pgTable("quotes", {
   id: serial("id").primaryKey(),
   quoteNumber: text("quote_number").notNull().unique(),
   customerId: integer("customer_id").notNull(),
+  opportunityId: integer("opportunity_id").references(() => opportunities.id, { onDelete: 'set null' }), // link to opportunity
   projectName: text("project_name"),
   projectAddress: text("project_address"),
   estimatedStartDate: text("estimated_start_date"),
@@ -170,7 +251,7 @@ export const lineItems = pgTable("line_items", {
   isAccessory: boolean("is_accessory").default(false),
 });
 
-// CRM Lead Management Tables
+// Original CRM Lead Management Tables (keeping for backward compatibility)
 export const leads = pgTable("leads", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
@@ -181,7 +262,7 @@ export const leads = pgTable("leads", {
   source: text("source"), // web, referral, cold_call, trade_show, social_media, etc.
   value: decimal("value", { precision: 12, scale: 2 }), // estimated project value
   notes: text("notes"),
-  assignedTo: varchar("assigned_to").references(() => users.id), // foreign key to users table
+  assignedTo: varchar("assigned_to").references(() => users.id, { onDelete: 'set null' }), // foreign key to users table
   customerId: integer("customer_id"), // optional link to customer when lead converts
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
@@ -195,7 +276,7 @@ export const tasks = pgTable("tasks", {
   dueDate: timestamp("due_date"),
   completed: boolean("completed").notNull().default(false),
   priority: text("priority").notNull().default("medium"), // low, medium, high
-  assignedTo: varchar("assigned_to").references(() => users.id), // foreign key to users table
+  assignedTo: varchar("assigned_to").references(() => users.id, { onDelete: 'set null' }), // foreign key to users table
   createdAt: timestamp("created_at").defaultNow(),
   completedAt: timestamp("completed_at"),
 });
@@ -205,7 +286,7 @@ export const leadActivities = pgTable("lead_activities", {
   leadId: integer("lead_id").notNull(), // foreign key to leads table
   activityType: text("activity_type").notNull(), // status_change, task_completed, note_added, email_sent, call_made, meeting_scheduled, quote_sent, etc.
   description: text("description").notNull(),
-  userId: varchar("user_id").references(() => users.id), // which user performed the activity
+  userId: varchar("user_id").references(() => users.id, { onDelete: 'set null' }), // which user performed the activity
   metadata: jsonb("metadata"), // additional activity-specific data
   createdAt: timestamp("created_at").defaultNow(),
 });
@@ -330,7 +411,94 @@ export const insertProposalTemplateSchema = createInsertSchema(proposalTemplates
   }).default('pdf'),
 });
 
-// CRM insert schemas
+// Comprehensive CRM insert schemas
+export const insertAccountSchema = createInsertSchema(accounts).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  name: z.string().min(1, "Account name is required"),
+  type: z.enum(['company', 'individual'], {
+    errorMap: () => ({ message: "Account type must be either 'company' or 'individual'" }),
+  }),
+  phone: z.string().optional(),
+  email: z.string().email().optional().or(z.literal('')),
+  billingAddress: z.string().optional(),
+  shippingAddress: z.string().optional(),
+  tags: z.array(z.string()).optional(),
+});
+
+export const insertAccountRoleSchema = createInsertSchema(accountRoles).omit({
+  id: true,
+  createdAt: true,
+}).extend({
+  accountId: z.number().int().positive("Account ID is required"),
+  role: z.enum(['lead', 'client', 'vendor', 'contractor', 'supplier'], {
+    errorMap: () => ({ message: "Role must be one of: lead, client, vendor, contractor, supplier" }),
+  }),
+});
+
+export const insertContactSchema = createInsertSchema(contacts).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  accountId: z.number().int().positive("Account ID is required"),
+  firstName: z.string().min(1, "First name is required"),
+  lastName: z.string().min(1, "Last name is required"),
+  email: z.string().email().optional().or(z.literal('')),
+  phone: z.string().optional(),
+  title: z.string().optional(),
+});
+
+export const insertContactRoleSchema = createInsertSchema(contactRoles).omit({
+  id: true,
+  createdAt: true,
+}).extend({
+  contactId: z.number().int().positive("Contact ID is required"),
+  role: z.enum(['lead', 'client', 'vendor', 'contractor', 'supplier'], {
+    errorMap: () => ({ message: "Role must be one of: lead, client, vendor, contractor, supplier" }),
+  }),
+});
+
+export const insertOpportunitySchema = createInsertSchema(opportunities).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  accountId: z.number().int().positive("Account ID is required"),
+  primaryContactId: z.number().int().positive().optional(),
+  name: z.string().min(1, "Opportunity name is required"),
+  stage: z.enum(['inquiry', 'estimating', 'proposal_sent', 'contract_signed', 'project_complete', 'closed_lost'], {
+    errorMap: () => ({ message: "Stage must be one of: inquiry, estimating, proposal_sent, contract_signed, project_complete, closed_lost" }),
+  }).default('inquiry'),
+  amount: z.union([z.string(), z.number(), z.null()]).transform(val => val === null ? null : (typeof val === 'string' ? val : val.toString())).optional(),
+  expectedCloseDate: z.union([z.date(), z.string(), z.null()]).transform(val => val === null ? null : val).optional(),
+  source: z.string().optional(),
+  assignedTo: z.string().optional(),
+  notes: z.string().optional(),
+});
+
+export const insertActivitySchema = createInsertSchema(activities).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  entityType: z.enum(['account', 'contact', 'opportunity'], {
+    errorMap: () => ({ message: "Entity type must be one of: account, contact, opportunity" }),
+  }),
+  entityId: z.number().int().positive("Entity ID is required"),
+  type: z.enum(['call', 'email', 'meeting', 'task', 'note', 'quote_sent', 'proposal_sent', 'contract_signed'], {
+    errorMap: () => ({ message: "Type must be one of: call, email, meeting, task, note, quote_sent, proposal_sent, contract_signed" }),
+  }),
+  summary: z.string().min(1, "Activity summary is required"),
+  description: z.string().optional(),
+  dueAt: z.union([z.date(), z.string(), z.null()]).transform(val => val === null ? null : val).optional(),
+  completedAt: z.union([z.date(), z.string(), z.null()]).transform(val => val === null ? null : val).optional(),
+  assignedTo: z.string().optional(),
+});
+
+// CRM insert schemas (existing - keeping for backward compatibility)
 export const insertLeadSchema = createInsertSchema(leads).omit({
   id: true,
   createdAt: true,
@@ -381,6 +549,7 @@ export const insertLeadActivitySchema = createInsertSchema(leadActivities).omit(
 
 
 
+// Select types (existing)
 export type Customer = typeof customers.$inferSelect;
 export type Quote = typeof quotes.$inferSelect;
 export type Product = typeof products.$inferSelect;
@@ -393,6 +562,15 @@ export type Lead = typeof leads.$inferSelect;
 export type Task = typeof tasks.$inferSelect;
 export type LeadActivity = typeof leadActivities.$inferSelect;
 
+// Comprehensive CRM select types
+export type Account = typeof accounts.$inferSelect;
+export type AccountRole = typeof accountRoles.$inferSelect;
+export type Contact = typeof contacts.$inferSelect;
+export type ContactRole = typeof contactRoles.$inferSelect;
+export type Opportunity = typeof opportunities.$inferSelect;
+export type Activity = typeof activities.$inferSelect;
+
+// Insert types (existing)
 export type InsertCustomer = z.infer<typeof insertCustomerSchema>;
 export type InsertQuote = z.infer<typeof insertQuoteSchema>;
 export type InsertProduct = z.infer<typeof insertProductSchema>;
@@ -404,6 +582,14 @@ export type InsertProductAccessory = z.infer<typeof insertProductAccessorySchema
 export type InsertLead = z.infer<typeof insertLeadSchema>;
 export type InsertTask = z.infer<typeof insertTaskSchema>;
 export type InsertLeadActivity = z.infer<typeof insertLeadActivitySchema>;
+
+// Comprehensive CRM insert types
+export type InsertAccount = z.infer<typeof insertAccountSchema>;
+export type InsertAccountRole = z.infer<typeof insertAccountRoleSchema>;
+export type InsertContact = z.infer<typeof insertContactSchema>;
+export type InsertContactRole = z.infer<typeof insertContactRoleSchema>;
+export type InsertOpportunity = z.infer<typeof insertOpportunitySchema>;
+export type InsertActivity = z.infer<typeof insertActivitySchema>;
 
 export type QuoteWithDetails = Quote & {
   customer: Customer;
