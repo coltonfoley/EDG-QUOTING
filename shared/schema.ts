@@ -177,7 +177,7 @@ export const leads = pgTable("leads", {
   email: text("email"),
   phone: text("phone"),
   company: text("company"),
-  status: text("status").notNull().default("new"), // new, contacted, qualified, quoted, won, lost
+  status: text("status").notNull().default("new"), // new, contacted, quoted, won, lost
   source: text("source"), // web, referral, cold_call, trade_show, social_media, etc.
   value: decimal("value", { precision: 12, scale: 2 }), // estimated project value
   notes: text("notes"),
@@ -336,8 +336,8 @@ export const insertLeadSchema = createInsertSchema(leads).omit({
   createdAt: true,
   updatedAt: true,
 }).extend({
-  status: z.enum(['new', 'contacted', 'qualified', 'quoted', 'won', 'lost'], {
-    errorMap: () => ({ message: "Status must be one of: new, contacted, qualified, quoted, won, lost" }),
+  status: z.enum(['new', 'contacted', 'quoted', 'won', 'lost'], {
+    errorMap: () => ({ message: "Status must be one of: new, contacted, quoted, won, lost" }),
   }).default('new'),
   value: z.union([z.string(), z.number(), z.null()]).transform(val => val === null ? null : (typeof val === 'string' ? val : val.toString())).optional(),
   name: z.string().min(1, "Lead name is required"),
