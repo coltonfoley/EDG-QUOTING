@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { AppHeader } from "@/components/app-header";
 import { KanbanBoard } from "@/components/kanban-board";
+import { LeadDetailModal } from "@/components/lead-detail-modal";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -39,7 +40,8 @@ export default function CRMPage() {
   const [filterByAssigned, setFilterByAssigned] = useState<string>("all");
   const [filterByStatus, setFilterByStatus] = useState<string>("all");
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
+  const [selectedLeadId, setSelectedLeadId] = useState<number | null>(null);
+  const [leadModalOpen, setLeadModalOpen] = useState(false);
   
   const { toast } = useToast();
   const { isAuthenticated, isLoading: authLoading } = useAuth();
@@ -154,12 +156,13 @@ export default function CRMPage() {
   }, [filteredLeads]);
 
   const handleLeadClick = (lead: Lead) => {
-    setSelectedLead(lead);
-    // In the future, this could open a lead detail modal/sidebar
-    toast({
-      title: "Lead selected",
-      description: `Selected ${lead.name} - Lead details view coming soon!`,
-    });
+    setSelectedLeadId(lead.id);
+    setLeadModalOpen(true);
+  };
+
+  const handleModalClose = () => {
+    setLeadModalOpen(false);
+    setSelectedLeadId(null);
   };
 
   const handleCreateSubmit = (data: CreateLeadFormData) => {
@@ -462,6 +465,14 @@ export default function CRMPage() {
             />
           )}
         </div>
+
+        {/* Lead Detail Modal */}
+        <LeadDetailModal
+          leadId={selectedLeadId}
+          open={leadModalOpen}
+          onClose={handleModalClose}
+          users={users}
+        />
       </div>
     </div>
   );
