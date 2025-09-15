@@ -109,7 +109,7 @@ const leadUpdateSchema = z.object({
   source: z.string().optional(),
   notes: z.string().optional(),
   assignedTo: z.string().optional(),
-  status: z.enum(['new', 'contacted', 'qualified', 'quoted', 'won', 'lost']),
+  status: z.enum(['new', 'contacted', 'quoted', 'won', 'lost']),
 });
 
 type LeadUpdateData = z.infer<typeof leadUpdateSchema>;
@@ -386,8 +386,6 @@ export function LeadDetailModal({ leadId, open, onClose, users = [] }: LeadDetai
         return "bg-gray-100 text-gray-800";
       case "contacted":
         return "bg-blue-100 text-blue-800";
-      case "qualified":
-        return "bg-yellow-100 text-yellow-800";
       case "quoted":
         return "bg-orange-100 text-orange-800";
       case "won":
@@ -689,7 +687,6 @@ export function LeadDetailModal({ leadId, open, onClose, users = [] }: LeadDetai
                                     <SelectContent>
                                       <SelectItem value="new">New</SelectItem>
                                       <SelectItem value="contacted">Contacted</SelectItem>
-                                      <SelectItem value="qualified">Qualified</SelectItem>
                                       <SelectItem value="quoted">Quoted</SelectItem>
                                       <SelectItem value="won">Won</SelectItem>
                                       <SelectItem value="lost">Lost</SelectItem>
@@ -1572,7 +1569,6 @@ export function LeadDetailModal({ leadId, open, onClose, users = [] }: LeadDetai
                             <SelectContent>
                               <SelectItem value="new">New</SelectItem>
                               <SelectItem value="contacted">Contacted</SelectItem>
-                              <SelectItem value="qualified">Qualified</SelectItem>
                               <SelectItem value="quoted">Quoted</SelectItem>
                               <SelectItem value="won">Won</SelectItem>
                               <SelectItem value="lost">Lost</SelectItem>

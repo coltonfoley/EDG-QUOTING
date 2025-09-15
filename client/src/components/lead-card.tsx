@@ -20,8 +20,6 @@ export function LeadCard({ lead, taskCount = 0, isDragging = false, onClick }: L
         return "bg-gray-100 text-gray-800";
       case "contacted":
         return "bg-blue-100 text-blue-800";
-      case "qualified":
-        return "bg-yellow-100 text-yellow-800";
       case "quoted":
         return "bg-orange-100 text-orange-800";
       case "won":
