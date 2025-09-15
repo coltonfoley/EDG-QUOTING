@@ -179,7 +179,7 @@ export default function ProjectDashboardPage() {
         return projects;
     }
     
-    return projects.filter(project => new Date(project.createdAt) >= cutoffDate);
+    return projects.filter(project => project.createdAt && new Date(project.createdAt) >= cutoffDate);
   }, [projects, timeRange]);
 
   // Calculate comprehensive project metrics
@@ -479,7 +479,7 @@ export default function ProjectDashboardPage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="h-64">
+                  <ChartContainer config={{}} className="h-64">
                     <ResponsiveContainer width="100%" height="100%">
                       <RechartsPieChart>
                         <Pie
@@ -499,7 +499,7 @@ export default function ProjectDashboardPage() {
                         <ChartLegend content={<ChartLegendContent />} />
                       </RechartsPieChart>
                     </ResponsiveContainer>
-                  </div>
+                  </ChartContainer>
                 </CardContent>
               </Card>
 
@@ -512,7 +512,7 @@ export default function ProjectDashboardPage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="h-64">
+                  <ChartContainer config={{}} className="h-64">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={progressChartData}>
                         <XAxis dataKey="range" />
@@ -521,7 +521,7 @@ export default function ProjectDashboardPage() {
                         <Bar dataKey="count" fill="#059669" />
                       </BarChart>
                     </ResponsiveContainer>
-                  </div>
+                  </ChartContainer>
                 </CardContent>
               </Card>
             </div>
@@ -663,7 +663,7 @@ export default function ProjectDashboardPage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="h-64">
+                  <ChartContainer config={{}} className="h-64">
                     <ResponsiveContainer width="100%" height="100%">
                       <AreaChart data={revenueChartData}>
                         <XAxis dataKey="month" />
@@ -681,7 +681,7 @@ export default function ProjectDashboardPage() {
                         />
                       </AreaChart>
                     </ResponsiveContainer>
-                  </div>
+                  </ChartContainer>
                 </CardContent>
               </Card>
 
