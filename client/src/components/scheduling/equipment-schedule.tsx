@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Calendar } from "react-big-calendar";
+import { Calendar, momentLocalizer } from "react-big-calendar";
 import moment from "moment";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -540,7 +540,7 @@ export default function EquipmentSchedule({
 
             <div className="h-[600px] bg-white rounded-lg border">
               <Calendar
-                localizer={moment.localizer(moment)}
+                localizer={momentLocalizer(moment)}
                 events={calendarEvents}
                 startAccessor="start"
                 endAccessor="end"
