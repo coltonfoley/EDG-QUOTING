@@ -1,4 +1,18 @@
-import { customers, quotes, lineItems, products, users, contractTemplates, proposalTemplates, pricingTables, productAccessories, leads, tasks, leadActivities, accounts, accountRoles, contacts, contactRoles, opportunities, activities, type Customer, type Quote, type LineItem, type Product, type User, type ContractTemplate, type ProposalTemplate, type PricingTable, type ProductAccessory, type Lead, type Task, type LeadActivity, type Account, type AccountRole, type Contact, type ContactRole, type Opportunity, type Activity, type InsertCustomer, type InsertQuote, type InsertLineItem, type InsertProduct, type InsertUser, type InsertContractTemplate, type InsertProposalTemplate, type InsertPricingTable, type InsertProductAccessory, type InsertLead, type InsertTask, type InsertLeadActivity, type InsertAccount, type InsertAccountRole, type InsertContact, type InsertContactRole, type InsertOpportunity, type InsertActivity, type QuoteWithDetails, type ProductWithDetails } from "@shared/schema";
+import { 
+  customers, quotes, lineItems, products, users, contractTemplates, proposalTemplates, pricingTables, productAccessories, leads, tasks, leadActivities, accounts, accountRoles, contacts, contactRoles, opportunities, activities,
+  // Project management tables
+  projects, projectMilestones, projectTasks, projectTaskDependencies, projectTaskAssignments, projectCrew, projectEquipment, projectBudgetLines, projectScheduleEvents, projectProgress, projectTimeEntries, projectMaterials, projectChangeOrders, projectPurchaseOrders, projectMaterialReceipts, projectLineItemLinks, projectFinancials,
+  // Select types
+  type Customer, type Quote, type LineItem, type Product, type User, type ContractTemplate, type ProposalTemplate, type PricingTable, type ProductAccessory, type Lead, type Task, type LeadActivity, type Account, type AccountRole, type Contact, type ContactRole, type Opportunity, type Activity,
+  // Project management select types
+  type Project, type ProjectMilestone, type ProjectTask, type ProjectTaskDependency, type ProjectTaskAssignment, type ProjectCrew, type ProjectEquipment, type ProjectBudgetLine, type ProjectScheduleEvent, type ProjectProgress, type ProjectTimeEntry, type ProjectMaterial, type ProjectChangeOrder, type ProjectPurchaseOrder, type ProjectMaterialReceipt, type ProjectLineItemLink, type ProjectFinancial,
+  // Insert types
+  type InsertCustomer, type InsertQuote, type InsertLineItem, type InsertProduct, type InsertUser, type InsertContractTemplate, type InsertProposalTemplate, type InsertPricingTable, type InsertProductAccessory, type InsertLead, type InsertTask, type InsertLeadActivity, type InsertAccount, type InsertAccountRole, type InsertContact, type InsertContactRole, type InsertOpportunity, type InsertActivity,
+  // Project management insert types
+  type InsertProject, type InsertProjectMilestone, type InsertProjectTask, type InsertProjectTaskDependency, type InsertProjectTaskAssignment, type InsertProjectCrew, type InsertProjectEquipment, type InsertProjectBudgetLine, type InsertProjectScheduleEvent, type InsertProjectProgress, type InsertProjectTimeEntry, type InsertProjectMaterial, type InsertProjectChangeOrder, type InsertProjectPurchaseOrder, type InsertProjectMaterialReceipt, type InsertProjectLineItemLink, type InsertProjectFinancial,
+  // Complex types
+  type QuoteWithDetails, type ProductWithDetails
+} from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, inArray, sql, and, ne, lt } from "drizzle-orm";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
@@ -182,6 +196,197 @@ export interface IStorage {
     totalContacts: number;
     totalOpportunities: number;
   }>;
+
+  // ==========================================
+  // PROJECT MANAGEMENT CRUD OPERATIONS
+  // ==========================================
+
+  // Project CRUD methods
+  getAllProjects(): Promise<Project[]>;
+  getProject(id: number): Promise<Project | undefined>;
+  getProjectsByStatus(status: string): Promise<Project[]>;
+  getProjectsByAccountId(accountId: number): Promise<Project[]>;
+  getProjectsByProjectManager(projectManagerId: string): Promise<Project[]>;
+  createProject(project: InsertProject): Promise<Project>;
+  updateProject(id: number, project: Partial<InsertProject>): Promise<Project | undefined>;
+  deleteProject(id: number): Promise<boolean>;
+  convertQuoteToProject(quoteId: number, projectData: Partial<InsertProject>): Promise<{ quote: Quote | undefined; project: Project | undefined }>;
+
+  // Project Milestone CRUD methods
+  getProjectMilestones(projectId: number): Promise<ProjectMilestone[]>;
+  getProjectMilestone(id: number): Promise<ProjectMilestone | undefined>;
+  createProjectMilestone(milestone: InsertProjectMilestone): Promise<ProjectMilestone>;
+  updateProjectMilestone(id: number, milestone: Partial<InsertProjectMilestone>): Promise<ProjectMilestone | undefined>;
+  deleteProjectMilestone(id: number): Promise<boolean>;
+  completeProjectMilestone(id: number, completionData?: { actualDate?: Date; clientApprovedBy?: number }): Promise<ProjectMilestone | undefined>;
+
+  // Project Task CRUD methods with hierarchical support
+  getProjectTasks(projectId: number): Promise<ProjectTask[]>;
+  getProjectTask(id: number): Promise<ProjectTask | undefined>;
+  getProjectTasksByMilestone(milestoneId: number): Promise<ProjectTask[]>;
+  getProjectTasksByAssignee(assignedTo: string): Promise<ProjectTask[]>;
+  getProjectTasksByParent(parentTaskId: number): Promise<ProjectTask[]>;
+  getProjectTaskHierarchy(projectId: number): Promise<ProjectTask[]>; // Returns tasks with proper hierarchical structure
+  createProjectTask(task: InsertProjectTask): Promise<ProjectTask>;
+  updateProjectTask(id: number, task: Partial<InsertProjectTask>): Promise<ProjectTask | undefined>;
+  deleteProjectTask(id: number): Promise<boolean>;
+  completeProjectTask(id: number, completionData?: { actualEndDate?: Date; actualHours?: string; actualCost?: string }): Promise<ProjectTask | undefined>;
+
+  // Project Task Dependency CRUD methods
+  getProjectTaskDependencies(taskId: number): Promise<ProjectTaskDependency[]>;
+  getProjectTaskDependency(id: number): Promise<ProjectTaskDependency | undefined>;
+  createProjectTaskDependency(dependency: InsertProjectTaskDependency): Promise<ProjectTaskDependency>;
+  updateProjectTaskDependency(id: number, dependency: Partial<InsertProjectTaskDependency>): Promise<ProjectTaskDependency | undefined>;
+  deleteProjectTaskDependency(id: number): Promise<boolean>;
+  validateTaskDependencies(taskId: number): Promise<{ isValid: boolean; blockingTasks?: ProjectTask[]; circularDependencies?: boolean }>;
+
+  // Project Task Assignment CRUD methods
+  getProjectTaskAssignments(taskId: number): Promise<ProjectTaskAssignment[]>;
+  getProjectTaskAssignmentsByCrewMember(crewMemberId: number): Promise<ProjectTaskAssignment[]>;
+  getProjectTaskAssignmentsByUser(userId: string): Promise<ProjectTaskAssignment[]>;
+  createProjectTaskAssignment(assignment: InsertProjectTaskAssignment): Promise<ProjectTaskAssignment>;
+  updateProjectTaskAssignment(id: number, assignment: Partial<InsertProjectTaskAssignment>): Promise<ProjectTaskAssignment | undefined>;
+  deleteProjectTaskAssignment(id: number): Promise<boolean>;
+
+  // Project Crew CRUD methods
+  getProjectCrew(projectId: number): Promise<ProjectCrew[]>;
+  getProjectCrewMember(id: number): Promise<ProjectCrew | undefined>;
+  getProjectCrewByRole(projectId: number, role: string): Promise<ProjectCrew[]>;
+  createProjectCrewMember(crewMember: InsertProjectCrew): Promise<ProjectCrew>;
+  updateProjectCrewMember(id: number, crewMember: Partial<InsertProjectCrew>): Promise<ProjectCrew | undefined>;
+  deleteProjectCrewMember(id: number): Promise<boolean>;
+  getAvailableCrewMembers(startDate: Date, endDate: Date): Promise<ProjectCrew[]>;
+
+  // Project Equipment CRUD methods
+  getProjectEquipment(projectId: number): Promise<ProjectEquipment[]>;
+  getProjectEquipmentItem(id: number): Promise<ProjectEquipment | undefined>;
+  getProjectEquipmentByStatus(status: string): Promise<ProjectEquipment[]>;
+  createProjectEquipment(equipment: InsertProjectEquipment): Promise<ProjectEquipment>;
+  updateProjectEquipment(id: number, equipment: Partial<InsertProjectEquipment>): Promise<ProjectEquipment | undefined>;
+  deleteProjectEquipment(id: number): Promise<boolean>;
+  allocateEquipmentToProject(projectId: number, equipmentData: InsertProjectEquipment): Promise<ProjectEquipment>;
+  returnProjectEquipment(id: number, returnData?: { returnDate?: Date; condition?: string; notes?: string }): Promise<ProjectEquipment | undefined>;
+
+  // Project Budget Line CRUD methods
+  getProjectBudgetLines(projectId: number): Promise<ProjectBudgetLine[]>;
+  getProjectBudgetLine(id: number): Promise<ProjectBudgetLine | undefined>;
+  getProjectBudgetLinesByCategory(projectId: number, category: string): Promise<ProjectBudgetLine[]>;
+  createProjectBudgetLine(budgetLine: InsertProjectBudgetLine): Promise<ProjectBudgetLine>;
+  updateProjectBudgetLine(id: number, budgetLine: Partial<InsertProjectBudgetLine>): Promise<ProjectBudgetLine | undefined>;
+  deleteProjectBudgetLine(id: number): Promise<boolean>;
+  syncBudgetFromQuoteLineItems(projectId: number, quoteId: number): Promise<{ createdBudgetLines: number; errors: string[] }>;
+
+  // Project Schedule Event CRUD methods
+  getProjectScheduleEvents(projectId: number): Promise<ProjectScheduleEvent[]>;
+  getProjectScheduleEvent(id: number): Promise<ProjectScheduleEvent | undefined>;
+  getScheduleEventsByResource(resourceType: string, resourceId: number): Promise<ProjectScheduleEvent[]>;
+  getScheduleEventsByDateRange(startDate: Date, endDate: Date): Promise<ProjectScheduleEvent[]>;
+  createProjectScheduleEvent(event: InsertProjectScheduleEvent): Promise<ProjectScheduleEvent>;
+  updateProjectScheduleEvent(id: number, event: Partial<InsertProjectScheduleEvent>): Promise<ProjectScheduleEvent | undefined>;
+  deleteProjectScheduleEvent(id: number): Promise<boolean>;
+  checkResourceAvailability(resourceType: string, resourceId: number, startDate: Date, endDate: Date): Promise<{ isAvailable: boolean; conflictingEvents?: ProjectScheduleEvent[] }>;
+
+  // Project Progress CRUD methods
+  getProjectProgress(projectId: number): Promise<ProjectProgress[]>;
+  getProjectProgressEntry(id: number): Promise<ProjectProgress | undefined>;
+  getProjectProgressByTask(taskId: number): Promise<ProjectProgress[]>;
+  getProjectProgressByDate(projectId: number, startDate: Date, endDate: Date): Promise<ProjectProgress[]>;
+  createProjectProgressEntry(progress: InsertProjectProgress): Promise<ProjectProgress>;
+  updateProjectProgressEntry(id: number, progress: Partial<InsertProjectProgress>): Promise<ProjectProgress | undefined>;
+  deleteProjectProgressEntry(id: number): Promise<boolean>;
+  getClientVisibleProgress(projectId: number): Promise<ProjectProgress[]>;
+
+  // Project Time Entry CRUD methods
+  getProjectTimeEntries(projectId: number): Promise<ProjectTimeEntry[]>;
+  getProjectTimeEntry(id: number): Promise<ProjectTimeEntry | undefined>;
+  getProjectTimeEntriesByCrewMember(crewMemberId: number): Promise<ProjectTimeEntry[]>;
+  getProjectTimeEntriesByUser(userId: string): Promise<ProjectTimeEntry[]>;
+  getProjectTimeEntriesByStatus(status: string): Promise<ProjectTimeEntry[]>;
+  getProjectTimeEntriesByDateRange(startDate: Date, endDate: Date): Promise<ProjectTimeEntry[]>;
+  createProjectTimeEntry(timeEntry: InsertProjectTimeEntry): Promise<ProjectTimeEntry>;
+  updateProjectTimeEntry(id: number, timeEntry: Partial<InsertProjectTimeEntry>): Promise<ProjectTimeEntry | undefined>;
+  deleteProjectTimeEntry(id: number): Promise<boolean>;
+  approveProjectTimeEntry(id: number, approvedBy: string): Promise<ProjectTimeEntry | undefined>;
+  rejectProjectTimeEntry(id: number, rejectedBy: string, reason?: string): Promise<ProjectTimeEntry | undefined>;
+
+  // Project Material CRUD methods
+  getProjectMaterials(projectId: number): Promise<ProjectMaterial[]>;
+  getProjectMaterial(id: number): Promise<ProjectMaterial | undefined>;
+  getProjectMaterialsByTask(taskId: number): Promise<ProjectMaterial[]>;
+  getProjectMaterialsByType(materialType: string): Promise<ProjectMaterial[]>;
+  createProjectMaterial(material: InsertProjectMaterial): Promise<ProjectMaterial>;
+  updateProjectMaterial(id: number, material: Partial<InsertProjectMaterial>): Promise<ProjectMaterial | undefined>;
+  deleteProjectMaterial(id: number): Promise<boolean>;
+  trackMaterialUsage(id: number, usageData: { quantityUsed?: string; quantityWasted?: string; usageDate?: Date; notes?: string }): Promise<ProjectMaterial | undefined>;
+
+  // Project Change Order CRUD methods
+  getProjectChangeOrders(projectId: number): Promise<ProjectChangeOrder[]>;
+  getProjectChangeOrder(id: number): Promise<ProjectChangeOrder | undefined>;
+  getProjectChangeOrdersByStatus(status: string): Promise<ProjectChangeOrder[]>;
+  createProjectChangeOrder(changeOrder: InsertProjectChangeOrder): Promise<ProjectChangeOrder>;
+  updateProjectChangeOrder(id: number, changeOrder: Partial<InsertProjectChangeOrder>): Promise<ProjectChangeOrder | undefined>;
+  deleteProjectChangeOrder(id: number): Promise<boolean>;
+  approveProjectChangeOrder(id: number, approvalData: { clientApprovedBy?: number; internalApprovedBy?: string; clientSignature?: string }): Promise<ProjectChangeOrder | undefined>;
+  implementProjectChangeOrder(id: number, implementedBy: string): Promise<ProjectChangeOrder | undefined>;
+
+  // Project Purchase Order CRUD methods
+  getProjectPurchaseOrders(projectId: number): Promise<ProjectPurchaseOrder[]>;
+  getProjectPurchaseOrder(id: number): Promise<ProjectPurchaseOrder | undefined>;
+  getProjectPurchaseOrdersByStatus(status: string): Promise<ProjectPurchaseOrder[]>;
+  getProjectPurchaseOrdersBySupplier(supplierName: string): Promise<ProjectPurchaseOrder[]>;
+  createProjectPurchaseOrder(purchaseOrder: InsertProjectPurchaseOrder): Promise<ProjectPurchaseOrder>;
+  updateProjectPurchaseOrder(id: number, purchaseOrder: Partial<InsertProjectPurchaseOrder>): Promise<ProjectPurchaseOrder | undefined>;
+  deleteProjectPurchaseOrder(id: number): Promise<boolean>;
+  markPurchaseOrderDelivered(id: number, deliveryData: { actualDeliveryDate?: Date; status?: string }): Promise<ProjectPurchaseOrder | undefined>;
+
+  // Project Material Receipt CRUD methods
+  getProjectMaterialReceipts(projectId: number): Promise<ProjectMaterialReceipt[]>;
+  getProjectMaterialReceipt(id: number): Promise<ProjectMaterialReceipt | undefined>;
+  getProjectMaterialReceiptsByPurchaseOrder(purchaseOrderId: number): Promise<ProjectMaterialReceipt[]>;
+  createProjectMaterialReceipt(receipt: InsertProjectMaterialReceipt): Promise<ProjectMaterialReceipt>;
+  updateProjectMaterialReceipt(id: number, receipt: Partial<InsertProjectMaterialReceipt>): Promise<ProjectMaterialReceipt | undefined>;
+  deleteProjectMaterialReceipt(id: number): Promise<boolean>;
+
+  // Project Line Item Link CRUD methods
+  getProjectLineItemLinks(projectId: number): Promise<ProjectLineItemLink[]>;
+  getProjectLineItemLink(id: number): Promise<ProjectLineItemLink | undefined>;
+  getProjectLineItemLinksByLineItem(lineItemId: number): Promise<ProjectLineItemLink[]>;
+  createProjectLineItemLink(link: InsertProjectLineItemLink): Promise<ProjectLineItemLink>;
+  updateProjectLineItemLink(id: number, link: Partial<InsertProjectLineItemLink>): Promise<ProjectLineItemLink | undefined>;
+  deleteProjectLineItemLink(id: number): Promise<boolean>;
+
+  // Project Financial CRUD methods
+  getProjectFinancial(projectId: number): Promise<ProjectFinancial | undefined>;
+  createProjectFinancial(financial: InsertProjectFinancial): Promise<ProjectFinancial>;
+  updateProjectFinancial(id: number, financial: Partial<InsertProjectFinancial>): Promise<ProjectFinancial | undefined>;
+  deleteProjectFinancial(id: number): Promise<boolean>;
+  recalculateProjectFinancials(projectId: number): Promise<ProjectFinancial | undefined>;
+  getProjectProfitabilityReport(projectId: number): Promise<{
+    originalBudget: string;
+    currentBudget: string;
+    actualCosts: string;
+    grossProfit: string;
+    grossMarginPercentage: string;
+    changeOrderImpact: string;
+  }>;
+
+  // Additional helper methods for project management
+  getProjectWithDetails(id: number): Promise<{
+    project: Project;
+    milestones: ProjectMilestone[];
+    tasks: ProjectTask[];
+    crew: ProjectCrew[];
+    equipment: ProjectEquipment[];
+    financials: ProjectFinancial;
+  } | undefined>;
+  
+  getProjectDashboardData(projectId: number): Promise<{
+    project: Project;
+    taskSummary: { total: number; completed: number; inProgress: number; pending: number; blocked: number };
+    milestoneSummary: { total: number; completed: number; overdue: number };
+    budgetSummary: { estimatedTotal: string; actualTotal: string; variance: string };
+    timeEntrySummary: { totalHours: string; approvedHours: string; pendingHours: string };
+  } | undefined>;
 }
 
 export class MemStorage {
@@ -1931,6 +2136,912 @@ export class DatabaseStorage implements IStorage {
         errors
       };
     }
+  }
+
+  // ==========================================
+  // PROJECT MANAGEMENT METHOD IMPLEMENTATIONS
+  // ==========================================
+
+  // Project CRUD methods implementation
+  async getAllProjects(): Promise<Project[]> {
+    return await db.select().from(projects).orderBy(desc(projects.createdAt));
+  }
+
+  async getProject(id: number): Promise<Project | undefined> {
+    const [project] = await db.select().from(projects).where(eq(projects.id, id));
+    return project || undefined;
+  }
+
+  async getProjectsByStatus(status: string): Promise<Project[]> {
+    return await db.select().from(projects).where(eq(projects.status, status)).orderBy(desc(projects.createdAt));
+  }
+
+  async getProjectsByAccountId(accountId: number): Promise<Project[]> {
+    return await db.select().from(projects).where(eq(projects.accountId, accountId)).orderBy(desc(projects.createdAt));
+  }
+
+  async getProjectsByProjectManager(projectManagerId: string): Promise<Project[]> {
+    return await db.select().from(projects).where(eq(projects.projectManagerId, projectManagerId)).orderBy(desc(projects.createdAt));
+  }
+
+  async createProject(insertProject: InsertProject): Promise<Project> {
+    const [project] = await db.insert(projects).values(insertProject).returning();
+    return project;
+  }
+
+  async updateProject(id: number, projectData: Partial<InsertProject>): Promise<Project | undefined> {
+    const [updated] = await db.update(projects).set(projectData).where(eq(projects.id, id)).returning();
+    return updated || undefined;
+  }
+
+  async deleteProject(id: number): Promise<boolean> {
+    const result = await db.delete(projects).where(eq(projects.id, id));
+    return (result.rowCount || 0) > 0;
+  }
+
+  async convertQuoteToProject(quoteId: number, projectData: Partial<InsertProject>): Promise<{ quote: Quote | undefined; project: Project | undefined }> {
+    const quote = await this.getQuote(quoteId);
+    if (!quote) return { quote: undefined, project: undefined };
+
+    const project = await this.createProject({
+      ...projectData,
+      quoteId,
+      opportunityId: quote.opportunityId || undefined,
+      accountId: projectData.accountId!,
+      name: projectData.name || quote.projectName || 'New Project',
+      estimatedTotalCost: projectData.estimatedTotalCost || '0'
+    });
+
+    return { quote, project };
+  }
+
+  // Project Milestone CRUD methods implementation
+  async getProjectMilestones(projectId: number): Promise<ProjectMilestone[]> {
+    return await db.select().from(projectMilestones).where(eq(projectMilestones.projectId, projectId)).orderBy(projectMilestones.displayOrder);
+  }
+
+  async getProjectMilestone(id: number): Promise<ProjectMilestone | undefined> {
+    const [milestone] = await db.select().from(projectMilestones).where(eq(projectMilestones.id, id));
+    return milestone || undefined;
+  }
+
+  async createProjectMilestone(insertMilestone: InsertProjectMilestone): Promise<ProjectMilestone> {
+    const [milestone] = await db.insert(projectMilestones).values(insertMilestone).returning();
+    return milestone;
+  }
+
+  async updateProjectMilestone(id: number, milestoneData: Partial<InsertProjectMilestone>): Promise<ProjectMilestone | undefined> {
+    const [updated] = await db.update(projectMilestones).set(milestoneData).where(eq(projectMilestones.id, id)).returning();
+    return updated || undefined;
+  }
+
+  async deleteProjectMilestone(id: number): Promise<boolean> {
+    const result = await db.delete(projectMilestones).where(eq(projectMilestones.id, id));
+    return (result.rowCount || 0) > 0;
+  }
+
+  async completeProjectMilestone(id: number, completionData?: { actualDate?: Date; clientApprovedBy?: number }): Promise<ProjectMilestone | undefined> {
+    const updateData: Partial<InsertProjectMilestone> = {
+      status: 'completed',
+      completionPercentage: 100,
+      actualDate: completionData?.actualDate || new Date(),
+      clientApprovedBy: completionData?.clientApprovedBy
+    };
+
+    if (completionData?.clientApprovedBy) {
+      updateData.clientApprovedAt = new Date();
+    }
+
+    const [updated] = await db.update(projectMilestones).set(updateData).where(eq(projectMilestones.id, id)).returning();
+    return updated || undefined;
+  }
+
+  // Project Task CRUD methods implementation
+  async getProjectTasks(projectId: number): Promise<ProjectTask[]> {
+    return await db.select().from(projectTasks).where(eq(projectTasks.projectId, projectId)).orderBy(projectTasks.displayOrder);
+  }
+
+  async getProjectTask(id: number): Promise<ProjectTask | undefined> {
+    const [task] = await db.select().from(projectTasks).where(eq(projectTasks.id, id));
+    return task || undefined;
+  }
+
+  async getProjectTasksByMilestone(milestoneId: number): Promise<ProjectTask[]> {
+    return await db.select().from(projectTasks).where(eq(projectTasks.milestoneId, milestoneId)).orderBy(projectTasks.displayOrder);
+  }
+
+  async getProjectTasksByAssignee(assignedTo: string): Promise<ProjectTask[]> {
+    return await db.select().from(projectTasks).where(eq(projectTasks.assignedTo, assignedTo)).orderBy(desc(projectTasks.createdAt));
+  }
+
+  async getProjectTasksByParent(parentTaskId: number): Promise<ProjectTask[]> {
+    return await db.select().from(projectTasks).where(eq(projectTasks.parentTaskId, parentTaskId)).orderBy(projectTasks.displayOrder);
+  }
+
+  async getProjectTaskHierarchy(projectId: number): Promise<ProjectTask[]> {
+    return await db.select().from(projectTasks).where(eq(projectTasks.projectId, projectId)).orderBy(projectTasks.displayOrder);
+  }
+
+  async createProjectTask(insertTask: InsertProjectTask): Promise<ProjectTask> {
+    const [task] = await db.insert(projectTasks).values(insertTask).returning();
+    return task;
+  }
+
+  async updateProjectTask(id: number, taskData: Partial<InsertProjectTask>): Promise<ProjectTask | undefined> {
+    const [updated] = await db.update(projectTasks).set(taskData).where(eq(projectTasks.id, id)).returning();
+    return updated || undefined;
+  }
+
+  async deleteProjectTask(id: number): Promise<boolean> {
+    const result = await db.delete(projectTasks).where(eq(projectTasks.id, id));
+    return (result.rowCount || 0) > 0;
+  }
+
+  async completeProjectTask(id: number, completionData?: { actualEndDate?: Date; actualHours?: string; actualCost?: string }): Promise<ProjectTask | undefined> {
+    const updateData: Partial<InsertProjectTask> = {
+      status: 'completed',
+      completionPercentage: 100,
+      actualEndDate: completionData?.actualEndDate || new Date(),
+      actualHours: completionData?.actualHours,
+      actualCost: completionData?.actualCost
+    };
+
+    const [updated] = await db.update(projectTasks).set(updateData).where(eq(projectTasks.id, id)).returning();
+    return updated || undefined;
+  }
+
+  // Project Task Dependency CRUD methods implementation
+  async getProjectTaskDependencies(taskId: number): Promise<ProjectTaskDependency[]> {
+    return await db.select().from(projectTaskDependencies).where(eq(projectTaskDependencies.taskId, taskId));
+  }
+
+  async getProjectTaskDependency(id: number): Promise<ProjectTaskDependency | undefined> {
+    const [dependency] = await db.select().from(projectTaskDependencies).where(eq(projectTaskDependencies.id, id));
+    return dependency || undefined;
+  }
+
+  async createProjectTaskDependency(insertDependency: InsertProjectTaskDependency): Promise<ProjectTaskDependency> {
+    const [dependency] = await db.insert(projectTaskDependencies).values(insertDependency).returning();
+    return dependency;
+  }
+
+  async updateProjectTaskDependency(id: number, dependencyData: Partial<InsertProjectTaskDependency>): Promise<ProjectTaskDependency | undefined> {
+    const [updated] = await db.update(projectTaskDependencies).set(dependencyData).where(eq(projectTaskDependencies.id, id)).returning();
+    return updated || undefined;
+  }
+
+  async deleteProjectTaskDependency(id: number): Promise<boolean> {
+    const result = await db.delete(projectTaskDependencies).where(eq(projectTaskDependencies.id, id));
+    return (result.rowCount || 0) > 0;
+  }
+
+  async validateTaskDependencies(taskId: number): Promise<{ isValid: boolean; blockingTasks?: ProjectTask[]; circularDependencies?: boolean }> {
+    const dependencies = await this.getProjectTaskDependencies(taskId);
+    const blockingTasks: ProjectTask[] = [];
+    
+    for (const dep of dependencies) {
+      const dependentTask = await this.getProjectTask(dep.dependsOnTaskId);
+      if (dependentTask && dependentTask.status !== 'completed') {
+        blockingTasks.push(dependentTask);
+      }
+    }
+
+    return {
+      isValid: blockingTasks.length === 0,
+      blockingTasks: blockingTasks.length > 0 ? blockingTasks : undefined,
+      circularDependencies: false // TODO: Implement circular dependency detection
+    };
+  }
+
+  // Project Task Assignment CRUD methods implementation
+  async getProjectTaskAssignments(taskId: number): Promise<ProjectTaskAssignment[]> {
+    return await db.select().from(projectTaskAssignments).where(eq(projectTaskAssignments.taskId, taskId));
+  }
+
+  async getProjectTaskAssignmentsByCrewMember(crewMemberId: number): Promise<ProjectTaskAssignment[]> {
+    return await db.select().from(projectTaskAssignments).where(eq(projectTaskAssignments.crewMemberId, crewMemberId));
+  }
+
+  async getProjectTaskAssignmentsByUser(userId: string): Promise<ProjectTaskAssignment[]> {
+    return await db.select().from(projectTaskAssignments).where(eq(projectTaskAssignments.userId, userId));
+  }
+
+  async createProjectTaskAssignment(insertAssignment: InsertProjectTaskAssignment): Promise<ProjectTaskAssignment> {
+    const [assignment] = await db.insert(projectTaskAssignments).values(insertAssignment).returning();
+    return assignment;
+  }
+
+  async updateProjectTaskAssignment(id: number, assignmentData: Partial<InsertProjectTaskAssignment>): Promise<ProjectTaskAssignment | undefined> {
+    const [updated] = await db.update(projectTaskAssignments).set(assignmentData).where(eq(projectTaskAssignments.id, id)).returning();
+    return updated || undefined;
+  }
+
+  async deleteProjectTaskAssignment(id: number): Promise<boolean> {
+    const result = await db.delete(projectTaskAssignments).where(eq(projectTaskAssignments.id, id));
+    return (result.rowCount || 0) > 0;
+  }
+
+  // Project Crew CRUD methods implementation
+  async getProjectCrew(projectId: number): Promise<ProjectCrew[]> {
+    return await db.select().from(projectCrew).where(eq(projectCrew.projectId, projectId));
+  }
+
+  async getProjectCrewMember(id: number): Promise<ProjectCrew | undefined> {
+    const [member] = await db.select().from(projectCrew).where(eq(projectCrew.id, id));
+    return member || undefined;
+  }
+
+  async getProjectCrewByRole(projectId: number, role: string): Promise<ProjectCrew[]> {
+    return await db.select().from(projectCrew).where(and(eq(projectCrew.projectId, projectId), eq(projectCrew.role, role)));
+  }
+
+  async createProjectCrewMember(insertCrew: InsertProjectCrew): Promise<ProjectCrew> {
+    const [crew] = await db.insert(projectCrew).values(insertCrew).returning();
+    return crew;
+  }
+
+  async updateProjectCrewMember(id: number, crewData: Partial<InsertProjectCrew>): Promise<ProjectCrew | undefined> {
+    const [updated] = await db.update(projectCrew).set(crewData).where(eq(projectCrew.id, id)).returning();
+    return updated || undefined;
+  }
+
+  async deleteProjectCrewMember(id: number): Promise<boolean> {
+    const result = await db.delete(projectCrew).where(eq(projectCrew.id, id));
+    return (result.rowCount || 0) > 0;
+  }
+
+  async getAvailableCrewMembers(startDate: Date, endDate: Date): Promise<ProjectCrew[]> {
+    return await db.select().from(projectCrew).where(
+      and(
+        eq(projectCrew.isActive, true),
+        // Additional availability logic would go here
+      )
+    );
+  }
+
+  // Project Equipment CRUD methods implementation
+  async getProjectEquipment(projectId: number): Promise<ProjectEquipment[]> {
+    return await db.select().from(projectEquipment).where(eq(projectEquipment.projectId, projectId));
+  }
+
+  async getProjectEquipmentItem(id: number): Promise<ProjectEquipment | undefined> {
+    const [equipment] = await db.select().from(projectEquipment).where(eq(projectEquipment.id, id));
+    return equipment || undefined;
+  }
+
+  async getProjectEquipmentByStatus(status: string): Promise<ProjectEquipment[]> {
+    return await db.select().from(projectEquipment).where(eq(projectEquipment.status, status));
+  }
+
+  async createProjectEquipment(insertEquipment: InsertProjectEquipment): Promise<ProjectEquipment> {
+    const [equipment] = await db.insert(projectEquipment).values(insertEquipment).returning();
+    return equipment;
+  }
+
+  async updateProjectEquipment(id: number, equipmentData: Partial<InsertProjectEquipment>): Promise<ProjectEquipment | undefined> {
+    const [updated] = await db.update(projectEquipment).set(equipmentData).where(eq(projectEquipment.id, id)).returning();
+    return updated || undefined;
+  }
+
+  async deleteProjectEquipment(id: number): Promise<boolean> {
+    const result = await db.delete(projectEquipment).where(eq(projectEquipment.id, id));
+    return (result.rowCount || 0) > 0;
+  }
+
+  async allocateEquipmentToProject(projectId: number, equipmentData: InsertProjectEquipment): Promise<ProjectEquipment> {
+    return await this.createProjectEquipment({ ...equipmentData, projectId, status: 'allocated' });
+  }
+
+  async returnProjectEquipment(id: number, returnData?: { returnDate?: Date; condition?: string; notes?: string }): Promise<ProjectEquipment | undefined> {
+    const updateData: Partial<InsertProjectEquipment> = {
+      status: 'returned',
+      returnDate: returnData?.returnDate || new Date(),
+      condition: returnData?.condition,
+      notes: returnData?.notes
+    };
+
+    const [updated] = await db.update(projectEquipment).set(updateData).where(eq(projectEquipment.id, id)).returning();
+    return updated || undefined;
+  }
+
+  // Project Budget Line CRUD methods implementation
+  async getProjectBudgetLines(projectId: number): Promise<ProjectBudgetLine[]> {
+    return await db.select().from(projectBudgetLines).where(eq(projectBudgetLines.projectId, projectId));
+  }
+
+  async getProjectBudgetLine(id: number): Promise<ProjectBudgetLine | undefined> {
+    const [budgetLine] = await db.select().from(projectBudgetLines).where(eq(projectBudgetLines.id, id));
+    return budgetLine || undefined;
+  }
+
+  async getProjectBudgetLinesByCategory(projectId: number, category: string): Promise<ProjectBudgetLine[]> {
+    return await db.select().from(projectBudgetLines).where(
+      and(eq(projectBudgetLines.projectId, projectId), eq(projectBudgetLines.category, category))
+    );
+  }
+
+  async createProjectBudgetLine(insertBudgetLine: InsertProjectBudgetLine): Promise<ProjectBudgetLine> {
+    const [budgetLine] = await db.insert(projectBudgetLines).values(insertBudgetLine).returning();
+    return budgetLine;
+  }
+
+  async updateProjectBudgetLine(id: number, budgetLineData: Partial<InsertProjectBudgetLine>): Promise<ProjectBudgetLine | undefined> {
+    const [updated] = await db.update(projectBudgetLines).set(budgetLineData).where(eq(projectBudgetLines.id, id)).returning();
+    return updated || undefined;
+  }
+
+  async deleteProjectBudgetLine(id: number): Promise<boolean> {
+    const result = await db.delete(projectBudgetLines).where(eq(projectBudgetLines.id, id));
+    return (result.rowCount || 0) > 0;
+  }
+
+  async syncBudgetFromQuoteLineItems(projectId: number, quoteId: number): Promise<{ createdBudgetLines: number; errors: string[] }> {
+    const lineItems = await this.getLineItemsByQuoteId(quoteId);
+    const errors: string[] = [];
+    let createdBudgetLines = 0;
+
+    for (const item of lineItems) {
+      try {
+        await this.createProjectBudgetLine({
+          projectId,
+          costCode: `LINE_ITEM_${item.id}`,
+          description: item.description,
+          category: 'materials',
+          quantity: item.quantity,
+          unit: 'each',
+          estimatedUnitCost: item.unitPrice,
+          estimatedTotalCost: (parseFloat(item.quantity) * parseFloat(item.unitPrice)).toString(),
+          actualQuantity: '0',
+          actualUnitCost: '0',
+          actualTotalCost: '0',
+          linkedLineItemId: item.id
+        });
+        createdBudgetLines++;
+      } catch (error) {
+        errors.push(`Failed to create budget line for item ${item.id}: ${error}`);
+      }
+    }
+
+    return { createdBudgetLines, errors };
+  }
+
+  // Project Schedule Event CRUD methods implementation
+  async getProjectScheduleEvents(projectId: number): Promise<ProjectScheduleEvent[]> {
+    return await db.select().from(projectScheduleEvents).where(eq(projectScheduleEvents.projectId, projectId));
+  }
+
+  async getProjectScheduleEvent(id: number): Promise<ProjectScheduleEvent | undefined> {
+    const [event] = await db.select().from(projectScheduleEvents).where(eq(projectScheduleEvents.id, id));
+    return event || undefined;
+  }
+
+  async getScheduleEventsByResource(resourceType: string, resourceId: number): Promise<ProjectScheduleEvent[]> {
+    return await db.select().from(projectScheduleEvents).where(
+      and(eq(projectScheduleEvents.resourceType, resourceType), eq(projectScheduleEvents.resourceId, resourceId))
+    );
+  }
+
+  async getScheduleEventsByDateRange(startDate: Date, endDate: Date): Promise<ProjectScheduleEvent[]> {
+    return await db.select().from(projectScheduleEvents).where(
+      and(
+        sql`${projectScheduleEvents.startDateTime} >= ${startDate}`,
+        sql`${projectScheduleEvents.endDateTime} <= ${endDate}`
+      )
+    );
+  }
+
+  async createProjectScheduleEvent(insertEvent: InsertProjectScheduleEvent): Promise<ProjectScheduleEvent> {
+    const [event] = await db.insert(projectScheduleEvents).values(insertEvent).returning();
+    return event;
+  }
+
+  async updateProjectScheduleEvent(id: number, eventData: Partial<InsertProjectScheduleEvent>): Promise<ProjectScheduleEvent | undefined> {
+    const [updated] = await db.update(projectScheduleEvents).set(eventData).where(eq(projectScheduleEvents.id, id)).returning();
+    return updated || undefined;
+  }
+
+  async deleteProjectScheduleEvent(id: number): Promise<boolean> {
+    const result = await db.delete(projectScheduleEvents).where(eq(projectScheduleEvents.id, id));
+    return (result.rowCount || 0) > 0;
+  }
+
+  async checkResourceAvailability(resourceType: string, resourceId: number, startDate: Date, endDate: Date): Promise<{ isAvailable: boolean; conflictingEvents?: ProjectScheduleEvent[] }> {
+    const conflictingEvents = await db.select().from(projectScheduleEvents).where(
+      and(
+        eq(projectScheduleEvents.resourceType, resourceType),
+        eq(projectScheduleEvents.resourceId, resourceId),
+        sql`${projectScheduleEvents.startDateTime} < ${endDate}`,
+        sql`${projectScheduleEvents.endDateTime} > ${startDate}`
+      )
+    );
+
+    return {
+      isAvailable: conflictingEvents.length === 0,
+      conflictingEvents: conflictingEvents.length > 0 ? conflictingEvents : undefined
+    };
+  }
+
+  // Project Progress CRUD methods implementation
+  async getProjectProgress(projectId: number): Promise<ProjectProgress[]> {
+    return await db.select().from(projectProgress).where(eq(projectProgress.projectId, projectId)).orderBy(desc(projectProgress.entryDate));
+  }
+
+  async getProjectProgressEntry(id: number): Promise<ProjectProgress | undefined> {
+    const [progress] = await db.select().from(projectProgress).where(eq(projectProgress.id, id));
+    return progress || undefined;
+  }
+
+  async getProjectProgressByTask(taskId: number): Promise<ProjectProgress[]> {
+    return await db.select().from(projectProgress).where(eq(projectProgress.taskId, taskId)).orderBy(desc(projectProgress.entryDate));
+  }
+
+  async getProjectProgressByDate(projectId: number, startDate: Date, endDate: Date): Promise<ProjectProgress[]> {
+    return await db.select().from(projectProgress).where(
+      and(
+        eq(projectProgress.projectId, projectId),
+        sql`${projectProgress.entryDate} >= ${startDate}`,
+        sql`${projectProgress.entryDate} <= ${endDate}`
+      )
+    ).orderBy(desc(projectProgress.entryDate));
+  }
+
+  async createProjectProgressEntry(insertProgress: InsertProjectProgress): Promise<ProjectProgress> {
+    const [progress] = await db.insert(projectProgress).values(insertProgress).returning();
+    return progress;
+  }
+
+  async updateProjectProgressEntry(id: number, progressData: Partial<InsertProjectProgress>): Promise<ProjectProgress | undefined> {
+    const [updated] = await db.update(projectProgress).set(progressData).where(eq(projectProgress.id, id)).returning();
+    return updated || undefined;
+  }
+
+  async deleteProjectProgressEntry(id: number): Promise<boolean> {
+    const result = await db.delete(projectProgress).where(eq(projectProgress.id, id));
+    return (result.rowCount || 0) > 0;
+  }
+
+  async getClientVisibleProgress(projectId: number): Promise<ProjectProgress[]> {
+    return await db.select().from(projectProgress).where(
+      and(eq(projectProgress.projectId, projectId), eq(projectProgress.isVisible, true))
+    ).orderBy(desc(projectProgress.entryDate));
+  }
+
+  // Project Time Entry CRUD methods implementation
+  async getProjectTimeEntries(projectId: number): Promise<ProjectTimeEntry[]> {
+    return await db.select().from(projectTimeEntries).where(eq(projectTimeEntries.projectId, projectId));
+  }
+
+  async getProjectTimeEntry(id: number): Promise<ProjectTimeEntry | undefined> {
+    const [timeEntry] = await db.select().from(projectTimeEntries).where(eq(projectTimeEntries.id, id));
+    return timeEntry || undefined;
+  }
+
+  async getProjectTimeEntriesByCrewMember(crewMemberId: number): Promise<ProjectTimeEntry[]> {
+    return await db.select().from(projectTimeEntries).where(eq(projectTimeEntries.crewMemberId, crewMemberId));
+  }
+
+  async getProjectTimeEntriesByUser(userId: string): Promise<ProjectTimeEntry[]> {
+    return await db.select().from(projectTimeEntries).where(eq(projectTimeEntries.userId, userId));
+  }
+
+  async getProjectTimeEntriesByStatus(status: string): Promise<ProjectTimeEntry[]> {
+    return await db.select().from(projectTimeEntries).where(eq(projectTimeEntries.status, status));
+  }
+
+  async getProjectTimeEntriesByDateRange(startDate: Date, endDate: Date): Promise<ProjectTimeEntry[]> {
+    return await db.select().from(projectTimeEntries).where(
+      and(
+        sql`${projectTimeEntries.workDate} >= ${startDate}`,
+        sql`${projectTimeEntries.workDate} <= ${endDate}`
+      )
+    );
+  }
+
+  async createProjectTimeEntry(insertTimeEntry: InsertProjectTimeEntry): Promise<ProjectTimeEntry> {
+    const [timeEntry] = await db.insert(projectTimeEntries).values(insertTimeEntry).returning();
+    return timeEntry;
+  }
+
+  async updateProjectTimeEntry(id: number, timeEntryData: Partial<InsertProjectTimeEntry>): Promise<ProjectTimeEntry | undefined> {
+    const [updated] = await db.update(projectTimeEntries).set(timeEntryData).where(eq(projectTimeEntries.id, id)).returning();
+    return updated || undefined;
+  }
+
+  async deleteProjectTimeEntry(id: number): Promise<boolean> {
+    const result = await db.delete(projectTimeEntries).where(eq(projectTimeEntries.id, id));
+    return (result.rowCount || 0) > 0;
+  }
+
+  async approveProjectTimeEntry(id: number, approvedBy: string): Promise<ProjectTimeEntry | undefined> {
+    const [updated] = await db.update(projectTimeEntries).set({
+      status: 'approved',
+      approvedBy,
+      approvedAt: new Date()
+    }).where(eq(projectTimeEntries.id, id)).returning();
+    return updated || undefined;
+  }
+
+  async rejectProjectTimeEntry(id: number, rejectedBy: string, reason?: string): Promise<ProjectTimeEntry | undefined> {
+    const [updated] = await db.update(projectTimeEntries).set({
+      status: 'rejected',
+      approvedBy: rejectedBy,
+      approvedAt: new Date(),
+      notes: reason
+    }).where(eq(projectTimeEntries.id, id)).returning();
+    return updated || undefined;
+  }
+
+  // Project Material CRUD methods implementation
+  async getProjectMaterials(projectId: number): Promise<ProjectMaterial[]> {
+    return await db.select().from(projectMaterials).where(eq(projectMaterials.projectId, projectId));
+  }
+
+  async getProjectMaterial(id: number): Promise<ProjectMaterial | undefined> {
+    const [material] = await db.select().from(projectMaterials).where(eq(projectMaterials.id, id));
+    return material || undefined;
+  }
+
+  async getProjectMaterialsByTask(taskId: number): Promise<ProjectMaterial[]> {
+    return await db.select().from(projectMaterials).where(eq(projectMaterials.taskId, taskId));
+  }
+
+  async getProjectMaterialsByType(materialType: string): Promise<ProjectMaterial[]> {
+    return await db.select().from(projectMaterials).where(eq(projectMaterials.materialType, materialType));
+  }
+
+  async createProjectMaterial(insertMaterial: InsertProjectMaterial): Promise<ProjectMaterial> {
+    const [material] = await db.insert(projectMaterials).values(insertMaterial).returning();
+    return material;
+  }
+
+  async updateProjectMaterial(id: number, materialData: Partial<InsertProjectMaterial>): Promise<ProjectMaterial | undefined> {
+    const [updated] = await db.update(projectMaterials).set(materialData).where(eq(projectMaterials.id, id)).returning();
+    return updated || undefined;
+  }
+
+  async deleteProjectMaterial(id: number): Promise<boolean> {
+    const result = await db.delete(projectMaterials).where(eq(projectMaterials.id, id));
+    return (result.rowCount || 0) > 0;
+  }
+
+  async trackMaterialUsage(id: number, usageData: { quantityUsed?: string; quantityWasted?: string; usageDate?: Date; notes?: string }): Promise<ProjectMaterial | undefined> {
+    const [updated] = await db.update(projectMaterials).set({
+      quantityUsed: usageData.quantityUsed,
+      quantityWasted: usageData.quantityWasted,
+      usageDate: usageData.usageDate,
+      notes: usageData.notes
+    }).where(eq(projectMaterials.id, id)).returning();
+    return updated || undefined;
+  }
+
+  // Project Change Order CRUD methods implementation
+  async getProjectChangeOrders(projectId: number): Promise<ProjectChangeOrder[]> {
+    return await db.select().from(projectChangeOrders).where(eq(projectChangeOrders.projectId, projectId));
+  }
+
+  async getProjectChangeOrder(id: number): Promise<ProjectChangeOrder | undefined> {
+    const [changeOrder] = await db.select().from(projectChangeOrders).where(eq(projectChangeOrders.id, id));
+    return changeOrder || undefined;
+  }
+
+  async getProjectChangeOrdersByStatus(status: string): Promise<ProjectChangeOrder[]> {
+    return await db.select().from(projectChangeOrders).where(eq(projectChangeOrders.status, status));
+  }
+
+  async createProjectChangeOrder(insertChangeOrder: InsertProjectChangeOrder): Promise<ProjectChangeOrder> {
+    const [changeOrder] = await db.insert(projectChangeOrders).values(insertChangeOrder).returning();
+    return changeOrder;
+  }
+
+  async updateProjectChangeOrder(id: number, changeOrderData: Partial<InsertProjectChangeOrder>): Promise<ProjectChangeOrder | undefined> {
+    const [updated] = await db.update(projectChangeOrders).set(changeOrderData).where(eq(projectChangeOrders.id, id)).returning();
+    return updated || undefined;
+  }
+
+  async deleteProjectChangeOrder(id: number): Promise<boolean> {
+    const result = await db.delete(projectChangeOrders).where(eq(projectChangeOrders.id, id));
+    return (result.rowCount || 0) > 0;
+  }
+
+  async approveProjectChangeOrder(id: number, approvalData: { clientApprovedBy?: number; internalApprovedBy?: string; clientSignature?: string }): Promise<ProjectChangeOrder | undefined> {
+    const [updated] = await db.update(projectChangeOrders).set({
+      status: 'approved',
+      clientApprovedBy: approvalData.clientApprovedBy,
+      clientApprovedAt: approvalData.clientApprovedBy ? new Date() : undefined,
+      clientSignature: approvalData.clientSignature,
+      internalApprovedBy: approvalData.internalApprovedBy,
+      internalApprovedAt: approvalData.internalApprovedBy ? new Date() : undefined
+    }).where(eq(projectChangeOrders.id, id)).returning();
+    return updated || undefined;
+  }
+
+  async implementProjectChangeOrder(id: number, implementedBy: string): Promise<ProjectChangeOrder | undefined> {
+    const [updated] = await db.update(projectChangeOrders).set({
+      status: 'implemented',
+      implementedBy,
+      implementedAt: new Date()
+    }).where(eq(projectChangeOrders.id, id)).returning();
+    return updated || undefined;
+  }
+
+  // Project Purchase Order CRUD methods implementation
+  async getProjectPurchaseOrders(projectId: number): Promise<ProjectPurchaseOrder[]> {
+    return await db.select().from(projectPurchaseOrders).where(eq(projectPurchaseOrders.projectId, projectId));
+  }
+
+  async getProjectPurchaseOrder(id: number): Promise<ProjectPurchaseOrder | undefined> {
+    const [purchaseOrder] = await db.select().from(projectPurchaseOrders).where(eq(projectPurchaseOrders.id, id));
+    return purchaseOrder || undefined;
+  }
+
+  async getProjectPurchaseOrdersByStatus(status: string): Promise<ProjectPurchaseOrder[]> {
+    return await db.select().from(projectPurchaseOrders).where(eq(projectPurchaseOrders.status, status));
+  }
+
+  async getProjectPurchaseOrdersBySupplier(supplierName: string): Promise<ProjectPurchaseOrder[]> {
+    return await db.select().from(projectPurchaseOrders).where(eq(projectPurchaseOrders.supplierName, supplierName));
+  }
+
+  async createProjectPurchaseOrder(insertPurchaseOrder: InsertProjectPurchaseOrder): Promise<ProjectPurchaseOrder> {
+    const [purchaseOrder] = await db.insert(projectPurchaseOrders).values(insertPurchaseOrder).returning();
+    return purchaseOrder;
+  }
+
+  async updateProjectPurchaseOrder(id: number, purchaseOrderData: Partial<InsertProjectPurchaseOrder>): Promise<ProjectPurchaseOrder | undefined> {
+    const [updated] = await db.update(projectPurchaseOrders).set(purchaseOrderData).where(eq(projectPurchaseOrders.id, id)).returning();
+    return updated || undefined;
+  }
+
+  async deleteProjectPurchaseOrder(id: number): Promise<boolean> {
+    const result = await db.delete(projectPurchaseOrders).where(eq(projectPurchaseOrders.id, id));
+    return (result.rowCount || 0) > 0;
+  }
+
+  async markPurchaseOrderDelivered(id: number, deliveryData: { actualDeliveryDate?: Date; status?: string }): Promise<ProjectPurchaseOrder | undefined> {
+    const [updated] = await db.update(projectPurchaseOrders).set({
+      actualDeliveryDate: deliveryData.actualDeliveryDate || new Date(),
+      status: deliveryData.status || 'received'
+    }).where(eq(projectPurchaseOrders.id, id)).returning();
+    return updated || undefined;
+  }
+
+  // Project Material Receipt CRUD methods implementation
+  async getProjectMaterialReceipts(projectId: number): Promise<ProjectMaterialReceipt[]> {
+    return await db.select().from(projectMaterialReceipts).where(eq(projectMaterialReceipts.projectId, projectId));
+  }
+
+  async getProjectMaterialReceipt(id: number): Promise<ProjectMaterialReceipt | undefined> {
+    const [receipt] = await db.select().from(projectMaterialReceipts).where(eq(projectMaterialReceipts.id, id));
+    return receipt || undefined;
+  }
+
+  async getProjectMaterialReceiptsByPurchaseOrder(purchaseOrderId: number): Promise<ProjectMaterialReceipt[]> {
+    return await db.select().from(projectMaterialReceipts).where(eq(projectMaterialReceipts.purchaseOrderId, purchaseOrderId));
+  }
+
+  async createProjectMaterialReceipt(insertReceipt: InsertProjectMaterialReceipt): Promise<ProjectMaterialReceipt> {
+    const [receipt] = await db.insert(projectMaterialReceipts).values(insertReceipt).returning();
+    return receipt;
+  }
+
+  async updateProjectMaterialReceipt(id: number, receiptData: Partial<InsertProjectMaterialReceipt>): Promise<ProjectMaterialReceipt | undefined> {
+    const [updated] = await db.update(projectMaterialReceipts).set(receiptData).where(eq(projectMaterialReceipts.id, id)).returning();
+    return updated || undefined;
+  }
+
+  async deleteProjectMaterialReceipt(id: number): Promise<boolean> {
+    const result = await db.delete(projectMaterialReceipts).where(eq(projectMaterialReceipts.id, id));
+    return (result.rowCount || 0) > 0;
+  }
+
+  // Project Line Item Link CRUD methods implementation
+  async getProjectLineItemLinks(projectId: number): Promise<ProjectLineItemLink[]> {
+    return await db.select().from(projectLineItemLinks).where(eq(projectLineItemLinks.projectId, projectId));
+  }
+
+  async getProjectLineItemLink(id: number): Promise<ProjectLineItemLink | undefined> {
+    const [link] = await db.select().from(projectLineItemLinks).where(eq(projectLineItemLinks.id, id));
+    return link || undefined;
+  }
+
+  async getProjectLineItemLinksByLineItem(lineItemId: number): Promise<ProjectLineItemLink[]> {
+    return await db.select().from(projectLineItemLinks).where(eq(projectLineItemLinks.lineItemId, lineItemId));
+  }
+
+  async createProjectLineItemLink(insertLink: InsertProjectLineItemLink): Promise<ProjectLineItemLink> {
+    const [link] = await db.insert(projectLineItemLinks).values(insertLink).returning();
+    return link;
+  }
+
+  async updateProjectLineItemLink(id: number, linkData: Partial<InsertProjectLineItemLink>): Promise<ProjectLineItemLink | undefined> {
+    const [updated] = await db.update(projectLineItemLinks).set(linkData).where(eq(projectLineItemLinks.id, id)).returning();
+    return updated || undefined;
+  }
+
+  async deleteProjectLineItemLink(id: number): Promise<boolean> {
+    const result = await db.delete(projectLineItemLinks).where(eq(projectLineItemLinks.id, id));
+    return (result.rowCount || 0) > 0;
+  }
+
+  // Project Financial CRUD methods implementation
+  async getProjectFinancial(projectId: number): Promise<ProjectFinancial | undefined> {
+    const [financial] = await db.select().from(projectFinancials).where(eq(projectFinancials.projectId, projectId));
+    return financial || undefined;
+  }
+
+  async createProjectFinancial(insertFinancial: InsertProjectFinancial): Promise<ProjectFinancial> {
+    const [financial] = await db.insert(projectFinancials).values(insertFinancial).returning();
+    return financial;
+  }
+
+  async updateProjectFinancial(id: number, financialData: Partial<InsertProjectFinancial>): Promise<ProjectFinancial | undefined> {
+    const [updated] = await db.update(projectFinancials).set(financialData).where(eq(projectFinancials.id, id)).returning();
+    return updated || undefined;
+  }
+
+  async deleteProjectFinancial(id: number): Promise<boolean> {
+    const result = await db.delete(projectFinancials).where(eq(projectFinancials.id, id));
+    return (result.rowCount || 0) > 0;
+  }
+
+  async recalculateProjectFinancials(projectId: number): Promise<ProjectFinancial | undefined> {
+    // Get current financials or create new one
+    let financials = await this.getProjectFinancial(projectId);
+    
+    // Calculate actual costs from time entries, materials, etc.
+    const timeEntries = await this.getProjectTimeEntries(projectId);
+    const materials = await this.getProjectMaterials(projectId);
+    const equipment = await this.getProjectEquipment(projectId);
+
+    const actualLaborCost = timeEntries.reduce((sum, entry) => 
+      sum + parseFloat(entry.laborCost || '0'), 0
+    );
+    const actualMaterialCost = materials.reduce((sum, material) => 
+      sum + parseFloat(material.totalCost || '0'), 0
+    );
+    const actualEquipmentCost = equipment.reduce((sum, equip) => 
+      sum + parseFloat(equip.totalCost || '0'), 0
+    );
+
+    const actualTotalCost = actualLaborCost + actualMaterialCost + actualEquipmentCost;
+
+    if (financials) {
+      return await this.updateProjectFinancial(financials.id, {
+        actualLaborCost: actualLaborCost.toString(),
+        actualMaterialCost: actualMaterialCost.toString(),
+        actualEquipmentCost: actualEquipmentCost.toString(),
+        actualTotalCost: actualTotalCost.toString()
+      });
+    } else {
+      return await this.createProjectFinancial({
+        projectId,
+        actualLaborCost: actualLaborCost.toString(),
+        actualMaterialCost: actualMaterialCost.toString(),
+        actualEquipmentCost: actualEquipmentCost.toString(),
+        actualTotalCost: actualTotalCost.toString()
+      });
+    }
+  }
+
+  async getProjectProfitabilityReport(projectId: number): Promise<{
+    originalBudget: string;
+    currentBudget: string;
+    actualCosts: string;
+    grossProfit: string;
+    grossMarginPercentage: string;
+    changeOrderImpact: string;
+  }> {
+    const financials = await this.getProjectFinancial(projectId);
+    
+    if (!financials) {
+      return {
+        originalBudget: '0',
+        currentBudget: '0', 
+        actualCosts: '0',
+        grossProfit: '0',
+        grossMarginPercentage: '0',
+        changeOrderImpact: '0'
+      };
+    }
+
+    return {
+      originalBudget: financials.originalEstimatedTotal || '0',
+      currentBudget: financials.currentEstimatedTotal || '0',
+      actualCosts: financials.actualTotalCost || '0',
+      grossProfit: financials.grossProfit || '0',
+      grossMarginPercentage: financials.grossMarginPercentage || '0',
+      changeOrderImpact: financials.totalChangeOrderValue || '0'
+    };
+  }
+
+  // Additional helper methods for project management
+  async getProjectWithDetails(id: number): Promise<{
+    project: Project;
+    milestones: ProjectMilestone[];
+    tasks: ProjectTask[];
+    crew: ProjectCrew[];
+    equipment: ProjectEquipment[];
+    financials: ProjectFinancial;
+  } | undefined> {
+    const project = await this.getProject(id);
+    if (!project) return undefined;
+
+    const [milestones, tasks, crew, equipment] = await Promise.all([
+      this.getProjectMilestones(id),
+      this.getProjectTasks(id),
+      this.getProjectCrew(id),
+      this.getProjectEquipment(id)
+    ]);
+
+    let financials = await this.getProjectFinancial(id);
+    if (!financials) {
+      // Create default financials if none exist
+      financials = await this.createProjectFinancial({
+        projectId: id
+      });
+    }
+
+    return {
+      project,
+      milestones,
+      tasks,
+      crew,
+      equipment,
+      financials
+    };
+  }
+  
+  async getProjectDashboardData(projectId: number): Promise<{
+    project: Project;
+    taskSummary: { total: number; completed: number; inProgress: number; pending: number; blocked: number };
+    milestoneSummary: { total: number; completed: number; overdue: number };
+    budgetSummary: { estimatedTotal: string; actualTotal: string; variance: string };
+    timeEntrySummary: { totalHours: string; approvedHours: string; pendingHours: string };
+  } | undefined> {
+    const project = await this.getProject(projectId);
+    if (!project) return undefined;
+
+    const [tasks, milestones, financials, timeEntries] = await Promise.all([
+      this.getProjectTasks(projectId),
+      this.getProjectMilestones(projectId),
+      this.getProjectFinancial(projectId),
+      this.getProjectTimeEntries(projectId)
+    ]);
+
+    // Calculate task summary
+    const taskSummary = {
+      total: tasks.length,
+      completed: tasks.filter(t => t.status === 'completed').length,
+      inProgress: tasks.filter(t => t.status === 'in_progress').length,
+      pending: tasks.filter(t => t.status === 'pending').length,
+      blocked: tasks.filter(t => t.status === 'blocked').length
+    };
+
+    // Calculate milestone summary
+    const now = new Date();
+    const milestoneSummary = {
+      total: milestones.length,
+      completed: milestones.filter(m => m.status === 'completed').length,
+      overdue: milestones.filter(m => m.status !== 'completed' && new Date(m.targetDate) < now).length
+    };
+
+    // Calculate budget summary
+    const estimatedTotal = financials?.currentEstimatedTotal || '0';
+    const actualTotal = financials?.actualTotalCost || '0';
+    const variance = (parseFloat(estimatedTotal) - parseFloat(actualTotal)).toString();
+
+    // Calculate time entry summary
+    const totalHours = timeEntries.reduce((sum, entry) => sum + parseFloat(entry.hoursWorked || '0'), 0).toString();
+    const approvedHours = timeEntries.filter(e => e.status === 'approved').reduce((sum, entry) => sum + parseFloat(entry.hoursWorked || '0'), 0).toString();
+    const pendingHours = timeEntries.filter(e => e.status === 'pending').reduce((sum, entry) => sum + parseFloat(entry.hoursWorked || '0'), 0).toString();
+
+    return {
+      project,
+      taskSummary,
+      milestoneSummary,
+      budgetSummary: { estimatedTotal, actualTotal, variance },
+      timeEntrySummary: { totalHours, approvedHours, pendingHours }
+    };
   }
 }
 
