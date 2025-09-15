@@ -29,6 +29,7 @@ function Router() {
         <>
           <Route path="/" component={AuthPage} />
           <Route path="/auth" component={AuthPage} />
+          <Route path="/:rest*" component={AuthPage} />
         </>
       ) : (
         <>
