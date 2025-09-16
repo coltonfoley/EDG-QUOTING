@@ -174,7 +174,7 @@ export const lineItems = pgTable("line_items", {
 export const projects = pgTable("projects", {
   id: serial("id").primaryKey(),
   projectNumber: text("project_number").notNull().unique(),
-  quoteId: integer("quote_id").notNull().unique(), // reference to the originating quote - unique to prevent duplicates
+  quoteId: integer("quote_id").unique(), // reference to the originating quote - unique to prevent duplicates, nullable for standalone projects
   customerId: integer("customer_id").notNull(), // reference to customer
   projectName: text("project_name"),
   projectAddress: text("project_address"),
