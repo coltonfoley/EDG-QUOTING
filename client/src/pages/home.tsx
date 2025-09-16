@@ -15,8 +15,8 @@ export default function Home() {
 
   // Get recent quotes (last 5, sorted by creation date)
   const recentQuotes = quotes?.slice().sort((a, b) => {
-    const dateA = new Date(a.createdAt);
-    const dateB = new Date(b.createdAt);
+    const dateA = new Date(a.createdAt || '');
+    const dateB = new Date(b.createdAt || '');
     return dateB.getTime() - dateA.getTime();
   }).slice(0, 5) || [];
 
@@ -35,8 +35,8 @@ export default function Home() {
     }
   };
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
+  const formatDate = (dateString: string | Date) => {
+    const date = typeof dateString === 'string' ? new Date(dateString) : dateString;
     const now = new Date();
     const diffTime = Math.abs(now.getTime() - date.getTime());
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
@@ -135,7 +135,7 @@ export default function Home() {
                             Quote {quote.quoteNumber}
                           </div>
                           <div className="text-xs text-edg-grey">
-                            {quote.customer.name} • {formatDate(quote.createdAt)}
+                            {quote.customer.name} • {formatDate(quote.createdAt || '')}
                           </div>
                         </div>
                       </div>
@@ -145,10 +145,10 @@ export default function Home() {
                         </Badge>
                         <div className="text-sm font-medium text-edg-black">
                           {formatCurrency(quote.lineItems.reduce((sum, item) => {
-                            const itemTotal = item.quantity * item.unitPrice;
+                            const itemTotal = (item.quantity || 0) * (item.unitPrice || 0);
                             const markupAmount = item.markupType === 'percentage' 
-                              ? itemTotal * (item.markupValue / 100)
-                              : Number(item.markupValue);
+                              ? itemTotal * ((item.markupValue || 0) / 100)
+                              : Number(item.markupValue || 0);
                             return sum + itemTotal + markupAmount;
                           }, 0))}
                         </div>
