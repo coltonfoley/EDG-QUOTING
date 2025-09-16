@@ -270,7 +270,7 @@ export default function Projects() {
   };
 
   const handleNewProject = () => {
-    navigate("/quotes/new");
+    navigate("/projects/new");
   };
 
   const handleViewDetails = (projectId: number) => {
