@@ -148,19 +148,6 @@ export default function QuoteBuilder() {
     );
   }
 
-  if (error) {
-    return (
-      <div className="min-h-screen bg-gray-50">
-        <AppHeader />
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="text-center">
-            <h2 className="text-2xl font-bold text-red-600">Error loading quote</h2>
-            <p className="text-accent-grey mt-2">Please try again later.</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   const currentQuote = quote || {
     id: 0,
