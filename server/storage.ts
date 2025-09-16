@@ -103,6 +103,8 @@ export interface IStorage {
   // Authorization methods for security
   validateLineItemsOwnership(lineItemIds: number[], userId: any): Promise<{ isValid: boolean; quoteId?: number }>;
   validateQuoteOwnership(quoteId: number, userId: any): Promise<boolean>;
+  validateProjectOwnership(projectId: number, userId: any): Promise<boolean>;
+  getUserProjects(userId: any): Promise<ProjectWithDetails[]>;
 }
 
 export class MemStorage {
@@ -518,6 +520,19 @@ export class DatabaseStorage implements IStorage {
     // This should be enhanced when proper user-quote relationships are implemented
     const quote = await db.select().from(quotes).where(eq(quotes.id, quoteId)).limit(1);
     return quote.length > 0;
+  }
+
+  async validateProjectOwnership(projectId: number, userId: any): Promise<boolean> {
+    // For now, return true since we don't have user ownership in projects yet
+    // This should be enhanced when proper user-project relationships are implemented
+    const project = await db.select().from(projects).where(eq(projects.id, projectId)).limit(1);
+    return project.length > 0;
+  }
+
+  async getUserProjects(userId: any): Promise<ProjectWithDetails[]> {
+    // For now, return all projects since we don't have user ownership yet
+    // This should be enhanced when proper user-project relationships are implemented
+    return this.getAllProjects();
   }
 
   // Product methods
