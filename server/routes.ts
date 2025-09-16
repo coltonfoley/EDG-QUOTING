@@ -36,6 +36,26 @@ const upload = multer({
   },
 });
 
+// Helper function for automatic project creation from quotes
+async function tryCreateProjectFromQuote(quoteId: number, quoteNumber: string): Promise<void> {
+  try {
+    console.log(`🏗️ Attempting to auto-create project from approved quote ${quoteNumber} (ID: ${quoteId})`);
+    
+    const project = await storage.createProjectFromQuote(quoteId);
+    
+    console.log(`✅ Successfully auto-created project ${project.projectNumber} from quote ${quoteNumber}`);
+  } catch (error: any) {
+    // Log the error but don't throw - we don't want project creation failures to break quote updates
+    if (error.message?.includes('Project already exists')) {
+      console.log(`ℹ️ Project already exists for quote ${quoteNumber}, skipping auto-creation`);
+    } else if (error.message?.includes('must be approved')) {
+      console.log(`⚠️ Quote ${quoteNumber} is not in approved status, cannot create project`);
+    } else {
+      console.error(`❌ Failed to auto-create project from quote ${quoteNumber}:`, error.message || error);
+    }
+  }
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
   setupAuth(app);
@@ -301,10 +321,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const id = parseInt(req.params.id);
       const quoteData = insertQuoteSchema.partial().parse(req.body);
+      
+      // Get the original quote to check status change
+      const originalQuote = await storage.getQuote(id);
+      if (!originalQuote) {
+        return res.status(404).json({ message: "Quote not found" });
+      }
+      
       const quote = await storage.updateQuote(id, quoteData);
       if (!quote) {
         return res.status(404).json({ message: "Quote not found" });
       }
+      
+      // Auto-create project if quote status changed to approved
+      if (originalQuote.status !== "approved" && quote.status === "approved") {
+        await tryCreateProjectFromQuote(quote.id, quote.quoteNumber);
+      }
+      
       res.json(quote);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -1531,6 +1564,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       await storage.updateQuote(quote.id, updatedFields);
+
+      // Auto-create project if DocuSign envelope completed (quote now approved)
+      if (newStatus === 'completed') {
+        await tryCreateProjectFromQuote(quote.id, quote.quoteNumber);
+      }
 
       res.status(200).json({ message: "Webhook processed successfully" });
 
