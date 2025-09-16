@@ -9,9 +9,9 @@ import { Progress } from '@/components/ui/progress';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { Upload, X, Image, FileText, Camera, Building, Wrench } from 'lucide-react';
-import type { ProjectImage, PortfolioImage, TechnicalDiagram, CompanyImage, ProductImage } from '@shared/schema';
+import type { PortfolioImage, TechnicalDiagram, CompanyImage, ProductImage } from '@shared/schema';
 
-export type ImageType = 'project' | 'portfolio' | 'technical' | 'company' | 'product';
+export type ImageType = 'portfolio' | 'technical' | 'company' | 'product';
 
 export interface UploadedImage {
   id: string;
@@ -20,7 +20,7 @@ export interface UploadedImage {
   uploadProgress: number;
   uploaded: boolean;
   url?: string;
-  metadata: Partial<ProjectImage | PortfolioImage | TechnicalDiagram | CompanyImage | ProductImage>;
+  metadata: Partial<PortfolioImage | TechnicalDiagram | CompanyImage | ProductImage>;
 }
 
 interface ImageUploaderProps {
@@ -55,8 +55,6 @@ export function ImageUploader({
 
   const getImageTypeIcon = (type: ImageType) => {
     switch (type) {
-      case 'project':
-        return <Camera className="h-5 w-5" />;
       case 'portfolio':
         return <Image className="h-5 w-5" />;
       case 'technical':
