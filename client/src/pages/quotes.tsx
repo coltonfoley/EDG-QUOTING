@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { AppHeader } from "@/components/app-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,6 +22,7 @@ export default function Quotes() {
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const { toast } = useToast();
   const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const [, navigate] = useLocation();
   
   const { data: quotes, isLoading, error } = useQuery<QuoteWithDetails[]>({
     queryKey: ["/api/quotes"],
@@ -58,7 +59,7 @@ export default function Quotes() {
         variant: "destructive",
       });
       setTimeout(() => {
-        window.location.href = "/api/login";
+        navigate("/auth");
       }, 500);
       return;
     }
@@ -73,7 +74,7 @@ export default function Quotes() {
         variant: "destructive",
       });
       setTimeout(() => {
-        window.location.href = "/api/login";
+        navigate("/auth");
       }, 500);
       return;
     }

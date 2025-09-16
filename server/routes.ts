@@ -1585,7 +1585,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/projects", isAuthenticated, async (req, res) => {
     try {
       console.log("Attempting to get all projects...");
-      const projects = await storage.getAllProjects();
+      const projects = await storage.getUserProjects(req.user?.id);
       console.log(`Found ${projects.length} projects`);
       res.json(projects);
     } catch (error) {
@@ -1600,6 +1600,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (isNaN(id) || id <= 0) {
         return res.status(400).json({ message: "Invalid project ID. Must be a positive integer." });
       }
+      
+      // Validate project ownership
+      if (!await storage.validateProjectOwnership(id, req.user?.id)) {
+        return res.status(403).json({ message: "Unauthorized: You don't have access to this project" });
+      }
+      
       const project = await storage.getProjectWithDetails(id);
       if (!project) {
         return res.status(404).json({ message: "Project not found" });
@@ -1645,6 +1651,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (isNaN(id) || id <= 0) {
         return res.status(400).json({ message: "Invalid project ID. Must be a positive integer." });
       }
+      
+      // Validate project ownership
+      if (!await storage.validateProjectOwnership(id, req.user?.id)) {
+        return res.status(403).json({ message: "Unauthorized: You don't have access to this project" });
+      }
+      
+      const projectData = insertProjectSchema.partial().parse(req.body);
+      console.log(`Updating project ${id} with data:`, JSON.stringify(projectData, null, 2));
+      
+      const project = await storage.updateProject(id, projectData);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+      console.log(`Updated project: ${project.projectNumber}`);
+      res.json(project);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        console.error("Project update validation errors:", JSON.stringify(error.errors, null, 2));
+        return res.status(400).json({ message: "Invalid project data", errors: error.errors });
+      }
+      console.error(`Project update error for ID ${req.params.id}:`, error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // Add PATCH route for frontend compatibility  
+  app.patch("/api/projects/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id) || id <= 0) {
+        return res.status(400).json({ message: "Invalid project ID. Must be a positive integer." });
+      }
+      
+      // Validate project ownership
+      if (!await storage.validateProjectOwnership(id, req.user?.id)) {
+        return res.status(403).json({ message: "Unauthorized: You don't have access to this project" });
+      }
+      
       const projectData = insertProjectSchema.partial().parse(req.body);
       console.log(`Updating project ${id} with data:`, JSON.stringify(projectData, null, 2));
       
@@ -1670,6 +1714,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (isNaN(id) || id <= 0) {
         return res.status(400).json({ message: "Invalid project ID. Must be a positive integer." });
       }
+      
+      // Validate project ownership
+      if (!await storage.validateProjectOwnership(id, req.user?.id)) {
+        return res.status(403).json({ message: "Unauthorized: You don't have access to this project" });
+      }
+      
       console.log(`Attempting to delete project ${id}`);
       
       const deleted = await storage.deleteProject(id);
@@ -1690,6 +1740,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (isNaN(quoteId) || quoteId <= 0) {
         return res.status(400).json({ message: "Invalid quote ID. Must be a positive integer." });
       }
+      
+      // Validate quote ownership before converting to project
+      if (!await storage.validateQuoteOwnership(quoteId, req.user?.id)) {
+        return res.status(403).json({ message: "Unauthorized: You don't have access to this quote" });
+      }
+      
       console.log(`Converting quote ${quoteId} to project...`);
       
       const project = await storage.createProjectFromQuote(quoteId);
