@@ -298,9 +298,6 @@ export class DatabaseStorage implements IStorage {
       conString: process.env.DATABASE_URL,
       createTableIfMissing: false,
       tableName: "sessions",
-      ttl: 7 * 24 * 60 * 60, // 7 days in seconds
-      pruneSessionInterval: 60 * 60, // prune expired sessions every hour
-      errorLog: console.error.bind(console),
     });
   }
   async getCustomer(id: number): Promise<Customer | undefined> {
