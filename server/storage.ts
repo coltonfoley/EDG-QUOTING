@@ -194,7 +194,6 @@ export class MemStorage {
       taxRate: insertQuote.taxRate || "0",
       discount: insertQuote.discount || "0",
       shipping: insertQuote.shipping || "0",
-      projectImages: insertQuote.projectImages || null,
       portfolioImages: insertQuote.portfolioImages || null,
       technicalDiagrams: insertQuote.technicalDiagrams || null,
       companyImages: insertQuote.companyImages || null,
@@ -397,7 +396,7 @@ export class DatabaseStorage implements IStorage {
     let finalQuoteData = { ...quoteData };
 
     // Merge image arrays instead of replacing them
-    const imageFields = ['projectImages', 'portfolioImages', 'technicalDiagrams', 'companyImages'] as const;
+    const imageFields = ['portfolioImages', 'technicalDiagrams', 'companyImages'] as const;
     
     for (const field of imageFields) {
       if (quoteData[field] && Array.isArray(quoteData[field])) {

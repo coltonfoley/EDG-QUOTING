@@ -1,5 +1,4 @@
 import { 
-  ProjectImage, 
   PortfolioImage, 
   TechnicalDiagram, 
   CompanyImage, 
@@ -38,7 +37,7 @@ export function ProfessionalImage({ src, alt, caption, className, style }: Image
 }
 
 interface ImageGridProps {
-  images: (ProjectImage | PortfolioImage | TechnicalDiagram | CompanyImage | ProductImage)[];
+  images: (PortfolioImage | TechnicalDiagram | CompanyImage | ProductImage)[];
   columns?: number;
   maxImages?: number;
   showCaptions?: boolean;
@@ -81,7 +80,7 @@ export function ImageGrid({
 }
 
 interface HeroImageProps {
-  image: ProjectImage | PortfolioImage;
+  image: PortfolioImage;
   title?: string;
   subtitle?: string;
   overlay?: boolean;
@@ -278,72 +277,17 @@ export function CompanyImageDisplay({
   );
 }
 
-interface ProjectPhaseDisplayProps {
-  images: ProjectImage[];
-  showPhases?: boolean;
-}
-
-// Display project images organized by phase
-export function ProjectPhaseDisplay({ 
-  images, 
-  showPhases = true 
-}: ProjectPhaseDisplayProps) {
-  if (images.length === 0) return null;
-
-  if (!showPhases) {
-    return <ImageGrid images={images} columns={3} maxImages={15} />;
-  }
-
-  const phases = ['before', 'during', 'after', 'other'] as const;
-  const imagesByPhase = phases.reduce((acc, phase) => {
-    acc[phase] = images.filter(img => img.category === phase);
-    return acc;
-  }, {} as Record<typeof phases[number], ProjectImage[]>);
-
-  return (
-    <div className="space-y-6">
-      {phases.map(phase => {
-        const phaseImages = imagesByPhase[phase];
-        if (phaseImages.length === 0) return null;
-        
-        return (
-          <div key={phase} className="mb-6">
-            <h4 className="text-sm font-semibold text-gray-700 mb-3 capitalize border-b border-gray-200 pb-1">
-              {phase} {phase !== 'other' ? 'Project' : 'Images'}
-            </h4>
-            <ImageGrid 
-              images={phaseImages} 
-              columns={3} 
-              maxImages={8}
-              showCaptions={true}
-            />
-          </div>
-        );
-      })}
-    </div>
-  );
-}
 
 // Helper function to get the best image for a specific purpose
 export function getBestImage(
-  images: (ProjectImage | PortfolioImage)[], 
-  preference: string[] = ['featured', 'before', 'after']
-): ProjectImage | PortfolioImage | null {
+  images: PortfolioImage[], 
+  preference: string[] = ['featured']
+): PortfolioImage | null {
   if (images.length === 0) return null;
   
   // First try to find a featured portfolio image
-  const featured = images.find(img => 
-    'featured' in img && img.featured
-  );
+  const featured = images.find(img => img.featured);
   if (featured) return featured;
-  
-  // Then try categories in order of preference
-  for (const pref of preference) {
-    const match = images.find(img => 
-      'category' in img && img.category === pref
-    );
-    if (match) return match;
-  }
   
   // Fall back to first image
   return images[0];

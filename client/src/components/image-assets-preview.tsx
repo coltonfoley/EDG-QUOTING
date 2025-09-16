@@ -5,16 +5,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Camera, Image, Wrench, Building, Eye, FileText, Download, Upload, Clock, ChevronDown, ChevronUp } from 'lucide-react';
 import { getProxiedImageUrl } from '@/lib/image-utils';
-import type { ProjectImage, PortfolioImage, TechnicalDiagram, CompanyImage } from '@shared/schema';
+import type { PortfolioImage, TechnicalDiagram, CompanyImage } from '@shared/schema';
 import type { UploadedImage } from '@/components/image-uploader';
 import { useState, useMemo } from 'react';
 
 interface ImageAssetsPreviewProps {
-  projectImages?: ProjectImage[] | null;
   portfolioImages?: PortfolioImage[] | null;
   technicalDiagrams?: TechnicalDiagram[] | null;
   companyImages?: CompanyImage[] | null;
-  uploadedProjectImages?: UploadedImage[] | null;
   uploadedPortfolioImages?: UploadedImage[] | null;
   uploadedTechnicalDiagrams?: UploadedImage[] | null;
   uploadedCompanyImages?: UploadedImage[] | null;
@@ -240,11 +238,9 @@ function ImageCategory({ title, icon, images, emptyMessage, category }: ImageCat
 }
 
 export function ImageAssetsPreview({ 
-  projectImages = [], 
   portfolioImages = [], 
   technicalDiagrams = [], 
   companyImages = [],
-  uploadedProjectImages = [],
   uploadedPortfolioImages = [],
   uploadedTechnicalDiagrams = [],
   uploadedCompanyImages = [],
@@ -308,11 +304,6 @@ export function ImageAssetsPreview({
   };
 
   // Merge images using memoization for performance
-  const mergedProjectImages = useMemo(() => 
-    mergeImages(projectImages, uploadedProjectImages), 
-    [projectImages, uploadedProjectImages]
-  );
-  
   const mergedPortfolioImages = useMemo(() => 
     mergeImages(portfolioImages, uploadedPortfolioImages), 
     [portfolioImages, uploadedPortfolioImages]
@@ -328,7 +319,7 @@ export function ImageAssetsPreview({
     [companyImages, uploadedCompanyImages]
   );
 
-  const totalImages = mergedProjectImages.length + mergedPortfolioImages.length + mergedTechnicalDiagrams.length + mergedCompanyImages.length;
+  const totalImages = mergedPortfolioImages.length + mergedTechnicalDiagrams.length + mergedCompanyImages.length;
   
   if (totalImages === 0) {
     return (
@@ -379,14 +370,6 @@ export function ImageAssetsPreview({
         
         <CollapsibleContent>
           <CardContent className="space-y-8 pt-0">
-            <ImageCategory
-              title="Project Photos"
-              icon={<Camera className="h-5 w-5 text-blue-600" />}
-              images={mergedProjectImages}
-              emptyMessage="No project photos uploaded"
-              category="Project"
-            />
-            
             <ImageCategory
               title="Portfolio Showcase"
               icon={<Image className="h-5 w-5 text-green-600" />}

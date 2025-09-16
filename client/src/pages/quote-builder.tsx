@@ -25,12 +25,10 @@ export default function QuoteBuilder() {
 
   // State to track upload states from QuoteHeader
   const [uploadStates, setUploadStates] = useState<{
-    projectImages: UploadedImage[];
     portfolioImages: UploadedImage[];
     technicalDiagrams: UploadedImage[];
     companyImages: UploadedImage[];
   }>({
-    projectImages: [],
     portfolioImages: [],
     technicalDiagrams: [],
     companyImages: [],
@@ -172,7 +170,6 @@ export default function QuoteBuilder() {
     projectAddress: "",
     estimatedStartDate: "",
     notes: "",
-    projectImages: [],
     portfolioImages: [],
     technicalDiagrams: [],
     companyImages: [],
@@ -210,11 +207,9 @@ export default function QuoteBuilder() {
 
         {/* Image Assets Preview - Show for both new and existing quotes */}
         <ImageAssetsPreview
-          projectImages={currentQuote.projectImages as any[]}
           portfolioImages={currentQuote.portfolioImages as any[]}
           technicalDiagrams={currentQuote.technicalDiagrams as any[]}
           companyImages={currentQuote.companyImages as any[]}
-          uploadedProjectImages={uploadStates.projectImages}
           uploadedPortfolioImages={uploadStates.portfolioImages}
           uploadedTechnicalDiagrams={uploadStates.technicalDiagrams}
           uploadedCompanyImages={uploadStates.companyImages}

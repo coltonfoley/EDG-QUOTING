@@ -45,7 +45,6 @@ export const quotes = pgTable("quotes", {
   estimatedStartDate: text("estimated_start_date"),
   notes: text("notes"),
   // Image fields for comprehensive image integration
-  projectImages: jsonb("project_images"), // Array of project photo URLs and metadata
   portfolioImages: jsonb("portfolio_images"), // Array of selected portfolio showcase images
   technicalDiagrams: jsonb("technical_diagrams"), // Array of technical diagrams and plans
   companyImages: jsonb("company_images"), // Company branding and team photos
@@ -188,9 +187,6 @@ export const imageMetadataSchema = z.object({
   thumbnailUrl: z.string().url().optional(),
 });
 
-export const projectImageSchema = imageMetadataSchema.extend({
-  category: z.enum(['before', 'during', 'after', 'other']),
-});
 
 export const portfolioImageSchema = imageMetadataSchema.extend({
   projectType: z.string().optional(),
@@ -222,7 +218,6 @@ export const insertQuoteSchema = createInsertSchema(quotes).omit({
   estimatedStartDate: z.union([z.string(), z.null()]).transform(val => val === null ? "" : val),
   notes: z.union([z.string(), z.null()]).transform(val => val === null ? "" : val),
   // Image fields
-  projectImages: z.array(projectImageSchema).optional(),
   portfolioImages: z.array(portfolioImageSchema).optional(),
   technicalDiagrams: z.array(technicalDiagramSchema).optional(),
   companyImages: z.array(companyImageSchema).optional(),
@@ -350,9 +345,6 @@ export interface ImageMetadata {
   thumbnailUrl?: string;
 }
 
-export interface ProjectImage extends ImageMetadata {
-  category: 'before' | 'during' | 'after' | 'other';
-}
 
 export interface PortfolioImage extends ImageMetadata {
   projectType?: string;
