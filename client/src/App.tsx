@@ -34,7 +34,7 @@ function Router() {
           <Route path="/" component={Home} />
           <Route path="/quotes" component={Quotes} />
           <Route path="/quotes/new" component={QuoteBuilder} />
-          <Route path="/quotes/:id" component={QuoteBuilder} />
+          <Route path="/quotes/:id(\\d+)" component={QuoteBuilder} />
           <Route path="/products" component={Products} />
           <Route path="/contracts" component={ContractsPage} />
           <Route path="/admin" component={AdminPage} />
