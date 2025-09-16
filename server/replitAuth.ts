@@ -35,13 +35,6 @@ export function setupAuth(app: Express) {
     resave: false,
     saveUninitialized: false,
     store: storage.sessionStore,
-    cookie: {
-      secure: true, // Always secure for iframe compatibility
-      httpOnly: true,
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days in milliseconds
-      sameSite: 'none' // Required for iframe/third-party context
-    },
-    name: 'sessionId', // Custom session name for security
   };
 
   app.set("trust proxy", 1);
