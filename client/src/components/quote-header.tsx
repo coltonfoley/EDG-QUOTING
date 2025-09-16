@@ -31,7 +31,6 @@ interface QuoteHeaderProps {
   onSave: (data: QuoteFormData) => void;
   isLoading?: boolean;
   onUploadStatesChange?: (states: {
-    projectImages: UploadedImage[];
     portfolioImages: UploadedImage[];
     technicalDiagrams: UploadedImage[];
     companyImages: UploadedImage[];
@@ -43,7 +42,6 @@ export function QuoteHeader({ quote, onSave, isLoading, onUploadStatesChange }: 
   const queryClient = useQueryClient();
 
   // State for managing image uploads
-  const [projectImages, setProjectImages] = useState<UploadedImage[]>([]);
   const [portfolioImages, setPortfolioImages] = useState<UploadedImage[]>([]);
   const [technicalDiagrams, setTechnicalDiagrams] = useState<UploadedImage[]>([]);
   const [companyImages, setCompanyImages] = useState<UploadedImage[]>([]);
@@ -55,9 +53,9 @@ export function QuoteHeader({ quote, onSave, isLoading, onUploadStatesChange }: 
   const [isImageAssetsOpen, setIsImageAssetsOpen] = useState(false);
   
   // Calculate if any uploads are still in progress
-  const isUploading = [...projectImages, ...portfolioImages, ...technicalDiagrams, ...companyImages]
+  const isUploading = [...portfolioImages, ...technicalDiagrams, ...companyImages]
     .some(img => !img.uploaded);
-  const uploadingCount = [...projectImages, ...portfolioImages, ...technicalDiagrams, ...companyImages]
+  const uploadingCount = [...portfolioImages, ...technicalDiagrams, ...companyImages]
     .filter(img => !img.uploaded).length;
   
   const form = useForm<QuoteFormData>({
@@ -104,7 +102,7 @@ export function QuoteHeader({ quote, onSave, isLoading, onUploadStatesChange }: 
         }));
       };
       
-      setProjectImages(convertDbImagesToUploaded((quote.projectImages as any[]) || []));
+      // Project images removed with projects module
       setPortfolioImages(convertDbImagesToUploaded((quote.portfolioImages as any[]) || []));
       setTechnicalDiagrams(convertDbImagesToUploaded((quote.technicalDiagrams as any[]) || []));
       setCompanyImages(convertDbImagesToUploaded((quote.companyImages as any[]) || []));
@@ -141,13 +139,12 @@ export function QuoteHeader({ quote, onSave, isLoading, onUploadStatesChange }: 
   useEffect(() => {
     if (onUploadStatesChange) {
       onUploadStatesChange({
-        projectImages,
         portfolioImages,
         technicalDiagrams,
         companyImages,
       });
     }
-  }, [projectImages, portfolioImages, technicalDiagrams, companyImages, onUploadStatesChange]);
+  }, [portfolioImages, technicalDiagrams, companyImages, onUploadStatesChange]);
 
   const updateStatusMutation = useMutation({
     mutationFn: async ({ status }: { status: string }) => {
@@ -201,16 +198,7 @@ export function QuoteHeader({ quote, onSave, isLoading, onUploadStatesChange }: 
     // Convert uploaded images to the expected format for the database
     const imageData = {
       ...data,
-      projectImages: projectImages.filter(img => img.uploaded).map(img => ({
-        url: img.url || '',
-        filename: img.metadata.filename || '',
-        caption: img.metadata.caption || '',
-        altText: img.metadata.altText || '',
-        uploadedAt: img.metadata.uploadedAt || new Date().toISOString(),
-        size: img.metadata.size,
-        thumbnailUrl: img.metadata.thumbnailUrl,
-        category: (img.metadata as any).category || 'other',
-      })),
+      // Project images removed with projects module
       portfolioImages: portfolioImages.filter(img => img.uploaded).map(img => ({
         url: img.url || '',
         filename: img.metadata.filename || '',
@@ -450,7 +438,7 @@ export function QuoteHeader({ quote, onSave, isLoading, onUploadStatesChange }: 
                       Image Assets
                     </h3>
                     <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
-                      <span>({projectImages.filter(img => img.uploaded).length + portfolioImages.filter(img => img.uploaded).length + technicalDiagrams.filter(img => img.uploaded).length + companyImages.filter(img => img.uploaded).length} uploaded)</span>
+                      <span>({portfolioImages.filter(img => img.uploaded).length + technicalDiagrams.filter(img => img.uploaded).length + companyImages.filter(img => img.uploaded).length} uploaded)</span>
                     </div>
                   </div>
                   {isImageAssetsOpen ? (
@@ -471,21 +459,7 @@ export function QuoteHeader({ quote, onSave, isLoading, onUploadStatesChange }: 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   {/* Project Images */}
                   <div className="space-y-4">
-                    <ImageUploader
-                      imageType="project"
-                      title="Project Photos"
-                      description="Before, during, and after photos of project work"
-                      maxFiles={15}
-                      onImagesChange={setProjectImages}
-                      initialImages={projectImages}
-                      categoryOptions={[
-                        { value: 'before', label: 'Before Photos' },
-                        { value: 'during', label: 'During Construction' },
-                        { value: 'after', label: 'After Completion' },
-                        { value: 'other', label: 'Other' }
-                      ]}
-                      data-testid="uploader-project-images"
-                    />
+                    {/* Project photos removed with projects module */}
 
                     <ImageUploader
                       imageType="technical"
@@ -548,7 +522,7 @@ export function QuoteHeader({ quote, onSave, isLoading, onUploadStatesChange }: 
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm text-gray-600 dark:text-gray-400">
                     <div className="flex items-center gap-2">
                       <Camera className="h-4 w-4" />
-                      <span>Project: {projectImages.filter(img => img.uploaded).length}</span>
+                      <span>Project: N/A</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <Image className="h-4 w-4" />
