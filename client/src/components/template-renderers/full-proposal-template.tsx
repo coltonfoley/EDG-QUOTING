@@ -6,7 +6,6 @@ import {
   ImageGrid, 
   TechnicalDiagramDisplay, 
   CompanyImageDisplay, 
-  ProjectPhaseDisplay,
   ProfessionalImage,
   getBestImage,
   getCompanyLogo 
@@ -50,13 +49,13 @@ export function FullProposalTemplate({ quote, template, companyInfo, quoteTerms 
   );
 
   // Extract and organize images from quote data
-  const projectImages = quote.projectImages ? JSON.parse(JSON.stringify(quote.projectImages)) : [];
+  const projectImages: any[] = []; // Project images removed
   const portfolioImages = quote.portfolioImages ? JSON.parse(JSON.stringify(quote.portfolioImages)) : [];
   const technicalDiagrams = quote.technicalDiagrams ? JSON.parse(JSON.stringify(quote.technicalDiagrams)) : [];
   const companyImages = quote.companyImages ? JSON.parse(JSON.stringify(quote.companyImages)) : [];
   
   // Get best images for different purposes
-  const heroImage = getBestImage([...projectImages, ...portfolioImages], ['featured', 'before', 'after']);
+  const heroImage = getBestImage([...portfolioImages], ['featured', 'before', 'after']);
   const companyLogo = getCompanyLogo(companyImages);
 
   return (
@@ -169,12 +168,7 @@ export function FullProposalTemplate({ quote, template, companyInfo, quoteTerms 
           </div>
 
           {/* Project Images Section */}
-          {projectImages.length > 0 && (
-            <div>
-              <h3 className="text-lg font-semibold mb-4" style={{ color: branding.accentColor }}>Project Visuals</h3>
-              <ProjectPhaseDisplay images={projectImages} showPhases={true} />
-            </div>
-          )}
+          {/* Project visuals section removed with projects module */}
 
           <div>
             <h3 className="text-lg font-semibold mb-2" style={{ color: branding.accentColor }}>Deliverables Include:</h3>

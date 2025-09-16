@@ -1,13 +1,12 @@
 import { formatCurrency, calculateQuoteTotals } from "@/lib/utils";
 import { getProxiedImageUrl } from "@/lib/image-utils";
-import type { QuoteWithDetails, ProposalTemplate, BrandingSettings, DefaultContent, ProjectImage, CompanyImage } from "@shared/schema";
+import type { QuoteWithDetails, ProposalTemplate, BrandingSettings, DefaultContent, CompanyImage } from "@shared/schema";
 import logoPath from "@assets/my-logo.png_1753970984943.jpg";
 import { 
   HeroImage, 
   ImageGrid, 
   TechnicalDiagramDisplay, 
   CompanyImageDisplay, 
-  ProjectPhaseDisplay,
   ProfessionalImage,
   getBestImage,
   getCompanyLogo 
@@ -51,15 +50,15 @@ export function TechnicalSpecTemplate({ quote, template, companyInfo, quoteTerms
   );
 
   // Extract and organize images from quote data
-  const projectImages = quote.projectImages ? JSON.parse(JSON.stringify(quote.projectImages)) : [];
+  const projectImages: any[] = []; // Project images removed
   const portfolioImages = quote.portfolioImages ? JSON.parse(JSON.stringify(quote.portfolioImages)) : [];
   const technicalDiagrams = quote.technicalDiagrams ? JSON.parse(JSON.stringify(quote.technicalDiagrams)) : [];
   const companyImages = quote.companyImages ? JSON.parse(JSON.stringify(quote.companyImages)) : [];
   
   // Get best images for different purposes
   const companyLogo = getCompanyLogo(companyImages);
-  const installationImages = projectImages.filter((img: ProjectImage) => img.category === 'during');
-  const beforeAfterImages = projectImages.filter((img: ProjectImage) => img.category === 'before' || img.category === 'after');
+  const installationImages: any[] = []; // Project installation images removed
+  const beforeAfterImages: any[] = []; // Project before/after images removed
 
   return (
     <div className="bg-white text-black" style={{ fontFamily: 'system-ui, sans-serif', color: branding.textColor }}>

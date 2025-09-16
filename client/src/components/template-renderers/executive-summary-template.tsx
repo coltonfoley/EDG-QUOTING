@@ -50,13 +50,13 @@ export function ExecutiveSummaryTemplate({ quote, template, companyInfo, quoteTe
   );
 
   // Extract and organize images from quote data
-  const projectImages = quote.projectImages ? JSON.parse(JSON.stringify(quote.projectImages)) : [];
+  const projectImages: any[] = []; // Project images removed
   const portfolioImages = quote.portfolioImages ? JSON.parse(JSON.stringify(quote.portfolioImages)) : [];
   const technicalDiagrams = quote.technicalDiagrams ? JSON.parse(JSON.stringify(quote.technicalDiagrams)) : [];
   const companyImages = quote.companyImages ? JSON.parse(JSON.stringify(quote.companyImages)) : [];
   
   // Get best images for different purposes
-  const keyProjectImage = getBestImage([...projectImages, ...portfolioImages], ['featured', 'before', 'after']);
+  const keyProjectImage = getBestImage([...portfolioImages], ['featured', 'before', 'after']);
   const featuredPortfolioImages = portfolioImages.filter((img: PortfolioImage) => img.featured).slice(0, 3);
   const companyLogo = getCompanyLogo(companyImages);
 
