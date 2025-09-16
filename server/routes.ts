@@ -62,12 +62,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // User authentication routes
   app.get('/api/user', async (req: any, res) => {
+    // Prevent caching to ensure fresh authentication checks
+    res.set({
+      'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0',
+      'ETag': '' // Disable ETag generation to prevent 304 responses
+    });
+    
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: "Unauthorized" });
     }
     
     try {
       const user = await storage.getUser(req.user?.id);
+      console.log(`✅ User authenticated: ${user?.username} (ID: ${user?.id})`);
       res.json(user);
     } catch (error) {
       console.error("Error fetching user:", error);
