@@ -274,9 +274,7 @@ export default function Projects() {
   };
 
   const handleViewDetails = (projectId: number) => {
-    // For now, navigate to projects page with project ID in query
-    // This could be changed to a dedicated project details page when available
-    navigate(`/projects?id=${projectId}`);
+    navigate(`/projects/${projectId}`);
   };
 
   const retryQuery = () => {
