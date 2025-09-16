@@ -170,33 +170,6 @@ export const lineItems = pgTable("line_items", {
   isAccessory: boolean("is_accessory").default(false),
 });
 
-// Projects table for tracking project execution and management
-export const projects = pgTable("projects", {
-  id: serial("id").primaryKey(),
-  projectNumber: text("project_number").notNull().unique(),
-  quoteId: integer("quote_id").unique(), // reference to the originating quote - unique to prevent duplicates, nullable for standalone projects
-  customerId: integer("customer_id").notNull(), // reference to customer
-  projectName: text("project_name"),
-  projectAddress: text("project_address"),
-  status: text("status").notNull().default("pending"), // pending, in_progress, completed, on_hold, cancelled
-  // Date tracking
-  estimatedStartDate: text("estimated_start_date"),
-  estimatedEndDate: text("estimated_end_date"),
-  actualStartDate: text("actual_start_date"),
-  actualEndDate: text("actual_end_date"),
-  // Team and progress tracking
-  assignedTeamMembers: jsonb("assigned_team_members"), // Array of team member objects
-  completionPercentage: decimal("completion_percentage", { precision: 5, scale: 2 }).default("0"), // 0-100
-  // Financial tracking
-  contractValue: decimal("contract_value", { precision: 10, scale: 2 }),
-  actualCost: decimal("actual_cost", { precision: 10, scale: 2 }).default("0"),
-  // Progress documentation
-  notes: text("notes"),
-  progressPhotos: jsonb("progress_photos"), // Array of progress photo metadata
-  // Timestamps
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-});
 
 
 
@@ -318,25 +291,6 @@ export const insertProposalTemplateSchema = createInsertSchema(proposalTemplates
   }).default('pdf'),
 });
 
-export const insertProjectSchema = createInsertSchema(projects).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-}).extend({
-  projectName: z.union([z.string(), z.null()]).transform(val => val === null ? "" : val).optional(),
-  projectAddress: z.union([z.string(), z.null()]).transform(val => val === null ? "" : val).optional(),
-  contractValue: z.union([z.string(), z.number(), z.null()]).transform(val => val === null ? null : (typeof val === 'string' ? val : val.toString())).optional(),
-  actualCost: z.union([z.string(), z.number(), z.null()]).transform(val => val === null ? "0" : (typeof val === 'string' ? val : val.toString())),
-  completionPercentage: z.union([z.string(), z.number(), z.null()]).transform(val => val === null ? "0" : (typeof val === 'string' ? val : val.toString())),
-  // Date fields are now text, so handle as text
-  estimatedStartDate: z.union([z.string(), z.null()]).transform(val => val === null ? "" : val).optional(),
-  estimatedEndDate: z.union([z.string(), z.null()]).transform(val => val === null ? "" : val).optional(),
-  actualStartDate: z.union([z.string(), z.null()]).transform(val => val === null ? "" : val).optional(),
-  actualEndDate: z.union([z.string(), z.null()]).transform(val => val === null ? "" : val).optional(),
-  status: z.enum(['pending', 'in_progress', 'completed', 'on_hold', 'cancelled'], {
-    errorMap: () => ({ message: "Status must be one of: pending, in_progress, completed, on_hold, cancelled" }),
-  }).default('pending'),
-});
 
 
 
@@ -348,7 +302,6 @@ export type ContractTemplate = typeof contractTemplates.$inferSelect;
 export type ProposalTemplate = typeof proposalTemplates.$inferSelect;
 export type PricingTable = typeof pricingTables.$inferSelect;
 export type ProductAccessory = typeof productAccessories.$inferSelect;
-export type Project = typeof projects.$inferSelect;
 
 export type InsertCustomer = z.infer<typeof insertCustomerSchema>;
 export type InsertQuote = z.infer<typeof insertQuoteSchema>;
@@ -358,7 +311,6 @@ export type InsertContractTemplate = z.infer<typeof insertContractTemplateSchema
 export type InsertProposalTemplate = z.infer<typeof insertProposalTemplateSchema>;
 export type InsertPricingTable = z.infer<typeof insertPricingTableSchema>;
 export type InsertProductAccessory = z.infer<typeof insertProductAccessorySchema>;
-export type InsertProject = z.infer<typeof insertProjectSchema>;
 
 export type QuoteWithDetails = Quote & {
   customer: Customer;
@@ -386,10 +338,6 @@ export type ProductWithDetails = Product & {
   accessories?: (ProductAccessory & { accessory: Product })[];
 };
 
-export type ProjectWithDetails = Project & {
-  customer: Customer;
-  quote: Quote;
-};
 
 // Image metadata types
 export interface ImageMetadata {

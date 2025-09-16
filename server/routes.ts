@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertCustomerSchema, insertQuoteSchema, insertLineItemSchema, insertProductSchema, insertContractTemplateSchema, insertProposalTemplateSchema, insertPricingTableSchema, insertProductAccessorySchema, insertProjectSchema } from "@shared/schema";
+import { insertCustomerSchema, insertQuoteSchema, insertLineItemSchema, insertProductSchema, insertContractTemplateSchema, insertProposalTemplateSchema, insertPricingTableSchema, insertProductAccessorySchema } from "@shared/schema";
 import { z } from "zod";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import multer from "multer";
@@ -36,25 +36,6 @@ const upload = multer({
   },
 });
 
-// Helper function for automatic project creation from quotes
-async function tryCreateProjectFromQuote(quoteId: number, quoteNumber: string): Promise<void> {
-  try {
-    console.log(`🏗️ Attempting to auto-create project from approved quote ${quoteNumber} (ID: ${quoteId})`);
-    
-    const project = await storage.createProjectFromQuote(quoteId);
-    
-    console.log(`✅ Successfully auto-created project ${project.projectNumber} from quote ${quoteNumber}`);
-  } catch (error: any) {
-    // Log the error but don't throw - we don't want project creation failures to break quote updates
-    if (error.message?.includes('Project already exists')) {
-      console.log(`ℹ️ Project already exists for quote ${quoteNumber}, skipping auto-creation`);
-    } else if (error.message?.includes('must be approved')) {
-      console.log(`⚠️ Quote ${quoteNumber} is not in approved status, cannot create project`);
-    } else {
-      console.error(`❌ Failed to auto-create project from quote ${quoteNumber}:`, error.message || error);
-    }
-  }
-}
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
@@ -340,11 +321,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const quote = await storage.updateQuote(id, quoteData);
       if (!quote) {
         return res.status(404).json({ message: "Quote not found" });
-      }
-      
-      // Auto-create project if quote status changed to approved
-      if (originalQuote.status !== "approved" && quote.status === "approved") {
-        await tryCreateProjectFromQuote(quote.id, quote.quoteNumber);
       }
       
       res.json(quote);
@@ -1574,10 +1550,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       await storage.updateQuote(quote.id, updatedFields);
 
-      // Auto-create project if DocuSign envelope completed (quote now approved)
-      if (newStatus === 'completed') {
-        await tryCreateProjectFromQuote(quote.id, quote.quoteNumber);
-      }
 
       res.status(200).json({ message: "Webhook processed successfully" });
 
@@ -1590,196 +1562,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Project routes (protected)
-  app.get("/api/projects", isAuthenticated, async (req, res) => {
-    try {
-      console.log("Attempting to get all projects...");
-      const projects = await storage.getUserProjects(req.user?.id);
-      console.log(`Found ${projects.length} projects`);
-      res.json(projects);
-    } catch (error) {
-      console.error("Error in /api/projects:", error);
-      res.status(500).json({ message: "Internal server error" });
-    }
-  });
-
-  app.get("/api/projects/:id", isAuthenticated, async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      if (isNaN(id) || id <= 0) {
-        return res.status(400).json({ message: "Invalid project ID. Must be a positive integer." });
-      }
-      
-      // Validate project ownership
-      if (!await storage.validateProjectOwnership(id, req.user?.id)) {
-        return res.status(403).json({ message: "Unauthorized: You don't have access to this project" });
-      }
-      
-      const project = await storage.getProjectWithDetails(id);
-      if (!project) {
-        return res.status(404).json({ message: "Project not found" });
-      }
-      res.json(project);
-    } catch (error) {
-      console.error(`Error fetching project ${req.params.id}:`, error);
-      res.status(500).json({ message: "Internal server error" });
-    }
-  });
-
-  app.post("/api/projects", isAuthenticated, async (req, res) => {
-    try {
-      console.log("Project creation request body:", JSON.stringify(req.body, null, 2));
-      
-      // Generate unique project number if not provided BEFORE validation
-      const requestData = { ...req.body };
-      if (!requestData.projectNumber) {
-        const timestamp = Date.now();
-        const randomSuffix = Math.random().toString(36).substring(2, 8).toUpperCase();
-        requestData.projectNumber = `P-${timestamp}-${randomSuffix}`;
-      }
-      
-      // Now validate the complete data including generated projectNumber
-      const projectData = insertProjectSchema.parse(requestData);
-      
-      const project = await storage.createProject(projectData);
-      console.log(`Created project: ${project.projectNumber}`);
-      res.status(201).json(project);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        console.error("Project validation errors:", JSON.stringify(error.errors, null, 2));
-        return res.status(400).json({ message: "Invalid project data", errors: error.errors });
-      }
-      console.error("Project creation error:", error);
-      res.status(500).json({ message: "Internal server error" });
-    }
-  });
-
-  app.put("/api/projects/:id", isAuthenticated, async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      if (isNaN(id) || id <= 0) {
-        return res.status(400).json({ message: "Invalid project ID. Must be a positive integer." });
-      }
-      
-      // Validate project ownership
-      if (!await storage.validateProjectOwnership(id, req.user?.id)) {
-        return res.status(403).json({ message: "Unauthorized: You don't have access to this project" });
-      }
-      
-      const projectData = insertProjectSchema.partial().parse(req.body);
-      console.log(`Updating project ${id} with data:`, JSON.stringify(projectData, null, 2));
-      
-      const project = await storage.updateProject(id, projectData);
-      if (!project) {
-        return res.status(404).json({ message: "Project not found" });
-      }
-      console.log(`Updated project: ${project.projectNumber}`);
-      res.json(project);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        console.error("Project update validation errors:", JSON.stringify(error.errors, null, 2));
-        return res.status(400).json({ message: "Invalid project data", errors: error.errors });
-      }
-      console.error(`Project update error for ID ${req.params.id}:`, error);
-      res.status(500).json({ message: "Internal server error" });
-    }
-  });
-
-  // Add PATCH route for frontend compatibility  
-  app.patch("/api/projects/:id", isAuthenticated, async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      if (isNaN(id) || id <= 0) {
-        return res.status(400).json({ message: "Invalid project ID. Must be a positive integer." });
-      }
-      
-      // Validate project ownership
-      if (!await storage.validateProjectOwnership(id, req.user?.id)) {
-        return res.status(403).json({ message: "Unauthorized: You don't have access to this project" });
-      }
-      
-      const projectData = insertProjectSchema.partial().parse(req.body);
-      console.log(`Updating project ${id} with data:`, JSON.stringify(projectData, null, 2));
-      
-      const project = await storage.updateProject(id, projectData);
-      if (!project) {
-        return res.status(404).json({ message: "Project not found" });
-      }
-      console.log(`Updated project: ${project.projectNumber}`);
-      res.json(project);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        console.error("Project update validation errors:", JSON.stringify(error.errors, null, 2));
-        return res.status(400).json({ message: "Invalid project data", errors: error.errors });
-      }
-      console.error(`Project update error for ID ${req.params.id}:`, error);
-      res.status(500).json({ message: "Internal server error" });
-    }
-  });
-
-  app.delete("/api/projects/:id", isAuthenticated, async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      if (isNaN(id) || id <= 0) {
-        return res.status(400).json({ message: "Invalid project ID. Must be a positive integer." });
-      }
-      
-      // Validate project ownership
-      if (!await storage.validateProjectOwnership(id, req.user?.id)) {
-        return res.status(403).json({ message: "Unauthorized: You don't have access to this project" });
-      }
-      
-      console.log(`Attempting to delete project ${id}`);
-      
-      const deleted = await storage.deleteProject(id);
-      if (!deleted) {
-        return res.status(404).json({ message: "Project not found" });
-      }
-      console.log(`Successfully deleted project ${id}`);
-      res.status(204).send();
-    } catch (error) {
-      console.error(`Project deletion error for ID ${req.params.id}:`, error);
-      res.status(500).json({ message: "Internal server error" });
-    }
-  });
-
-  app.post("/api/projects/from-quote/:quoteId", isAuthenticated, async (req, res) => {
-    try {
-      const quoteId = parseInt(req.params.quoteId);
-      if (isNaN(quoteId) || quoteId <= 0) {
-        return res.status(400).json({ message: "Invalid quote ID. Must be a positive integer." });
-      }
-      
-      // Validate quote ownership before converting to project
-      if (!await storage.validateQuoteOwnership(quoteId, req.user?.id)) {
-        return res.status(403).json({ message: "Unauthorized: You don't have access to this quote" });
-      }
-      
-      console.log(`Converting quote ${quoteId} to project...`);
-      
-      const project = await storage.createProjectFromQuote(quoteId);
-      console.log(`Successfully created project ${project.projectNumber} from quote ${quoteId}`);
-      res.status(201).json(project);
-    } catch (error) {
-      console.error(`Error converting quote ${req.params.quoteId} to project:`, error);
-      
-      const errorMessage = error instanceof Error ? error.message : "Unknown error";
-      
-      // Handle specific error cases with appropriate HTTP status codes
-      if (errorMessage.includes("not found") || errorMessage.includes("Quote not found")) {
-        return res.status(404).json({ message: errorMessage });
-      } else if (errorMessage.includes("must be approved") || errorMessage.includes("not approved")) {
-        return res.status(400).json({ message: errorMessage });
-      } else if (errorMessage.includes("already exists") || errorMessage.includes("duplicate") || errorMessage.includes("already converted")) {
-        return res.status(409).json({ message: errorMessage });
-      }
-      
-      res.status(500).json({ 
-        message: "Failed to create project from quote",
-        error: errorMessage 
-      });
-    }
-  });
 
   const httpServer = createServer(app);
   return httpServer;

@@ -7,9 +7,6 @@ import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import NotFound from "@/pages/not-found";
 import Quotes from "@/pages/quotes";
 import QuoteBuilder from "@/pages/quote-builder";
-import Projects from "@/pages/projects";
-import ProjectBuilder from "@/pages/project-builder";
-import ProjectDetails from "@/pages/project-details";
 import Products from "@/pages/products";
 import Landing from "@/pages/landing";
 import Home from "@/pages/home";
@@ -38,9 +35,6 @@ function Router() {
           <Route path="/quotes" component={Quotes} />
           <Route path="/quotes/new" component={QuoteBuilder} />
           <Route path="/quotes/:id" component={QuoteBuilder} />
-          <Route path="/projects" component={Projects} />
-          <Route path="/projects/new" component={ProjectBuilder} />
-          <Route path="/projects/:id" component={ProjectDetails} />
           <Route path="/products" component={Products} />
           <Route path="/contracts" component={ContractsPage} />
           <Route path="/admin" component={AdminPage} />
