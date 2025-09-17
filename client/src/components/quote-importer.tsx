@@ -140,7 +140,7 @@ export function QuoteImporter({ onImportComplete, onClose }: QuoteImporterProps)
         const customer = await customerResponse.json();
         
         const quoteData = {
-          customerId: customer.id,
+          accountId: customer.id,
           quoteNumber: data.quoteNumber || `QT-${Date.now()}`,
           projectName: data.projectDescription || "Imported Project",
           projectAddress: data.customer.address || "",
