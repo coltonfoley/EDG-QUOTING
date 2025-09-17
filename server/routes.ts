@@ -495,15 +495,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/customers/search", isAuthenticated, async (req, res) => {
     try {
       const searchTerm = req.query.q as string;
+      console.log(`Customer search request: q="${searchTerm}"`);
+      
       if (!searchTerm) {
+        console.log("Empty search term, returning empty array");
         return res.json([]);
       }
       
+      console.log("Calling storage.searchCustomers...");
       const customers = await storage.searchCustomers(searchTerm);
+      console.log(`Search completed, found ${customers.length} results`);
       res.json(customers);
     } catch (error) {
       console.error("Customer search error:", error);
-      res.status(500).json({ message: "Internal server error" });
+      if (error instanceof Error) {
+        console.error("Error message:", error.message);
+        console.error("Error stack:", error.stack);
+      }
+      res.status(400).json({ message: "Invalid request parameter", error: error instanceof Error ? error.message : "Unknown error" });
     }
   });
 
