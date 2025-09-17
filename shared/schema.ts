@@ -34,7 +34,10 @@ export const customers = pgTable("customers", {
   email: text("email").notNull(),
   phone: text("phone").notNull(),
   company: text("company"), // Company name for business clients
-});
+}, (table) => [
+  index("idx_customers_email").on(table.email),
+  index("idx_customers_phone").on(table.phone),
+]);
 
 export const quotes = pgTable("quotes", {
   id: serial("id").primaryKey(),
@@ -61,7 +64,11 @@ export const quotes = pgTable("quotes", {
   customerSignatureDate: timestamp("customer_signature_date"),
   signatureStatus: text("signature_status").notNull().default("unsigned"), // unsigned, signed
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (table) => [
+  index("idx_quotes_customer_id").on(table.customerId),
+  index("idx_quotes_status").on(table.status),
+  index("idx_quotes_customer_created").on(table.customerId, table.createdAt),
+]);
 
 // Contract templates for reusable contract terms
 export const contractTemplates = pgTable("contract_templates", {
@@ -118,7 +125,10 @@ export const products = pgTable("products", {
   galleryImages: jsonb("gallery_images"), // Array of additional product photos
   specificationSheets: jsonb("specification_sheets"), // Technical specification documents/images
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (table) => [
+  index("idx_products_category").on(table.category),
+  index("idx_products_product_type").on(table.productType),
+]);
 
 // Dimensional pricing tables for configurable products
 export const pricingTables = pgTable("pricing_tables", {
@@ -133,7 +143,9 @@ export const pricingTables = pgTable("pricing_tables", {
   retailPrice: decimal("retail_price", { precision: 10, scale: 2 }).notNull(),
   basePrice: decimal("base_price", { precision: 10, scale: 2 }).notNull(),
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (table) => [
+  index("idx_pricing_tables_product_id").on(table.productId),
+]);
 
 // Product accessories - items that can be added to base products
 export const productAccessories = pgTable("product_accessories", {
@@ -144,7 +156,10 @@ export const productAccessories = pgTable("product_accessories", {
   displayOrder: integer("display_order").default(0),
   category: text("category"), // e.g., "Motors", "Lighting", "Sensors"
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (table) => [
+  index("idx_product_accessories_base_product").on(table.baseProductId),
+  index("idx_product_accessories_accessory_product").on(table.accessoryProductId),
+]);
 
 export const lineItems = pgTable("line_items", {
   id: serial("id").primaryKey(),
@@ -162,7 +177,11 @@ export const lineItems = pgTable("line_items", {
   configData: jsonb("config_data"), // JSON object storing configuration values (dimensions, options, etc.)
   baseProductId: integer("base_product_id"), // reference to base product for accessories
   isAccessory: boolean("is_accessory").default(false),
-});
+}, (table) => [
+  index("idx_line_items_quote_id").on(table.quoteId),
+  index("idx_line_items_product_id").on(table.productId),
+  index("idx_line_items_base_product_id").on(table.baseProductId),
+]);
 
 
 
