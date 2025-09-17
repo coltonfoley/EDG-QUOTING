@@ -12,13 +12,11 @@ import {
   insertProposalTemplateSchema,
   insertPricingTableSchema,
   insertProductAccessorySchema,
-  insertLeadSchema,
   createUserSchema,
   updateUserSchema,
   idParamSchema,
   queryIdParamSchema,
   productIdParamSchema,
-  leadIdParamSchema,
   uploadUrlSchema,
   finalizeUploadSchema,
   imageProxySchema,
@@ -26,9 +24,7 @@ import {
   bulkDeleteSchema,
   bulkUpdateSchema,
   bulkUpdateProductsSchema,
-  bulkUploadPricingSchema,
-  updateLeadStageSchema,
-  leadQueryParamsSchema
+  bulkUploadPricingSchema
 } from "./validation-schemas";
 import multer from "multer";
 import * as XLSX from "xlsx";
@@ -492,17 +488,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       console.log("Quote creation request body:", JSON.stringify(req.body, null, 2));
       const quoteData = insertQuoteSchema.parse(req.body);
-      
-      // Ensure required fields have default values for storage compatibility
-      const processedQuoteData = {
-        ...quoteData,
-        projectName: quoteData.projectName || "",
-        projectAddress: quoteData.projectAddress || "",
-        estimatedStartDate: quoteData.estimatedStartDate || "",
-        notes: quoteData.notes || ""
-      };
-      
-      const quote = await storage.createQuote(processedQuoteData);
+      const quote = await storage.createQuote(quoteData);
       res.status(201).json(quote);
     } catch (error: any) {
       if (error instanceof z.ZodError) {
@@ -1243,24 +1229,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // General users endpoint for dropdowns (non-admin access)
-  app.get('/api/users', isAuthenticated, async (req: any, res) => {
-    try {
-      const users = await storage.getAllUsers();
-      // Return minimal user data for dropdowns (no sensitive info)
-      const publicUsers = users.map(user => ({
-        id: user.id,
-        username: user.username,
-        firstName: user.firstName,
-        lastName: user.lastName,
-      }));
-      res.json(publicUsers);
-    } catch (error) {
-      console.error("Error fetching users:", error);
-      res.status(500).json({ message: "Failed to fetch users" });
-    }
-  });
-
   // Admin routes
   app.get('/api/admin/users', isAuthenticated, async (req: any, res) => {
     try {
@@ -1637,19 +1605,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Admin access required" });
       }
 
-      // Parse request body with explicit sections field to satisfy required constraint
-      const validatedData = insertProposalTemplateSchema.parse({
-        name: req.body.name,
-        description: req.body.description,
-        category: req.body.category,
-        templateType: req.body.templateType,
-        sections: req.body.sections || {},  // Provide default empty object for required field
-        layoutSettings: req.body.layoutSettings,
-        brandingSettings: req.body.brandingSettings,
-        defaultContent: req.body.defaultContent,
-        isActive: req.body.isActive,
-        isDefault: req.body.isDefault
-      });
+      const validatedData = insertProposalTemplateSchema.parse(req.body);
       const template = await storage.createProposalTemplate(validatedData);
       res.status(201).json(template);
     } catch (error) {
@@ -1818,340 +1774,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error signing quote as customer:", error);
       res.status(500).json({ message: "Failed to sign quote" });
-    }
-  });
-
-  // Lead Management API Endpoints
-  // GET /api/leads - Get all leads with optional query params (stage, assignedTo, search)
-  app.get('/api/leads', isAuthenticated, async (req, res) => {
-    try {
-      // Validate query parameters
-      const validatedQuery = leadQueryParamsSchema.safeParse(req.query);
-      if (!validatedQuery.success) {
-        return res.status(400).json({ 
-          message: "Invalid query parameters", 
-          errors: validatedQuery.error.errors 
-        });
-      }
-      
-      const { stage, assignedTo, search, priority, limit, offset } = validatedQuery.data;
-      
-      console.log(`📋 Getting leads with filters: stage=${stage}, assignedTo=${assignedTo}, search=${search}, priority=${priority}`);
-      
-      const leads = await storage.getAllLeads({
-        stage,
-        assignedTo,
-        search,
-        priority,
-        limit: limit || 100,
-        offset: offset || 0
-      });
-      
-      console.log(`📋 Found ${leads.length} leads`);
-      res.json(leads);
-    } catch (error) {
-      console.error("Error fetching leads:", error);
-      res.status(500).json({ message: "Failed to fetch leads" });
-    }
-  });
-
-  // GET /api/leads/:id - Get single lead by ID
-  app.get('/api/leads/:id', isAuthenticated, async (req, res) => {
-    try {
-      // Validate ID parameter
-      const params = leadIdParamSchema.safeParse({ leadId: req.params.id });
-      if (!params.success) {
-        return res.status(400).json({ 
-          message: "Invalid lead ID", 
-          errors: params.error.errors 
-        });
-      }
-      
-      const { leadId } = params.data;
-      console.log(`📋 Getting lead ${leadId}`);
-      
-      const lead = await storage.getLead(leadId);
-      if (!lead) {
-        return res.status(404).json({ message: "Lead not found" });
-      }
-      
-      res.json(lead);
-    } catch (error) {
-      console.error(`Error fetching lead ${req.params.id}:`, error);
-      res.status(500).json({ message: "Failed to fetch lead" });
-    }
-  });
-
-  // POST /api/leads - Create new lead
-  app.post('/api/leads', isAuthenticated, async (req, res) => {
-    try {
-      console.log("📋 Creating new lead:", req.body);
-      
-      // Validate request body
-      const validatedData = insertLeadSchema.safeParse(req.body);
-      if (!validatedData.success) {
-        console.error("❌ Lead validation failed:", validatedData.error.errors);
-        return res.status(400).json({ 
-          message: "Invalid lead data", 
-          errors: validatedData.error.errors 
-        });
-      }
-      
-      const leadData = validatedData.data;
-      
-      // Check for duplicate email if provided
-      if (leadData.email) {
-        const existingLead = await storage.getLeadByEmail(leadData.email);
-        if (existingLead) {
-          return res.status(400).json({ 
-            message: "A lead with this email address already exists",
-            existingLeadId: existingLead.id
-          });
-        }
-      }
-      
-      const newLead = await storage.createLead(leadData);
-      console.log(`✅ Created lead ${newLead.id}`);
-      
-      res.status(201).json(newLead);
-    } catch (error) {
-      console.error("Error creating lead:", error);
-      res.status(500).json({ message: "Failed to create lead" });
-    }
-  });
-
-  // PUT /api/leads/:id - Update lead
-  app.put('/api/leads/:id', isAuthenticated, async (req, res) => {
-    try {
-      // Validate ID parameter
-      const params = leadIdParamSchema.safeParse({ leadId: req.params.id });
-      if (!params.success) {
-        return res.status(400).json({ 
-          message: "Invalid lead ID", 
-          errors: params.error.errors 
-        });
-      }
-      
-      const { leadId } = params.data;
-      console.log(`📋 Updating lead ${leadId}:`, req.body);
-      
-      // Validate request body
-      const validatedData = insertLeadSchema.safeParse(req.body);
-      if (!validatedData.success) {
-        console.error("❌ Lead validation failed:", validatedData.error.errors);
-        return res.status(400).json({ 
-          message: "Invalid lead data", 
-          errors: validatedData.error.errors 
-        });
-      }
-      
-      const leadData = validatedData.data;
-      
-      // Check if lead exists
-      const existingLead = await storage.getLead(leadId);
-      if (!existingLead) {
-        return res.status(404).json({ message: "Lead not found" });
-      }
-      
-      // Check for duplicate email if changed
-      if (leadData.email && leadData.email !== existingLead.email) {
-        const duplicateLead = await storage.getLeadByEmail(leadData.email);
-        if (duplicateLead && duplicateLead.id !== leadId) {
-          return res.status(400).json({ 
-            message: "A lead with this email address already exists",
-            existingLeadId: duplicateLead.id
-          });
-        }
-      }
-      
-      const updatedLead = await storage.updateLead(leadId, leadData);
-      if (!updatedLead) {
-        return res.status(404).json({ message: "Lead not found" });
-      }
-      
-      console.log(`✅ Updated lead ${leadId}`);
-      res.json(updatedLead);
-    } catch (error) {
-      console.error(`Error updating lead ${req.params.id}:`, error);
-      res.status(500).json({ message: "Failed to update lead" });
-    }
-  });
-
-  // PATCH /api/leads/:id/stage - Update lead stage (for kanban drag-and-drop)
-  app.patch('/api/leads/:id/stage', isAuthenticated, async (req, res) => {
-    try {
-      // Validate ID parameter
-      const params = leadIdParamSchema.safeParse({ leadId: req.params.id });
-      if (!params.success) {
-        return res.status(400).json({ 
-          message: "Invalid lead ID", 
-          errors: params.error.errors 
-        });
-      }
-      
-      const { leadId } = params.data;
-      
-      // Validate request body
-      const validatedData = updateLeadStageSchema.safeParse(req.body);
-      if (!validatedData.success) {
-        return res.status(400).json({ 
-          message: "Invalid stage data", 
-          errors: validatedData.error.errors 
-        });
-      }
-      
-      const { stage } = validatedData.data;
-      console.log(`📋 Updating lead ${leadId} stage to: ${stage}`);
-      
-      // Check if lead exists
-      const existingLead = await storage.getLead(leadId);
-      if (!existingLead) {
-        return res.status(404).json({ message: "Lead not found" });
-      }
-      
-      const updatedLead = await storage.updateLead(leadId, { stage });
-      if (!updatedLead) {
-        return res.status(404).json({ message: "Lead not found" });
-      }
-      
-      console.log(`✅ Updated lead ${leadId} stage to ${stage}`);
-      res.json(updatedLead);
-    } catch (error) {
-      console.error(`Error updating lead stage ${req.params.id}:`, error);
-      res.status(500).json({ message: "Failed to update lead stage" });
-    }
-  });
-
-  // DELETE /api/leads/:id - Delete lead
-  app.delete('/api/leads/:id', isAuthenticated, async (req, res) => {
-    try {
-      // Validate ID parameter
-      const params = leadIdParamSchema.safeParse({ leadId: req.params.id });
-      if (!params.success) {
-        return res.status(400).json({ 
-          message: "Invalid lead ID", 
-          errors: params.error.errors 
-        });
-      }
-      
-      const { leadId } = params.data;
-      console.log(`📋 Deleting lead ${leadId}`);
-      
-      // Check if lead exists
-      const existingLead = await storage.getLead(leadId);
-      if (!existingLead) {
-        return res.status(404).json({ message: "Lead not found" });
-      }
-      
-      // Check if lead is linked to customer or quote
-      if (existingLead.customerId) {
-        return res.status(400).json({ 
-          message: "Cannot delete lead that has been converted to a customer. Archive it instead.",
-          code: "LEAD_CONVERTED"
-        });
-      }
-      
-      if (existingLead.quoteId) {
-        return res.status(400).json({ 
-          message: "Cannot delete lead that has an associated quote. Archive it instead.",
-          code: "LEAD_HAS_QUOTE"
-        });
-      }
-      
-      const success = await storage.deleteLead(leadId);
-      if (!success) {
-        return res.status(404).json({ message: "Lead not found" });
-      }
-      
-      console.log(`✅ Deleted lead ${leadId}`);
-      res.json({ message: "Lead deleted successfully" });
-    } catch (error) {
-      console.error(`Error deleting lead ${req.params.id}:`, error);
-      res.status(500).json({ message: "Failed to delete lead" });
-    }
-  });
-
-  // POST /api/leads/:id/convert - Convert lead to customer
-  app.post('/api/leads/:id/convert', isAuthenticated, async (req, res) => {
-    try {
-      // Validate ID parameter
-      const params = leadIdParamSchema.safeParse({ leadId: req.params.id });
-      if (!params.success) {
-        return res.status(400).json({ 
-          message: "Invalid lead ID", 
-          errors: params.error.errors 
-        });
-      }
-      
-      const { leadId } = params.data;
-      console.log(`📋 Converting lead ${leadId} to customer`);
-      
-      // Check if lead exists
-      const existingLead = await storage.getLead(leadId);
-      if (!existingLead) {
-        return res.status(404).json({ message: "Lead not found" });
-      }
-      
-      // Check if already converted
-      if (existingLead.customerId) {
-        return res.status(400).json({ 
-          message: "Lead has already been converted to a customer",
-          customerId: existingLead.customerId
-        });
-      }
-      
-      // Check if email already exists as a customer
-      const existingCustomer = await storage.getCustomerByEmail(existingLead.email);
-      if (existingCustomer) {
-        // Link the lead to existing customer
-        const updatedLead = await storage.updateLead(leadId, { 
-          customerId: existingCustomer.id,
-          stage: 'closed_won'
-        });
-        
-        return res.json({
-          message: "Lead linked to existing customer",
-          lead: updatedLead,
-          customer: existingCustomer
-        });
-      }
-      
-      // Create new customer from lead data
-      const customerData = {
-        name: existingLead.contactName,
-        email: existingLead.email,
-        phone: existingLead.phone || "",
-        company: existingLead.company || ""
-      };
-      
-      // Validate customer data
-      const validatedCustomerData = insertCustomerSchema.safeParse(customerData);
-      if (!validatedCustomerData.success) {
-        return res.status(400).json({ 
-          message: "Cannot convert lead to customer: invalid customer data", 
-          errors: validatedCustomerData.error.errors 
-        });
-      }
-      
-      const newCustomer = await storage.createCustomer(validatedCustomerData.data);
-      
-      // Update lead with customer ID and close as won
-      const updatedLead = await storage.updateLead(leadId, { 
-        customerId: newCustomer.id,
-        stage: 'closed_won'
-      });
-      
-      console.log(`✅ Converted lead ${leadId} to customer ${newCustomer.id}`);
-      
-      res.json({
-        message: "Lead successfully converted to customer",
-        lead: updatedLead,
-        customer: newCustomer
-      });
-      
-    } catch (error) {
-      console.error(`Error converting lead ${req.params.id}:`, error);
-      res.status(500).json({ message: "Failed to convert lead to customer" });
     }
   });
 

@@ -4,7 +4,6 @@ import {
   useMutation,
   UseMutationResult,
 } from "@tanstack/react-query";
-import { useLocation } from "wouter";
 import { insertUserSchema, User as SelectUser, InsertUser } from "@shared/schema";
 import { getQueryFn, apiRequest, queryClient, ApiError } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -26,7 +25,6 @@ export const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const { toast } = useToast();
-  const [, navigate] = useLocation();
   const {
     data: user,
     error,
@@ -60,8 +58,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         title: "Welcome back!",
         description: "Successfully logged in.",
       });
-      // Navigate to homepage after successful login
-      navigate("/");
+      // Redirect to homepage after successful login
+      window.location.href = "/";
     },
     onError: (error: Error) => {
       const appError = parseError(error);
@@ -101,8 +99,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         title: "Account created!",
         description: "Successfully registered and logged in.",
       });
-      // Navigate to homepage after successful registration
-      navigate("/");
+      // Redirect to homepage after successful registration
+      window.location.href = "/";
     },
     onError: (error: Error) => {
       const appError = parseError(error);
@@ -128,7 +126,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     onSuccess: () => {
       queryClient.setQueryData(["/api/user"], null);
       queryClient.clear(); // Clear all cached data on logout
-      navigate("/auth");
+      window.location.href = "/";
       toast({
         title: "Logged out",
         description: "Successfully logged out.",
@@ -142,9 +140,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         description: error.message,
         variant: "destructive",
       });
-      // Still navigate after a delay
+      // Still redirect after a delay
       setTimeout(() => {
-        navigate("/auth");
+        window.location.href = "/";
       }, 2000);
     },
   });
