@@ -6,17 +6,23 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { Building2, Users, Briefcase, Plus, Edit, Trash2, Phone, Mail, ChevronLeft, Star, User } from "lucide-react";
+import { Building2, Users, Briefcase, Plus, Edit, Trash2, Phone, Mail, ChevronLeft, Star, User, FolderPlus } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { AccountForm } from "@/components/forms/account-form";
 import { ContactForm } from "@/components/forms/contact-form";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { Account, Contact, Quote } from "@shared/schema";
+import type { Account, Contact, Quote, InsertQuote } from "@shared/schema";
 import { format } from "date-fns";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 
 interface AccountDetails extends Account {
   contacts: Contact[];
@@ -24,6 +30,13 @@ interface AccountDetails extends Account {
   contactCount: number;
   projectCount: number;
 }
+
+const projectFormSchema = z.object({
+  projectName: z.string().min(1, "Project name is required"),
+  jobsiteAddress: z.string().min(1, "Jobsite address is required"),
+  dealValue: z.number().min(0).optional(),
+  description: z.string().optional()
+});
 
 export default function AccountDetail() {
   const [match, params] = useRoute("/accounts/:id");
@@ -35,6 +48,7 @@ export default function AccountDetail() {
   const [editAccountOpen, setEditAccountOpen] = useState(false);
   const [createContactOpen, setCreateContactOpen] = useState(false);
   const [editContact, setEditContact] = useState<Contact | null>(null);
+  const [createProjectOpen, setCreateProjectOpen] = useState(false);
 
   const { data: account, isLoading, error } = useQuery<AccountDetails>({
     queryKey: [`/api/accounts/${accountId}/details`],
@@ -79,6 +93,62 @@ export default function AccountDetail() {
       title: editContact ? "Contact updated" : "Contact created",
       description: `The contact has been successfully ${editContact ? 'updated' : 'created'}.`,
     });
+  };
+
+  // Project form
+  const projectForm = useForm<z.infer<typeof projectFormSchema>>({
+    resolver: zodResolver(projectFormSchema),
+    defaultValues: {
+      projectName: "",
+      jobsiteAddress: "",
+      dealValue: undefined,
+      description: ""
+    }
+  });
+
+  // Create project mutation
+  const createProjectMutation = useMutation({
+    mutationFn: async (data: z.infer<typeof projectFormSchema>) => {
+      // Generate quote number
+      const timestamp = Date.now();
+      const random = Math.floor(Math.random() * 1000);
+      const quoteNumber = `QT-${new Date().getFullYear()}-${timestamp.toString().slice(-6)}${random}`;
+      
+      const quoteData: InsertQuote = {
+        quoteNumber,
+        accountId: accountId!,
+        projectName: data.projectName,
+        jobsiteAddress: data.jobsiteAddress,
+        dealStage: "lead", // Always set to lead for new projects
+        status: "draft",
+        validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days from now
+        notes: data.description || ""
+      };
+
+      return await apiRequest("POST", "/api/quotes", quoteData);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/accounts/${accountId}/details`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/quotes"] });
+      toast({
+        title: "Success",
+        description: "Project created successfully!",
+      });
+      setCreateProjectOpen(false);
+      projectForm.reset();
+      navigate("/pipeline");
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create project",
+        variant: "destructive"
+      });
+    }
+  });
+
+  const onProjectSubmit = (data: z.infer<typeof projectFormSchema>) => {
+    createProjectMutation.mutate(data);
   };
 
   const getAccountTypeColor = (type: string) => {
@@ -373,10 +443,10 @@ export default function AccountDetail() {
                 </div>
                 <Button
                   size="sm"
-                  onClick={() => navigate(`/quotes/new?accountId=${accountId}`)}
+                  onClick={() => setCreateProjectOpen(true)}
                   data-testid="button-new-project"
                 >
-                  <Plus className="h-4 w-4 mr-2" />
+                  <FolderPlus className="h-4 w-4 mr-2" />
                   New Project
                 </Button>
               </div>
@@ -452,6 +522,118 @@ export default function AccountDetail() {
               setEditContact(null);
             }}
           />
+        </DialogContent>
+      </Dialog>
+
+      {/* Create Project Dialog */}
+      <Dialog open={createProjectOpen} onOpenChange={setCreateProjectOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Create New Project</DialogTitle>
+            <DialogDescription>
+              Create a new project for {account?.name}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <Form {...projectForm}>
+            <form onSubmit={projectForm.handleSubmit(onProjectSubmit)} className="space-y-4">
+              <FormField
+                control={projectForm.control}
+                name="projectName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Project Name *</FormLabel>
+                    <FormControl>
+                      <Input 
+                        placeholder="e.g., Backyard Pergola Installation" 
+                        {...field} 
+                        data-testid="input-project-name"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={projectForm.control}
+                name="jobsiteAddress"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Jobsite Address *</FormLabel>
+                    <FormControl>
+                      <Textarea 
+                        placeholder="123 Main St, City, State 12345" 
+                        {...field} 
+                        data-testid="textarea-jobsite-address"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={projectForm.control}
+                name="dealValue"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Estimated Deal Value</FormLabel>
+                    <FormControl>
+                      <Input 
+                        type="number" 
+                        placeholder="0.00" 
+                        {...field}
+                        onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : undefined)}
+                        data-testid="input-deal-value"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={projectForm.control}
+                name="description"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Project Description</FormLabel>
+                    <FormControl>
+                      <Textarea 
+                        placeholder="Brief description of the project..." 
+                        {...field} 
+                        data-testid="textarea-description"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <DialogFooter>
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={() => {
+                    setCreateProjectOpen(false);
+                    projectForm.reset();
+                  }}
+                  disabled={createProjectMutation.isPending}
+                  data-testid="button-cancel"
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  type="submit" 
+                  disabled={createProjectMutation.isPending}
+                  data-testid="button-create-project"
+                >
+                  {createProjectMutation.isPending ? "Creating..." : "Create Project"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
         </DialogContent>
       </Dialog>
     </div>

@@ -843,17 +843,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "deal_stage is required" });
       }
       
-      const validStages = ['new_lead', 'qualifying', 'consultation_scheduled', 'building_estimate', 'quote_sent', 'closed_won', 'closed_lost', 'on_hold'];
+      const validStages = ['lead', 'qualified', 'proposal', 'negotiation', 'won', 'lost'];
       if (!validStages.includes(deal_stage)) {
         return res.status(400).json({ 
           message: `Invalid deal_stage. Must be one of: ${validStages.join(', ')}` 
         });
       }
       
-      // Require lost_reason for closed_lost stage
-      if (deal_stage === 'closed_lost' && !lost_reason) {
+      // Require lost_reason for lost stage
+      if (deal_stage === 'lost' && !lost_reason) {
         return res.status(400).json({ 
-          message: "lost_reason is required when setting stage to closed_lost" 
+          message: "lost_reason is required when setting stage to lost" 
         });
       }
       
