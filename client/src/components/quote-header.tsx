@@ -83,7 +83,20 @@ export function QuoteHeader({ quote, onSave, isLoading, onUploadStatesChange }: 
   
   // Query for customer search
   const { data: searchResults = [], isLoading: isSearching } = useQuery<Customer[]>({
-    queryKey: [`/api/customers/search?q=${encodeURIComponent(debouncedSearchTerm)}`],
+    queryKey: ["/api/customers/search", debouncedSearchTerm],
+    queryFn: async (): Promise<Customer[]> => {
+      if (!debouncedSearchTerm || debouncedSearchTerm.length < 2) return [];
+      
+      const response = await fetch(`/api/customers/search?q=${encodeURIComponent(debouncedSearchTerm)}`, {
+        credentials: 'include',
+      });
+      
+      if (!response.ok) {
+        throw new Error("Failed to search customers");
+      }
+      
+      return response.json();
+    },
     enabled: debouncedSearchTerm.length >= 2,
   });
   
