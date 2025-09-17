@@ -1,5 +1,7 @@
 import { z } from "zod";
 import { 
+  insertAccountSchema as baseAccountSchema,
+  insertContactSchema as baseContactSchema,
   insertCustomerSchema as baseCustomerSchema,
   insertQuoteSchema as baseQuoteSchema,
   insertLineItemSchema as baseLineItemSchema,
@@ -24,7 +26,37 @@ export const productIdParamSchema = z.object({
   productId: z.string().regex(/^\d+$/, "Product ID must be a valid positive integer").transform(val => parseInt(val))
 });
 
-// Enhanced Customer validation
+// Enhanced Account validation
+export const insertAccountSchema = baseAccountSchema.extend({
+  name: z.string().min(1, "Name is required").max(255, "Name is too long"),
+  email: z.string().email("Invalid email format").max(255, "Email is too long"),
+  phone: z.string()
+    .min(10, "Phone number must be at least 10 digits")
+    .max(20, "Phone number is too long")
+    .regex(/^[\d\s\-\+\(\)]+$/, "Phone number contains invalid characters"),
+  company: z.string().max(255, "Company name is too long").optional(),
+  accountType: z.enum(["general_contractor", "homeowner", "commercial"]).default("homeowner"),
+  paymentTerms: z.string().max(100, "Payment terms are too long").optional().nullable(),
+  billingAddress: z.string().max(500, "Billing address is too long").optional().nullable()
+});
+
+// Enhanced Contact validation
+export const insertContactSchema = baseContactSchema.extend({
+  accountId: z.number().int().positive("Account ID must be a positive integer"),
+  firstName: z.string().min(1, "First name is required").max(255, "First name is too long"),
+  lastName: z.string().min(1, "Last name is required").max(255, "Last name is too long"),
+  email: z.string().email("Invalid email format").max(255, "Email is too long"),
+  phone: z.string()
+    .min(10, "Phone number must be at least 10 digits")
+    .max(20, "Phone number is too long")
+    .regex(/^[\d\s\-\+\(\)]+$/, "Phone number contains invalid characters")
+    .optional()
+    .nullable(),
+  role: z.string().max(100, "Role is too long").default("primary_contact"),
+  isPrimary: z.boolean().default(false)
+});
+
+// Legacy Customer validation for backward compatibility
 export const insertCustomerSchema = baseCustomerSchema.extend({
   name: z.string().min(1, "Name is required").max(255, "Name is too long"),
   email: z.string().email("Invalid email format").max(255, "Email is too long"),
@@ -38,7 +70,11 @@ export const insertCustomerSchema = baseCustomerSchema.extend({
 // Enhanced Quote validation
 export const insertQuoteSchema = baseQuoteSchema.extend({
   quoteNumber: z.string().min(1, "Quote number is required").max(50, "Quote number is too long"),
-  customerId: z.number().int().positive("Customer ID must be a positive integer"),
+  accountId: z.number().int().positive("Account ID must be a positive integer"),
+  assignedRepId: z.string().max(255, "Assigned rep ID is too long").optional().nullable(),
+  dealStage: z.enum(["lead", "qualified", "proposal", "negotiation", "won", "lost"]).default("lead"),
+  lostReason: z.string().max(500, "Lost reason is too long").optional().nullable(),
+  jobsiteAddress: z.string().max(1000, "Jobsite address is too long").optional().nullable(),
   projectName: z.string().max(500, "Project name is too long").optional(),
   projectAddress: z.string().max(1000, "Project address is too long").optional(),
   estimatedStartDate: z.string().optional(),
