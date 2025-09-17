@@ -371,7 +371,8 @@ export class DatabaseStorage implements IStorage {
     
     // Check for phone match (after normalization)
     // We need to compare normalized versions of the stored phone numbers
-    conditions.push(sql`REPLACE(REPLACE(REPLACE(REPLACE(${accounts.phone}, '-', ''), '(', ''), ')', ''), ' ', '') LIKE '%${normalizedPhone}'`);
+    const phonePattern = `%${normalizedPhone}%`;
+    conditions.push(sql`REPLACE(REPLACE(REPLACE(REPLACE(${accounts.phone}, '-', ''), '(', ''), ')', ''), ' ', '') LIKE ${phonePattern}`);
     
     // For business accounts, also check name + company combination
     if (account.company) {
@@ -416,7 +417,7 @@ export class DatabaseStorage implements IStorage {
           ilike(accounts.email, `%${term}%`),
           ilike(accounts.company, `%${term}%`),
           // For phone, try to match the normalized version
-          sql`REPLACE(REPLACE(REPLACE(REPLACE(${accounts.phone}, '-', ''), '(', ''), ')', ''), ' ', '') LIKE '%${normalizedPhone}%'`
+          sql`REPLACE(REPLACE(REPLACE(REPLACE(${accounts.phone}, '-', ''), '(', ''), ')', ''), ' ', '') LIKE ${`%${normalizedPhone}%`}`
         )
       )
       .limit(10);
