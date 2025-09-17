@@ -83,8 +83,39 @@ export function QuoteHeader({ quote, onSave, isLoading, onUploadStatesChange }: 
   
   // Query for customer search using the accounts endpoint
   const { data: searchResults = [], isLoading: isSearching } = useQuery<Customer[]>({
-    queryKey: [`/api/accounts/search?q=${encodeURIComponent(debouncedSearchTerm)}`],
+    queryKey: ["/api/accounts/search", debouncedSearchTerm],
+    queryFn: async ({ signal }): Promise<Customer[]> => {
+      if (!debouncedSearchTerm || debouncedSearchTerm.length < 2) return [];
+      
+      try {
+        const response = await fetch(`/api/accounts/search?q=${encodeURIComponent(debouncedSearchTerm)}`, {
+          credentials: 'include',
+          signal,
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          console.error('Search failed:', response.status, errorData);
+          if (response.status === 401) {
+            throw new Error("Authentication required");
+          }
+          throw new Error(errorData.message || "Failed to search accounts");
+        }
+        
+        const data = await response.json();
+        console.log(`Search for "${debouncedSearchTerm}" returned ${data.length} results`);
+        return data;
+      } catch (error: any) {
+        // Don't throw error for cancelled requests
+        if (error.name === 'AbortError') {
+          return [];
+        }
+        console.error('Search error:', error);
+        throw error;
+      }
+    },
     enabled: debouncedSearchTerm.length >= 2,
+    retry: false,
   });
   
   const form = useForm<QuoteFormData>({
