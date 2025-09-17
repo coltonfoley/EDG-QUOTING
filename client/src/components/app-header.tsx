@@ -52,6 +52,13 @@ export function AppHeader() {
               }`}>
                 Quotes
               </Link>
+              <Link href="/pipeline" className={`text-sm font-medium transition-colors hover:text-edg-teal ${
+                location === '/pipeline'
+                  ? 'text-edg-teal border-b-2 border-edg-teal pb-4' 
+                  : 'text-edg-grey'
+              }`}>
+                Pipeline
+              </Link>
               <Link href="/products" className={`text-sm font-medium transition-colors hover:text-edg-teal ${
                 location.startsWith('/products') 
                   ? 'text-edg-teal border-b-2 border-edg-teal pb-4' 

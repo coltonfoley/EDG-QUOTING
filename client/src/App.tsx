@@ -19,6 +19,7 @@ import AdminTemplatesPage from "@/pages/admin-templates";
 import ContractsPage from "@/pages/contracts";
 import Accounts from "@/pages/accounts";
 import AccountDetail from "@/pages/account-detail";
+import Pipeline from "@/pages/pipeline";
 
 function GlobalLoadingIndicator() {
   const isFetching = useIsFetching();
@@ -48,6 +49,7 @@ function Router() {
           <Route path="/accounts" component={Accounts} />
           <Route path={/\/accounts\/\d+$/} component={AccountDetail} />
           <Route path="/quotes" component={Quotes} />
+          <Route path="/pipeline" component={Pipeline} />
           <Route path="/quotes/new" component={QuoteBuilder} />
           <Route path={/\/quotes\/\d+$/} component={QuoteBuilder} />
           <Route path="/products" component={Products} />

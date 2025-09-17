@@ -189,6 +189,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get all users (for rep filters, etc.)
+  app.get('/api/users', isAuthenticated, async (req, res) => {
+    try {
+      const users = await storage.getAllUsers();
+      // Map to include only necessary fields for frontend
+      const mappedUsers = users.map(user => ({
+        id: user.id,
+        username: user.username,
+        firstName: user.firstName || '',
+        lastName: user.lastName || '',
+        email: user.email,
+        role: user.role
+      }));
+      res.json(mappedUsers);
+    } catch (error) {
+      console.error("Error fetching users:", error);
+      res.status(500).json({ message: "Failed to fetch users" });
+    }
+  });
+
   // Real image upload endpoints using Object Storage
   // Note: Import moved to top of file below
 
@@ -800,6 +820,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       console.error("Quote update error:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // Update quote deal stage for pipeline management
+  app.patch("/api/quotes/:id/stage", isAuthenticated, async (req, res) => {
+    try {
+      // Validate ID parameter
+      const params = idParamSchema.safeParse(req.params);
+      if (!params.success) {
+        return res.status(400).json({ 
+          message: "Invalid request parameters", 
+          errors: params.error.errors 
+        });
+      }
+      
+      // Validate stage update data
+      const { deal_stage, lost_reason } = req.body;
+      
+      if (!deal_stage) {
+        return res.status(400).json({ message: "deal_stage is required" });
+      }
+      
+      const validStages = ['new_lead', 'qualifying', 'consultation_scheduled', 'building_estimate', 'quote_sent', 'closed_won', 'closed_lost', 'on_hold'];
+      if (!validStages.includes(deal_stage)) {
+        return res.status(400).json({ 
+          message: `Invalid deal_stage. Must be one of: ${validStages.join(', ')}` 
+        });
+      }
+      
+      // Require lost_reason for closed_lost stage
+      if (deal_stage === 'closed_lost' && !lost_reason) {
+        return res.status(400).json({ 
+          message: "lost_reason is required when setting stage to closed_lost" 
+        });
+      }
+      
+      // Update the quote
+      const updateData: any = { dealStage: deal_stage };
+      if (lost_reason) {
+        updateData.lostReason = lost_reason;
+      }
+      
+      const quote = await storage.updateQuote(params.data.id, updateData);
+      if (!quote) {
+        return res.status(404).json({ message: "Quote not found" });
+      }
+      
+      console.log(`✅ Updated quote ${params.data.id} stage to ${deal_stage}`);
+      res.json(quote);
+    } catch (error) {
+      console.error("Error updating quote stage:", error);
       res.status(500).json({ message: "Internal server error" });
     }
   });
