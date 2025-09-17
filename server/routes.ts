@@ -353,6 +353,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Account routes (formerly customer routes)
+  app.get("/api/accounts", isAuthenticated, async (req, res) => {
+    try {
+      const accounts = await storage.getAllAccounts();
+      res.json(accounts);
+    } catch (error) {
+      console.error("Error fetching accounts:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
   app.get("/api/accounts/:id", isAuthenticated, async (req, res) => {
     try {
       // Validate ID parameter
@@ -371,6 +381,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(account);
     } catch (error) {
       res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.get("/api/accounts/:id/details", isAuthenticated, async (req, res) => {
+    try {
+      // Validate ID parameter
+      const params = idParamSchema.safeParse(req.params);
+      if (!params.success) {
+        return res.status(400).json({ 
+          message: "Invalid request parameters", 
+          errors: params.error.errors 
+        });
+      }
+      
+      const accountDetails = await storage.getAccountWithDetails(params.data.id);
+      if (!accountDetails) {
+        return res.status(404).json({ message: "Account not found" });
+      }
+      res.json(accountDetails);
+    } catch (error) {
+      console.error("Error fetching account details:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.delete("/api/accounts/:id", isAuthenticated, async (req, res) => {
+    try {
+      const params = idParamSchema.safeParse(req.params);
+      if (!params.success) {
+        return res.status(400).json({ 
+          message: "Invalid request parameters", 
+          errors: params.error.errors 
+        });
+      }
+      
+      const deleted = await storage.deleteAccount(params.data.id);
+      if (!deleted) {
+        return res.status(404).json({ message: "Account not found" });
+      }
+      res.status(204).send();
+    } catch (error: any) {
+      if (error.message?.includes("Cannot delete account with existing quotes")) {
+        return res.status(409).json({ 
+          message: "Cannot delete account with existing projects. Please delete or reassign all projects first." 
+        });
+      }
+      console.error("Account deletion error:", error);
+      res.status(500).json({ message: "Failed to delete account" });
     }
   });
 

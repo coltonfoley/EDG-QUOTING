@@ -43,6 +43,9 @@ export interface IStorage {
   getAccountByEmail(email: string): Promise<Account | undefined>;
   findDuplicateAccount(account: InsertAccount): Promise<Account | undefined>;
   searchAccounts(searchTerm: string): Promise<Account[]>;
+  getAllAccounts(): Promise<Account[]>;
+  getAccountWithDetails(id: number): Promise<any>;
+  deleteAccount(id: number): Promise<boolean>;
   createAccount(account: InsertAccount, options?: { allowDuplicate?: boolean; updateIfExists?: boolean }): Promise<Account>;
   updateAccount(id: number, account: Partial<InsertAccount>): Promise<Account | undefined>;
   
@@ -482,6 +485,78 @@ export class DatabaseStorage implements IStorage {
     return updated || undefined;
   }
 
+  async getAllAccounts(): Promise<Account[]> {
+    // Use a single efficient query with subqueries to get contact and project counts
+    const allAccountsWithCounts = await db.select({
+      id: accounts.id,
+      name: accounts.name,
+      email: accounts.email,
+      phone: accounts.phone,
+      company: accounts.company,
+      accountType: accounts.accountType,
+      paymentTerms: accounts.paymentTerms,
+      billingAddress: accounts.billingAddress,
+      createdAt: accounts.createdAt,
+      updatedAt: accounts.updatedAt,
+      contactCount: sql<number>`
+        COALESCE((
+          SELECT COUNT(*)::int 
+          FROM ${contacts}
+          WHERE ${contacts.accountId} = ${accounts.id}
+        ), 0)
+      `,
+      projectCount: sql<number>`
+        COALESCE((
+          SELECT COUNT(*)::int
+          FROM ${quotes}
+          WHERE ${quotes.accountId} = ${accounts.id}
+        ), 0)
+      `
+    })
+    .from(accounts)
+    .orderBy(desc(accounts.createdAt));
+    
+    return allAccountsWithCounts;
+  }
+
+  async getAccountWithDetails(id: number): Promise<any> {
+    const [account] = await db.select().from(accounts).where(eq(accounts.id, id));
+    if (!account) return undefined;
+
+    // Get all contacts for this account
+    const accountContacts = await db.select().from(contacts)
+      .where(eq(contacts.accountId, id))
+      .orderBy(desc(contacts.isPrimary), contacts.firstName);
+
+    // Get all quotes/projects for this account
+    const accountQuotes = await db.select().from(quotes)
+      .where(eq(quotes.accountId, id))
+      .orderBy(desc(quotes.createdAt));
+
+    return {
+      ...account,
+      contacts: accountContacts,
+      quotes: accountQuotes,
+      projectCount: accountQuotes.length,
+      contactCount: accountContacts.length
+    };
+  }
+
+  async deleteAccount(id: number): Promise<boolean> {
+    // Check if account has quotes - prevent deletion if it has quotes
+    const accountQuotes = await db.select().from(quotes).where(eq(quotes.accountId, id));
+    if (accountQuotes.length > 0) {
+      throw new Error("Cannot delete account with existing quotes");
+    }
+    
+    // Delete contacts first
+    await db.delete(contacts).where(eq(contacts.accountId, id));
+    
+    // Then delete the account
+    const result = await db.delete(accounts).where(eq(accounts.id, id));
+    return (result.rowCount || 0) > 0;
+  }
+
   // Legacy method for backward compatibility
   async updateCustomer(id: number, customerData: Partial<InsertCustomer>): Promise<Customer | undefined> {
     return this.updateAccount(id, customerData as Partial<InsertAccount>);
@@ -777,12 +852,10 @@ export class DatabaseStorage implements IStorage {
     const items = await db
       .select({
         lineItemId: lineItems.id,
-        quoteId: lineItems.quoteId,
-        userId: users.id // Use users.id since quotes table doesn't have userId field
+        quoteId: lineItems.quoteId
       })
       .from(lineItems)
       .leftJoin(quotes, eq(lineItems.quoteId, quotes.id))
-      .leftJoin(users, eq(quotes.customerId, users.id)) // This may need adjustment based on auth model
       .where(inArray(lineItems.id, lineItemIds));
 
     if (items.length !== lineItemIds.length) {
