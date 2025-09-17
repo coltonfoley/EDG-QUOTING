@@ -1,6 +1,6 @@
 import { customers, quotes, lineItems, products, users, contractTemplates, proposalTemplates, pricingTables, productAccessories, type Customer, type Quote, type LineItem, type Product, type User, type ContractTemplate, type ProposalTemplate, type PricingTable, type ProductAccessory, type InsertCustomer, type InsertQuote, type InsertLineItem, type InsertProduct, type InsertUser, type InsertContractTemplate, type InsertProposalTemplate, type InsertPricingTable, type InsertProductAccessory, type QuoteWithDetails, type ProductWithDetails } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, inArray, sql, and, ne } from "drizzle-orm";
+import { eq, desc, inArray, sql, and, ne, or, ilike } from "drizzle-orm";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 import connectPg from "connect-pg-simple";
@@ -14,11 +14,36 @@ async function hashPassword(password: string) {
   return `${buf.toString("hex")}.${salt}`;
 }
 
+// Utility function to normalize phone numbers for comparison
+export function normalizePhoneNumber(phone: string): string {
+  // Remove all non-digit characters
+  const digits = phone.replace(/\D/g, '');
+  
+  // If starts with 1 and is 11 digits (US/Canada), remove the leading 1
+  if (digits.length === 11 && digits.startsWith('1')) {
+    return digits.substring(1);
+  }
+  
+  // Return last 10 digits if longer than 10 (handles international codes)
+  if (digits.length > 10) {
+    return digits.slice(-10);
+  }
+  
+  return digits;
+}
+
+// Utility to normalize email for comparison
+export function normalizeEmail(email: string): string {
+  return email.toLowerCase().trim();
+}
+
 export interface IStorage {
   // Customer methods
   getCustomer(id: number): Promise<Customer | undefined>;
   getCustomerByEmail(email: string): Promise<Customer | undefined>;
-  createCustomer(customer: InsertCustomer): Promise<Customer>;
+  findDuplicateCustomer(customer: InsertCustomer): Promise<Customer | undefined>;
+  searchCustomers(searchTerm: string): Promise<Customer[]>;
+  createCustomer(customer: InsertCustomer, options?: { allowDuplicate?: boolean; updateIfExists?: boolean }): Promise<Customer>;
   updateCustomer(id: number, customer: Partial<InsertCustomer>): Promise<Customer | undefined>;
 
   // Quote methods
@@ -293,15 +318,108 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getCustomerByEmail(email: string): Promise<Customer | undefined> {
-    const [user] = await db.select().from(customers).where(eq(customers.email, email));
+    const normalizedEmail = normalizeEmail(email);
+    const [user] = await db.select().from(customers).where(eq(sql`LOWER(${customers.email})`, normalizedEmail));
     return user || undefined;
   }
 
-  async createCustomer(insertCustomer: InsertCustomer): Promise<Customer> {
+  async findDuplicateCustomer(customer: InsertCustomer): Promise<Customer | undefined> {
+    // Normalize the input data
+    const normalizedEmail = normalizeEmail(customer.email);
+    const normalizedPhone = normalizePhoneNumber(customer.phone);
+    
+    // Build conditions for duplicate detection
+    const conditions = [];
+    
+    // Check for email match (case-insensitive)
+    conditions.push(eq(sql`LOWER(${customers.email})`, normalizedEmail));
+    
+    // Check for phone match (after normalization)
+    // We need to compare normalized versions of the stored phone numbers
+    conditions.push(sql`REPLACE(REPLACE(REPLACE(REPLACE(${customers.phone}, '-', ''), '(', ''), ')', ''), ' ', '') LIKE '%${normalizedPhone}'`);
+    
+    // For business customers, also check name + company combination
+    if (customer.company) {
+      conditions.push(
+        and(
+          eq(sql`LOWER(${customers.name})`, customer.name.toLowerCase()),
+          eq(sql`LOWER(${customers.company})`, customer.company.toLowerCase())
+        )
+      );
+    }
+    
+    // Query for any matching customers
+    const duplicates = await db
+      .select()
+      .from(customers)
+      .where(or(...conditions))
+      .limit(1);
+    
+    return duplicates[0] || undefined;
+  }
+
+  async searchCustomers(searchTerm: string): Promise<Customer[]> {
+    if (!searchTerm || searchTerm.trim().length === 0) {
+      return [];
+    }
+    
+    const term = searchTerm.trim().toLowerCase();
+    const normalizedPhone = normalizePhoneNumber(searchTerm);
+    
+    // Search across multiple fields
+    const results = await db
+      .select()
+      .from(customers)
+      .where(
+        or(
+          ilike(customers.name, `%${term}%`),
+          ilike(customers.email, `%${term}%`),
+          ilike(customers.company, `%${term}%`),
+          // For phone, try to match the normalized version
+          sql`REPLACE(REPLACE(REPLACE(REPLACE(${customers.phone}, '-', ''), '(', ''), ')', ''), ' ', '') LIKE '%${normalizedPhone}%'`
+        )
+      )
+      .limit(10);
+    
+    return results;
+  }
+
+  async createCustomer(insertCustomer: InsertCustomer, options?: { allowDuplicate?: boolean; updateIfExists?: boolean }): Promise<Customer> {
+    // Set default options
+    const { allowDuplicate = false, updateIfExists = true } = options || {};
+    
+    // Check for duplicates unless explicitly allowed
+    if (!allowDuplicate) {
+      const duplicate = await this.findDuplicateCustomer(insertCustomer);
+      
+      if (duplicate) {
+        if (updateIfExists) {
+          // Update the existing customer with new information (merge)
+          const updated = await this.updateCustomer(duplicate.id, {
+            // Only update fields that have values in the new data
+            ...(insertCustomer.name && { name: insertCustomer.name }),
+            ...(insertCustomer.email && { email: insertCustomer.email }),
+            ...(insertCustomer.phone && { phone: insertCustomer.phone }),
+            ...(insertCustomer.company !== undefined && { company: insertCustomer.company }),
+          });
+          
+          console.log(`Updated existing customer ${duplicate.id} instead of creating duplicate`);
+          return updated || duplicate;
+        } else {
+          // Return the existing customer without updating
+          console.log(`Found existing customer ${duplicate.id}, returning without update`);
+          return duplicate;
+        }
+      }
+    }
+    
+    // No duplicate found or duplicates allowed, create new customer
     const [customer] = await db
       .insert(customers)
       .values(insertCustomer)
       .returning();
+    
+    console.log(`Created new customer ${customer.id}`);
     return customer;
   }
 

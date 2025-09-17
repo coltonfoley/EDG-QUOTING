@@ -1,6 +1,6 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { insertQuoteSchema, insertCustomerSchema, type QuoteWithDetails } from "@shared/schema";
+import { insertQuoteSchema, insertCustomerSchema, type QuoteWithDetails, type Customer } from "@shared/schema";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -8,14 +8,18 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Save, Clock, Camera, Image, Wrench, Building, ChevronDown, ChevronUp } from "lucide-react";
+import { Save, Clock, Camera, Image, Wrench, Building, ChevronDown, ChevronUp, Search, Users } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { z } from "zod";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { ImageUploader, type UploadedImage } from "@/components/image-uploader";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
+import { debounce } from "lodash";
 
 const quoteFormSchema = insertQuoteSchema.extend({
   customerName: z.string().min(1, "Customer name is required"),
@@ -52,11 +56,36 @@ export function QuoteHeader({ quote, onSave, isLoading, onUploadStatesChange }: 
   // State for collapsible image assets section
   const [isImageAssetsOpen, setIsImageAssetsOpen] = useState(false);
   
+  // Customer search state
+  const [customerSearchTerm, setCustomerSearchTerm] = useState("");
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
+  const [customerSearchOpen, setCustomerSearchOpen] = useState(false);
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [showDuplicateWarning, setShowDuplicateWarning] = useState(false);
+  
   // Calculate if any uploads are still in progress
   const isUploading = [...portfolioImages, ...technicalDiagrams, ...companyImages]
     .some(img => !img.uploaded);
   const uploadingCount = [...portfolioImages, ...technicalDiagrams, ...companyImages]
     .filter(img => !img.uploaded).length;
+  
+  // Debounce search term
+  const debouncedSearch = useCallback(
+    debounce((value: string) => {
+      setDebouncedSearchTerm(value);
+    }, 300),
+    []
+  );
+  
+  useEffect(() => {
+    debouncedSearch(customerSearchTerm);
+  }, [customerSearchTerm, debouncedSearch]);
+  
+  // Query for customer search
+  const { data: searchResults = [], isLoading: isSearching } = useQuery<Customer[]>({
+    queryKey: [`/api/customers/search?q=${encodeURIComponent(debouncedSearchTerm)}`],
+    enabled: debouncedSearchTerm.length >= 2,
+  });
   
   const form = useForm<QuoteFormData>({
     resolver: zodResolver(quoteFormSchema),
@@ -77,9 +106,63 @@ export function QuoteHeader({ quote, onSave, isLoading, onUploadStatesChange }: 
     },
   });
 
+  // Handle customer selection from search
+  const handleCustomerSelect = (customer: Customer) => {
+    setSelectedCustomer(customer);
+    form.setValue("customerName", customer.name);
+    form.setValue("customerEmail", customer.email);
+    form.setValue("customerPhone", customer.phone);
+    form.setValue("customerCompany", customer.company || "");
+    setCustomerSearchOpen(false);
+    setShowDuplicateWarning(false);
+    toast({
+      title: "Customer Selected",
+      description: `Selected existing customer: ${customer.name}`,
+    });
+  };
+  
+  // Check for duplicate when customer info changes
+  const checkForDuplicates = useCallback(
+    debounce(async (email: string, phone: string) => {
+      if ((!email && !phone) || selectedCustomer) return;
+      
+      try {
+        const searchTerm = email || phone;
+        const response = await fetch(`/api/customers/search?q=${encodeURIComponent(searchTerm)}`, {
+          credentials: 'include',
+        });
+        const results = await response.json();
+        
+        if (results.length > 0) {
+          setShowDuplicateWarning(true);
+        } else {
+          setShowDuplicateWarning(false);
+        }
+      } catch (error) {
+        console.error('Error checking for duplicates:', error);
+      }
+    }, 500),
+    [selectedCustomer]
+  );
+  
+  // Watch for changes in email and phone to detect duplicates
+  const watchedEmail = form.watch("customerEmail");
+  const watchedPhone = form.watch("customerPhone");
+  
+  useEffect(() => {
+    if (!selectedCustomer) {
+      checkForDuplicates(watchedEmail, watchedPhone);
+    }
+  }, [watchedEmail, watchedPhone, checkForDuplicates, selectedCustomer]);
+  
   // Initialize image states from database when quote loads
   useEffect(() => {
     if (quote) {
+      // Set selected customer if editing existing quote
+      if (quote.customer) {
+        setSelectedCustomer(quote.customer);
+      }
+      
       // Convert database image arrays to UploadedImage format
       const convertDbImagesToUploaded = (dbImages: any[] = []): UploadedImage[] => {
         return dbImages.map((img, index) => ({
@@ -290,7 +373,109 @@ export function QuoteHeader({ quote, onSave, isLoading, onUploadStatesChange }: 
           <form id="quote-form" onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div>
-                <h3 className="text-lg font-semibold text-charcoal mb-3">Customer Information</h3>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-lg font-semibold text-charcoal">Customer Information</h3>
+                  {selectedCustomer && (
+                    <Badge variant="secondary" className="flex items-center gap-1">
+                      <Users className="h-3 w-3" />
+                      Existing Customer
+                    </Badge>
+                  )}
+                </div>
+                
+                {/* Customer Search */}
+                <div className="mb-4">
+                  <FormLabel>Customer Search</FormLabel>
+                  <Popover open={customerSearchOpen} onOpenChange={setCustomerSearchOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={customerSearchOpen}
+                        className="w-full justify-between"
+                        data-testid="customer-search-trigger"
+                      >
+                        <div className="flex items-center gap-2">
+                          <Search className="h-4 w-4" />
+                          <span className="text-left">
+                            {selectedCustomer
+                              ? `${selectedCustomer.name} (${selectedCustomer.email})`
+                              : "Search for existing customer..."}
+                          </span>
+                        </div>
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-full p-0" align="start">
+                      <Command>
+                        <CommandInput 
+                          placeholder="Search by name, email, phone, or company..." 
+                          value={customerSearchTerm}
+                          onValueChange={setCustomerSearchTerm}
+                          data-testid="customer-search-input"
+                        />
+                        <CommandList>
+                          {isSearching ? (
+                            <CommandEmpty>Searching...</CommandEmpty>
+                          ) : searchResults.length === 0 && debouncedSearchTerm.length >= 2 ? (
+                            <CommandEmpty>No customers found.</CommandEmpty>
+                          ) : searchResults.length > 0 ? (
+                            <CommandGroup heading="Existing Customers">
+                              {searchResults.map((customer) => (
+                                <CommandItem
+                                  key={customer.id}
+                                  onSelect={() => handleCustomerSelect(customer)}
+                                  className="cursor-pointer"
+                                  data-testid={`customer-option-${customer.id}`}
+                                >
+                                  <div className="flex flex-col gap-1">
+                                    <div className="font-medium">{customer.name}</div>
+                                    <div className="text-sm text-muted-foreground">
+                                      {customer.email} • {customer.phone}
+                                      {customer.company && ` • ${customer.company}`}
+                                    </div>
+                                  </div>
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          ) : (
+                            <CommandEmpty>Type at least 2 characters to search...</CommandEmpty>
+                          )}
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                  
+                  {selectedCustomer && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="mt-2"
+                      onClick={() => {
+                        setSelectedCustomer(null);
+                        setShowDuplicateWarning(false);
+                        form.setValue("customerName", "");
+                        form.setValue("customerEmail", "");
+                        form.setValue("customerPhone", "");
+                        form.setValue("customerCompany", "");
+                      }}
+                      data-testid="clear-customer-selection"
+                    >
+                      Clear selection and create new customer
+                    </Button>
+                  )}
+                </div>
+                
+                {/* Duplicate Warning */}
+                {showDuplicateWarning && !selectedCustomer && (
+                  <div className="mb-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+                    <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                      <strong>Possible duplicate:</strong> A customer with similar details may already exist. 
+                      Use the search above to find and select them, or continue to create a new customer.
+                    </p>
+                  </div>
+                )}
+                
                 <div className="space-y-3">
                   <FormField
                     control={form.control}
@@ -299,7 +484,14 @@ export function QuoteHeader({ quote, onSave, isLoading, onUploadStatesChange }: 
                       <FormItem>
                         <FormLabel>Customer Name</FormLabel>
                         <FormControl>
-                          <Input {...field} />
+                          <Input 
+                            {...field} 
+                            disabled={!!selectedCustomer}
+                            onChange={(e) => {
+                              field.onChange(e);
+                              if (selectedCustomer) setSelectedCustomer(null);
+                            }}
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -312,7 +504,15 @@ export function QuoteHeader({ quote, onSave, isLoading, onUploadStatesChange }: 
                       <FormItem>
                         <FormLabel>Email</FormLabel>
                         <FormControl>
-                          <Input type="email" {...field} />
+                          <Input 
+                            type="email" 
+                            {...field} 
+                            disabled={!!selectedCustomer}
+                            onChange={(e) => {
+                              field.onChange(e);
+                              if (selectedCustomer) setSelectedCustomer(null);
+                            }}
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -325,7 +525,15 @@ export function QuoteHeader({ quote, onSave, isLoading, onUploadStatesChange }: 
                       <FormItem>
                         <FormLabel>Phone</FormLabel>
                         <FormControl>
-                          <Input type="tel" {...field} />
+                          <Input 
+                            type="tel" 
+                            {...field} 
+                            disabled={!!selectedCustomer}
+                            onChange={(e) => {
+                              field.onChange(e);
+                              if (selectedCustomer) setSelectedCustomer(null);
+                            }}
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -338,7 +546,15 @@ export function QuoteHeader({ quote, onSave, isLoading, onUploadStatesChange }: 
                       <FormItem>
                         <FormLabel>Company (Optional)</FormLabel>
                         <FormControl>
-                          <Input placeholder="Company name" {...field} />
+                          <Input 
+                            placeholder="Company name" 
+                            {...field} 
+                            disabled={!!selectedCustomer}
+                            onChange={(e) => {
+                              field.onChange(e);
+                              if (selectedCustomer) setSelectedCustomer(null);
+                            }}
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
