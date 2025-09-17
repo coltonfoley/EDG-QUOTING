@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Upload, FileText, Edit3, Check, X } from "lucide-react";
+import { Loader2, Upload, FileText, Edit3, Check, X, Users } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
@@ -60,6 +60,8 @@ export function QuoteImporter({ onImportComplete, onClose }: QuoteImporterProps)
   const [importType, setImportType] = useState<"new" | "existing">("new");
   const [selectedQuoteId, setSelectedQuoteId] = useState<string>("");
   const [bulkMarkupValue, setBulkMarkupValue] = useState<string>("");
+  const [accountMode, setAccountMode] = useState<"new" | "existing">("new");
+  const [selectedAccountId, setSelectedAccountId] = useState<string>("");
 
   const { toast } = useToast();
 
@@ -67,6 +69,12 @@ export function QuoteImporter({ onImportComplete, onClose }: QuoteImporterProps)
   const { data: quotesData } = useQuery<QuoteWithDetails[]>({
     queryKey: ["/api/quotes"],
     enabled: importType === "existing",
+  });
+
+  // Fetch existing accounts for account selection
+  const { data: accountsData } = useQuery<any[]>({
+    queryKey: ["/api/accounts"],
+    enabled: activeTab === "preview" && accountMode === "existing",
   });
 
   // Transform quotes to include calculated totals
@@ -103,6 +111,18 @@ export function QuoteImporter({ onImportComplete, onClose }: QuoteImporterProps)
         setExtractedData(data.data);
         setEditedData(data.data);
         setActiveTab("preview");
+        // Auto-select existing account if customer matches
+        if (accountsData && data.data.customer) {
+          const matchingAccount = accountsData.find(
+            (account: any) => 
+              account.email.toLowerCase() === data.data.customer.email?.toLowerCase() ||
+              account.name.toLowerCase() === data.data.customer.name?.toLowerCase()
+          );
+          if (matchingAccount) {
+            setAccountMode("existing");
+            setSelectedAccountId(matchingAccount.id.toString());
+          }
+        }
         toast({
           title: "PDF Processed",
           description: "Quote data extracted successfully. Please review and edit as needed.",
@@ -130,19 +150,27 @@ export function QuoteImporter({ onImportComplete, onClose }: QuoteImporterProps)
       try {
         if (importType === "new") {
         // Create new quote with extracted data
-        // Ensure required customer fields have values
-        const customerData = {
-          name: data.customer.name || "Customer Name",
-          email: data.customer.email || "customer@example.com", 
-          phone: data.customer.phone || "000-000-0000",
-          company: data.customer.company || null,
-        };
+        let accountId: number;
         
-        const customerResponse = await apiRequest("POST", "/api/customers", customerData, { timeout: 10000 });
-        const customer = await customerResponse.json();
+        if (accountMode === "new") {
+          // Create new account with extracted or edited customer data
+          const customerData = {
+            name: data.customer.name || "Customer Name",
+            email: data.customer.email || "customer@example.com", 
+            phone: data.customer.phone || "000-000-0000",
+            company: data.customer.company || null,
+          };
+          
+          const customerResponse = await apiRequest("POST", "/api/customers", customerData, { timeout: 10000 });
+          const customer = await customerResponse.json();
+          accountId = customer.id;
+        } else {
+          // Use existing account
+          accountId = parseInt(selectedAccountId);
+        }
         
         const quoteData = {
-          accountId: customer.id,
+          accountId: accountId,
           quoteNumber: data.quoteNumber || `QT-${Date.now()}`,
           projectName: data.projectDescription || "Imported Project",
           projectAddress: data.customer.address || "",
@@ -186,7 +214,7 @@ export function QuoteImporter({ onImportComplete, onClose }: QuoteImporterProps)
           });
         }
         
-        return { quote, customer };
+        return { quote, accountId };
       } else {
         // Add line items to existing quote
         if (!selectedQuoteId) {
@@ -454,11 +482,71 @@ export function QuoteImporter({ onImportComplete, onClose }: QuoteImporterProps)
           <TabsContent value="preview" className="space-y-6">
             {editedData && (
               <>
+                {/* Account Selection */}
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2">
+                    <Users className="h-4 w-4" />
+                    <h3 className="text-lg font-semibold">Account Selection</h3>
+                  </div>
+                  <div className="space-y-4">
+                    <div className="flex gap-4">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="radio"
+                          checked={accountMode === "new"}
+                          onChange={() => {
+                            setAccountMode("new");
+                            setSelectedAccountId("");
+                          }}
+                          className="w-4 h-4"
+                        />
+                        <span>Create New Account</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="radio"
+                          checked={accountMode === "existing"}
+                          onChange={() => setAccountMode("existing")}
+                          className="w-4 h-4"
+                        />
+                        <span>Use Existing Account</span>
+                      </label>
+                    </div>
+                    
+                    {accountMode === "existing" && (
+                      <div>
+                        <Label htmlFor="account-select">Select Account</Label>
+                        <Select value={selectedAccountId} onValueChange={setSelectedAccountId}>
+                          <SelectTrigger id="account-select">
+                            <SelectValue placeholder="Select an existing account" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {accountsData?.map((account: any) => (
+                              <SelectItem key={account.id} value={account.id.toString()}>
+                                {account.name} ({account.email})
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <Separator />
+
                 {/* Customer Information */}
                 <div className="space-y-4">
                   <div className="flex items-center gap-2">
                     <Edit3 className="h-4 w-4" />
-                    <h3 className="text-lg font-semibold">Customer Information</h3>
+                    <h3 className="text-lg font-semibold">
+                      {accountMode === "new" ? "New Account Details" : "Quote Contact Information"}
+                    </h3>
+                    {accountMode === "existing" && (
+                      <span className="text-sm text-gray-500">
+                        (These details are from the PDF and won't update the selected account)
+                      </span>
+                    )}
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
@@ -467,6 +555,7 @@ export function QuoteImporter({ onImportComplete, onClose }: QuoteImporterProps)
                         id="customer-name"
                         value={editedData.customer.name}
                         onChange={(e) => updateCustomerField("name", e.target.value)}
+                        disabled={accountMode === "existing"}
                       />
                     </div>
                     <div>
@@ -475,6 +564,7 @@ export function QuoteImporter({ onImportComplete, onClose }: QuoteImporterProps)
                         id="customer-email"
                         value={editedData.customer.email || ""}
                         onChange={(e) => updateCustomerField("email", e.target.value)}
+                        disabled={accountMode === "existing"}
                       />
                     </div>
                     <div>
@@ -483,6 +573,7 @@ export function QuoteImporter({ onImportComplete, onClose }: QuoteImporterProps)
                         id="customer-phone"
                         value={editedData.customer.phone || ""}
                         onChange={(e) => updateCustomerField("phone", e.target.value)}
+                        disabled={accountMode === "existing"}
                       />
                     </div>
                     <div>
@@ -491,6 +582,7 @@ export function QuoteImporter({ onImportComplete, onClose }: QuoteImporterProps)
                         id="customer-company"
                         value={editedData.customer.company || ""}
                         onChange={(e) => updateCustomerField("company", e.target.value)}
+                        disabled={accountMode === "existing"}
                       />
                     </div>
                   </div>
