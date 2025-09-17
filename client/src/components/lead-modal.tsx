@@ -136,11 +136,11 @@ export function LeadModal({ open, onOpenChange, lead, onLeadSaved }: LeadModalPr
         email: lead.email || "",
         phone: lead.phone || "",
         company: lead.company || "",
-        source: lead.source || "",
+        source: lead.source || "unspecified",
         stage: (lead.stage as "new" | "contacted" | "qualified" | "proposal" | "negotiation" | "closed_won" | "closed_lost") || "new",
         value: lead.value ? lead.value.toString() : "",
         priority: (lead.priority as "low" | "medium" | "high") || "medium",
-        assignedTo: lead.assignedTo || undefined,
+        assignedTo: lead.assignedTo?.toString() || "unassigned",
         notes: lead.notes || "",
         customerId: lead.customerId || undefined,
         quoteId: lead.quoteId || undefined,
@@ -154,11 +154,11 @@ export function LeadModal({ open, onOpenChange, lead, onLeadSaved }: LeadModalPr
         email: "",
         phone: "",
         company: "",
-        source: "",
+        source: "unspecified",
         stage: "new",
         value: "",
         priority: "medium",
-        assignedTo: undefined,
+        assignedTo: "unassigned",
         notes: "",
         customerId: undefined,
         quoteId: undefined,
@@ -226,11 +226,11 @@ export function LeadModal({ open, onOpenChange, lead, onLeadSaved }: LeadModalPr
         email: data.email,
         phone: data.phone || null,
         company: data.company || null,
-        source: data.source || null,
+        source: (data.source && data.source !== "unspecified") ? data.source : null,
         stage: data.stage,
         value: data.value && data.value !== "" ? data.value.replace(/[,$]/g, "") : null,
         priority: data.priority,
-        assignedTo: data.assignedTo || null,
+        assignedTo: (data.assignedTo && data.assignedTo !== "unassigned") ? data.assignedTo : null,
         notes: data.notes || null,
         customerId: data.customerId || null,
         quoteId: data.quoteId || null,
@@ -389,7 +389,7 @@ export function LeadModal({ open, onOpenChange, lead, onLeadSaved }: LeadModalPr
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="">Not specified</SelectItem>
+                        <SelectItem value="unspecified">Not specified</SelectItem>
                         {LEAD_SOURCES.map((source) => (
                           <SelectItem key={source.value} value={source.value}>
                             {source.label}
@@ -490,8 +490,8 @@ export function LeadModal({ open, onOpenChange, lead, onLeadSaved }: LeadModalPr
                   <FormItem>
                     <FormLabel>Assigned To</FormLabel>
                     <Select 
-                      onValueChange={(value) => field.onChange(value ? parseInt(value) : undefined)} 
-                      value={field.value?.toString() || ""} 
+                      onValueChange={(value) => field.onChange(value === "unassigned" ? undefined : parseInt(value))} 
+                      value={field.value?.toString() || "unassigned"} 
                       data-testid="select-assigned-to"
                       disabled={usersLoading}
                     >
@@ -501,7 +501,7 @@ export function LeadModal({ open, onOpenChange, lead, onLeadSaved }: LeadModalPr
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="">Unassigned</SelectItem>
+                        <SelectItem value="unassigned">Unassigned</SelectItem>
                         {users?.map((user) => (
                           <SelectItem key={user.id} value={user.id.toString()}>
                             {user.firstName && user.lastName 
