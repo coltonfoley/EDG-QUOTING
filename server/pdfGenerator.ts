@@ -289,7 +289,7 @@ export async function generateQuotePDF(quote: QuoteWithDetails): Promise<string>
     const base64Content = Buffer.from(htmlContent, 'utf-8').toString('base64');
     
     // This is not a real PDF - it's HTML encoded as base64
-    // For DocuSign to work properly, you'd need actual PDF binary content
+    // In production, you'd need actual PDF binary content
     return base64Content;
   } catch (error) {
     // Error generating PDF
