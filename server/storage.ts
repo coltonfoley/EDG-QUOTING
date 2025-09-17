@@ -455,11 +455,7 @@ export class DatabaseStorage implements IStorage {
         or(
           ilike(contacts.firstName, `%${term}%`),
           ilike(contacts.lastName, `%${term}%`),
-          ilike(contacts.email, `%${term}%`),
-          sql`REPLACE(REPLACE(REPLACE(REPLACE(${contacts.phone}, '-', ''), '(', ''), ')', ''), ' ', '') LIKE ${`%${normalizedPhone}%`}`,
-          // Also search full name combinations
-          sql`LOWER(CONCAT(${contacts.firstName}, ' ', ${contacts.lastName})) LIKE ${`%${term}%`}`,
-          sql`LOWER(CONCAT(${contacts.lastName}, ', ', ${contacts.firstName})) LIKE ${`%${term}%`}`
+          ilike(contacts.email, `%${term}%`)
         )
       )
       .limit(10);
