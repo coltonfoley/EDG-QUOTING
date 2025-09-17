@@ -486,7 +486,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAllAccounts(): Promise<Account[]> {
-    // Use a single efficient query with subqueries to get contact and project counts
+    // Use a single efficient query with proper correlated subqueries
     const allAccountsWithCounts = await db.select({
       id: accounts.id,
       name: accounts.name,
@@ -499,18 +499,14 @@ export class DatabaseStorage implements IStorage {
       createdAt: accounts.createdAt,
       updatedAt: accounts.updatedAt,
       contactCount: sql<number>`
-        COALESCE((
-          SELECT COUNT(*)::int 
-          FROM ${contacts}
-          WHERE ${contacts.accountId} = ${accounts.id}
-        ), 0)
+        (SELECT COUNT(*)::int 
+         FROM contacts
+         WHERE contacts.account_id = accounts.id)
       `,
       projectCount: sql<number>`
-        COALESCE((
-          SELECT COUNT(*)::int
-          FROM ${quotes}
-          WHERE ${quotes.accountId} = ${accounts.id}
-        ), 0)
+        (SELECT COUNT(*)::int
+         FROM quotes
+         WHERE quotes.account_id = accounts.id)
       `
     })
     .from(accounts)
