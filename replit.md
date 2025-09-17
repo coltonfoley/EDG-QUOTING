@@ -95,6 +95,10 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+- September 17, 2025: Updated terminology from "Projects" to "Quotes" throughout application - we now manage quotes for projects, not projects directly
+- September 17, 2025: Standardized dealStage values across application with centralized constants for consistency
+- September 17, 2025: Fixed all TypeScript and runtime errors related to quote creation and account management
+- September 17, 2025: Completely removed all DocuSign integration code and references from the application
 - September 11, 2025: Enhanced PDF import functionality with cost tracking for true margin visibility - users can now enter actual costs for imported line items to see real profit margins, includes bulk markup application and cost clearing features
 - August 6, 2025: Added search functionality to product catalog selection when creating quotes - users can now search and filter products in the "From Catalog" dialog
 - July 31, 2025: Redesigned Products page UI for better scalability with hundreds of products - added search bar, category filters, table/grid view toggle, and compact table layout
@@ -104,7 +108,6 @@ Preferred communication style: Simple, everyday language.
 - July 30, 2025: Fixed PDF generation blank page issue by converting logo to base64 format for cross-window compatibility
 - July 30, 2025: Successfully integrated EDG company logo across all application interfaces (landing page, app header, PDF templates)
 - July 30, 2025: Fixed homepage duplication issue by correcting router configuration - removed conflicting catch-all route
-- September 17, 2025: Completely removed all DocuSign integration code and references from the application
 - June 27, 2025: Added company field to customer schema for business client tracking
 - June 27, 2025: Updated quote forms, tables, and PDFs to display company information
 - June 27, 2025: Enhanced search to include company names in quote filtering
