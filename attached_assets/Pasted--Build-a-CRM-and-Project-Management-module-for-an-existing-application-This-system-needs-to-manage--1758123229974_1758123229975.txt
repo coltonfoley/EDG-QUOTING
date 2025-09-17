@@ -1,0 +1,126 @@
+
+Build a CRM and Project Management module for an existing application. This system needs to manage relationships with General Contractors (GCs) who have multiple ongoing projects, as well as one-off customers. The core architecture will be a hierarchical model of Accounts, Contacts, and Projects.
+
+Business Context:
+We are edgpatioshade.com, a design, supply, and installation company for patio shades and awnings. We need a system to manage our sales pipeline and project operations. Our customers can be individual homeowners or large GC accounts with multiple concurrent jobs.
+
+1. Core Data Models & Relationships
+Please start by defining the following database schemas and their relationships:
+
+A. Account Model (The Company/GC)
+This represents the top-level client company.
+
+id: Primary Key
+
+company_name: String (Required)
+
+account_type: Enum/String (e.g., 'General Contractor', 'Homeowner', 'Commercial')
+
+billing_address: String
+
+payment_terms: String (e.g., 'Net 30', '50% Deposit')
+
+created_at: DateTime
+
+updated_at: DateTime
+
+B. Contact Model (The People)
+These are the individuals who work at an Account.
+
+id: Primary Key
+
+account_id: Foreign Key linking to Account (Required)
+
+first_name: String
+
+last_name: String
+
+email: String (Unique)
+
+phone: String
+
+role: String (e.g., 'Project Manager', 'Primary Contact')
+
+created_at: DateTime
+
+updated_at: DateTime
+
+Relationship: An Account can have many Contacts.
+
+C. Project Model (The Job/Lead)
+This represents a single job, opportunity, or lead.
+
+id: Primary Key
+
+account_id: Foreign Key linking to Account (Required)
+
+project_name: String (e.g., "123 Main St. Awning")
+
+jobsite_address: String
+
+status: Enum/String (This will be used for the Kanban stages)
+
+deal_value: Decimal/Float
+
+assigned_rep_id: Foreign Key linking to an internal User model
+
+created_at: DateTime
+
+updated_at: DateTime
+
+Relationship: An Account can have many Projects.
+
+2. Required Features & Modules
+Please build out the following features based on the data models above.
+
+A. Account Management (CRUD)
+
+Create a view to see a list of all Accounts.
+
+Create a form to add a new Account.
+
+Create an "Account Dashboard" view that is displayed when a user clicks on a specific Account. This page must show:
+
+The Account's details (name, address, terms).
+
+A list of all associated Contacts.
+
+A table/list of all associated Projects, showing project_name, status, and deal_value.
+
+B. Sales Pipeline Kanban Board
+
+Create a Kanban board view for all Projects that are in a sales stage.
+
+The board should have the following columns (mapped to the Project.status field):
+
+New Lead
+
+Qualifying
+
+Consultation Scheduled
+
+Building Estimate
+
+Quote Sent
+
+Cards on the board should represent a Project. Each card should display the project_name, Account.company_name, and deal_value.
+
+Implement drag-and-drop functionality to move a Project card between columns, which should update the Project.status in the database.
+
+Add three "end-game" columns/buttons:
+
+Closed - Won: Moving a card here should trigger the next phase (this will eventually link to the full PM module).
+
+Closed - Lost: Moving a card here should prompt the user to enter a "Reason for Loss."
+
+On Hold: A column for projects that are not active but not lost.
+
+C. Project Creation Workflow
+
+The system must support two ways to create a new lead/project:
+
+For a New Customer: A "New Lead" button that first creates a new Account, then a new Project linked to it.
+
+For an Existing GC: On the Account Dashboard, there must be a "New Project" button. Clicking this creates a new Project that is automatically linked to the current Account.
+
+In both cases, the new Project card should appear in the "New Lead" column of the Kanban board.
