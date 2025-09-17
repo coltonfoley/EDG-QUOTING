@@ -417,57 +417,70 @@ export class DatabaseStorage implements IStorage {
       return [];
     }
     
-    const term = searchTerm.trim().toLowerCase();
-    const normalizedPhone = normalizePhoneNumber(searchTerm);
-    
-    // Search across account fields
-    const accountResults = await db
-      .select()
-      .from(accounts)
-      .where(
-        or(
-          ilike(accounts.name, `%${term}%`),
-          ilike(accounts.email, `%${term}%`),
-          ilike(accounts.company, `%${term}%`),
-          // For phone, try to match the normalized version
-          sql`REPLACE(REPLACE(REPLACE(REPLACE(${accounts.phone}, '-', ''), '(', ''), ')', ''), ' ', '') LIKE ${`%${normalizedPhone}%`}`
+    try {
+      const term = searchTerm.trim().toLowerCase();
+      const normalizedPhone = normalizePhoneNumber(searchTerm);
+      
+      console.log(`Searching for: "${term}"`);
+      
+      // Search across account fields
+      const accountResults = await db
+        .select()
+        .from(accounts)
+        .where(
+          or(
+            ilike(accounts.name, `%${term}%`),
+            ilike(accounts.email, `%${term}%`),
+            ilike(accounts.company, `%${term}%`),
+            // For phone, try to match the normalized version
+            sql`REPLACE(REPLACE(REPLACE(REPLACE(${accounts.phone}, '-', ''), '(', ''), ')', ''), ' ', '') LIKE ${`%${normalizedPhone}%`}`
+          )
         )
-      )
-      .limit(10);
-    
-    // Also search through contacts and return their associated accounts
-    const contactResults = await db
-      .select({
-        id: accounts.id,
-        name: accounts.name,
-        email: accounts.email,
-        phone: accounts.phone,
-        company: accounts.company,
-        accountType: accounts.accountType,
-        paymentTerms: accounts.paymentTerms,
-        billingAddress: accounts.billingAddress,
-        createdAt: accounts.createdAt,
-        updatedAt: accounts.updatedAt,
-      })
-      .from(contacts)
-      .innerJoin(accounts, eq(contacts.accountId, accounts.id))
-      .where(
-        or(
-          ilike(contacts.firstName, `%${term}%`),
-          ilike(contacts.lastName, `%${term}%`),
-          ilike(contacts.email, `%${term}%`)
+        .limit(10);
+      
+      console.log(`Account results: ${accountResults.length}`);
+      
+      // Also search through contacts and return their associated accounts
+      const contactResults = await db
+        .select({
+          id: accounts.id,
+          name: accounts.name,
+          email: accounts.email,
+          phone: accounts.phone,
+          company: accounts.company,
+          accountType: accounts.accountType,
+          paymentTerms: accounts.paymentTerms,
+          billingAddress: accounts.billingAddress,
+          createdAt: accounts.createdAt,
+          updatedAt: accounts.updatedAt,
+        })
+        .from(contacts)
+        .innerJoin(accounts, eq(contacts.accountId, accounts.id))
+        .where(
+          or(
+            ilike(contacts.firstName, `%${term}%`),
+            ilike(contacts.lastName, `%${term}%`),
+            ilike(contacts.email, `%${term}%`)
+          )
         )
-      )
-      .limit(10);
-    
-    // Combine results and remove duplicates by account ID
-    const allResults = [...accountResults, ...contactResults];
-    const uniqueResults = allResults.filter((account, index, self) => 
-      index === self.findIndex(a => a.id === account.id)
-    );
-    
-    // Limit to 10 total results
-    return uniqueResults.slice(0, 10);
+        .limit(10);
+      
+      console.log(`Contact results: ${contactResults.length}`);
+      
+      // Combine results and remove duplicates by account ID
+      const allResults = [...accountResults, ...contactResults];
+      const uniqueResults = allResults.filter((account, index, self) => 
+        index === self.findIndex(a => a.id === account.id)
+      );
+      
+      console.log(`Total unique results: ${uniqueResults.length}`);
+      
+      // Limit to 10 total results
+      return uniqueResults.slice(0, 10);
+    } catch (error) {
+      console.error("Search error:", error);
+      throw error;
+    }
   }
 
   // Legacy method for backward compatibility
