@@ -271,22 +271,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Customer search endpoint for autocomplete
+  app.get("/api/customers/search", isAuthenticated, async (req, res) => {
+    try {
+      const searchTerm = req.query.q as string;
+      if (!searchTerm) {
+        return res.json([]);
+      }
+      
+      const customers = await storage.searchCustomers(searchTerm);
+      res.json(customers);
+    } catch (error) {
+      console.error("Customer search error:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
   app.post("/api/customers", isAuthenticated, async (req, res) => {
     try {
       const customerData = insertCustomerSchema.parse(req.body);
       
-      // Check if customer already exists by email
-      const existingCustomer = await storage.getCustomerByEmail(customerData.email);
-      if (existingCustomer) {
-        return res.json(existingCustomer);
-      }
+      // Options for duplicate handling
+      const allowDuplicate = req.body.allowDuplicate === true;
+      const updateIfExists = req.body.updateIfExists !== false; // Default to true
       
-      const customer = await storage.createCustomer(customerData);
-      res.status(201).json(customer);
+      const customer = await storage.createCustomer(customerData, {
+        allowDuplicate,
+        updateIfExists
+      });
+      
+      // Check if this was an update of existing customer or new creation
+      // by checking if the customer existed before (we can detect this from logs)
+      const duplicate = await storage.findDuplicateCustomer(customerData);
+      
+      if (duplicate && duplicate.id === customer.id && !allowDuplicate) {
+        // This was an update of existing customer
+        res.status(200).json({
+          ...customer,
+          _wasExisting: true,
+          _message: "Customer already existed and was updated with new information"
+        });
+      } else {
+        // This was a new customer creation
+        res.status(201).json(customer);
+      }
     } catch (error) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: "Invalid customer data", errors: error.errors });
       }
+      console.error("Customer creation error:", error);
       res.status(500).json({ message: "Internal server error" });
     }
   });
