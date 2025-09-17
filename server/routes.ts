@@ -356,11 +356,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const quoteData = insertQuoteSchema.parse(req.body);
       const quote = await storage.createQuote(quoteData);
       res.status(201).json(quote);
-    } catch (error) {
+    } catch (error: any) {
       if (error instanceof z.ZodError) {
         console.error("Quote validation errors:", JSON.stringify(error.errors, null, 2));
         return res.status(400).json({ message: "Invalid quote data", errors: error.errors });
       }
+      
+      // Handle unique constraint violations
+      if (error.message?.includes("already exists") || error.message?.includes("Unable to generate unique quote number")) {
+        console.error("Quote number uniqueness error:", error.message);
+        return res.status(409).json({ 
+          message: error.message || "Quote number already exists", 
+          code: "DUPLICATE_QUOTE_NUMBER" 
+        });
+      }
+      
       console.error("Quote creation error:", error);
       res.status(500).json({ message: "Internal server error" });
     }
@@ -391,10 +401,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       res.json(quote);
-    } catch (error) {
+    } catch (error: any) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: "Invalid quote data", errors: error.errors });
       }
+      
+      // Handle unique constraint violations for quote number
+      if (error.message?.includes("already exists")) {
+        console.error("Quote number uniqueness error:", error.message);
+        return res.status(409).json({ 
+          message: error.message || "Quote number already exists", 
+          code: "DUPLICATE_QUOTE_NUMBER" 
+        });
+      }
+      
+      console.error("Quote update error:", error);
       res.status(500).json({ message: "Internal server error" });
     }
   });

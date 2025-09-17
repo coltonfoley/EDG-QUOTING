@@ -370,11 +370,71 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createQuote(insertQuote: InsertQuote): Promise<Quote> {
-    const [quote] = await db
-      .insert(quotes)
-      .values(insertQuote)
-      .returning();
-    return quote;
+    // Retry logic for handling duplicate quote numbers
+    const maxRetries = 5;
+    let retryCount = 0;
+    let lastError: any = null;
+    
+    while (retryCount < maxRetries) {
+      try {
+        // Check if quote number already exists
+        const existingQuote = await db
+          .select()
+          .from(quotes)
+          .where(eq(quotes.quoteNumber, insertQuote.quoteNumber))
+          .limit(1);
+        
+        if (existingQuote.length > 0) {
+          // Quote number exists, generate a new one
+          console.log(`Quote number ${insertQuote.quoteNumber} already exists, generating new one...`);
+          
+          // Generate a new unique quote number
+          const year = new Date().getFullYear();
+          const timestamp = Date.now();
+          const random = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+          insertQuote.quoteNumber = `QT-${year}-${timestamp.toString().slice(-8)}${random}`;
+          
+          retryCount++;
+          continue;
+        }
+        
+        // Try to insert the quote
+        const [quote] = await db
+          .insert(quotes)
+          .values(insertQuote)
+          .returning();
+        
+        console.log(`Successfully created quote with number: ${quote.quoteNumber}`);
+        return quote;
+        
+      } catch (error: any) {
+        lastError = error;
+        
+        // Check if it's a unique constraint violation
+        if (error.code === '23505' && error.constraint === 'quotes_quote_number_unique') {
+          console.log(`Unique constraint violation for quote number ${insertQuote.quoteNumber}, retry ${retryCount + 1}/${maxRetries}`);
+          
+          // Generate a new unique quote number for retry
+          const year = new Date().getFullYear();
+          const timestamp = Date.now();
+          const random = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+          insertQuote.quoteNumber = `QT-${year}-${timestamp.toString().slice(-8)}${random}`;
+          
+          retryCount++;
+          
+          // Add a small delay to reduce collision probability
+          await new Promise(resolve => setTimeout(resolve, 100));
+        } else {
+          // Other database error, throw immediately
+          console.error('Database error while creating quote:', error);
+          throw error;
+        }
+      }
+    }
+    
+    // If we've exhausted all retries, throw the error
+    console.error(`Failed to create quote after ${maxRetries} retries`);
+    throw new Error(`Unable to generate unique quote number after ${maxRetries} attempts. Last error: ${lastError?.message || 'Unknown error'}`);
   }
 
   async updateQuote(id: number, quoteData: Partial<InsertQuote>): Promise<Quote | undefined> {
@@ -386,6 +446,20 @@ export class DatabaseStorage implements IStorage {
     
     if (!existingQuote) {
       return undefined;
+    }
+
+    // Check if quote number is being changed and validate uniqueness
+    if (quoteData.quoteNumber && quoteData.quoteNumber !== existingQuote.quoteNumber) {
+      const [duplicateQuote] = await db
+        .select()
+        .from(quotes)
+        .where(eq(quotes.quoteNumber, quoteData.quoteNumber))
+        .limit(1);
+      
+      if (duplicateQuote) {
+        console.error(`Cannot update quote ${id}: Quote number ${quoteData.quoteNumber} already exists`);
+        throw new Error(`Quote number ${quoteData.quoteNumber} already exists. Please use a different quote number.`);
+      }
     }
 
     // Prepare the update data
