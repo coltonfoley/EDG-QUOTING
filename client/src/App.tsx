@@ -40,6 +40,8 @@ function Router() {
         <>
           <Route path="/" component={AuthPage} />
           <Route path="/auth" component={AuthPage} />
+          {/* Catch-all route for unauthenticated users */}
+          <Route component={AuthPage} />
         </>
       ) : (
         <>
@@ -52,6 +54,8 @@ function Router() {
           <Route path="/contracts" component={ContractsPage} />
           <Route path="/admin" component={AdminPage} />
           <Route path="/admin/templates" component={AdminTemplatesPage} />
+          {/* Catch-all route for authenticated users */}
+          <Route component={NotFound} />
         </>
       )}
     </Switch>
