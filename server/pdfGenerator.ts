@@ -292,7 +292,7 @@ export async function generateQuotePDF(quote: QuoteWithDetails): Promise<string>
     // For DocuSign to work properly, you'd need actual PDF binary content
     return base64Content;
   } catch (error) {
-    console.error('Error generating PDF:', error);
+    // Error generating PDF
     throw new Error('Failed to generate PDF: ' + (error as Error).message);
   }
 }

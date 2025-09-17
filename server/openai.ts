@@ -101,7 +101,7 @@ export async function extractProductsFromImage(base64Image: string): Promise<Ext
 
     const content = response.choices[0].message.content;
     if (!content) {
-      console.error("Empty response from OpenAI for image");
+      // Empty response from OpenAI
       return [];
     }
 
@@ -110,8 +110,7 @@ export async function extractProductsFromImage(base64Image: string): Promise<Ext
     try {
       parsedContent = JSON.parse(content);
     } catch (jsonError) {
-      console.error("JSON parsing failed for image:", jsonError);
-      console.error("Raw content:", content);
+      // JSON parsing failed for image
       
       // Try to extract valid JSON from partial response
       try {
@@ -120,11 +119,11 @@ export async function extractProductsFromImage(base64Image: string): Promise<Ext
           const productsStr = `{"products": [${productsMatch[1]}]}`;
           parsedContent = JSON.parse(productsStr);
         } else {
-          console.error("Could not extract products array from image response");
+          // Could not extract products array from image response
           return [];
         }
       } catch (fallbackError) {
-        console.error("Fallback parsing also failed for image:", fallbackError);
+        // Fallback parsing also failed for image
         return [];
       }
     }
@@ -133,7 +132,7 @@ export async function extractProductsFromImage(base64Image: string): Promise<Ext
     const parsed = ExtractedProductsSchema.parse(parsedContent);
     return parsed.products || [];
   } catch (error) {
-    console.error("Error extracting products from image:", error);
+    // Error extracting products from image
     return []; // Return empty array instead of throwing
   }
 }
@@ -181,7 +180,7 @@ export async function extractProductsFromText(text: string): Promise<ExtractedPr
 
     const content = response.choices[0].message.content;
     if (!content) {
-      console.error("Empty response from OpenAI");
+      // Empty response from OpenAI
       return [];
     }
 
@@ -190,17 +189,16 @@ export async function extractProductsFromText(text: string): Promise<ExtractedPr
     try {
       parsedContent = JSON.parse(content);
     } catch (jsonError) {
-      console.error("JSON parsing failed:", jsonError);
-      console.error("Raw content:", content);
+      // JSON parsing failed
       
       // Try to extract products from truncated response
       try {
-        console.log("Attempting to parse truncated response...");
+        // Attempting to parse truncated response
         
         // Find the start of the products array
         const productsStart = content.indexOf('"products": [');
         if (productsStart === -1) {
-          console.error("No products array found in response");
+          // No products array found in response
           return [];
         }
 
@@ -218,7 +216,7 @@ export async function extractProductsFromText(text: string): Promise<ExtractedPr
           if (firstProductEnd !== -1) {
             productsContent = productsContent.substring(0, firstProductEnd + 1);
           } else {
-            console.error("No complete products found in truncated response");
+            // No complete products found in truncated response
             return [];
           }
         }
@@ -226,9 +224,9 @@ export async function extractProductsFromText(text: string): Promise<ExtractedPr
         // Reconstruct valid JSON
         const fixedJson = `{"products": [${productsContent}]}`;
         parsedContent = JSON.parse(fixedJson);
-        console.log(`Successfully recovered ${parsedContent.products?.length || 0} products from truncated response`);
+        // Successfully recovered products from truncated response
       } catch (fallbackError) {
-        console.error("Fallback parsing also failed:", fallbackError);
+        // Fallback parsing also failed
         return [];
       }
     }
@@ -237,7 +235,7 @@ export async function extractProductsFromText(text: string): Promise<ExtractedPr
     const parsed = ExtractedProductsSchema.parse(parsedContent);
     return parsed.products || [];
   } catch (error) {
-    console.error("Error extracting products from text:", error);
+    // Error extracting products from text
     return []; // Return empty array instead of throwing
   }
 }
@@ -249,9 +247,6 @@ export async function extractQuoteDataFromText(text: string): Promise<ExtractedQ
     const truncatedText = text.length > maxTextLength 
       ? text.substring(0, maxTextLength) + "\n... (truncated)"
       : text;
-
-    console.log("Processing PDF text length:", truncatedText.length);
-    console.log("First 200 chars of text:", truncatedText.substring(0, 200));
     
     const response = await openai.chat.completions.create({
       model: "gpt-4o", // Using proven working model for PDF extraction
@@ -328,9 +323,7 @@ export async function extractQuoteDataFromText(text: string): Promise<ExtractedQ
 
     const content = response.choices[0].message.content;
     if (!content) {
-      console.error("Empty response from OpenAI for quote extraction");
-      console.error("Full response:", JSON.stringify(response, null, 2));
-      console.error("Choices:", response.choices);
+      // Empty response from OpenAI for quote extraction
       return null;
     }
 
@@ -339,8 +332,7 @@ export async function extractQuoteDataFromText(text: string): Promise<ExtractedQ
     try {
       parsedContent = JSON.parse(content);
     } catch (jsonError) {
-      console.error("JSON parsing failed for quote extraction:", jsonError);
-      console.error("Raw content:", content);
+      // JSON parsing failed for quote extraction
       return null;
     }
 
@@ -348,7 +340,7 @@ export async function extractQuoteDataFromText(text: string): Promise<ExtractedQ
     const extracted = ExtractedQuoteSchema.parse(parsedContent);
     return extracted;
   } catch (error) {
-    console.error("Error extracting quote data from text:", error);
+    // Error extracting quote data from text
     return null;
   }
 }

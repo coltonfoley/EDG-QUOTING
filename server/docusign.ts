@@ -120,12 +120,7 @@ export class DocuSignService {
       throw new Error('DOCUSIGN_PRIVATE_KEY environment variable is not set');
     }
 
-    // Debug the raw key
-    console.log('Raw private key length:', privateKey.length);
-    console.log('Raw key first 50 chars:', privateKey.substring(0, 50));
-    console.log('Raw key last 50 chars:', privateKey.substring(privateKey.length - 50));
-    console.log('Contains \\n:', privateKey.includes('\n'));
-    console.log('Contains \\\\n:', privateKey.includes('\\n'));
+    // Process the private key without exposing it in logs
 
     // Robust private key formatting that handles multiple storage scenarios
     let formattedKey = privateKey.trim();
@@ -151,16 +146,11 @@ export class DocuSignService {
       formattedKey = formattedKey.replace('-----END RSA PRIVATE KEY-----', '\n-----END RSA PRIVATE KEY-----');
     }
 
-    // Debug the formatted key
-    console.log('Formatted key length:', formattedKey.length);
-    console.log('Formatted key first 50 chars:', formattedKey.substring(0, 50));
-    console.log('Formatted key last 50 chars:', formattedKey.substring(formattedKey.length - 50));
-    console.log('Formatted contains BEGIN:', formattedKey.includes('-----BEGIN RSA PRIVATE KEY-----'));
-    console.log('Formatted contains END:', formattedKey.includes('-----END RSA PRIVATE KEY-----'));
+    // Validate the formatted key structure
 
     // Validate the key format before using it
     if (!formattedKey.includes('-----BEGIN RSA PRIVATE KEY-----') || !formattedKey.includes('-----END RSA PRIVATE KEY-----')) {
-      console.error('Key validation failed. Full formatted key:', formattedKey);
+      // Key validation failed - missing BEGIN/END markers
       throw new Error('Invalid RSA private key format - missing BEGIN/END markers');
     }
 
@@ -178,7 +168,7 @@ export class DocuSignService {
     try {
       return jwt.sign(payload, formattedKey, { algorithm: 'RS256' });
     } catch (error: any) {
-      console.error('JWT signing failed. Error:', error);
+      // JWT signing failed
       throw new Error(`JWT signing failed: ${error.message}`);
     }
   }
@@ -203,8 +193,8 @@ export class DocuSignService {
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('DocuSign JWT auth failed:', response.status, errorText);
-      throw new Error(`Failed to get access token: ${response.status} ${response.statusText} - ${errorText}`);
+      // DocuSign JWT auth failed
+      throw new Error(`Failed to get access token: ${response.status} ${response.statusText}`);
     }
 
     return response.json() as Promise<DocuSignTokenResponse>;
@@ -221,9 +211,7 @@ export class DocuSignService {
   ): Promise<DocuSignEnvelopeResponse> {
     const accessToken = await this.getAccessToken();
     
-    console.log('Creating DocuSign envelope for quote:', quoteNumber);
-    console.log('Document size:', documentBase64.length, 'characters');
-    console.log('Recipient email:', recipient.email);
+    // Creating DocuSign envelope for the quote
     
     const envelopeRequest: DocuSignEnvelopeRequest = {
       emailSubject: subject,
@@ -277,8 +265,8 @@ export class DocuSignService {
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('DocuSign envelope creation failed:', response.status, errorText);
-      throw new Error(`Failed to create envelope: ${response.status} ${response.statusText} - ${errorText}`);
+      // DocuSign envelope creation failed
+      throw new Error(`Failed to create envelope: ${response.status} ${response.statusText}`);
     }
 
     return response.json() as Promise<DocuSignEnvelopeResponse>;
