@@ -34,6 +34,80 @@ import type { ExtractedProduct } from "./openai";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 import { ObjectPermission } from "./objectAcl";
 
+// Server-side calculation verification utilities
+function verifyLineItemCalculation(
+  quantity: number | string,
+  unitPrice: number | string,
+  markupType: string,
+  markupValue: number | string,
+  discountType: string = "percentage",
+  discountValue: number | string = 0,
+  expectedTotal?: number | string
+): { isValid: boolean; calculatedTotal: number; expectedTotal: number; discrepancy: number } {
+  // Parse values
+  const qty = typeof quantity === 'string' ? parseFloat(quantity) : quantity;
+  const price = typeof unitPrice === 'string' ? parseFloat(unitPrice) : unitPrice;
+  const markup = typeof markupValue === 'string' ? parseFloat(markupValue) : markupValue;
+  const discount = typeof discountValue === 'string' ? parseFloat(discountValue) : discountValue;
+  const expected = expectedTotal ? (typeof expectedTotal === 'string' ? parseFloat(expectedTotal) : expectedTotal) : 0;
+
+  // Validate inputs
+  if (!isFinite(qty) || qty <= 0 || qty > 999999) {
+    console.warn(`⚠️ Invalid quantity: ${qty}`);
+    return { isValid: false, calculatedTotal: 0, expectedTotal: expected, discrepancy: expected };
+  }
+  if (!isFinite(price) || price < 0 || price > 10000000) {
+    console.warn(`⚠️ Invalid unit price: ${price}`);
+    return { isValid: false, calculatedTotal: 0, expectedTotal: expected, discrepancy: expected };
+  }
+  if (!isFinite(markup) || markup < 0 || markup > 1000) {
+    console.warn(`⚠️ Invalid markup value: ${markup}`);
+    return { isValid: false, calculatedTotal: 0, expectedTotal: expected, discrepancy: expected };
+  }
+  if (!isFinite(discount) || discount < 0) {
+    console.warn(`⚠️ Invalid discount value: ${discount}`);
+    return { isValid: false, calculatedTotal: 0, expectedTotal: expected, discrepancy: expected };
+  }
+
+  // Perform calculation with same logic as client
+  const baseTotal = qty * price;
+  let afterDiscount = baseTotal;
+  
+  if (discount > 0) {
+    if (discountType === 'percentage') {
+      const discountPercent = Math.min(discount, 100); // Cap at 100%
+      afterDiscount = baseTotal - (baseTotal * (discountPercent / 100));
+    } else {
+      afterDiscount = Math.max(0, baseTotal - discount);
+    }
+  }
+  
+  let calculatedTotal = afterDiscount;
+  if (markupType === 'percentage') {
+    calculatedTotal = afterDiscount + (afterDiscount * (markup / 100));
+  } else {
+    calculatedTotal = afterDiscount + markup;
+  }
+
+  // Round to 2 decimal places
+  calculatedTotal = Math.round(calculatedTotal * 100) / 100;
+
+  if (expectedTotal !== undefined && expected > 0) {
+    const discrepancy = Math.abs(calculatedTotal - expected);
+    const isValid = discrepancy < 0.01; // Allow for small rounding differences
+    
+    if (!isValid) {
+      console.warn(`⚠️ Calculation discrepancy detected:`);
+      console.warn(`   Expected: $${expected.toFixed(2)}, Calculated: $${calculatedTotal.toFixed(2)}`);
+      console.warn(`   Inputs: qty=${qty}, price=${price}, markup=${markup} (${markupType}), discount=${discount} (${discountType})`);
+    }
+    
+    return { isValid, calculatedTotal, expectedTotal: expected, discrepancy };
+  }
+
+  return { isValid: true, calculatedTotal, expectedTotal: calculatedTotal, discrepancy: 0 };
+}
+
 // Configure multer for file uploads
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -598,6 +672,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const lineItemData = insertLineItemSchema.parse({ ...req.body, quoteId: params.data.quoteId });
+      
+      // Server-side calculation verification
+      const verification = verifyLineItemCalculation(
+        lineItemData.quantity,
+        lineItemData.unitPrice,
+        lineItemData.markupType,
+        lineItemData.markupValue,
+        lineItemData.discountType,
+        lineItemData.discountValue
+      );
+      
+      if (!verification.isValid) {
+        console.error(`❌ Invalid line item calculation for quote ${params.data.quoteId}`);
+        return res.status(400).json({ 
+          message: "Invalid calculation values",
+          details: `Server calculation: $${verification.calculatedTotal.toFixed(2)}`
+        });
+      }
+      
       const lineItem = await storage.createLineItem(lineItemData);
       res.status(201).json(lineItem);
     } catch (error) {
@@ -621,6 +714,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const lineItemData = insertLineItemSchema.partial().parse(req.body);
+      
+      // If pricing fields are being updated, verify calculations
+      if (lineItemData.quantity !== undefined || 
+          lineItemData.unitPrice !== undefined || 
+          lineItemData.markupValue !== undefined || 
+          lineItemData.discountValue !== undefined) {
+        
+        // Get existing line item for complete data
+        const existingItem = await storage.getLineItem(params.data.id);
+        if (!existingItem) {
+          return res.status(404).json({ message: "Line item not found" });
+        }
+        
+        // Merge with existing data for complete calculation
+        const completeData = { ...existingItem, ...lineItemData };
+        
+        const verification = verifyLineItemCalculation(
+          completeData.quantity,
+          completeData.unitPrice,
+          completeData.markupType,
+          completeData.markupValue,
+          completeData.discountType,
+          completeData.discountValue
+        );
+        
+        if (!verification.isValid) {
+          console.error(`❌ Invalid line item calculation for update of item ${params.data.id}`);
+          return res.status(400).json({ 
+            message: "Invalid calculation values",
+            details: `Server calculation: $${verification.calculatedTotal.toFixed(2)}`
+          });
+        }
+      }
+      
       const lineItem = await storage.updateLineItem(params.data.id, lineItemData);
       if (!lineItem) {
         return res.status(404).json({ message: "Line item not found" });

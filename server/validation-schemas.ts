@@ -82,7 +82,13 @@ export const insertLineItemSchema = baseLineItemSchema.extend({
     .refine(val => {
       const num = parseFloat(val);
       return !isNaN(num) && num > 0 && num <= 999999;
-    }, "Quantity must be between 0.01 and 999,999"),
+    }, "Quantity must be between 0.01 and 999,999")
+    .refine(val => {
+      const num = parseFloat(val);
+      // Limit to 2 decimal places for quantity
+      const rounded = Math.round(num * 100) / 100;
+      return num === rounded || Math.abs(num - rounded) < 0.001;
+    }, "Quantity can have maximum 2 decimal places"),
   retailPrice: z.union([z.string(), z.number(), z.null()])
     .transform(val => val === null ? null : (typeof val === 'string' ? val : val.toString()))
     .optional()
@@ -96,7 +102,13 @@ export const insertLineItemSchema = baseLineItemSchema.extend({
     .refine(val => {
       const num = parseFloat(val);
       return !isNaN(num) && num >= 0 && num <= 10000000;
-    }, "Unit price must be between 0 and 10,000,000"),
+    }, "Unit price must be between 0 and 10,000,000")
+    .refine(val => {
+      const num = parseFloat(val);
+      // Ensure no more than 2 decimal places for currency
+      const rounded = Math.round(num * 100) / 100;
+      return Math.abs(num - rounded) < 0.001;
+    }, "Unit price can have maximum 2 decimal places"),
   markupType: z.enum(['percentage', 'dollar'], {
     errorMap: () => ({ message: "Markup type must be either 'percentage' or 'dollar'" })
   }),
@@ -105,7 +117,13 @@ export const insertLineItemSchema = baseLineItemSchema.extend({
     .refine(val => {
       const num = parseFloat(val);
       return !isNaN(num) && num >= 0 && num <= 1000;
-    }, "Markup value must be between 0 and 1000"),
+    }, "Markup value must be between 0 and 1000")
+    .refine(val => {
+      const num = parseFloat(val);
+      // For percentage markup, limit to 2 decimal places
+      const rounded = Math.round(num * 100) / 100;
+      return Math.abs(num - rounded) < 0.001;
+    }, "Markup value can have maximum 2 decimal places"),
   discountType: z.enum(['percentage', 'dollar'], {
     errorMap: () => ({ message: "Discount type must be either 'percentage' or 'dollar'" })
   }).optional(),
@@ -113,8 +131,14 @@ export const insertLineItemSchema = baseLineItemSchema.extend({
     .transform(val => typeof val === 'string' ? val : val.toString())
     .refine(val => {
       const num = parseFloat(val);
-      return !isNaN(num) && num >= 0 && num <= 100;
-    }, "Discount value must be between 0 and 100"),
+      return !isNaN(num) && num >= 0 && num <= 10000000;
+    }, "Discount value must be between 0 and 10,000,000")
+    .refine(val => {
+      const num = parseFloat(val);
+      // Ensure no more than 2 decimal places
+      const rounded = Math.round(num * 100) / 100;
+      return Math.abs(num - rounded) < 0.001;
+    }, "Discount value can have maximum 2 decimal places"),
   isAccessory: z.boolean().optional(),
   configData: z.any().optional()
 });

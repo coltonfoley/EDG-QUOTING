@@ -78,6 +78,7 @@ export interface IStorage {
   deleteProductAccessory(id: number): Promise<boolean>;
 
   // Line item methods
+  getLineItem(id: number): Promise<LineItem | undefined>;
   getLineItemsByQuoteId(quoteId: number): Promise<LineItem[]>;
   createLineItem(lineItem: InsertLineItem): Promise<LineItem>;
   updateLineItem(id: number, lineItem: Partial<InsertLineItem>): Promise<LineItem | undefined>;
@@ -254,6 +255,10 @@ export class MemStorage {
   }
 
   // Line item methods
+  async getLineItem(id: number): Promise<LineItem | undefined> {
+    return this.lineItems.get(id);
+  }
+
   async getLineItemsByQuoteId(quoteId: number): Promise<LineItem[]> {
     return Array.from(this.lineItems.values()).filter(item => item.quoteId === quoteId);
   }
@@ -616,6 +621,11 @@ export class DatabaseStorage implements IStorage {
     // Then delete the quote
     const result = await db.delete(quotes).where(eq(quotes.id, id));
     return (result.rowCount || 0) > 0;
+  }
+
+  async getLineItem(id: number): Promise<LineItem | undefined> {
+    const [lineItem] = await db.select().from(lineItems).where(eq(lineItems.id, id));
+    return lineItem;
   }
 
   async getLineItemsByQuoteId(quoteId: number): Promise<LineItem[]> {
