@@ -220,7 +220,8 @@ export default function Quotes() {
                   onImportComplete={() => {
                     setImportDialogOpen(false);
                     // Refetch quotes to show the new import
-                    window.location.reload();
+                    queryClient.invalidateQueries({ queryKey: ["/api/quotes"] });
+                    queryClient.invalidateQueries({ queryKey: ["/api/accounts"] });
                   }}
                   onClose={() => setImportDialogOpen(false)}
                 />
