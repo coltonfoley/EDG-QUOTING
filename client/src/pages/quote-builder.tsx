@@ -19,10 +19,7 @@ import type { UploadedImage } from "@/components/image-uploader";
 
 export default function QuoteBuilder() {
   const params = useParams();
-  // Extract id from either /quotes/:id/edit or /quotes/:id patterns
-  const rawPath = window.location.pathname;
-  const isEditRoute = rawPath.includes('/edit');
-  const id = isEditRoute ? rawPath.split('/')[2] : params.id;
+  const id = params.id;
   
   const isNewQuote = !id || id === "new";
   const quoteId = id && id !== "new" ? parseInt(id) : undefined;
