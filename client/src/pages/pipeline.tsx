@@ -2,7 +2,6 @@ import { useState, useMemo, useEffect, useCallback, memo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { AppHeader } from "@/components/app-header";
 import { PipelineCard } from "@/components/pipeline-card";
-import { LeadCreationModal } from "@/components/lead-creation-modal";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -172,7 +171,6 @@ export default function Pipeline() {
   const [filterDateRange, setFilterDateRange] = useState("all");
   const [filterAccountType, setFilterAccountType] = useState("all");
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [leadModalOpen, setLeadModalOpen] = useState(false);
   const [lostReasonDialog, setLostReasonDialog] = useState<{
     open: boolean;
     quoteId: number | null;
@@ -469,14 +467,6 @@ export default function Pipeline() {
             <h2 className="text-3xl font-bold text-edg-black">Sales Pipeline</h2>
             <p className="text-edg-grey mt-2">Track and manage your sales opportunities</p>
           </div>
-          <Button 
-            onClick={() => setLeadModalOpen(true)}
-            className="bg-blue-600 hover:bg-blue-700"
-            data-testid="button-new-lead"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            New Lead
-          </Button>
         </div>
 
         {/* Stats Cards */}
@@ -631,11 +621,6 @@ export default function Pipeline() {
         </Card>
       </div>
 
-      {/* Lead Creation Modal */}
-      <LeadCreationModal 
-        open={leadModalOpen} 
-        onClose={() => setLeadModalOpen(false)} 
-      />
 
       {/* Lost Reason Dialog */}
       <Dialog open={lostReasonDialog.open} onOpenChange={(open) => {
