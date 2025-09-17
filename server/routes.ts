@@ -1,9 +1,31 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertCustomerSchema, insertQuoteSchema, insertLineItemSchema, insertProductSchema, insertContractTemplateSchema, insertProposalTemplateSchema, insertPricingTableSchema, insertProductAccessorySchema } from "@shared/schema";
 import { z } from "zod";
 import { setupAuth, isAuthenticated } from "./replitAuth";
+import {
+  insertCustomerSchema,
+  insertQuoteSchema,
+  insertLineItemSchema,
+  insertProductSchema,
+  insertContractTemplateSchema,
+  insertProposalTemplateSchema,
+  insertPricingTableSchema,
+  insertProductAccessorySchema,
+  createUserSchema,
+  updateUserSchema,
+  idParamSchema,
+  queryIdParamSchema,
+  productIdParamSchema,
+  uploadUrlSchema,
+  finalizeUploadSchema,
+  imageProxySchema,
+  calculatePriceSchema,
+  bulkDeleteSchema,
+  bulkUpdateSchema,
+  bulkUpdateProductsSchema,
+  bulkUploadPricingSchema
+} from "./validation-schemas";
 import multer from "multer";
 import * as XLSX from "xlsx";
 import { parsePDF } from "./pdf-parser";
@@ -70,11 +92,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get upload URL for image uploads
   app.post("/api/images/upload-url", isAuthenticated, async (req, res) => {
     try {
-      const { imageType, filename } = req.body;
-      
-      if (!imageType || !filename) {
-        return res.status(400).json({ message: "imageType and filename are required" });
+      // Validate request body
+      const validatedData = uploadUrlSchema.safeParse(req.body);
+      if (!validatedData.success) {
+        return res.status(400).json({ 
+          message: "Invalid request data", 
+          errors: validatedData.error.errors 
+        });
       }
+      
+      const { imageType, filename } = validatedData.data;
       
       const objectStorageService = new ObjectStorageService();
       // Create a custom path based on image type and filename
@@ -100,11 +127,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Set ACL policy after successful upload
   app.post("/api/images/finalize-upload", isAuthenticated, async (req, res) => {
     try {
-      const { objectPath } = req.body;
+      // Validate request body
+      const validatedData = finalizeUploadSchema.safeParse(req.body);
+      if (!validatedData.success) {
+        return res.status(400).json({ 
+          message: "Invalid request data", 
+          errors: validatedData.error.errors 
+        });
+      }
+      
+      const { objectPath } = validatedData.data;
       const userId = req.user?.id;
       
-      if (!objectPath || !userId) {
-        return res.status(400).json({ message: "objectPath and authenticated user required" });
+      if (!userId) {
+        return res.status(401).json({ message: "User authentication required" });
       }
       
       const objectStorageService = new ObjectStorageService();
@@ -158,16 +194,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Image proxy endpoint to bypass CORS for object storage images
   app.get("/api/image-proxy", isAuthenticated, async (req, res) => {
     try {
-      const imageUrl = req.query.url as string;
-      
-      if (!imageUrl) {
-        return res.status(400).json({ message: "URL parameter required" });
+      // Validate query parameters
+      const validatedData = imageProxySchema.safeParse(req.query);
+      if (!validatedData.success) {
+        return res.status(400).json({ 
+          message: "Invalid request parameters", 
+          errors: validatedData.error.errors 
+        });
       }
       
-      // Only allow Replit storage URLs for security
-      if (!imageUrl.includes('storage.replit.com') && !imageUrl.includes('/objects/')) {
-        return res.status(403).json({ message: "Only Replit storage URLs allowed" });
-      }
+      const imageUrl = validatedData.data.url;
       
       console.log(`🔧 Proxying image request: ${imageUrl}`);
       
@@ -216,8 +252,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Customer routes (protected)
   app.get("/api/customers/:id", isAuthenticated, async (req, res) => {
     try {
-      const id = parseInt(req.params.id);
-      const customer = await storage.getCustomer(id);
+      // Validate ID parameter
+      const params = idParamSchema.safeParse(req.params);
+      if (!params.success) {
+        return res.status(400).json({ 
+          message: "Invalid request parameters", 
+          errors: params.error.errors 
+        });
+      }
+      
+      const customer = await storage.getCustomer(params.data.id);
       if (!customer) {
         return res.status(404).json({ message: "Customer not found" });
       }
@@ -249,9 +293,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.put("/api/customers/:id", isAuthenticated, async (req, res) => {
     try {
-      const id = parseInt(req.params.id);
+      // Validate ID parameter
+      const params = idParamSchema.safeParse(req.params);
+      if (!params.success) {
+        return res.status(400).json({ 
+          message: "Invalid request parameters", 
+          errors: params.error.errors 
+        });
+      }
+      
       const customerData = insertCustomerSchema.partial().parse(req.body);
-      const customer = await storage.updateCustomer(id, customerData);
+      const customer = await storage.updateCustomer(params.data.id, customerData);
       if (!customer) {
         return res.status(404).json({ message: "Customer not found" });
       }
@@ -279,8 +331,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/quotes/:id", isAuthenticated, async (req, res) => {
     try {
-      const id = parseInt(req.params.id);
-      const quote = await storage.getQuoteWithDetails(id);
+      // Validate ID parameter
+      const params = idParamSchema.safeParse(req.params);
+      if (!params.success) {
+        return res.status(400).json({ 
+          message: "Invalid request parameters", 
+          errors: params.error.errors 
+        });
+      }
+      
+      const quote = await storage.getQuoteWithDetails(params.data.id);
       if (!quote) {
         return res.status(404).json({ message: "Quote not found" });
       }
@@ -308,16 +368,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.put("/api/quotes/:id", isAuthenticated, async (req, res) => {
     try {
-      const id = parseInt(req.params.id);
+      // Validate ID parameter
+      const params = idParamSchema.safeParse(req.params);
+      if (!params.success) {
+        return res.status(400).json({ 
+          message: "Invalid request parameters", 
+          errors: params.error.errors 
+        });
+      }
+      
       const quoteData = insertQuoteSchema.partial().parse(req.body);
       
       // Get the original quote to check status change
-      const originalQuote = await storage.getQuote(id);
+      const originalQuote = await storage.getQuote(params.data.id);
       if (!originalQuote) {
         return res.status(404).json({ message: "Quote not found" });
       }
       
-      const quote = await storage.updateQuote(id, quoteData);
+      const quote = await storage.updateQuote(params.data.id, quoteData);
       if (!quote) {
         return res.status(404).json({ message: "Quote not found" });
       }
@@ -333,8 +401,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.delete("/api/quotes/:id", isAuthenticated, async (req, res) => {
     try {
-      const id = parseInt(req.params.id);
-      const deleted = await storage.deleteQuote(id);
+      // Validate ID parameter
+      const params = idParamSchema.safeParse(req.params);
+      if (!params.success) {
+        return res.status(400).json({ 
+          message: "Invalid request parameters", 
+          errors: params.error.errors 
+        });
+      }
+      
+      const deleted = await storage.deleteQuote(params.data.id);
       if (!deleted) {
         return res.status(404).json({ message: "Quote not found" });
       }
@@ -386,8 +462,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Line item routes (protected)
   app.get("/api/quotes/:quoteId/line-items", isAuthenticated, async (req, res) => {
     try {
-      const quoteId = parseInt(req.params.quoteId);
-      const lineItems = await storage.getLineItemsByQuoteId(quoteId);
+      // Validate quote ID parameter
+      const params = queryIdParamSchema.safeParse(req.params);
+      if (!params.success) {
+        return res.status(400).json({ 
+          message: "Invalid request parameters", 
+          errors: params.error.errors 
+        });
+      }
+      
+      const lineItems = await storage.getLineItemsByQuoteId(params.data.quoteId);
       res.json(lineItems);
     } catch (error) {
       res.status(500).json({ message: "Internal server error" });
@@ -396,8 +480,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/quotes/:quoteId/line-items", isAuthenticated, async (req, res) => {
     try {
-      const quoteId = parseInt(req.params.quoteId);
-      const lineItemData = insertLineItemSchema.parse({ ...req.body, quoteId });
+      // Validate quote ID parameter
+      const params = queryIdParamSchema.safeParse(req.params);
+      if (!params.success) {
+        return res.status(400).json({ 
+          message: "Invalid request parameters", 
+          errors: params.error.errors 
+        });
+      }
+      
+      const lineItemData = insertLineItemSchema.parse({ ...req.body, quoteId: params.data.quoteId });
       const lineItem = await storage.createLineItem(lineItemData);
       res.status(201).json(lineItem);
     } catch (error) {
@@ -411,9 +503,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.put("/api/line-items/:id", isAuthenticated, async (req, res) => {
     try {
-      const id = parseInt(req.params.id);
+      // Validate ID parameter
+      const params = idParamSchema.safeParse(req.params);
+      if (!params.success) {
+        return res.status(400).json({ 
+          message: "Invalid request parameters", 
+          errors: params.error.errors 
+        });
+      }
+      
       const lineItemData = insertLineItemSchema.partial().parse(req.body);
-      const lineItem = await storage.updateLineItem(id, lineItemData);
+      const lineItem = await storage.updateLineItem(params.data.id, lineItemData);
       if (!lineItem) {
         return res.status(404).json({ message: "Line item not found" });
       }
@@ -428,8 +528,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.delete("/api/line-items/:id", isAuthenticated, async (req, res) => {
     try {
-      const id = parseInt(req.params.id);
-      const deleted = await storage.deleteLineItem(id);
+      // Validate ID parameter
+      const params = idParamSchema.safeParse(req.params);
+      if (!params.success) {
+        return res.status(400).json({ 
+          message: "Invalid request parameters", 
+          errors: params.error.errors 
+        });
+      }
+      
+      const deleted = await storage.deleteLineItem(params.data.id);
       if (!deleted) {
         return res.status(404).json({ message: "Line item not found" });
       }
@@ -442,19 +550,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Bulk operations for line items
   app.delete("/api/line-items/bulk", isAuthenticated, async (req: any, res) => {
     try {
-      const { ids } = req.body;
-      if (!Array.isArray(ids) || ids.length === 0) {
-        return res.status(400).json({ message: "ids array is required and must not be empty" });
-      }
-
-      // Validate all integers
-      const lineItemIds = ids.map(id => parseInt(id)).filter(id => !isNaN(id));
-      if (lineItemIds.length !== ids.length) {
-        return res.status(400).json({ message: "All IDs must be valid integers" });
+      // Validate request body
+      const validatedData = bulkDeleteSchema.safeParse(req.body);
+      if (!validatedData.success) {
+        return res.status(400).json({ 
+          message: "Invalid request data", 
+          errors: validatedData.error.errors 
+        });
       }
 
       // Authorization check: validate ownership and same quote
-      const ownership = await storage.validateLineItemsOwnership(lineItemIds, req.user?.id);
+      const ownership = await storage.validateLineItemsOwnership(validatedData.data.ids, req.user?.id);
       if (!ownership.isValid) {
         return res.status(403).json({ message: "Unauthorized: You can only delete your own line items from the same quote" });
       }
@@ -464,7 +570,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Unauthorized: You don't have access to this quote" });
       }
 
-      const deletedCount = await storage.bulkDeleteLineItems(lineItemIds);
+      const deletedCount = await storage.bulkDeleteLineItems(validatedData.data.ids);
       res.json({ deletedCount });
     } catch (error) {
       console.error("Bulk delete error:", error);
@@ -474,22 +580,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.put("/api/line-items/bulk", isAuthenticated, async (req: any, res) => {
     try {
-      const { ids, updates } = req.body;
-      if (!Array.isArray(ids) || ids.length === 0) {
-        return res.status(400).json({ message: "ids array is required and must not be empty" });
-      }
-      if (!updates || typeof updates !== 'object') {
-        return res.status(400).json({ message: "updates object is required" });
-      }
-
-      // Validate all integers
-      const lineItemIds = ids.map(id => parseInt(id)).filter(id => !isNaN(id));
-      if (lineItemIds.length !== ids.length) {
-        return res.status(400).json({ message: "All IDs must be valid integers" });
+      // Validate request body
+      const validatedData = bulkUpdateSchema.safeParse(req.body);
+      if (!validatedData.success) {
+        return res.status(400).json({ 
+          message: "Invalid request data", 
+          errors: validatedData.error.errors 
+        });
       }
 
       // Authorization check: validate ownership and same quote
-      const ownership = await storage.validateLineItemsOwnership(lineItemIds, req.user?.id);
+      const ownership = await storage.validateLineItemsOwnership(validatedData.data.ids, req.user?.id);
       if (!ownership.isValid) {
         return res.status(403).json({ message: "Unauthorized: You can only update your own line items from the same quote" });
       }
@@ -499,58 +600,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Unauthorized: You don't have access to this quote" });
       }
 
-      // Whitelist allowed fields to prevent mass assignment vulnerabilities
-      const allowedFields = ['discountType', 'discountValue', 'markupType', 'markupValue', 'quantity', 'unitPrice', 'description'];
-      const safeUpdates: any = {};
-      
-      for (const [key, value] of Object.entries(updates)) {
-        if (allowedFields.includes(key)) {
-          safeUpdates[key] = value;
-        }
-      }
-
-      if (Object.keys(safeUpdates).length === 0) {
-        return res.status(400).json({ message: "No valid fields provided for update" });
-      }
-
-      // Validate bounds for discount and markup values
-      if (safeUpdates.discountValue !== undefined) {
-        const discountValue = parseFloat(safeUpdates.discountValue);
-        if (isNaN(discountValue) || discountValue < 0) {
-          return res.status(400).json({ message: "Discount value must be a positive number" });
-        }
-        if (safeUpdates.discountType === 'percentage' && discountValue > 100) {
-          return res.status(400).json({ message: "Discount percentage cannot exceed 100%" });
-        }
-      }
-
-      if (safeUpdates.markupValue !== undefined) {
-        const markupValue = parseFloat(safeUpdates.markupValue);
-        if (isNaN(markupValue) || markupValue < 0) {
-          return res.status(400).json({ message: "Markup value must be a positive number" });
-        }
-        if (safeUpdates.markupType === 'percentage' && markupValue > 1000) {
-          return res.status(400).json({ message: "Markup percentage cannot exceed 1000%" });
-        }
-      }
-
-      if (safeUpdates.quantity !== undefined) {
-        const quantity = parseFloat(safeUpdates.quantity);
-        if (isNaN(quantity) || quantity <= 0) {
-          return res.status(400).json({ message: "Quantity must be a positive number" });
-        }
-      }
-
-      if (safeUpdates.unitPrice !== undefined) {
-        const unitPrice = parseFloat(safeUpdates.unitPrice);
-        if (isNaN(unitPrice) || unitPrice < 0) {
-          return res.status(400).json({ message: "Unit price must be a non-negative number" });
-        }
-      }
-      
-      // Validate the updates object against the schema (partial)
-      const validatedUpdates = insertLineItemSchema.partial().parse(safeUpdates);
-      const updatedCount = await storage.bulkUpdateLineItems(lineItemIds, validatedUpdates);
+      const updatedCount = await storage.bulkUpdateLineItems(validatedData.data.ids, validatedData.data.updates);
       res.json({ updatedCount });
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -589,8 +639,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/products/:id", isAuthenticated, async (req, res) => {
     try {
-      const id = parseInt(req.params.id);
-      const product = await storage.getProduct(id);
+      // Validate ID parameter
+      const params = idParamSchema.safeParse(req.params);
+      if (!params.success) {
+        return res.status(400).json({ 
+          message: "Invalid request parameters", 
+          errors: params.error.errors 
+        });
+      }
+      
+      const product = await storage.getProduct(params.data.id);
       if (!product) {
         return res.status(404).json({ message: "Product not found" });
       }
@@ -615,9 +673,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.put("/api/products/:id", isAuthenticated, async (req, res) => {
     try {
-      const id = parseInt(req.params.id);
+      // Validate ID parameter
+      const params = idParamSchema.safeParse(req.params);
+      if (!params.success) {
+        return res.status(400).json({ 
+          message: "Invalid request parameters", 
+          errors: params.error.errors 
+        });
+      }
+      
       const productData = insertProductSchema.partial().parse(req.body);
-      const product = await storage.updateProduct(id, productData);
+      const product = await storage.updateProduct(params.data.id, productData);
       if (!product) {
         return res.status(404).json({ message: "Product not found" });
       }
@@ -632,8 +698,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.delete("/api/products/:id", isAuthenticated, async (req, res) => {
     try {
-      const id = parseInt(req.params.id);
-      const deleted = await storage.deleteProduct(id);
+      // Validate ID parameter
+      const params = idParamSchema.safeParse(req.params);
+      if (!params.success) {
+        return res.status(400).json({ 
+          message: "Invalid request parameters", 
+          errors: params.error.errors 
+        });
+      }
+      
+      const deleted = await storage.deleteProduct(params.data.id);
       if (!deleted) {
         return res.status(404).json({ message: "Product not found" });
       }
@@ -646,8 +720,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Enhanced product endpoint with pricing tables and accessories
   app.get("/api/products/:id/with-details", isAuthenticated, async (req, res) => {
     try {
-      const id = parseInt(req.params.id);
-      const productWithDetails = await storage.getProductWithDetails(id);
+      // Validate ID parameter
+      const params = idParamSchema.safeParse(req.params);
+      if (!params.success) {
+        return res.status(400).json({ 
+          message: "Invalid request parameters", 
+          errors: params.error.errors 
+        });
+      }
+      
+      const productWithDetails = await storage.getProductWithDetails(params.data.id);
       if (!productWithDetails) {
         return res.status(404).json({ message: "Product not found" });
       }
@@ -660,8 +742,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Pricing tables routes
   app.get("/api/products/:productId/pricing-tables", isAuthenticated, async (req, res) => {
     try {
-      const productId = parseInt(req.params.productId);
-      const pricingTables = await storage.getPricingTablesByProductId(productId);
+      // Validate product ID parameter
+      const params = productIdParamSchema.safeParse(req.params);
+      if (!params.success) {
+        return res.status(400).json({ 
+          message: "Invalid request parameters", 
+          errors: params.error.errors 
+        });
+      }
+      
+      const pricingTables = await storage.getPricingTablesByProductId(params.data.productId);
       res.json(pricingTables);
     } catch (error) {
       res.status(500).json({ message: "Internal server error" });
@@ -670,8 +760,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/products/:productId/pricing-tables", isAuthenticated, async (req, res) => {
     try {
-      const productId = parseInt(req.params.productId);
-      const pricingData = insertPricingTableSchema.parse({ ...req.body, productId });
+      // Validate product ID parameter
+      const params = productIdParamSchema.safeParse(req.params);
+      if (!params.success) {
+        return res.status(400).json({ 
+          message: "Invalid request parameters", 
+          errors: params.error.errors 
+        });
+      }
+      
+      const pricingData = insertPricingTableSchema.parse({ ...req.body, productId: params.data.productId });
       const pricingTable = await storage.createPricingTable(pricingData);
       res.status(201).json(pricingTable);
     } catch (error) {
@@ -770,14 +868,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Calculate pricing for configurable products
   app.post("/api/products/:productId/calculate-price", isAuthenticated, async (req, res) => {
     try {
-      const productId = parseInt(req.params.productId);
-      const { length, width } = req.body;
-      
-      if (!length || !width) {
-        return res.status(400).json({ message: "Length and width are required" });
+      // Validate product ID parameter
+      const params = productIdParamSchema.safeParse(req.params);
+      if (!params.success) {
+        return res.status(400).json({ 
+          message: "Invalid request parameters", 
+          errors: params.error.errors 
+        });
       }
       
-      const price = await storage.calculateConfigurableProductPrice(productId, parseFloat(length), parseFloat(width));
+      // Validate request body
+      const validatedData = calculatePriceSchema.safeParse(req.body);
+      if (!validatedData.success) {
+        return res.status(400).json({ 
+          message: "Invalid request data", 
+          errors: validatedData.error.errors 
+        });
+      }
+      
+      const { length, width } = validatedData.data;
+      const price = await storage.calculateConfigurableProductPrice(params.data.productId, length, width);
       if (price === null) {
         return res.status(404).json({ message: "No pricing found for these dimensions" });
       }
@@ -812,43 +922,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Bulk upload pricing table data
   app.post("/api/products/:productId/pricing-tables/bulk-upload", isAuthenticated, async (req, res) => {
     try {
-      const productId = parseInt(req.params.productId);
-      const { pricingData } = req.body;
-
-      if (!Array.isArray(pricingData) || pricingData.length === 0) {
-        return res.status(400).json({ message: "Valid pricing data array is required" });
+      // Validate product ID parameter
+      const params = productIdParamSchema.safeParse(req.params);
+      if (!params.success) {
+        return res.status(400).json({ 
+          message: "Invalid request parameters", 
+          errors: params.error.errors 
+        });
       }
-
-      // Validate pricing data format
-      for (const item of pricingData) {
-        if (!item.lengthMin || !item.lengthMax || !item.widthMin || !item.widthMax || !item.retailPrice || !item.basePrice || 
-            item.lengthMin <= 0 || item.lengthMax <= 0 || item.widthMin <= 0 || item.widthMax <= 0 || item.retailPrice <= 0 || item.basePrice <= 0) {
-          return res.status(400).json({ 
-            message: "Each pricing entry must have valid lengthMin, lengthMax, widthMin, widthMax, retailPrice, and basePrice values" 
-          });
-        }
-        
-        // Validate that min values are less than max values
-        if (item.lengthMin >= item.lengthMax || item.widthMin >= item.widthMax) {
-          return res.status(400).json({ 
-            message: "Min values must be less than max values for each dimension" 
-          });
-        }
+      
+      // Validate request body
+      const validatedData = bulkUploadPricingSchema.safeParse(req.body);
+      if (!validatedData.success) {
+        return res.status(400).json({ 
+          message: "Invalid pricing data", 
+          errors: validatedData.error.errors 
+        });
       }
 
       // Clear existing pricing tables for this product
-      await storage.deletePricingTablesByProductId(productId);
+      await storage.deletePricingTablesByProductId(params.data.productId);
 
       const results = [];
-      for (const item of pricingData) {
+      for (const item of validatedData.data.pricingData) {
         const pricingTable = await storage.createPricingTable({
-          productId,
-          lengthMin: parseFloat(item.lengthMin.toString()).toString(),
-          lengthMax: parseFloat(item.lengthMax.toString()).toString(),
-          widthMin: parseFloat(item.widthMin.toString()).toString(),
-          widthMax: parseFloat(item.widthMax.toString()).toString(),
-          retailPrice: parseFloat(item.retailPrice.toString()).toString(),
-          basePrice: parseFloat(item.basePrice.toString()).toString()
+          productId: params.data.productId,
+          lengthMin: item.lengthMin.toString(),
+          lengthMax: item.lengthMax.toString(),
+          widthMin: item.widthMin.toString(),
+          widthMax: item.widthMax.toString(),
+          retailPrice: item.retailPrice.toString(),
+          basePrice: item.basePrice.toString()
         });
         results.push(pricingTable);
       }
@@ -886,12 +990,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Admin access required" });
       }
 
-      const existingUser = await storage.getUserByUsername(req.body.username);
+      // Validate user data
+      const validatedData = createUserSchema.safeParse(req.body);
+      if (!validatedData.success) {
+        return res.status(400).json({ 
+          message: "Invalid user data", 
+          errors: validatedData.error.errors 
+        });
+      }
+
+      const existingUser = await storage.getUserByUsername(validatedData.data.username);
       if (existingUser) {
         return res.status(400).json({ message: "Username already exists" });
       }
 
-      const user = await storage.createUser(req.body);
+      const user = await storage.createUser(validatedData.data);
       res.status(201).json(user);
     } catch (error) {
       console.error("Error creating user:", error);
@@ -907,17 +1020,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const userId = req.params.id; // Don't parse as int, keep as string/number as needed
-      const updateData = req.body;
+      
+      // Validate update data
+      const validatedData = updateUserSchema.safeParse(req.body);
+      if (!validatedData.success) {
+        return res.status(400).json({ 
+          message: "Invalid user data", 
+          errors: validatedData.error.errors 
+        });
+      }
 
       // If updating username, check for conflicts
-      if (updateData.username) {
-        const existingUser = await storage.getUserByUsername(updateData.username);
+      if (validatedData.data.username) {
+        const existingUser = await storage.getUserByUsername(validatedData.data.username);
         if (existingUser && existingUser.id.toString() !== userId.toString()) {
           return res.status(400).json({ message: "Username already exists" });
         }
       }
 
-      const updatedUser = await storage.updateUser(userId, updateData);
+      const updatedUser = await storage.updateUser(userId, validatedData.data);
       if (!updatedUser) {
         return res.status(404).json({ message: "User not found" });
       }
@@ -1077,17 +1198,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Admin access required" });
       }
 
-      const { productIds, updates } = req.body;
-      
-      if (!Array.isArray(productIds) || productIds.length === 0) {
-        return res.status(400).json({ message: "Product IDs array is required" });
+      // Validate request body
+      const validatedData = bulkUpdateProductsSchema.safeParse(req.body);
+      if (!validatedData.success) {
+        return res.status(400).json({ 
+          message: "Invalid request data", 
+          errors: validatedData.error.errors 
+        });
       }
 
-      if (!updates || typeof updates !== 'object') {
-        return res.status(400).json({ message: "Updates object is required" });
-      }
-
-      const updatedCount = await storage.bulkUpdateProducts(productIds, updates);
+      const updatedCount = await storage.bulkUpdateProducts(
+        validatedData.data.productIds, 
+        validatedData.data.updates
+      );
       
       res.json({
         message: `Successfully updated ${updatedCount} products`,
