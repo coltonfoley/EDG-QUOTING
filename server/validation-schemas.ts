@@ -8,7 +8,8 @@ import {
   insertProposalTemplateSchema as baseProposalTemplateSchema,
   insertPricingTableSchema as basePricingTableSchema,
   insertProductAccessorySchema as baseProductAccessorySchema,
-  insertUserSchema as baseUserSchema
+  insertUserSchema as baseUserSchema,
+  insertLeadSchema as baseLeadSchema
 } from "@shared/schema";
 
 // Common validation schemas
@@ -22,6 +23,10 @@ export const queryIdParamSchema = z.object({
 
 export const productIdParamSchema = z.object({
   productId: z.string().regex(/^\d+$/, "Product ID must be a valid positive integer").transform(val => parseInt(val))
+});
+
+export const leadIdParamSchema = z.object({
+  leadId: z.string().regex(/^\d+$/, "Lead ID must be a valid positive integer").transform(val => parseInt(val))
 });
 
 // Enhanced Customer validation
@@ -477,4 +482,54 @@ export const insertProductAccessorySchema = baseProductAccessorySchema.extend({
   isRequired: z.boolean().optional(),
   displayOrder: z.number().int().min(0).max(999).optional(),
   category: z.string().max(100, "Category name is too long").optional()
+});
+
+// Enhanced Lead validation
+export const insertLeadSchema = baseLeadSchema.extend({
+  title: z.string().min(1, "Title is required").max(255, "Title is too long"),
+  description: z.string().max(5000, "Description is too long").optional(),
+  contactName: z.string().min(1, "Contact name is required").max(255, "Contact name is too long"),
+  email: z.string().email("Invalid email format").max(255, "Email is too long"),
+  phone: z.string()
+    .min(10, "Phone number must be at least 10 digits")
+    .max(20, "Phone number is too long")
+    .regex(/^[\d\s\-\+\(\)]+$/, "Phone number contains invalid characters")
+    .optional(),
+  company: z.string().max(255, "Company name is too long").optional(),
+  source: z.string().max(255, "Source is too long").optional(),
+  stage: z.enum(['new', 'contacted', 'qualified', 'proposal', 'negotiation', 'closed_won', 'closed_lost'], {
+    errorMap: () => ({ message: "Stage must be one of: new, contacted, qualified, proposal, negotiation, closed_won, closed_lost" })
+  }).default('new'),
+  value: z.union([z.string(), z.number(), z.null()])
+    .transform(val => val === null ? null : (typeof val === 'string' ? val : val.toString()))
+    .optional()
+    .refine(val => {
+      if (val === null || val === undefined) return true;
+      const num = parseFloat(val);
+      return !isNaN(num) && num >= 0 && num <= 10000000;
+    }, "Value must be between 0 and 10,000,000"),
+  priority: z.enum(['low', 'medium', 'high'], {
+    errorMap: () => ({ message: "Priority must be one of: low, medium, high" })
+  }).default('medium'),
+  assignedTo: z.number().int().positive("Assigned to must be a valid user ID").optional(),
+  notes: z.string().max(10000, "Notes are too long").optional(),
+  customerId: z.number().int().positive().optional(),
+  quoteId: z.number().int().positive().optional()
+});
+
+// Lead stage update validation
+export const updateLeadStageSchema = z.object({
+  stage: z.enum(['new', 'contacted', 'qualified', 'proposal', 'negotiation', 'closed_won', 'closed_lost'], {
+    errorMap: () => ({ message: "Stage must be one of: new, contacted, qualified, proposal, negotiation, closed_won, closed_lost" })
+  })
+});
+
+// Lead query parameters validation
+export const leadQueryParamsSchema = z.object({
+  stage: z.enum(['new', 'contacted', 'qualified', 'proposal', 'negotiation', 'closed_won', 'closed_lost']).optional(),
+  assignedTo: z.string().regex(/^\d+$/, "Assigned to must be a valid positive integer").transform(val => parseInt(val)).optional(),
+  search: z.string().max(255, "Search term is too long").optional(),
+  priority: z.enum(['low', 'medium', 'high']).optional(),
+  limit: z.string().regex(/^\d+$/, "Limit must be a positive integer").transform(val => Math.min(parseInt(val), 1000)).optional(),
+  offset: z.string().regex(/^\d+$/, "Offset must be a positive integer").transform(val => parseInt(val)).optional()
 });
