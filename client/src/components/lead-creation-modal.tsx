@@ -174,7 +174,20 @@ export function LeadCreationModal({ open, onClose }: LeadCreationModalProps) {
       return await apiRequest("POST", "/api/accounts", data);
     },
     onSuccess: (account: any) => {
+      console.log("Account created/updated:", account);
+      // Ensure we have a valid account ID
+      if (!account || !account.id) {
+        toast({
+          title: "Error",
+          description: "Invalid account response from server",
+          variant: "destructive"
+        });
+        return;
+      }
+      
+      // Set the account ID and move to next step
       setCreatedAccountId(account.id);
+      console.log("Set createdAccountId to:", account.id);
       setStep("contact");
     },
     onError: (error: any) => {
@@ -189,6 +202,8 @@ export function LeadCreationModal({ open, onClose }: LeadCreationModalProps) {
   // Create contact mutation
   const createContactMutation = useMutation({
     mutationFn: async (data: z.infer<typeof contactFormSchema>) => {
+      console.log("Contact mutation called, createdAccountId:", createdAccountId);
+      
       // Ensure we have a valid accountId
       if (!createdAccountId) {
         throw new Error("No account ID available. Please go back and create the account first.");
@@ -284,7 +299,12 @@ export function LeadCreationModal({ open, onClose }: LeadCreationModalProps) {
   };
 
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
+    <Dialog open={open} onOpenChange={(newOpen) => {
+      // Only close if the user is explicitly closing the dialog
+      if (!newOpen) {
+        handleClose();
+      }
+    }}>
       <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
@@ -470,6 +490,7 @@ export function LeadCreationModal({ open, onClose }: LeadCreationModalProps) {
 
         {/* Contact Form (New Customer - Step 2) */}
         {step === "contact" && (
+          console.log("Rendering contact step, createdAccountId:", createdAccountId) ||
           <Form {...contactForm}>
             <form onSubmit={contactForm.handleSubmit(onContactSubmit)} className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
