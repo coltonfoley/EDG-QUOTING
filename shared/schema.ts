@@ -287,7 +287,7 @@ export const insertQuoteSchema = createInsertSchema(quotes).omit({
   jobsiteAddress: z.union([z.string(), z.null()]).transform(val => val === null ? "" : val).optional(),
   estimatedStartDate: z.union([z.string(), z.null()]).transform(val => val === null ? "" : val),
   notes: z.union([z.string(), z.null()]).transform(val => val === null ? "" : val),
-  dealStage: z.enum(["lead", "qualified", "proposal", "negotiation", "won", "lost"]).default("lead"),
+  dealStage: z.enum(["new_lead", "qualifying", "consultation_scheduled", "building_estimate", "quote_sent", "closed_won", "closed_lost", "on_hold"]).default("new_lead"),
   lostReason: z.string().optional().nullable(),
   assignedRepId: z.string().optional().nullable(),
   // Image fields

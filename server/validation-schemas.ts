@@ -72,7 +72,7 @@ export const insertQuoteSchema = baseQuoteSchema.extend({
   quoteNumber: z.string().min(1, "Quote number is required").max(50, "Quote number is too long"),
   accountId: z.number().int().positive("Account ID must be a positive integer"),
   assignedRepId: z.string().max(255, "Assigned rep ID is too long").optional().nullable(),
-  dealStage: z.enum(["lead", "qualified", "proposal", "negotiation", "won", "lost"]).default("lead"),
+  dealStage: z.enum(["new_lead", "qualifying", "consultation_scheduled", "building_estimate", "quote_sent", "closed_won", "closed_lost", "on_hold"]).default("new_lead"),
   lostReason: z.string().max(500, "Lost reason is too long").optional().nullable(),
   jobsiteAddress: z.string().max(1000, "Jobsite address is too long").optional().nullable(),
   projectName: z.string().max(500, "Project name is too long").optional(),
