@@ -84,7 +84,7 @@ export const quotes = pgTable("quotes", {
   discount: decimal("discount", { precision: 5, scale: 2 }).default("0"),
   shipping: decimal("shipping", { precision: 10, scale: 2 }).default("0"),
   status: text("status").notNull().default("draft"), // draft, sent, approved, rejected
-  dealStage: text("deal_stage").notNull().default("lead"), // lead, qualified, proposal, negotiation, won, lost
+  dealStage: text("deal_stage").notNull().default("new_lead"), // new_lead, qualifying, consultation_scheduled, building_estimate, quote_sent, closed_won, closed_lost, on_hold
   lostReason: text("lost_reason"), // price, timeline, competitor, no_budget, etc.
   // Contract and signature fields
   contractTemplateId: integer("contract_template_id"), // reference to contract template
@@ -282,10 +282,10 @@ export const insertQuoteSchema = createInsertSchema(quotes).omit({
   taxRate: z.union([z.string(), z.number(), z.null()]).transform(val => val === null ? "0" : (typeof val === 'string' ? val : val.toString())),
   discount: z.union([z.string(), z.number(), z.null()]).transform(val => val === null ? "0" : (typeof val === 'string' ? val : val.toString())),
   shipping: z.union([z.string(), z.number(), z.null()]).transform(val => val === null ? "0" : (typeof val === 'string' ? val : val.toString())),
-  projectName: z.union([z.string(), z.null()]).transform(val => val === null ? "" : val),
-  projectAddress: z.union([z.string(), z.null()]).transform(val => val === null ? "" : val),
+  projectName: z.union([z.string(), z.null()]).transform(val => val === null ? "" : val).optional(),
+  projectAddress: z.union([z.string(), z.null()]).transform(val => val === null ? "" : val).optional(),
   jobsiteAddress: z.union([z.string(), z.null()]).transform(val => val === null ? "" : val).optional(),
-  estimatedStartDate: z.union([z.string(), z.null()]).transform(val => val === null ? "" : val),
+  estimatedStartDate: z.union([z.string(), z.null()]).transform(val => val === null ? "" : val).optional(),
   notes: z.union([z.string(), z.null()]).transform(val => val === null ? "" : val),
   dealStage: z.enum(["new_lead", "qualifying", "consultation_scheduled", "building_estimate", "quote_sent", "closed_won", "closed_lost", "on_hold"]).default("new_lead"),
   lostReason: z.string().optional().nullable(),
@@ -387,7 +387,7 @@ export type InsertProductAccessory = z.infer<typeof insertProductAccessorySchema
 
 export type QuoteWithDetails = Quote & {
   account: Account;
-  customer: Customer; // Legacy alias for backward compatibility
+  customer: Account; // Legacy alias for backward compatibility
   lineItems: LineItem[];
   contractTemplate?: ContractTemplate;
   proposalTemplate?: ProposalTemplate;

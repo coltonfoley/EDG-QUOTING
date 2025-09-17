@@ -31,7 +31,7 @@ interface LeadCreationModalProps {
 }
 
 type WorkflowType = "new_customer" | "existing_account" | null;
-type Step = "select" | "account" | "contact" | "project" | "search_account";
+type Step = "select" | "account" | "contact" | "quote" | "search_account";
 
 // Form schemas
 const accountFormSchema = insertAccountSchema.extend({
@@ -59,7 +59,7 @@ const contactFormSchema = z.object({
   isPrimary: z.boolean().default(true)
 });
 
-const projectFormSchema = z.object({
+const quoteFormSchema = z.object({
   projectName: z.string().min(1, "Project name is required"),
   jobsiteAddress: z.string().min(1, "Jobsite address is required"),
   dealValue: z.number().min(0).optional(),
@@ -102,8 +102,8 @@ export function LeadCreationModal({ open, onClose }: LeadCreationModalProps) {
     }
   });
 
-  const projectForm = useForm<z.infer<typeof projectFormSchema>>({
-    resolver: zodResolver(projectFormSchema),
+  const quoteForm = useForm<z.infer<typeof quoteFormSchema>>({
+    resolver: zodResolver(quoteFormSchema),
     defaultValues: {
       projectName: "",
       jobsiteAddress: "",
@@ -133,7 +133,7 @@ export function LeadCreationModal({ open, onClose }: LeadCreationModalProps) {
     setSearchTerm("");
     accountForm.reset();
     contactForm.reset();
-    projectForm.reset();
+    quoteForm.reset();
   };
 
   // Handle modal close
@@ -159,7 +159,7 @@ export function LeadCreationModal({ open, onClose }: LeadCreationModalProps) {
       setWorkflowType(null);
     } else if (step === "contact") {
       setStep("account");
-    } else if (step === "project") {
+    } else if (step === "quote") {
       if (workflowType === "new_customer") {
         setStep("contact");
       } else {
@@ -220,7 +220,7 @@ export function LeadCreationModal({ open, onClose }: LeadCreationModalProps) {
       return await apiRequest("POST", "/api/contacts", contactData);
     },
     onSuccess: () => {
-      setStep("project");
+      setStep("quote");
     },
     onError: (error: any) => {
       console.error("Contact creation error:", error);
@@ -234,7 +234,7 @@ export function LeadCreationModal({ open, onClose }: LeadCreationModalProps) {
 
   // Create quote mutation
   const createQuoteMutation = useMutation({
-    mutationFn: async (data: z.infer<typeof projectFormSchema>) => {
+    mutationFn: async (data: z.infer<typeof quoteFormSchema>) => {
       const accountId = workflowType === "new_customer" ? createdAccountId : selectedAccountId;
       
       // Generate quote number
@@ -247,12 +247,11 @@ export function LeadCreationModal({ open, onClose }: LeadCreationModalProps) {
         accountId: accountId!,
         projectName: data.projectName,
         jobsiteAddress: data.jobsiteAddress,
-        dealStage: "new_lead", // Always set to new_lead for new projects
+        dealStage: "new_lead", // Always set to new_lead for new quotes
         status: "draft",
         taxRate: "0", // Required field
         discount: "0", // Required field
         shipping: "0", // Required field
-        validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days from now
         notes: data.description || ""
       };
 
@@ -270,7 +269,7 @@ export function LeadCreationModal({ open, onClose }: LeadCreationModalProps) {
     onError: (error: any) => {
       toast({
         title: "Error",
-        description: error.message || "Failed to create project",
+        description: error.message || "Failed to create quote",
         variant: "destructive"
       });
     }
@@ -286,8 +285,8 @@ export function LeadCreationModal({ open, onClose }: LeadCreationModalProps) {
     createContactMutation.mutate(data);
   };
 
-  // Handle project form submission
-  const onProjectSubmit = (data: z.infer<typeof projectFormSchema>) => {
+  // Handle quote form submission
+  const onQuoteSubmit = (data: z.infer<typeof quoteFormSchema>) => {
     setIsCreating(true);
     createQuoteMutation.mutate(data);
   };
@@ -295,7 +294,7 @@ export function LeadCreationModal({ open, onClose }: LeadCreationModalProps) {
   // Handle account selection in existing account workflow
   const handleAccountSelect = (accountId: number) => {
     setSelectedAccountId(accountId);
-    setStep("project");
+    setStep("quote");
   };
 
   return (
@@ -311,14 +310,14 @@ export function LeadCreationModal({ open, onClose }: LeadCreationModalProps) {
             {step === "select" && "Create New Lead"}
             {step === "account" && "Step 1: Account Information"}
             {step === "contact" && "Step 2: Primary Contact"}
-            {step === "project" && "Step 3: Project Details"}
+            {step === "quote" && "Step 3: Quote Details"}
             {step === "search_account" && "Select Existing Account"}
           </DialogTitle>
           <DialogDescription>
             {step === "select" && "Choose how you want to create a new lead"}
             {step === "account" && "Enter the account details for this lead"}
             {step === "contact" && "Add the primary contact for this account"}
-            {step === "project" && "Enter the project details"}
+            {step === "quote" && "Enter the quote details"}
             {step === "search_account" && "Search and select an existing account"}
           </DialogDescription>
         </DialogHeader>
@@ -338,7 +337,7 @@ export function LeadCreationModal({ open, onClose }: LeadCreationModalProps) {
               </CardHeader>
               <CardContent>
                 <CardDescription>
-                  Create a new account, add a primary contact, and start a new project
+                  Create a new account, add a primary contact, and start a new quote
                 </CardDescription>
               </CardContent>
             </Card>
@@ -355,7 +354,7 @@ export function LeadCreationModal({ open, onClose }: LeadCreationModalProps) {
               </CardHeader>
               <CardContent>
                 <CardDescription>
-                  Select an existing account and create a new project for them
+                  Select an existing account and create a new quote for them
                 </CardDescription>
               </CardContent>
             </Card>
@@ -490,7 +489,6 @@ export function LeadCreationModal({ open, onClose }: LeadCreationModalProps) {
 
         {/* Contact Form (New Customer - Step 2) */}
         {step === "contact" && (
-          console.log("Rendering contact step, createdAccountId:", createdAccountId) ||
           <Form {...contactForm}>
             <form onSubmit={contactForm.handleSubmit(onContactSubmit)} className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -681,11 +679,11 @@ export function LeadCreationModal({ open, onClose }: LeadCreationModalProps) {
         )}
 
         {/* Project Form (Final Step) */}
-        {step === "project" && (
-          <Form {...projectForm}>
-            <form onSubmit={projectForm.handleSubmit(onProjectSubmit)} className="space-y-4">
+        {step === "quote" && (
+          <Form {...quoteForm}>
+            <form onSubmit={quoteForm.handleSubmit(onQuoteSubmit)} className="space-y-4">
               <FormField
-                control={projectForm.control}
+                control={quoteForm.control}
                 name="projectName"
                 render={({ field }) => (
                   <FormItem>
@@ -703,7 +701,7 @@ export function LeadCreationModal({ open, onClose }: LeadCreationModalProps) {
               />
 
               <FormField
-                control={projectForm.control}
+                control={quoteForm.control}
                 name="jobsiteAddress"
                 render={({ field }) => (
                   <FormItem>
@@ -721,7 +719,7 @@ export function LeadCreationModal({ open, onClose }: LeadCreationModalProps) {
               />
 
               <FormField
-                control={projectForm.control}
+                control={quoteForm.control}
                 name="dealValue"
                 render={({ field }) => (
                   <FormItem>
@@ -741,7 +739,7 @@ export function LeadCreationModal({ open, onClose }: LeadCreationModalProps) {
               />
 
               <FormField
-                control={projectForm.control}
+                control={quoteForm.control}
                 name="description"
                 render={({ field }) => (
                   <FormItem>

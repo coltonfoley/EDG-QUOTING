@@ -1,11 +1,11 @@
 import { Link } from "wouter";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { formatCurrency } from "@/lib/utils";
 import { CalendarDays, User, Building2 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import type { QuoteWithDetails } from "@shared/schema";
+import { getDealStageById, getDealStageLabel, getDealStageColor, isLostStage } from "@shared/dealStageConstants";
 
 interface PipelineCardProps {
   quote: QuoteWithDetails;
@@ -25,58 +25,9 @@ export function PipelineCard({ quote, isDragging }: PipelineCardProps) {
     return sum + total;
   }, 0);
 
-  // Get stage color
-  const getStageColor = (stage: string) => {
-    switch (stage) {
-      case "new_lead":
-        return "bg-blue-100 text-blue-800";
-      case "qualifying":
-        return "bg-purple-100 text-purple-800";
-      case "consultation_scheduled":
-        return "bg-indigo-100 text-indigo-800";
-      case "building_estimate":
-        return "bg-yellow-100 text-yellow-800";
-      case "quote_sent":
-        return "bg-orange-100 text-orange-800";
-      case "closed_won":
-        return "bg-green-100 text-green-800";
-      case "closed_lost":
-        return "bg-red-100 text-red-800";
-      case "on_hold":
-        return "bg-gray-100 text-gray-800";
-      default:
-        return "bg-gray-100 text-gray-800";
-    }
-  };
 
-  // Get stage label
-  const getStageLabel = (stage: string) => {
-    switch (stage) {
-      case "new_lead": return "New Lead";
-      case "qualifying": return "Qualifying";
-      case "consultation_scheduled": return "Consultation Scheduled";
-      case "building_estimate": return "Building Estimate";
-      case "quote_sent": return "Quote Sent";
-      case "closed_won": return "Closed-Won";
-      case "closed_lost": return "Closed-Lost";
-      case "on_hold": return "On Hold";
-      default: return stage;
-    }
-  };
-
-  // Get initials for avatar
-  const getInitials = (name: string) => {
-    const parts = name.split(' ').filter(Boolean);
-    if (parts.length === 0) return '??';
-    if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
-    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-  };
-
-  // Get assigned rep name (if available)
-  const assignedRep = quote.assignedRep;
-  const repName = assignedRep ? 
-    `${assignedRep.firstName || ''} ${assignedRep.lastName || ''}`.trim() || assignedRep.username : 
-    null;
+  // Check if quote is assigned to a rep
+  const isAssigned = !!quote.assignedRepId;
 
   return (
     <Link href={`/quotes/${quote.id}`}>
@@ -96,8 +47,8 @@ export function PipelineCard({ quote, isDragging }: PipelineCardProps) {
                 {quote.customer?.company || quote.customer?.name}
               </p>
             </div>
-            <Badge className={getStageColor(quote.dealStage || 'new_lead')} data-testid={`badge-stage-${quote.id}`}>
-              {getStageLabel(quote.dealStage || 'new_lead')}
+            <Badge className={getDealStageColor(quote.dealStage || 'new_lead')} data-testid={`badge-stage-${quote.id}`}>
+              {getDealStageLabel(quote.dealStage || 'new_lead')}
             </Badge>
           </div>
         </CardHeader>
@@ -124,28 +75,14 @@ export function PipelineCard({ quote, isDragging }: PipelineCardProps) {
               </span>
             </div>
 
-            {repName && (
-              <div className="flex items-center gap-1">
-                <Avatar className="h-6 w-6">
-                  <AvatarFallback className="text-xs">
-                    {getInitials(repName)}
-                  </AvatarFallback>
-                </Avatar>
-                <span className="text-xs text-muted-foreground">
-                  {repName.split(' ')[0]}
-                </span>
-              </div>
-            )}
-            {!repName && (
-              <div className="flex items-center text-xs text-muted-foreground">
-                <User className="h-3 w-3 mr-1" />
-                <span>Unassigned</span>
-              </div>
-            )}
+            <div className="flex items-center text-xs text-muted-foreground">
+              <User className="h-3 w-3 mr-1" />
+              <span>{isAssigned ? 'Assigned' : 'Unassigned'}</span>
+            </div>
           </div>
 
           {/* Lost reason if closed-lost */}
-          {quote.dealStage === 'closed_lost' && quote.lostReason && (
+          {isLostStage(quote.dealStage || '') && quote.lostReason && (
             <div className="mt-2 text-xs text-red-600 italic">
               Lost: {quote.lostReason}
             </div>

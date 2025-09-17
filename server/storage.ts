@@ -174,7 +174,12 @@ export class MemStorage {
     const customer: Customer = { 
       ...insertCustomer, 
       id,
-      company: insertCustomer.company || null
+      accountType: insertCustomer.accountType || "homeowner",
+      company: insertCustomer.company || null,
+      paymentTerms: insertCustomer.paymentTerms || null,
+      billingAddress: insertCustomer.billingAddress || null,
+      createdAt: new Date(),
+      updatedAt: new Date()
     };
     this.customers.set(id, customer);
     return customer;
@@ -205,7 +210,8 @@ export class MemStorage {
 
     return {
       ...quote,
-      customer,
+      account: customer, // Use customer as account for QuoteWithDetails
+      customer, // Legacy alias for backward compatibility
       lineItems: quoteLineItems,
     };
   }
@@ -219,7 +225,8 @@ export class MemStorage {
         const quoteLineItems = Array.from(this.lineItems.values()).filter(item => item.quoteId === quote.id);
         result.push({
           ...quote,
-          customer,
+          account: customer, // Use customer as account for QuoteWithDetails
+          customer, // Legacy alias for backward compatibility
           lineItems: quoteLineItems,
         });
       }
@@ -234,14 +241,16 @@ export class MemStorage {
       ...insertQuote,
       id,
       status: insertQuote.status || "draft",
+      assignedRepId: insertQuote.assignedRepId || null,
+      projectName: insertQuote.projectName || null,
+      projectAddress: insertQuote.projectAddress || null,
+      jobsiteAddress: insertQuote.jobsiteAddress || null,
       estimatedStartDate: insertQuote.estimatedStartDate || null,
       notes: insertQuote.notes || null,
       taxRate: insertQuote.taxRate || "0",
       discount: insertQuote.discount || "0",
       shipping: insertQuote.shipping || "0",
-      portfolioImages: insertQuote.portfolioImages || null,
-      technicalDiagrams: insertQuote.technicalDiagrams || null,
-      companyImages: insertQuote.companyImages || null,
+      lostReason: insertQuote.lostReason || null,
       contractTemplateId: insertQuote.contractTemplateId || null,
       customContractTerms: insertQuote.customContractTerms || null,
       issuerSignature: insertQuote.issuerSignature || null,
@@ -249,7 +258,11 @@ export class MemStorage {
       customerSignature: insertQuote.customerSignature || null,
       customerSignatureDate: insertQuote.customerSignatureDate || null,
       signatureStatus: insertQuote.signatureStatus || "unsigned",
+      portfolioImages: insertQuote.portfolioImages || null,
+      technicalDiagrams: insertQuote.technicalDiagrams || null,
+      companyImages: insertQuote.companyImages || null,
       createdAt: new Date(),
+      updatedAt: new Date()
     };
     this.quotes.set(id, quote);
     return quote;

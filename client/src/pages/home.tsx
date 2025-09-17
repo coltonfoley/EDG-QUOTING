@@ -24,18 +24,8 @@ import { useQuery } from "@tanstack/react-query";
 import { formatCurrency, cn } from "@/lib/utils";
 import { format, startOfMonth, endOfMonth, isWithinInterval } from "date-fns";
 import type { QuoteWithDetails, Account } from "@shared/schema";
+import { DEAL_STAGES, getDealStageById, isWonStage, isLostStage, isFinalStage, isActiveStage } from "@shared/dealStageConstants";
 
-// Deal stages configuration
-const DEAL_STAGES = [
-  { id: 'new_lead', label: 'New Lead', color: 'bg-blue-100 border-blue-300 text-blue-800' },
-  { id: 'qualifying', label: 'Qualifying', color: 'bg-purple-100 border-purple-300 text-purple-800' },
-  { id: 'consultation_scheduled', label: 'Consultation Scheduled', color: 'bg-indigo-100 border-indigo-300 text-indigo-800' },
-  { id: 'building_estimate', label: 'Building Estimate', color: 'bg-cyan-100 border-cyan-300 text-cyan-800' },
-  { id: 'quote_sent', label: 'Quote Sent', color: 'bg-yellow-100 border-yellow-300 text-yellow-800' },
-  { id: 'closed_won', label: 'Closed-Won', color: 'bg-green-100 border-green-300 text-green-800' },
-  { id: 'closed_lost', label: 'Closed-Lost', color: 'bg-red-100 border-red-300 text-red-800' },
-  { id: 'on_hold', label: 'On Hold', color: 'bg-gray-100 border-gray-300 text-gray-800' }
-];
 
 export default function Home() {
   // Fetch quotes
@@ -65,27 +55,27 @@ export default function Home() {
   // Calculate metrics
   const metrics = {
     totalAccounts: accounts?.length || 0,
-    activeDeals: quotes?.filter(q => !['closed_won', 'closed_lost'].includes(q.dealStage || '')).length || 0,
+    activeDeals: quotes?.filter(q => isActiveStage(q.dealStage || 'new_lead')).length || 0,
     totalDeals: quotes?.length || 0,
     wonThisMonth: quotes?.filter(q => {
-      if (q.dealStage !== 'closed_won') return false;
+      if (!isWonStage(q.dealStage || '')) return false;
       const updatedAt = new Date(q.updatedAt || q.createdAt || '');
       const start = startOfMonth(new Date());
       const end = endOfMonth(new Date());
       return isWithinInterval(updatedAt, { start, end });
     }).length || 0,
-    pipelineValue: quotes?.filter(q => !['closed_won', 'closed_lost'].includes(q.dealStage || '')).reduce((sum, quote) => {
+    pipelineValue: quotes?.filter(q => isActiveStage(q.dealStage || 'new_lead')).reduce((sum, quote) => {
       return sum + calculateQuoteTotal(quote);
     }, 0) || 0,
-    wonValue: quotes?.filter(q => q.dealStage === 'closed_won').reduce((sum, quote) => {
+    wonValue: quotes?.filter(q => isWonStage(q.dealStage || '')).reduce((sum, quote) => {
       return sum + calculateQuoteTotal(quote);
     }, 0) || 0,
     avgDealSize: quotes && quotes.length > 0 
       ? quotes.reduce((sum, q) => sum + calculateQuoteTotal(q), 0) / quotes.length 
       : 0,
     winRate: quotes && quotes.length > 0
-      ? (quotes.filter(q => q.dealStage === 'closed_won').length / 
-         quotes.filter(q => ['closed_won', 'closed_lost'].includes(q.dealStage || '')).length) * 100 || 0
+      ? (quotes.filter(q => isWonStage(q.dealStage || '')).length / 
+         quotes.filter(q => isFinalStage(q.dealStage || '')).length) * 100 || 0
       : 0
   };
 
@@ -122,9 +112,6 @@ export default function Home() {
     return format(date, 'MMM d, yyyy');
   };
 
-  const getStageConfig = (stage: string) => {
-    return DEAL_STAGES.find(s => s.id === stage) || DEAL_STAGES[0];
-  };
 
   const isLoading = quotesLoading || accountsLoading;
 
@@ -298,7 +285,7 @@ export default function Home() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {quotesByStage.filter(stage => !['closed_lost', 'on_hold'].includes(stage.id)).map((stage) => (
+                {quotesByStage.filter(stage => !isLostStage(stage.id)).map((stage) => (
                   <div key={stage.id} className="space-y-2">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
@@ -358,7 +345,7 @@ export default function Home() {
                 ) : recentActivity.length > 0 ? (
                   <div className="space-y-3">
                     {recentActivity.map((quote) => {
-                      const stage = getStageConfig(quote.dealStage || 'new_lead');
+                      const stage = getDealStageById(quote.dealStage || 'new_lead');
                       return (
                         <div key={quote.id} className="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg transition-colors">
                           <div className="flex items-center space-x-3">
@@ -379,7 +366,7 @@ export default function Home() {
                                 </Badge>
                               </div>
                               <div className="text-xs text-edg-grey">
-                                {quote.customer.name} • {formatDate(quote.updatedAt || quote.createdAt || '')}
+                                {quote.account?.name || 'Unknown Account'} • {formatDate(quote.updatedAt || quote.createdAt || '')}
                               </div>
                               {quote.projectName && (
                                 <div className="text-xs text-edg-grey mt-0.5">
@@ -398,7 +385,7 @@ export default function Home() {
                 ) : (
                   <div className="text-center py-6">
                     <FileText className="h-12 w-12 text-edg-grey mx-auto mb-3 opacity-50" />
-                    <p className="text-edg-grey text-sm">No activity yet</p>
+                    <p className="text-edg-grey text-sm">No recent quotes</p>
                     <Link href="/quote-builder">
                       <Button variant="outline" size="sm" className="mt-2">
                         Create Your First Quote

@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ClipboardList, FileText, Users } from "lucide-react";
+import { Building2, ClipboardList, FileText, Users } from "lucide-react";
 import logoPath from "@assets/my-logo.png_1753970984943.jpg";
 
 export default function Landing() {
@@ -49,7 +49,7 @@ export default function Landing() {
             </CardHeader>
             <CardContent>
               <CardDescription>
-                Manage customer information and track project history across all quotes.
+                Manage customer information and track quote history across all customers.
               </CardDescription>
             </CardContent>
           </Card>

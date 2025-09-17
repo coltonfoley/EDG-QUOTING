@@ -31,7 +31,7 @@ interface AccountDetails extends Account {
   projectCount: number;
 }
 
-const projectFormSchema = z.object({
+const quoteFormSchema = z.object({
   projectName: z.string().min(1, "Project name is required"),
   jobsiteAddress: z.string().min(1, "Jobsite address is required"),
   dealValue: z.number().min(0).optional(),
@@ -48,7 +48,7 @@ export default function AccountDetail() {
   const [editAccountOpen, setEditAccountOpen] = useState(false);
   const [createContactOpen, setCreateContactOpen] = useState(false);
   const [editContact, setEditContact] = useState<Contact | null>(null);
-  const [createProjectOpen, setCreateProjectOpen] = useState(false);
+  const [createQuoteOpen, setCreateQuoteOpen] = useState(false);
 
   const { data: account, isLoading, error } = useQuery<AccountDetails>({
     queryKey: [`/api/accounts/${accountId}/details`],
@@ -95,9 +95,9 @@ export default function AccountDetail() {
     });
   };
 
-  // Project form
-  const projectForm = useForm<z.infer<typeof projectFormSchema>>({
-    resolver: zodResolver(projectFormSchema),
+  // Quote form
+  const quoteForm = useForm<z.infer<typeof quoteFormSchema>>({
+    resolver: zodResolver(quoteFormSchema),
     defaultValues: {
       projectName: "",
       jobsiteAddress: "",
@@ -106,9 +106,9 @@ export default function AccountDetail() {
     }
   });
 
-  // Create project mutation
-  const createProjectMutation = useMutation({
-    mutationFn: async (data: z.infer<typeof projectFormSchema>) => {
+  // Create quote mutation
+  const createQuoteMutation = useMutation({
+    mutationFn: async (data: z.infer<typeof quoteFormSchema>) => {
       // Generate quote number
       const timestamp = Date.now();
       const random = Math.floor(Math.random() * 1000);
@@ -119,9 +119,11 @@ export default function AccountDetail() {
         accountId: accountId!,
         projectName: data.projectName,
         jobsiteAddress: data.jobsiteAddress,
-        dealStage: "lead", // Always set to lead for new projects
+        dealStage: "new_lead", // Always set to new_lead for new quotes
         status: "draft",
-        validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days from now
+        taxRate: "0",
+        discount: "0",
+        shipping: "0",
         notes: data.description || ""
       };
 
@@ -132,23 +134,23 @@ export default function AccountDetail() {
       queryClient.invalidateQueries({ queryKey: ["/api/quotes"] });
       toast({
         title: "Success",
-        description: "Project created successfully!",
+        description: "Quote created successfully!",
       });
-      setCreateProjectOpen(false);
-      projectForm.reset();
+      setCreateQuoteOpen(false);
+      quoteForm.reset();
       navigate("/pipeline");
     },
     onError: (error: any) => {
       toast({
         title: "Error",
-        description: error.message || "Failed to create project",
+        description: error.message || "Failed to create quote",
         variant: "destructive"
       });
     }
   });
 
-  const onProjectSubmit = (data: z.infer<typeof projectFormSchema>) => {
-    createProjectMutation.mutate(data);
+  const onQuoteSubmit = (data: z.infer<typeof quoteFormSchema>) => {
+    createQuoteMutation.mutate(data);
   };
 
   const getAccountTypeColor = (type: string) => {
@@ -312,7 +314,7 @@ export default function AccountDetail() {
           </CardContent>
         </Card>
 
-        {/* Two Column Layout for Contacts and Projects */}
+        {/* Two Column Layout for Contacts and Quotes */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Contacts Section */}
           <Card>
@@ -428,26 +430,26 @@ export default function AccountDetail() {
             </CardContent>
           </Card>
 
-          {/* Projects Section */}
+          {/* Quotes Section */}
           <Card>
             <CardHeader>
               <div className="flex justify-between items-center">
                 <div>
                   <CardTitle className="flex items-center gap-2">
                     <Briefcase className="h-5 w-5" />
-                    Projects
+                    Quotes
                   </CardTitle>
                   <CardDescription>
-                    {account.projectCount} project{account.projectCount !== 1 ? 's' : ''} for this account
+                    {account.quotes?.length || 0} quote{account.quotes?.length !== 1 ? 's' : ''} for this account
                   </CardDescription>
                 </div>
                 <Button
                   size="sm"
-                  onClick={() => setCreateProjectOpen(true)}
-                  data-testid="button-new-project"
+                  onClick={() => setCreateQuoteOpen(true)}
+                  data-testid="button-new-quote"
                 >
                   <FolderPlus className="h-4 w-4 mr-2" />
-                  New Project
+                  New Quote
                 </Button>
               </div>
             </CardHeader>
@@ -455,7 +457,7 @@ export default function AccountDetail() {
               <div className="space-y-3">
                 {account.quotes.length === 0 ? (
                   <p className="text-center py-8 text-gray-500">
-                    No projects yet. Create your first quote to get started.
+                    No quotes yet. Create your first quote to get started.
                   </p>
                 ) : (
                   account.quotes.map(quote => (
@@ -463,7 +465,7 @@ export default function AccountDetail() {
                       key={quote.id}
                       className="p-4 border rounded-lg hover:bg-gray-50 transition-colors cursor-pointer"
                       onClick={() => navigate(`/quotes/${quote.id}`)}
-                      data-testid={`card-project-${quote.id}`}
+                      data-testid={`card-quote-${quote.id}`}
                     >
                       <div className="flex justify-between items-start">
                         <div className="flex-1">
@@ -525,20 +527,20 @@ export default function AccountDetail() {
         </DialogContent>
       </Dialog>
 
-      {/* Create Project Dialog */}
-      <Dialog open={createProjectOpen} onOpenChange={setCreateProjectOpen}>
+      {/* Create Quote Dialog */}
+      <Dialog open={createQuoteOpen} onOpenChange={setCreateQuoteOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Create New Project</DialogTitle>
+            <DialogTitle>Create New Quote</DialogTitle>
             <DialogDescription>
-              Create a new project for {account?.name}
+              Create a new quote for {account?.name}
             </DialogDescription>
           </DialogHeader>
           
-          <Form {...projectForm}>
-            <form onSubmit={projectForm.handleSubmit(onProjectSubmit)} className="space-y-4">
+          <Form {...quoteForm}>
+            <form onSubmit={quoteForm.handleSubmit(onQuoteSubmit)} className="space-y-4">
               <FormField
-                control={projectForm.control}
+                control={quoteForm.control}
                 name="projectName"
                 render={({ field }) => (
                   <FormItem>
@@ -556,7 +558,7 @@ export default function AccountDetail() {
               />
 
               <FormField
-                control={projectForm.control}
+                control={quoteForm.control}
                 name="jobsiteAddress"
                 render={({ field }) => (
                   <FormItem>
@@ -574,7 +576,7 @@ export default function AccountDetail() {
               />
 
               <FormField
-                control={projectForm.control}
+                control={quoteForm.control}
                 name="dealValue"
                 render={({ field }) => (
                   <FormItem>
@@ -594,7 +596,7 @@ export default function AccountDetail() {
               />
 
               <FormField
-                control={projectForm.control}
+                control={quoteForm.control}
                 name="description"
                 render={({ field }) => (
                   <FormItem>
@@ -616,20 +618,20 @@ export default function AccountDetail() {
                   type="button" 
                   variant="outline" 
                   onClick={() => {
-                    setCreateProjectOpen(false);
-                    projectForm.reset();
+                    setCreateQuoteOpen(false);
+                    quoteForm.reset();
                   }}
-                  disabled={createProjectMutation.isPending}
+                  disabled={createQuoteMutation.isPending}
                   data-testid="button-cancel"
                 >
                   Cancel
                 </Button>
                 <Button 
                   type="submit" 
-                  disabled={createProjectMutation.isPending}
-                  data-testid="button-create-project"
+                  disabled={createQuoteMutation.isPending}
+                  data-testid="button-create-quote"
                 >
-                  {createProjectMutation.isPending ? "Creating..." : "Create Project"}
+                  {createQuoteMutation.isPending ? "Creating..." : "Create Quote"}
                 </Button>
               </DialogFooter>
             </form>
