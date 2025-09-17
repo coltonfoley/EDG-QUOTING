@@ -7,8 +7,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Textarea } from '@/components/ui/textarea';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
-import { Upload, X, Image, FileText, Camera, Building, Wrench } from 'lucide-react';
+import { Upload, X, Image, FileText, Camera, Building, Wrench, AlertTriangle, RefreshCw } from 'lucide-react';
+import { showError, showSuccess, ERROR_MESSAGES, retryOperation } from '@/lib/error-utils';
 import type { PortfolioImage, TechnicalDiagram, CompanyImage, ProductImage } from '@shared/schema';
 
 export type ImageType = 'portfolio' | 'technical' | 'company' | 'product';
@@ -74,10 +76,18 @@ export function ImageUploader({
 
   const validateFile = (file: File): string | null => {
     if (!allowedTypes.includes(file.type)) {
-      return `File type ${file.type} is not supported. Please upload ${allowedTypes.join(', ')} files.`;
+      const supportedTypes = allowedTypes
+        .map(type => type.split('/')[1]?.toUpperCase() || type)
+        .join(', ');
+      return ERROR_MESSAGES.FILE_INVALID_TYPE.replace('{types}', supportedTypes);
     }
     if (file.size > maxFileSize) {
-      return `File size ${(file.size / 1024 / 1024).toFixed(1)}MB exceeds the maximum allowed size of ${(maxFileSize / 1024 / 1024).toFixed(1)}MB.`;
+      const maxSizeMB = (maxFileSize / 1024 / 1024).toFixed(0);
+      return ERROR_MESSAGES.FILE_TOO_LARGE.replace('{size}', `${maxSizeMB}MB`);
+    }
+    // Check for corrupted files
+    if (file.size === 0) {
+      return ERROR_MESSAGES.FILE_CORRUPT;
     }
     return null;
   };
@@ -164,30 +174,39 @@ export function ImageUploader({
       );
 
       return finalPublicUrl;
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ Real upload failed:', error);
+      
+      // Provide specific error messages
+      if (error.message.includes('timeout')) {
+        throw new Error(ERROR_MESSAGES.NETWORK_TIMEOUT);
+      }
+      if (!navigator.onLine) {
+        throw new Error(ERROR_MESSAGES.NETWORK_OFFLINE);
+      }
+      if (error.message.includes('401') || error.message.includes('Unauthorized')) {
+        throw new Error(ERROR_MESSAGES.AUTH_SESSION_EXPIRED);
+      }
+      
+      // Re-throw with a more user-friendly message if generic
+      if (error.message && !error.message.includes('upload')) {
+        throw new Error(`${ERROR_MESSAGES.FILE_UPLOAD_FAILED}: ${error.message}`);
+      }
+      
       throw error;
     }
   };
 
   const handleFiles = useCallback(async (acceptedFiles: File[]) => {
     if (images.length + acceptedFiles.length > maxFiles) {
-      toast({
-        title: "Too many files",
-        description: `You can only upload up to ${maxFiles} files.`,
-        variant: "destructive"
-      });
+      showError(null, `You can only upload up to ${maxFiles} files. Please remove some files before adding new ones.`);
       return;
     }
 
     const newImages: UploadedImage[] = acceptedFiles.map(file => {
       const validation = validateFile(file);
       if (validation) {
-        toast({
-          title: "File validation failed",
-          description: validation,
-          variant: "destructive"
-        });
+        showError(null, validation);
         return null;
       }
 
