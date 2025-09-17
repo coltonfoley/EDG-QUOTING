@@ -10,6 +10,7 @@ import { LoadingSpinner } from "@/components/loading-spinner";
 import NotFound from "@/pages/not-found";
 import Quotes from "@/pages/quotes";
 import QuoteBuilder from "@/pages/quote-builder";
+import QuoteDetail from "@/pages/quote-detail";
 import Products from "@/pages/products";
 import Landing from "@/pages/landing";
 import Home from "@/pages/home";
@@ -51,7 +52,8 @@ function Router() {
           <Route path="/quotes" component={Quotes} />
           <Route path="/pipeline" component={Pipeline} />
           <Route path="/quotes/new" component={QuoteBuilder} />
-          <Route path={/\/quotes\/\d+$/} component={QuoteBuilder} />
+          <Route path={/\/quotes\/\d+$/} component={QuoteDetail} />
+          <Route path={/\/quotes\/\d+\/edit$/} component={QuoteBuilder} />
           <Route path="/products" component={Products} />
           <Route path="/contracts" component={ContractsPage} />
           <Route path="/admin" component={AdminPage} />
