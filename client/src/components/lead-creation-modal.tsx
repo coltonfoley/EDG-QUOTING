@@ -44,14 +44,20 @@ const accountFormSchema = insertAccountSchema.extend({
   billingAddress: z.string().optional()
 });
 
-const contactFormSchema = insertContactSchema.extend({
+const contactFormSchema = z.object({
   firstName: z.string().min(1, "First name is required"),
   lastName: z.string().min(1, "Last name is required"),
   email: z.string().email("Valid email is required"),
-  phone: z.string().optional(),
+  phone: z.string()
+    .optional()
+    .transform(val => val === "" ? undefined : val)
+    .refine(
+      val => !val || val.length >= 10,
+      "Phone number must be at least 10 digits"
+    ),
   role: z.string().default("primary_contact"),
   isPrimary: z.boolean().default(true)
-}).omit({ accountId: true });
+});
 
 const projectFormSchema = z.object({
   projectName: z.string().min(1, "Project name is required"),
@@ -183,15 +189,26 @@ export function LeadCreationModal({ open, onClose }: LeadCreationModalProps) {
   // Create contact mutation
   const createContactMutation = useMutation({
     mutationFn: async (data: z.infer<typeof contactFormSchema>) => {
-      return await apiRequest("POST", "/api/contacts", {
+      // Ensure we have a valid accountId
+      if (!createdAccountId) {
+        throw new Error("No account ID available. Please go back and create the account first.");
+      }
+      
+      // Create the contact data with proper typing
+      const contactData = {
         ...data,
-        accountId: createdAccountId
-      });
+        accountId: createdAccountId,
+        phone: data.phone || null, // Ensure phone is null if empty
+      };
+      
+      console.log("Creating contact with data:", contactData);
+      return await apiRequest("POST", "/api/contacts", contactData);
     },
     onSuccess: () => {
       setStep("project");
     },
     onError: (error: any) => {
+      console.error("Contact creation error:", error);
       toast({
         title: "Error",
         description: error.message || "Failed to create contact",
