@@ -126,7 +126,8 @@ export function QuoteImporter({ onImportComplete, onClose }: QuoteImporterProps)
   // Import quote mutation
   const importMutation = useMutation({
     mutationFn: async (data: ExtractedQuote) => {
-      if (importType === "new") {
+      try {
+        if (importType === "new") {
         // Create new quote with extracted data
         // Ensure required customer fields have values
         const customerData = {
@@ -221,6 +222,11 @@ export function QuoteImporter({ onImportComplete, onClose }: QuoteImporterProps)
         
         return { quoteId: selectedQuoteId };
       }
+      } catch (error: any) {
+        console.error("Import error:", error);
+        const errorMessage = error?.response?.data?.message || error?.message || "Failed to import quote";
+        throw new Error(errorMessage);
+      }
     },
     onSuccess: (result) => {
       toast({
@@ -232,7 +238,8 @@ export function QuoteImporter({ onImportComplete, onClose }: QuoteImporterProps)
       onImportComplete?.();
       onClose?.();
     },
-    onError: (error: Error) => {
+    onError: (error: any) => {
+      console.error("Import mutation error:", error);
       toast({
         title: "Import Failed",
         description: error.message || "Failed to import quote data",
