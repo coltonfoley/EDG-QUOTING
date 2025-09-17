@@ -35,6 +35,7 @@ import { extractProductsFromImage, extractProductsFromText, extractQuoteDataFrom
 import type { ExtractedProduct } from "./openai";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 import { ObjectPermission } from "./objectAcl";
+import type { InsertQuote } from "@shared/schema";
 
 /**
  * Server-side calculation verification utility
@@ -757,7 +758,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/quotes", isAuthenticated, async (req, res) => {
     try {
       console.log("Quote creation request body:", JSON.stringify(req.body, null, 2));
-      const quoteData = insertQuoteSchema.parse(req.body);
+      const parsedData = insertQuoteSchema.parse(req.body);
+      // Ensure required fields have defaults and optional fields are properly handled
+      const quoteData: InsertQuote = {
+        ...parsedData,
+        projectName: parsedData.projectName || "",
+        projectAddress: parsedData.projectAddress || "",
+        estimatedStartDate: parsedData.estimatedStartDate || "",
+        notes: parsedData.notes || "",
+        jobsiteAddress: parsedData.jobsiteAddress || undefined,
+        lostReason: parsedData.lostReason || undefined,
+        assignedRepId: parsedData.assignedRepId || undefined,
+        portfolioImages: parsedData.portfolioImages || undefined,
+        technicalDiagrams: parsedData.technicalDiagrams || undefined,
+        companyImages: parsedData.companyImages || undefined,
+      };
       const quote = await storage.createQuote(quoteData);
       res.status(201).json(quote);
     } catch (error: any) {
@@ -791,7 +806,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      const quoteData = insertQuoteSchema.partial().parse(req.body);
+      const parsedData = insertQuoteSchema.partial().parse(req.body);
+      
+      // Ensure optional fields are properly handled
+      const quoteData: Partial<InsertQuote> = {
+        ...parsedData,
+        jobsiteAddress: parsedData.jobsiteAddress === null ? undefined : parsedData.jobsiteAddress,
+        lostReason: parsedData.lostReason === null ? undefined : parsedData.lostReason,
+        assignedRepId: parsedData.assignedRepId === null ? undefined : parsedData.assignedRepId,
+      };
       
       // Get the original quote to check status change
       const originalQuote = await storage.getQuote(params.data.id);
@@ -1927,7 +1950,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Admin access required" });
       }
 
-      const validatedData = insertProposalTemplateSchema.parse(req.body);
+      const parsedData = insertProposalTemplateSchema.parse(req.body);
+      // Ensure sections is properly structured as JSONB
+      const validatedData = {
+        ...parsedData,
+        sections: parsedData.sections || [],
+      };
       const template = await storage.createProposalTemplate(validatedData);
       res.status(201).json(template);
     } catch (error) {

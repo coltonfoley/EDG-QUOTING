@@ -46,18 +46,8 @@ import {
 } from "lucide-react";
 import { format, subDays, startOfDay, endOfDay, isWithinInterval } from "date-fns";
 import type { QuoteWithDetails } from "@shared/schema";
+import { DEAL_STAGES, getDealStageById, isWonStage, isLostStage, isFinalStage } from "@shared/dealStageConstants";
 
-// Deal stages configuration - 8 required stages per CRM requirements
-const DEAL_STAGES = [
-  { id: 'new_lead', label: 'New Lead', color: 'bg-blue-100 border-blue-300 text-blue-800' },
-  { id: 'qualifying', label: 'Qualifying', color: 'bg-purple-100 border-purple-300 text-purple-800' },
-  { id: 'consultation_scheduled', label: 'Consultation Scheduled', color: 'bg-indigo-100 border-indigo-300 text-indigo-800' },
-  { id: 'building_estimate', label: 'Building Estimate', color: 'bg-cyan-100 border-cyan-300 text-cyan-800' },
-  { id: 'quote_sent', label: 'Quote Sent', color: 'bg-yellow-100 border-yellow-300 text-yellow-800' },
-  { id: 'closed_won', label: 'Closed-Won', color: 'bg-green-100 border-green-300 text-green-800' },
-  { id: 'closed_lost', label: 'Closed-Lost', color: 'bg-red-100 border-red-300 text-red-800' },
-  { id: 'on_hold', label: 'On Hold', color: 'bg-gray-100 border-gray-300 text-gray-800' }
-];
 
 // Sortable Column Component - Memoized for performance
 const SortableColumn = memo(function SortableColumn({ 
@@ -65,7 +55,7 @@ const SortableColumn = memo(function SortableColumn({
   quotes, 
   activeId 
 }: { 
-  stage: typeof DEAL_STAGES[0]; 
+  stage: typeof DEAL_STAGES[number]; 
   quotes: QuoteWithDetails[];
   activeId: string | null;
 }) {
@@ -339,7 +329,7 @@ export default function Pipeline() {
     });
 
     filteredQuotes.forEach(quote => {
-      const stage = quote.dealStage || 'lead';
+      const stage = quote.dealStage || 'new_lead';
       if (grouped[stage]) {
         grouped[stage].push(quote);
       }
@@ -365,7 +355,7 @@ export default function Pipeline() {
       return sum + quoteTotal;
     }, 0);
 
-    const wonDeals = filteredQuotes.filter(q => q.dealStage === 'won').length;
+    const wonDeals = filteredQuotes.filter(q => isWonStage(q.dealStage || '')).length;
     const conversionRate = totalDeals > 0 ? (wonDeals / totalDeals) * 100 : 0;
 
     const avgDealSize = totalDeals > 0 ? totalValue / totalDeals : 0;
