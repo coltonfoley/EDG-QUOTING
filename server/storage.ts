@@ -742,9 +742,15 @@ export class DatabaseStorage implements IStorage {
         }
         
         // Try to insert the quote
+        // Temporarily map accountId to both customer_id and account_id for compatibility
+        const quoteToInsert = {
+          ...insertQuote,
+          customer_id: insertQuote.accountId, // Map to old column name for compatibility
+        } as any;
+        
         const [quote] = await db
           .insert(quotes)
-          .values(insertQuote)
+          .values(quoteToInsert)
           .returning();
         
         console.log(`Successfully created quote with number: ${quote.quoteNumber}`);
