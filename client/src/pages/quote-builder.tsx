@@ -7,11 +7,13 @@ import { ImageAssetsPreview } from "@/components/image-assets-preview";
 import { LineItemsTable } from "@/components/line-items-table";
 import { QuoteSummary } from "@/components/quote-summary";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { generateQuoteNumber } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Save } from "lucide-react";
+import { LoadingSpinner } from "@/components/loading-spinner";
+import { Save, Loader2 } from "lucide-react";
 import type { QuoteWithDetails } from "@shared/schema";
 import type { UploadedImage } from "@/components/image-uploader";
 
@@ -136,8 +138,50 @@ export default function QuoteBuilder() {
         <AppHeader />
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="space-y-6">
-            <Skeleton className="h-64 w-full" />
-            <Skeleton className="h-96 w-full" />
+            {/* Header skeleton */}
+            <Card>
+              <CardContent className="p-6">
+                <div className="space-y-4">
+                  <Skeleton className="h-8 w-48" />
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <Skeleton className="h-10 w-full" />
+                    <Skeleton className="h-10 w-full" />
+                    <Skeleton className="h-10 w-full" />
+                    <Skeleton className="h-10 w-full" />
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <Skeleton className="h-24 w-full" />
+                    <Skeleton className="h-24 w-full" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            
+            {/* Image assets skeleton */}
+            <Card>
+              <CardContent className="p-6">
+                <Skeleton className="h-6 w-32 mb-4" />
+                <div className="grid grid-cols-3 gap-4">
+                  <Skeleton className="h-32 w-full" />
+                  <Skeleton className="h-32 w-full" />
+                  <Skeleton className="h-32 w-full" />
+                </div>
+              </CardContent>
+            </Card>
+            
+            {/* Line items skeleton */}
+            <Card>
+              <CardContent className="p-6">
+                <Skeleton className="h-6 w-40 mb-4" />
+                <div className="space-y-2">
+                  <Skeleton className="h-12 w-full" />
+                  <Skeleton className="h-12 w-full" />
+                  <Skeleton className="h-12 w-full" />
+                </div>
+              </CardContent>
+            </Card>
+            
+            {/* Summary skeleton */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <Skeleton className="lg:col-span-2 h-64" />
               <Skeleton className="h-64" />
@@ -218,8 +262,17 @@ export default function QuoteBuilder() {
             className="bg-edg-black hover:bg-edg-grey text-edg-white px-8 py-3 text-lg"
             disabled={createQuoteMutation.isPending || updateQuoteMutation.isPending}
           >
-            <Save className="mr-2 h-5 w-5" />
-            {isNewQuote ? "Create Quote" : "Save Changes"}
+            {(createQuoteMutation.isPending || updateQuoteMutation.isPending) ? (
+              <>
+                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              <>
+                <Save className="mr-2 h-5 w-5" />
+                {isNewQuote ? "Create Quote" : "Save Changes"}
+              </>
+            )}
           </Button>
         </div>
 

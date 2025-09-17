@@ -1,10 +1,12 @@
 import { Switch, Route } from "wouter";
 import { queryClient } from "./lib/queryClient";
-import { QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider, useIsFetching, useIsMutating } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { ErrorBoundary } from "@/components/error-boundary";
+import { LoadingBar } from "@/components/loading-bar";
+import { LoadingSpinner } from "@/components/loading-spinner";
 import NotFound from "@/pages/not-found";
 import Quotes from "@/pages/quotes";
 import QuoteBuilder from "@/pages/quote-builder";
@@ -16,11 +18,19 @@ import AdminPage from "@/pages/admin";
 import AdminTemplatesPage from "@/pages/admin-templates";
 import ContractsPage from "@/pages/contracts";
 
+function GlobalLoadingIndicator() {
+  const isFetching = useIsFetching();
+  const isMutating = useIsMutating();
+  const isLoading = isFetching > 0 || isMutating > 0;
+  
+  return <LoadingBar isLoading={isLoading} />;
+}
+
 function Router() {
   const { isAuthenticated, isLoading } = useAuth();
 
   if (isLoading) {
-    return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+    return <LoadingSpinner fullScreen text="Loading application..." />;
   }
 
   return (
@@ -52,6 +62,7 @@ function App() {
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
           <TooltipProvider>
+            <GlobalLoadingIndicator />
             <Toaster />
             <Router />
           </TooltipProvider>
