@@ -742,10 +742,11 @@ export class DatabaseStorage implements IStorage {
         }
         
         // Try to insert the quote
-        // Temporarily map accountId to both customer_id and account_id for compatibility
+        // Map accountId to customer_id for backward compatibility with old database schema
+        // The database still has both customer_id (NOT NULL) and account_id columns
         const quoteToInsert = {
           ...insertQuote,
-          customer_id: insertQuote.accountId, // Map to old column name for compatibility
+          customer_id: insertQuote.accountId, // Map accountId to old customer_id column for compatibility
         } as any;
         
         const [quote] = await db
