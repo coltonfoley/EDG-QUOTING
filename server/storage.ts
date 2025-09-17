@@ -1,4 +1,4 @@
-import { customers, quotes, lineItems, products, users, contractTemplates, proposalTemplates, pricingTables, productAccessories, type Customer, type Quote, type LineItem, type Product, type User, type ContractTemplate, type ProposalTemplate, type PricingTable, type ProductAccessory, type InsertCustomer, type InsertQuote, type InsertLineItem, type InsertProduct, type InsertUser, type InsertContractTemplate, type InsertProposalTemplate, type InsertPricingTable, type InsertProductAccessory, type QuoteWithDetails, type ProductWithDetails } from "@shared/schema";
+import { customers, quotes, lineItems, products, users, contractTemplates, proposalTemplates, pricingTables, productAccessories, leads, type Customer, type Quote, type LineItem, type Product, type User, type ContractTemplate, type ProposalTemplate, type PricingTable, type ProductAccessory, type Lead, type InsertCustomer, type InsertQuote, type InsertLineItem, type InsertProduct, type InsertUser, type InsertContractTemplate, type InsertProposalTemplate, type InsertPricingTable, type InsertProductAccessory, type InsertLead, type QuoteWithDetails, type ProductWithDetails } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, inArray, sql, and, ne, or, ilike } from "drizzle-orm";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
@@ -112,6 +112,18 @@ export interface IStorage {
   getDefaultProposalTemplate(): Promise<ProposalTemplate | undefined>;
   getDefaultProposalTemplateByCategory(category: string): Promise<ProposalTemplate | undefined>;
   getProposalTemplatesByCategory(category: string, includeInactive?: boolean): Promise<ProposalTemplate[]>;
+
+  // Lead methods
+  getLead(id: number): Promise<Lead | undefined>;
+  getAllLeads(): Promise<Lead[]>;
+  getLeadsByStage(stage: string): Promise<Lead[]>;
+  getLeadsByAssignedUser(userId: number): Promise<Lead[]>;
+  searchLeads(searchTerm: string): Promise<Lead[]>;
+  createLead(lead: InsertLead): Promise<Lead>;
+  updateLead(id: number, lead: Partial<InsertLead>): Promise<Lead | undefined>;
+  updateLeadStage(id: number, stage: string): Promise<Lead | undefined>;
+  deleteLead(id: number): Promise<boolean>;
+  convertLeadToCustomer(leadId: number): Promise<{ lead: Lead | undefined, customer: Customer | undefined }>;
   
   
   // Session store for authentication
@@ -1134,6 +1146,147 @@ export class DatabaseStorage implements IStorage {
 
     const result = await db.execute(updateSql);
     return { updated: result.rowCount || 0 };
+  }
+
+  // Lead methods
+  async getLead(id: number): Promise<Lead | undefined> {
+    const [lead] = await db.select().from(leads).where(eq(leads.id, id));
+    return lead || undefined;
+  }
+
+  async getAllLeads(): Promise<Lead[]> {
+    const allLeads = await db
+      .select()
+      .from(leads)
+      .orderBy(desc(leads.createdAt));
+    return allLeads;
+  }
+
+  async getLeadsByStage(stage: string): Promise<Lead[]> {
+    const stageLeads = await db
+      .select()
+      .from(leads)
+      .where(eq(leads.stage, stage))
+      .orderBy(desc(leads.createdAt));
+    return stageLeads;
+  }
+
+  async getLeadsByAssignedUser(userId: number): Promise<Lead[]> {
+    const assignedLeads = await db
+      .select()
+      .from(leads)
+      .where(eq(leads.assignedTo, userId))
+      .orderBy(desc(leads.createdAt));
+    return assignedLeads;
+  }
+
+  async searchLeads(searchTerm: string): Promise<Lead[]> {
+    if (!searchTerm || searchTerm.trim().length === 0) {
+      return [];
+    }
+    
+    const term = searchTerm.trim().toLowerCase();
+    const normalizedPhone = normalizePhoneNumber(searchTerm);
+    
+    // Search across multiple fields
+    const results = await db
+      .select()
+      .from(leads)
+      .where(
+        or(
+          ilike(leads.contactName, `%${term}%`),
+          ilike(leads.email, `%${term}%`),
+          ilike(leads.company, `%${term}%`),
+          ilike(leads.title, `%${term}%`),
+          // For phone, try to match the normalized version
+          sql`REPLACE(REPLACE(REPLACE(REPLACE(${leads.phone}, '-', ''), '(', ''), ')', ''), ' ', '') LIKE '%${normalizedPhone}%'`
+        )
+      )
+      .orderBy(desc(leads.createdAt))
+      .limit(20);
+    
+    return results;
+  }
+
+  async createLead(insertLead: InsertLead): Promise<Lead> {
+    const [lead] = await db
+      .insert(leads)
+      .values({
+        ...insertLead,
+        updatedAt: new Date(),
+      })
+      .returning();
+    return lead;
+  }
+
+  async updateLead(id: number, leadData: Partial<InsertLead>): Promise<Lead | undefined> {
+    const [updated] = await db
+      .update(leads)
+      .set({
+        ...leadData,
+        updatedAt: new Date(),
+      })
+      .where(eq(leads.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async updateLeadStage(id: number, stage: string): Promise<Lead | undefined> {
+    const [updated] = await db
+      .update(leads)
+      .set({
+        stage,
+        updatedAt: new Date(),
+      })
+      .where(eq(leads.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteLead(id: number): Promise<boolean> {
+    const result = await db.delete(leads).where(eq(leads.id, id));
+    return (result.rowCount || 0) > 0;
+  }
+
+  async convertLeadToCustomer(leadId: number): Promise<{ lead: Lead | undefined, customer: Customer | undefined }> {
+    // Get the lead first
+    const lead = await this.getLead(leadId);
+    if (!lead) {
+      return { lead: undefined, customer: undefined };
+    }
+
+    // Check if lead is already converted
+    if (lead.customerId) {
+      const existingCustomer = await this.getCustomer(lead.customerId);
+      return { lead, customer: existingCustomer };
+    }
+
+    try {
+      // Create customer from lead data
+      const customerData: InsertCustomer = {
+        name: lead.contactName,
+        email: lead.email,
+        phone: lead.phone || '',
+        company: lead.company || null,
+      };
+
+      // Use existing customer creation logic with duplicate checking
+      const customer = await this.createCustomer(customerData, { 
+        allowDuplicate: false, 
+        updateIfExists: true 
+      });
+
+      // Update the lead with the customer ID and move to converted stage
+      const updatedLead = await this.updateLead(leadId, {
+        customerId: customer.id,
+        stage: 'closed_won', // Mark as successfully converted
+      });
+
+      return { lead: updatedLead, customer };
+    } catch (error) {
+      console.error('Error converting lead to customer:', error);
+      return { lead, customer: undefined };
+    }
   }
 
 }
