@@ -172,17 +172,85 @@ export function QuoteImporter({ onImportComplete, onClose }: QuoteImporterProps)
         let accountId: number;
         
         if (accountMode === "new") {
-          // Create new account with extracted or edited customer data
-          const customerData = {
-            name: data.customer.name || "Customer Name",
-            email: data.customer.email || "customer@example.com", 
-            phone: data.customer.phone || "000-000-0000",
-            company: data.customer.company || null,
-          };
+          // Determine how to create the account based on whether both name and company are present
+          const companyName = data.customer.company?.trim();
+          const personName = data.customer.name?.trim();
+          const hasCompany = companyName && companyName !== "";
+          const hasPersonName = personName && personName !== "";
           
-          const customerResponse = await apiRequest("POST", "/api/customers", customerData, { timeout: 10000 });
-          const customer = await customerResponse.json();
-          accountId = customer.id;
+          if (hasCompany && hasPersonName && companyName && personName) {
+            // Both company and person name exist - create/find company as account and person as contact
+            
+            // First, search for existing company account
+            const searchResponse = await apiRequest("GET", `/api/accounts/search?q=${encodeURIComponent(companyName)}`, null, { timeout: 10000 });
+            const searchResults = await searchResponse.json();
+            
+            // Check if company already exists (match by company name)
+            let companyAccount = searchResults.find(
+              (acc: any) => acc.name?.toLowerCase() === companyName.toLowerCase() || 
+              acc.company?.toLowerCase() === companyName.toLowerCase()
+            );
+            
+            if (!companyAccount) {
+              // Create the company as a new account
+              const companyData = {
+                name: companyName,
+                email: data.customer.email || `info@${companyName.toLowerCase().replace(/\s+/g, '')}.com`,
+                phone: data.customer.phone || "000-000-0000",
+                company: companyName,
+                accountType: "commercial",
+                billingAddress: data.customer.address || null,
+              };
+              
+              const companyResponse = await apiRequest("POST", "/api/accounts", companyData, { timeout: 10000 });
+              companyAccount = await companyResponse.json();
+            }
+            
+            accountId = companyAccount.id;
+            
+            // Create the person as a contact for this company
+            const contactData = {
+              accountId: companyAccount.id,
+              firstName: personName.split(' ')[0] || "First",
+              lastName: personName.split(' ').slice(1).join(' ') || "Last",
+              email: data.customer.email || `contact@${companyName.toLowerCase().replace(/\s+/g, '')}.com`,
+              phone: data.customer.phone || null,
+              role: "primary_contact",
+              isPrimary: true,
+            };
+            
+            await apiRequest("POST", "/api/contacts", contactData, { timeout: 10000 });
+            
+          } else if (hasCompany && !hasPersonName && companyName) {
+            // Only company exists - create as account
+            const companyData = {
+              name: companyName,
+              email: data.customer.email || `info@${companyName.toLowerCase().replace(/\s+/g, '')}.com`,
+              phone: data.customer.phone || "000-000-0000",
+              company: companyName,
+              accountType: "commercial",
+              billingAddress: data.customer.address || null,
+            };
+            
+            const companyResponse = await apiRequest("POST", "/api/accounts", companyData, { timeout: 10000 });
+            const company = await companyResponse.json();
+            accountId = company.id;
+            
+          } else {
+            // Only person name exists (or neither) - create as individual account
+            const customerData = {
+              name: data.customer.name || "Customer Name",
+              email: data.customer.email || "customer@example.com",
+              phone: data.customer.phone || "000-000-0000",
+              company: null, // Don't set company for individual accounts
+              accountType: "homeowner", // Individual account type
+              billingAddress: data.customer.address || null,
+            };
+            
+            const customerResponse = await apiRequest("POST", "/api/accounts", customerData, { timeout: 10000 });
+            const customer = await customerResponse.json();
+            accountId = customer.id;
+          }
         } else {
           // Use existing account
           accountId = parseInt(selectedAccountId);
