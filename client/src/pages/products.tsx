@@ -11,9 +11,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Package, Edit, Trash2, Search, Grid, List, Filter, X, Settings, Camera, FileText, Image } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Plus, Package, Edit, Trash2, Search, Grid, List, Filter, X, Settings, Camera, FileText, Image, Loader2 } from "lucide-react";
 import { DimensionalPricingManager } from "@/components/dimensional-pricing-manager";
 import { ImageUploader, type UploadedImage } from "@/components/image-uploader";
+import { LoadingSpinner } from "@/components/loading-spinner";
 import { formatCurrency } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -259,14 +261,80 @@ export default function Products() {
       <div className="min-h-screen bg-gray-50">
         <AppHeader />
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="animate-pulse">
-            <div className="h-8 bg-gray-200 rounded w-64 mb-6"></div>
+          {/* Header Skeleton */}
+          <div className="flex justify-between items-center mb-6">
+            <div>
+              <Skeleton className="h-8 w-48 mb-2" />
+              <Skeleton className="h-5 w-64" />
+            </div>
+            <Skeleton className="h-10 w-32" />
+          </div>
+          
+          {/* Filters skeleton */}
+          <div className="flex gap-4 mb-6">
+            <Skeleton className="h-10 w-64" />
+            <Skeleton className="h-10 w-40" />
+            <Skeleton className="h-10 w-32" />
+          </div>
+          
+          {viewMode === "table" ? (
+            /* Table view skeleton */
+            <Card>
+              <CardContent className="p-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead><Skeleton className="h-4 w-20" /></TableHead>
+                      <TableHead><Skeleton className="h-4 w-32" /></TableHead>
+                      <TableHead><Skeleton className="h-4 w-24" /></TableHead>
+                      <TableHead><Skeleton className="h-4 w-20" /></TableHead>
+                      <TableHead><Skeleton className="h-4 w-28" /></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {[1, 2, 3, 4, 5].map((i) => (
+                      <TableRow key={i}>
+                        <TableCell><Skeleton className="h-5 w-24" /></TableCell>
+                        <TableCell>
+                          <div className="space-y-1">
+                            <Skeleton className="h-5 w-48" />
+                            <Skeleton className="h-4 w-64" />
+                          </div>
+                        </TableCell>
+                        <TableCell><Skeleton className="h-6 w-20" /></TableCell>
+                        <TableCell><Skeleton className="h-5 w-16" /></TableCell>
+                        <TableCell>
+                          <div className="flex gap-2">
+                            <Skeleton className="h-8 w-8" />
+                            <Skeleton className="h-8 w-8" />
+                            <Skeleton className="h-8 w-8" />
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          ) : (
+            /* Grid view skeleton */
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {[1, 2, 3, 4, 5, 6].map((i) => (
-                <div key={i} className="h-48 bg-gray-200 rounded-lg"></div>
+                <Card key={i}>
+                  <CardContent className="p-6">
+                    <Skeleton className="h-32 w-full mb-4" />
+                    <Skeleton className="h-6 w-32 mb-2" />
+                    <Skeleton className="h-4 w-full mb-1" />
+                    <Skeleton className="h-4 w-3/4 mb-4" />
+                    <div className="flex justify-between items-center">
+                      <Skeleton className="h-6 w-20" />
+                      <Skeleton className="h-8 w-24" />
+                    </div>
+                  </CardContent>
+                </Card>
               ))}
             </div>
-          </div>
+          )}
         </div>
       </div>
     );
@@ -564,7 +632,14 @@ export default function Products() {
                       className="bg-edg-black hover:bg-edg-grey text-edg-white"
                       disabled={createProductMutation.isPending || updateProductMutation.isPending}
                     >
-                      {editingProduct ? "Update" : "Create"} Product
+                      {(createProductMutation.isPending || updateProductMutation.isPending) ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          {editingProduct ? "Updating..." : "Creating..."}
+                        </>
+                      ) : (
+                        <>{editingProduct ? "Update" : "Create"} Product</>
+                      )}
                     </Button>
                   </div>
                 </form>

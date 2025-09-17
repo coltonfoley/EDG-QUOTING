@@ -6,14 +6,16 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, FileText, Users, DollarSign, Search, Upload, Trash2 } from "lucide-react";
+import { Plus, FileText, Users, DollarSign, Search, Upload, Trash2, Loader2 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { useAuth } from "@/hooks/useAuth";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { QuoteImporter } from "@/components/quote-importer";
+import { LoadingSpinner } from "@/components/loading-spinner";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { QuoteWithDetails } from "@shared/schema";
 
@@ -129,14 +131,54 @@ export default function Quotes() {
       <div className="min-h-screen bg-gray-50">
         <AppHeader />
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="animate-pulse">
-            <div className="h-8 bg-gray-200 rounded w-64 mb-6"></div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-              {[1, 2, 3].map((i) => (
-                <div key={i} className="h-32 bg-gray-200 rounded-lg"></div>
-              ))}
+          {/* Header skeleton */}
+          <div className="flex justify-between items-center mb-8">
+            <div>
+              <Skeleton className="h-9 w-48 mb-2" />
+              <Skeleton className="h-5 w-64" />
+            </div>
+            <div className="flex space-x-4">
+              <Skeleton className="h-10 w-32" />
+              <Skeleton className="h-10 w-32" />
+              <Skeleton className="h-10 w-32" />
             </div>
           </div>
+          
+          {/* Stats cards skeleton */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            {[1, 2, 3].map((i) => (
+              <Card key={i}>
+                <CardContent className="p-6">
+                  <div className="flex items-center">
+                    <Skeleton className="h-8 w-8 rounded" />
+                    <div className="ml-4 space-y-2">
+                      <Skeleton className="h-4 w-20" />
+                      <Skeleton className="h-7 w-24" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+          
+          {/* Table skeleton */}
+          <Card>
+            <CardContent className="p-0">
+              <div className="p-4 space-y-3">
+                {[1, 2, 3, 4].map((i) => (
+                  <div key={i} className="flex items-center space-x-4 p-4 border-b">
+                    <Skeleton className="h-10 w-20" />
+                    <div className="flex-1 space-y-2">
+                      <Skeleton className="h-5 w-48" />
+                      <Skeleton className="h-4 w-64" />
+                    </div>
+                    <Skeleton className="h-6 w-24" />
+                    <Skeleton className="h-9 w-20" />
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </div>
     );
@@ -401,6 +443,9 @@ export default function Quotes() {
                                       disabled={deleteQuoteMutation.isPending}
                                       data-testid={`button-confirm-delete-${quote.id}`}
                                     >
+                                      {deleteQuoteMutation.isPending && (
+                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                      )}
                                       {deleteQuoteMutation.isPending ? "Deleting..." : "Delete"}
                                     </AlertDialogAction>
                                   </AlertDialogFooter>
