@@ -203,7 +203,8 @@ export class MemStorage {
     const quote = this.quotes.get(id);
     if (!quote) return undefined;
 
-    const customer = this.customers.get(quote.accountId);
+    const accountIdToUse = quote.accountId || quote.customerId;
+    const customer = this.customers.get(accountIdToUse);
     if (!customer) return undefined;
 
     const quoteLineItems = Array.from(this.lineItems.values()).filter(item => item.quoteId === id);
@@ -220,7 +221,8 @@ export class MemStorage {
     const result: QuoteWithDetails[] = [];
     
     for (const quote of Array.from(this.quotes.values())) {
-      const customer = this.customers.get(quote.accountId);
+      const accountIdToUse = quote.accountId || quote.customerId;
+      const customer = this.customers.get(accountIdToUse);
       if (customer) {
         const quoteLineItems = Array.from(this.lineItems.values()).filter(item => item.quoteId === quote.id);
         result.push({
@@ -240,6 +242,8 @@ export class MemStorage {
     const quote: Quote = { 
       ...insertQuote,
       id,
+      customerId: (insertQuote.accountId || insertQuote.customerId || 0) as number, // Use accountId for customerId
+      accountId: insertQuote.accountId || null, // Keep accountId as is
       status: insertQuote.status || "draft",
       assignedRepId: insertQuote.assignedRepId || null,
       projectName: insertQuote.projectName || null,
@@ -660,11 +664,12 @@ export class DatabaseStorage implements IStorage {
     const [quote] = await db.select().from(quotes).where(eq(quotes.id, id));
     if (!quote) return undefined;
 
-    const [account] = await db.select().from(accounts).where(eq(accounts.id, quote.accountId));
+    const accountIdToUse = quote.accountId || quote.customerId;
+    const [account] = await db.select().from(accounts).where(eq(accounts.id, accountIdToUse));
     if (!account) return undefined;
 
     const quoteLineItems = await db.select().from(lineItems).where(eq(lineItems.quoteId, id));
-    const projectContacts = await db.select().from(contacts).where(eq(contacts.accountId, quote.accountId));
+    const projectContacts = await db.select().from(contacts).where(eq(contacts.accountId, accountIdToUse));
 
     // Get contract template if referenced
     let contractTemplate: ContractTemplate | undefined;
@@ -687,10 +692,11 @@ export class DatabaseStorage implements IStorage {
     const result: QuoteWithDetails[] = [];
 
     for (const quote of allQuotes) {
-      const [account] = await db.select().from(accounts).where(eq(accounts.id, quote.accountId));
+      const accountIdToUse = quote.accountId || quote.customerId;
+      const [account] = await db.select().from(accounts).where(eq(accounts.id, accountIdToUse));
       if (account) {
         const quoteLineItems = await db.select().from(lineItems).where(eq(lineItems.quoteId, quote.id));
-        const projectContacts = await db.select().from(contacts).where(eq(contacts.accountId, quote.accountId));
+        const projectContacts = await db.select().from(contacts).where(eq(contacts.accountId, accountIdToUse));
         
         // Get contract template if referenced
         let contractTemplate: ContractTemplate | undefined;
@@ -742,12 +748,12 @@ export class DatabaseStorage implements IStorage {
         }
         
         // Try to insert the quote
-        // Map accountId to customer_id for backward compatibility with old database schema
-        // The database still has both customer_id (NOT NULL) and account_id columns
-        const quoteToInsert = {
+        // Map accountId to customerId for backward compatibility
+        const quoteToInsert: any = {
           ...insertQuote,
-          customer_id: insertQuote.accountId, // Map accountId to old customer_id column for compatibility
-        } as any;
+          customerId: insertQuote.accountId || insertQuote.customerId || 0, // Use accountId value for customerId
+          accountId: insertQuote.accountId || null, // Keep accountId as well
+        };
         
         const [quote] = await db
           .insert(quotes)
