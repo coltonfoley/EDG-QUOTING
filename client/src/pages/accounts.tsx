@@ -2,7 +2,6 @@ import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
 import { AppHeader } from "@/components/app-header";
-import { LeadCreationModal } from "@/components/lead-creation-modal";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -28,7 +27,6 @@ export default function Accounts() {
   const [searchTerm, setSearchTerm] = useState("");
   const [accountTypeFilter, setAccountTypeFilter] = useState<string>("all");
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [leadModalOpen, setLeadModalOpen] = useState(false);
   const { toast } = useToast();
   const { isAuthenticated } = useAuth();
   const [, navigate] = useLocation();
@@ -177,14 +175,6 @@ export default function Accounts() {
             <h1 className="text-3xl font-bold text-gray-900">Account Management</h1>
             <p className="text-gray-600 mt-1">Manage your clients and business relationships</p>
           </div>
-          <Button 
-            onClick={() => setLeadModalOpen(true)}
-            className="bg-blue-600 hover:bg-blue-700"
-            data-testid="button-new-account"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            New Account
-          </Button>
         </div>
 
         {/* Stats Cards */}
@@ -383,11 +373,6 @@ export default function Accounts() {
         </Card>
       </div>
 
-      {/* Lead Creation Modal */}
-      <LeadCreationModal 
-        open={leadModalOpen} 
-        onClose={() => setLeadModalOpen(false)} 
-      />
 
       {/* Create Account Dialog - Keep for direct account creation if needed */}
       <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
