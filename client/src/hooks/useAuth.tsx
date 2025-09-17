@@ -5,8 +5,9 @@ import {
   UseMutationResult,
 } from "@tanstack/react-query";
 import { insertUserSchema, User as SelectUser, InsertUser } from "@shared/schema";
-import { getQueryFn, apiRequest, queryClient } from "@/lib/queryClient";
+import { getQueryFn, apiRequest, queryClient, ApiError } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { showError, ERROR_MESSAGES, parseError } from "@/lib/error-utils";
 
 type AuthContextType = {
   user: SelectUser | null;
@@ -35,8 +36,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const loginMutation = useMutation({
     mutationFn: async (credentials: LoginData) => {
-      const res = await apiRequest("POST", "/api/login", credentials);
-      return await res.json();
+      try {
+        const res = await apiRequest("POST", "/api/login", credentials);
+        return await res.json();
+      } catch (error: any) {
+        // Handle specific authentication errors
+        if (error instanceof ApiError) {
+          if (error.statusCode === 401) {
+            throw new Error(ERROR_MESSAGES.AUTH_INVALID_CREDENTIALS);
+          }
+          if (error.statusCode === 429) {
+            throw new Error("Too many login attempts. Please try again later.");
+          }
+        }
+        throw error;
+      }
     },
     onSuccess: (user: SelectUser) => {
       queryClient.setQueryData(["/api/user"], user);
@@ -48,9 +62,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       window.location.href = "/";
     },
     onError: (error: Error) => {
+      const appError = parseError(error);
       toast({
         title: "Login failed",
-        description: error.message,
+        description: appError.message,
         variant: "destructive",
       });
     },
@@ -58,8 +73,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const registerMutation = useMutation({
     mutationFn: async (credentials: InsertUser) => {
-      const res = await apiRequest("POST", "/api/register", credentials);
-      return await res.json();
+      try {
+        const res = await apiRequest("POST", "/api/register", credentials);
+        return await res.json();
+      } catch (error: any) {
+        // Handle specific registration errors
+        if (error instanceof ApiError) {
+          if (error.statusCode === 409) {
+            throw new Error("An account with this username already exists. Please choose a different username.");
+          }
+          if (error.statusCode === 400 && error.details?.errors) {
+            // Parse validation errors
+            const validationMessages = error.details.errors.map((err: any) => 
+              err.message || err
+            ).join(", ");
+            throw new Error(validationMessages);
+          }
+        }
+        throw error;
+      }
     },
     onSuccess: (user: SelectUser) => {
       queryClient.setQueryData(["/api/user"], user);
@@ -71,9 +103,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       window.location.href = "/";
     },
     onError: (error: Error) => {
+      const appError = parseError(error);
       toast({
         title: "Registration failed",
-        description: error.message,
+        description: appError.message,
         variant: "destructive",
       });
     },
@@ -81,10 +114,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logoutMutation = useMutation({
     mutationFn: async () => {
-      await apiRequest("POST", "/api/logout");
+      try {
+        await apiRequest("POST", "/api/logout");
+      } catch (error: any) {
+        // Logout should rarely fail, but handle it gracefully
+        console.error("Logout error:", error);
+        // Even if logout fails on server, clear local state
+        throw new Error("Failed to complete logout. You may need to refresh the page.");
+      }
     },
     onSuccess: () => {
       queryClient.setQueryData(["/api/user"], null);
+      queryClient.clear(); // Clear all cached data on logout
       window.location.href = "/";
       toast({
         title: "Logged out",
@@ -92,11 +133,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
     },
     onError: (error: Error) => {
+      // Clear local auth state even if server logout fails
+      queryClient.setQueryData(["/api/user"], null);
       toast({
-        title: "Logout failed",
+        title: "Logout warning",
         description: error.message,
         variant: "destructive",
       });
+      // Still redirect after a delay
+      setTimeout(() => {
+        window.location.href = "/";
+      }, 2000);
     },
   });
 

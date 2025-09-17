@@ -424,24 +424,62 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/quotes/import-pdf", isAuthenticated, upload.single('pdf'), async (req, res) => {
     try {
       if (!req.file) {
-        return res.status(400).json({ message: "No PDF file uploaded" });
+        return res.status(400).json({ 
+          message: "No PDF file uploaded. Please select a PDF file to import.",
+          code: "NO_FILE"
+        });
       }
 
       if (req.file.mimetype !== 'application/pdf') {
-        return res.status(400).json({ message: "File must be a PDF" });
+        return res.status(400).json({ 
+          message: "Invalid file type. Please upload a PDF file only.",
+          code: "INVALID_FILE_TYPE"
+        });
       }
 
-      // Extract text from PDF
+      // Check file size (limit to 10MB)
+      if (req.file.size > 10 * 1024 * 1024) {
+        return res.status(400).json({ 
+          message: "PDF file is too large. Please upload a file smaller than 10MB.",
+          code: "FILE_TOO_LARGE"
+        });
+      }
+
+      // Extract text from PDF with enhanced error handling
       const pdfData = await parsePDF(req.file.buffer);
+      
+      // Check if PDF parsing returned an error
+      if (pdfData.error) {
+        return res.status(400).json({ 
+          message: pdfData.error,
+          code: "PDF_PARSE_ERROR"
+        });
+      }
+      
       if (!pdfData.text.trim()) {
-        return res.status(400).json({ message: "Failed to extract text from PDF" });
+        return res.status(400).json({ 
+          message: "No text could be extracted from the PDF. The document may be scanned or contain only images.",
+          code: "NO_TEXT_EXTRACTED"
+        });
       }
 
       // Extract quote data using AI
-      const extractedQuoteData = await extractQuoteDataFromText(pdfData.text);
+      let extractedQuoteData;
+      try {
+        extractedQuoteData = await extractQuoteDataFromText(pdfData.text);
+      } catch (aiError: any) {
+        console.error("AI extraction error:", aiError);
+        return res.status(503).json({ 
+          message: "The AI service is temporarily unavailable. Please try again in a few moments.",
+          code: "AI_SERVICE_ERROR"
+        });
+      }
       
       if (!extractedQuoteData) {
-        return res.status(400).json({ message: "Failed to extract quote data from PDF" });
+        return res.status(400).json({ 
+          message: "Could not extract quote data from the PDF. Please ensure the PDF contains a valid quote with line items and pricing.",
+          code: "EXTRACTION_FAILED"
+        });
       }
 
       res.json({
@@ -450,11 +488,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         originalText: pdfData.text.substring(0, 500) + '...' // Preview of extracted text
       });
 
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error processing PDF quote import:", error);
+      
+      // Provide specific error messages based on error type
+      if (error.message?.includes('memory')) {
+        return res.status(413).json({ 
+          message: "The PDF file is too complex to process. Please try a simpler document.",
+          code: "PROCESSING_ERROR"
+        });
+      }
+      
+      if (error.message?.includes('timeout')) {
+        return res.status(504).json({ 
+          message: "Processing took too long. Please try again with a smaller PDF.",
+          code: "TIMEOUT_ERROR"
+        });
+      }
+      
       res.status(500).json({ 
-        message: "Failed to process PDF quote import",
-        error: error instanceof Error ? error.message : "Unknown error"
+        message: "An unexpected error occurred while processing the PDF. Please try again or contact support if the problem persists.",
+        code: "INTERNAL_ERROR"
       });
     }
   });
