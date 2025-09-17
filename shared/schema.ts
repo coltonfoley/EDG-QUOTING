@@ -69,7 +69,8 @@ export const contacts = pgTable("contacts", {
 export const quotes = pgTable("quotes", {
   id: serial("id").primaryKey(),
   quoteNumber: text("quote_number").notNull().unique(),
-  accountId: integer("account_id").notNull(), // renamed from customerId for consistency
+  customerId: integer("customer_id").notNull(), // Legacy column for backward compatibility
+  accountId: integer("account_id"), // New column name, nullable for now
   assignedRepId: text("assigned_rep_id"), // foreign key to users table (for sales rep assignment)
   projectName: text("project_name"),
   projectAddress: text("project_address"),
