@@ -183,34 +183,6 @@ export const lineItems = pgTable("line_items", {
   index("idx_line_items_base_product_id").on(table.baseProductId),
 ]);
 
-// Leads table for CRM/lead management with kanban stages
-export const leads = pgTable("leads", {
-  id: serial("id").primaryKey(),
-  title: text("title").notNull(), // brief lead description
-  description: text("description"), // detailed lead notes
-  contactName: text("contact_name").notNull(), // lead's contact person
-  email: text("email").notNull(), // contact email
-  phone: text("phone"), // contact phone number
-  company: text("company"), // lead's company name
-  source: text("source"), // how we found this lead (website, referral, etc.)
-  stage: text("stage").notNull().default("new"), // kanban stage: new, contacted, qualified, proposal, negotiation, closed_won, closed_lost
-  value: decimal("value", { precision: 10, scale: 2 }), // estimated deal value
-  priority: text("priority").notNull().default("medium"), // high, medium, low
-  assignedTo: integer("assigned_to"), // reference to users table
-  notes: text("notes"), // additional notes/activities
-  customerId: integer("customer_id"), // link to customers table if converted
-  quoteId: integer("quote_id"), // link to quotes table if quote created
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-}, (table) => [
-  index("idx_leads_email").on(table.email),
-  index("idx_leads_stage").on(table.stage),
-  index("idx_leads_assigned_to").on(table.assignedTo),
-  index("idx_leads_customer_id").on(table.customerId),
-  index("idx_leads_created_at").on(table.createdAt),
-  index("idx_leads_stage_created").on(table.stage, table.createdAt),
-]);
-
 
 
 
@@ -309,20 +281,6 @@ export const insertLineItemSchema = createInsertSchema(lineItems).omit({
   discountValue: z.union([z.string(), z.number()]).transform(val => typeof val === 'string' ? val : val.toString()),
 });
 
-export const insertLeadSchema = createInsertSchema(leads).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-}).extend({
-  stage: z.enum(['new', 'contacted', 'qualified', 'proposal', 'negotiation', 'closed_won', 'closed_lost'], {
-    errorMap: () => ({ message: "Stage must be one of: new, contacted, qualified, proposal, negotiation, closed_won, closed_lost" }),
-  }).default('new'),
-  priority: z.enum(['low', 'medium', 'high'], {
-    errorMap: () => ({ message: "Priority must be one of: low, medium, high" }),
-  }).default('medium'),
-  value: z.union([z.string(), z.number(), z.null()]).transform(val => val === null ? null : (typeof val === 'string' ? val : val.toString())).optional(),
-});
-
 export const insertContractTemplateSchema = createInsertSchema(contractTemplates).omit({
   id: true,
   createdAt: true,
@@ -349,7 +307,6 @@ export type Customer = typeof customers.$inferSelect;
 export type Quote = typeof quotes.$inferSelect;
 export type Product = typeof products.$inferSelect;
 export type LineItem = typeof lineItems.$inferSelect;
-export type Lead = typeof leads.$inferSelect;
 export type ContractTemplate = typeof contractTemplates.$inferSelect;
 export type ProposalTemplate = typeof proposalTemplates.$inferSelect;
 export type PricingTable = typeof pricingTables.$inferSelect;
@@ -359,7 +316,6 @@ export type InsertCustomer = z.infer<typeof insertCustomerSchema>;
 export type InsertQuote = z.infer<typeof insertQuoteSchema>;
 export type InsertProduct = z.infer<typeof insertProductSchema>;
 export type InsertLineItem = z.infer<typeof insertLineItemSchema>;
-export type InsertLead = z.infer<typeof insertLeadSchema>;
 export type InsertContractTemplate = z.infer<typeof insertContractTemplateSchema>;
 export type InsertProposalTemplate = z.infer<typeof insertProposalTemplateSchema>;
 export type InsertPricingTable = z.infer<typeof insertPricingTableSchema>;

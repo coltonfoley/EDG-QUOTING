@@ -11,7 +11,6 @@ import NotFound from "@/pages/not-found";
 import Quotes from "@/pages/quotes";
 import QuoteBuilder from "@/pages/quote-builder";
 import Products from "@/pages/products";
-import Leads from "@/pages/leads";
 import Landing from "@/pages/landing";
 import Home from "@/pages/home";
 import AuthPage from "@/pages/auth-page";
@@ -40,8 +39,6 @@ function Router() {
         <>
           <Route path="/" component={AuthPage} />
           <Route path="/auth" component={AuthPage} />
-          {/* Catch-all route for unauthenticated users */}
-          <Route component={AuthPage} />
         </>
       ) : (
         <>
@@ -50,12 +47,9 @@ function Router() {
           <Route path="/quotes/new" component={QuoteBuilder} />
           <Route path={/\/quotes\/\d+$/} component={QuoteBuilder} />
           <Route path="/products" component={Products} />
-          <Route path="/leads" component={Leads} />
           <Route path="/contracts" component={ContractsPage} />
           <Route path="/admin" component={AdminPage} />
           <Route path="/admin/templates" component={AdminTemplatesPage} />
-          {/* Catch-all route for authenticated users */}
-          <Route component={NotFound} />
         </>
       )}
     </Switch>
