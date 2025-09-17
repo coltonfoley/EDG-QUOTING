@@ -5,6 +5,43 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+// Safe math operations with overflow protection
+export function safeAdd(a: number, b: number): number {
+  const result = a + b;
+  if (!isFinite(result)) return Number.MAX_SAFE_INTEGER;
+  return result;
+}
+
+export function safeMultiply(a: number, b: number): number {
+  const result = a * b;
+  if (!isFinite(result)) return Number.MAX_SAFE_INTEGER;
+  return result;
+}
+
+export function safeDivide(a: number, b: number): number {
+  if (b === 0) return 0;
+  const result = a / b;
+  if (!isFinite(result)) return 0;
+  return result;
+}
+
+// Round to 2 decimal places for currency
+export function roundCurrency(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+// Validate numeric input
+export function isValidNumber(value: any): boolean {
+  if (value === null || value === undefined || value === '') return false;
+  const num = typeof value === 'string' ? parseFloat(value) : value;
+  return !isNaN(num) && isFinite(num) && num >= 0;
+}
+
+// Clamp value between min and max
+export function clampValue(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
 export function formatCurrency(value: number | string): string {
   const num = typeof value === 'string' ? parseFloat(value) : value;
   return new Intl.NumberFormat('en-US', {
@@ -21,29 +58,50 @@ export function calculateLineItemTotal(
   discountType: string = "percentage",
   discountValue: number | string = 0
 ): number {
+  // Safely parse and validate inputs
   const qty = typeof quantity === 'string' ? parseFloat(quantity) : quantity;
   const price = typeof unitPrice === 'string' ? parseFloat(unitPrice) : unitPrice;
   const markup = typeof markupValue === 'string' ? parseFloat(markupValue) : markupValue;
   const discount = typeof discountValue === 'string' ? parseFloat(discountValue) : discountValue;
 
-  const baseTotal = qty * price;
+  // Validate inputs
+  if (!isValidNumber(qty) || qty <= 0 || qty > 999999) return 0;
+  if (!isValidNumber(price) || price < 0 || price > 10000000) return 0;
+  if (!isValidNumber(markup) || markup < 0 || markup > 1000) return 0;
+  if (!isValidNumber(discount) || discount < 0) return 0;
+
+  // Clamp values to safe ranges
+  const safeQty = clampValue(qty, 0.01, 999999);
+  const safePrice = clampValue(price, 0, 10000000);
+  const safeMarkup = clampValue(markup, 0, 1000);
+  const safeDiscount = discountType === 'percentage' 
+    ? clampValue(discount, 0, 100)
+    : clampValue(discount, 0, 10000000);
+
+  // Calculate base total with overflow protection
+  const baseTotal = safeMultiply(safeQty, safePrice);
   
   // Apply manufacturer discount first
   let afterDiscount = baseTotal;
-  if (discount > 0) {
+  if (safeDiscount > 0) {
     if (discountType === 'percentage') {
-      afterDiscount = baseTotal - (baseTotal * (discount / 100));
+      const discountAmount = safeMultiply(baseTotal, safeDivide(safeDiscount, 100));
+      afterDiscount = Math.max(0, baseTotal - discountAmount);
     } else {
-      afterDiscount = baseTotal - discount;
+      afterDiscount = Math.max(0, baseTotal - safeDiscount);
     }
   }
   
   // Then apply markup to the discounted amount
+  let finalTotal = afterDiscount;
   if (markupType === 'percentage') {
-    return afterDiscount + (afterDiscount * (markup / 100));
+    const markupAmount = safeMultiply(afterDiscount, safeDivide(safeMarkup, 100));
+    finalTotal = safeAdd(afterDiscount, markupAmount);
   } else {
-    return afterDiscount + markup;
+    finalTotal = safeAdd(afterDiscount, safeMarkup);
   }
+
+  return roundCurrency(finalTotal);
 }
 
 export function calculateLineItemMargin(
@@ -54,38 +112,66 @@ export function calculateLineItemMargin(
   discountType: string = "percentage",
   discountValue: number | string = 0
 ): number {
+  // Safely parse and validate inputs
   const qty = typeof quantity === 'string' ? parseFloat(quantity) : quantity;
   const price = typeof unitPrice === 'string' ? parseFloat(unitPrice) : unitPrice;
   const markup = typeof markupValue === 'string' ? parseFloat(markupValue) : markupValue;
   const discount = typeof discountValue === 'string' ? parseFloat(discountValue) : discountValue;
 
-  const baseTotal = qty * price;
+  // Validate inputs
+  if (!isValidNumber(qty) || qty <= 0 || qty > 999999) return 0;
+  if (!isValidNumber(price) || price < 0 || price > 10000000) return 0;
+  if (!isValidNumber(markup) || markup < 0 || markup > 1000) return 0;
+  if (!isValidNumber(discount) || discount < 0) return 0;
+
+  // Clamp values to safe ranges
+  const safeQty = clampValue(qty, 0.01, 999999);
+  const safePrice = clampValue(price, 0, 10000000);
+  const safeMarkup = clampValue(markup, 0, 1000);
+  const safeDiscount = discountType === 'percentage' 
+    ? clampValue(discount, 0, 100)
+    : clampValue(discount, 0, 10000000);
+
+  // Calculate base total with overflow protection
+  const baseTotal = safeMultiply(safeQty, safePrice);
   
   // Apply manufacturer discount first
   let afterDiscount = baseTotal;
-  if (discount > 0) {
+  if (safeDiscount > 0) {
     if (discountType === 'percentage') {
-      afterDiscount = baseTotal - (baseTotal * (discount / 100));
+      const discountAmount = safeMultiply(baseTotal, safeDivide(safeDiscount, 100));
+      afterDiscount = Math.max(0, baseTotal - discountAmount);
     } else {
-      afterDiscount = baseTotal - discount;
+      afterDiscount = Math.max(0, baseTotal - safeDiscount);
     }
   }
   
   // Calculate markup on the discounted amount
+  let marginAmount = 0;
   if (markupType === 'percentage') {
-    return afterDiscount * (markup / 100);
+    marginAmount = safeMultiply(afterDiscount, safeDivide(safeMarkup, 100));
   } else {
-    return markup;
+    marginAmount = safeMarkup;
   }
+
+  return roundCurrency(marginAmount);
 }
 
 export function calculateQuoteTotals(lineItems: any[], taxRate: number | string = 0, discount: number | string = 0, shipping: number | string = 0) {
+  // Safely parse and validate inputs
   const tax = typeof taxRate === 'string' ? parseFloat(taxRate) : taxRate;
   const disc = typeof discount === 'string' ? parseFloat(discount) : discount;
   const shippingAmount = typeof shipping === 'string' ? parseFloat(shipping) : shipping;
 
-  const subtotal = lineItems.reduce((sum, item) => {
-    return sum + calculateLineItemTotal(
+  // Validate and clamp inputs
+  const safeTax = clampValue(tax || 0, 0, 100);
+  const safeDiscount = clampValue(disc || 0, 0, 100);
+  const safeShipping = clampValue(shippingAmount || 0, 0, 1000000);
+
+  // Calculate subtotal with overflow protection
+  let subtotal = 0;
+  for (const item of lineItems) {
+    const lineTotal = calculateLineItemTotal(
       item.quantity,
       item.unitPrice,
       item.markupType,
@@ -93,49 +179,63 @@ export function calculateQuoteTotals(lineItems: any[], taxRate: number | string 
       item.discountType || "percentage",
       item.discountValue || 0
     );
-  }, 0);
+    subtotal = safeAdd(subtotal, lineTotal);
+  }
 
-  const baseCost = lineItems.reduce((sum, item) => {
+  // Calculate base cost
+  let baseCost = 0;
+  for (const item of lineItems) {
     const qty = typeof item.quantity === 'string' ? parseFloat(item.quantity) : item.quantity;
     const price = typeof item.unitPrice === 'string' ? parseFloat(item.unitPrice) : item.unitPrice;
-    return sum + (qty * price);
-  }, 0);
+    
+    if (isValidNumber(qty) && isValidNumber(price)) {
+      const safeQty = clampValue(qty, 0, 999999);
+      const safePrice = clampValue(price, 0, 10000000);
+      baseCost = safeAdd(baseCost, safeMultiply(safeQty, safePrice));
+    }
+  }
 
   // Calculate total manufacturer discounts for display purposes
-  const totalManufacturerDiscount = lineItems.reduce((sum, item) => {
+  let totalManufacturerDiscount = 0;
+  for (const item of lineItems) {
     const qty = typeof item.quantity === 'string' ? parseFloat(item.quantity) : item.quantity;
     const price = typeof item.unitPrice === 'string' ? parseFloat(item.unitPrice) : item.unitPrice;
     const discountValue = typeof item.discountValue === 'string' ? parseFloat(item.discountValue) : item.discountValue || 0;
     const discountType = item.discountType || "percentage";
     
-    const lineBaseTotal = qty * price;
-    
-    if (discountValue > 0) {
+    if (isValidNumber(qty) && isValidNumber(price) && isValidNumber(discountValue) && discountValue > 0) {
+      const safeQty = clampValue(qty, 0, 999999);
+      const safePrice = clampValue(price, 0, 10000000);
+      const lineBaseTotal = safeMultiply(safeQty, safePrice);
+      
       if (discountType === 'percentage') {
-        return sum + (lineBaseTotal * (discountValue / 100));
+        const safeDiscountPercent = clampValue(discountValue, 0, 100);
+        const discAmount = safeMultiply(lineBaseTotal, safeDivide(safeDiscountPercent, 100));
+        totalManufacturerDiscount = safeAdd(totalManufacturerDiscount, discAmount);
       } else {
-        return sum + discountValue;
+        const safeDiscountDollar = clampValue(discountValue, 0, lineBaseTotal);
+        totalManufacturerDiscount = safeAdd(totalManufacturerDiscount, safeDiscountDollar);
       }
     }
-    return sum;
-  }, 0);
+  }
 
-  const totalMarkup = subtotal - baseCost + totalManufacturerDiscount;
-  const discountAmount = disc > 0 ? (subtotal * (disc / 100)) : 0;
-  const afterDiscount = subtotal - discountAmount;
-  const beforeTax = afterDiscount + shippingAmount;
-  const taxAmount = beforeTax * (tax / 100);
-  const total = beforeTax + taxAmount;
-  const margin = baseCost > 0 ? ((totalMarkup / baseCost) * 100) : 0;
+  // Calculate markup, discount, tax with proper order of operations
+  const totalMarkup = Math.max(0, subtotal - baseCost + totalManufacturerDiscount);
+  const discountAmount = safeDiscount > 0 ? safeMultiply(subtotal, safeDivide(safeDiscount, 100)) : 0;
+  const afterDiscount = Math.max(0, subtotal - discountAmount);
+  const beforeTax = safeAdd(afterDiscount, safeShipping);
+  const taxAmount = safeMultiply(beforeTax, safeDivide(safeTax, 100));
+  const total = safeAdd(beforeTax, taxAmount);
+  const margin = baseCost > 0 ? safeDivide(safeMultiply(totalMarkup, 100), baseCost) : 0;
 
   return {
-    subtotal,
-    totalMarkup,
-    totalManufacturerDiscount,
-    discountAmount,
-    shippingAmount,
-    taxAmount,
-    total,
+    subtotal: roundCurrency(subtotal),
+    totalMarkup: roundCurrency(totalMarkup),
+    totalManufacturerDiscount: roundCurrency(totalManufacturerDiscount),
+    discountAmount: roundCurrency(discountAmount),
+    shippingAmount: roundCurrency(safeShipping),
+    taxAmount: roundCurrency(taxAmount),
+    total: roundCurrency(total),
     margin: Math.round(margin * 10) / 10,
   };
 }
@@ -148,14 +248,23 @@ export function applyDiscountToPrice(
   const unitPrice = typeof price === 'string' ? parseFloat(price) : price;
   const discount = typeof discountValue === 'string' ? parseFloat(discountValue) : discountValue;
 
+  // Validate inputs
+  if (!isValidNumber(unitPrice) || unitPrice < 0) return 0;
+  if (!isValidNumber(discount) || discount < 0) return unitPrice;
+
+  const safePrice = clampValue(unitPrice, 0, 10000000);
+
   if (discount <= 0) {
-    return unitPrice;
+    return safePrice;
   }
 
   if (discountType === 'percentage') {
-    return unitPrice - (unitPrice * (discount / 100));
+    const safeDiscountPercent = clampValue(discount, 0, 100);
+    const discountAmount = safeMultiply(safePrice, safeDivide(safeDiscountPercent, 100));
+    return roundCurrency(Math.max(0, safePrice - discountAmount));
   } else {
-    return unitPrice - discount;
+    const safeDiscountDollar = Math.min(discount, safePrice);
+    return roundCurrency(Math.max(0, safePrice - safeDiscountDollar));
   }
 }
 

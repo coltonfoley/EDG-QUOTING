@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Trash2, Edit, Plus, Package, Search, Filter, X, ChevronDown, ChevronUp, Save, XCircle, Percent, DollarSign, Check, CheckSquare, Square, Minus, Users, Tags, Settings, Eye, EyeOff, Calculator, Receipt, TrendingUp, ShoppingCart, Layers, Target, Image, FileText } from "lucide-react";
-import { formatCurrency, calculateLineItemTotal, calculateLineItemMargin, applyDiscountToPrice } from "@/lib/utils";
+import { formatCurrency, calculateLineItemTotal, calculateLineItemMargin, applyDiscountToPrice, isValidNumber, clampValue, roundCurrency } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { LineItem, Product } from "@shared/schema";
@@ -58,6 +58,10 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
   const [bulkDiscountValue, setBulkDiscountValue] = useState("");
   const [bulkMarkupType, setBulkMarkupType] = useState<"percentage" | "dollar">("percentage");
   const [bulkMarkupValue, setBulkMarkupValue] = useState("");
+  
+  // Validation error states
+  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+  const [newItemErrors, setNewItemErrors] = useState<Record<string, string>>({});
 
   // Responsive detection
   useEffect(() => {
@@ -987,11 +991,31 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
               {isEditing ? (
                 <Input
                   type="number"
-                  step="1"
-                  min="0"
+                  step="0.01"
+                  min="0.01"
+                  max="999999"
                   value={safeInputValue(editingValues[item.id]?.quantity, item.quantity)}
-                  onChange={(e) => updateEditingValue(item.id, "quantity", e.target.value)}
-                  className="text-center text-sm border-edg-teal focus:ring-edg-teal focus:border-edg-teal bg-white"
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    updateEditingValue(item.id, "quantity", value);
+                    
+                    // Validate quantity
+                    const num = parseFloat(value);
+                    const errorKey = `quantity-${item.id}`;
+                    if (!value) {
+                      setValidationErrors(prev => ({ ...prev, [errorKey]: "Quantity is required" }));
+                    } else if (!isValidNumber(num) || num <= 0) {
+                      setValidationErrors(prev => ({ ...prev, [errorKey]: "Quantity must be greater than 0" }));
+                    } else if (num > 999999) {
+                      setValidationErrors(prev => ({ ...prev, [errorKey]: "Quantity must be less than 999,999" }));
+                    } else {
+                      setValidationErrors(prev => {
+                        const { [errorKey]: _, ...rest } = prev;
+                        return rest;
+                      });
+                    }
+                  }}
+                  className={`text-center text-sm border-edg-teal focus:ring-edg-teal focus:border-edg-teal bg-white ${validationErrors[`quantity-${item.id}`] ? 'border-red-500' : ''}`}
                   data-testid={`input-quantity-${item.id}`}
                 />
               ) : (
@@ -1007,9 +1031,31 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                   type="number"
                   step="0.01"
                   min="0"
+                  max="10000000"
                   value={safeInputValue(editingValues[item.id]?.unitPrice, item.unitPrice)}
-                  onChange={(e) => updateEditingValue(item.id, "unitPrice", e.target.value)}
-                  className="text-center text-sm border-edg-teal focus:ring-edg-teal focus:border-edg-teal bg-white"
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    updateEditingValue(item.id, "unitPrice", value);
+                    
+                    // Validate unit price
+                    const num = parseFloat(value);
+                    const errorKey = `unitPrice-${item.id}`;
+                    if (!value && value !== "0") {
+                      setValidationErrors(prev => ({ ...prev, [errorKey]: "Unit price is required" }));
+                    } else if (!isValidNumber(num)) {
+                      setValidationErrors(prev => ({ ...prev, [errorKey]: "Unit price must be a valid number" }));
+                    } else if (num < 0) {
+                      setValidationErrors(prev => ({ ...prev, [errorKey]: "Unit price cannot be negative" }));
+                    } else if (num > 10000000) {
+                      setValidationErrors(prev => ({ ...prev, [errorKey]: "Unit price must be less than $10,000,000" }));
+                    } else {
+                      setValidationErrors(prev => {
+                        const { [errorKey]: _, ...rest } = prev;
+                        return rest;
+                      });
+                    }
+                  }}
+                  className={`text-center text-sm border-edg-teal focus:ring-edg-teal focus:border-edg-teal bg-white ${validationErrors[`unitPrice-${item.id}`] ? 'border-red-500' : ''}`}
                   data-testid={`input-unit-price-${item.id}`}
                 />
               ) : (
@@ -1458,11 +1504,30 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                       <label className="block text-sm font-medium text-gray-700 mb-1">Quantity</label>
                       <Input
                         type="number"
-                        step="1"
-                        min="0"
+                        step="0.01"
+                        min="0.01"
+                        max="999999"
                         value={newItem.quantity}
-                        onChange={(e) => setNewItem({ ...newItem, quantity: e.target.value })}
-                        className="text-center text-sm"
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setNewItem({ ...newItem, quantity: value });
+                          
+                          // Validate quantity
+                          const num = parseFloat(value);
+                          if (!value) {
+                            setNewItemErrors(prev => ({ ...prev, quantity: "Quantity is required" }));
+                          } else if (!isValidNumber(num) || num <= 0) {
+                            setNewItemErrors(prev => ({ ...prev, quantity: "Quantity must be greater than 0" }));
+                          } else if (num > 999999) {
+                            setNewItemErrors(prev => ({ ...prev, quantity: "Quantity must be less than 999,999" }));
+                          } else {
+                            setNewItemErrors(prev => {
+                              const { quantity, ...rest } = prev;
+                              return rest;
+                            });
+                          }
+                        }}
+                        className={`text-center text-sm ${newItemErrors.quantity ? 'border-red-500' : ''}`}
                         placeholder="1"
                         data-testid="input-quantity-new"
                       />
@@ -1473,9 +1538,30 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                         type="number"
                         step="0.01"
                         min="0"
+                        max="10000000"
                         value={newItem.unitPrice}
-                        onChange={(e) => setNewItem({ ...newItem, unitPrice: e.target.value })}
-                        className="text-center text-sm"
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setNewItem({ ...newItem, unitPrice: value });
+                          
+                          // Validate unit price
+                          const num = parseFloat(value);
+                          if (!value && value !== "0") {
+                            setNewItemErrors(prev => ({ ...prev, unitPrice: "Unit price is required" }));
+                          } else if (!isValidNumber(num)) {
+                            setNewItemErrors(prev => ({ ...prev, unitPrice: "Unit price must be a valid number" }));
+                          } else if (num < 0) {
+                            setNewItemErrors(prev => ({ ...prev, unitPrice: "Unit price cannot be negative" }));
+                          } else if (num > 10000000) {
+                            setNewItemErrors(prev => ({ ...prev, unitPrice: "Unit price must be less than $10,000,000" }));
+                          } else {
+                            setNewItemErrors(prev => {
+                              const { unitPrice, ...rest } = prev;
+                              return rest;
+                            });
+                          }
+                        }}
+                        className={`text-center text-sm ${newItemErrors.unitPrice ? 'border-red-500' : ''}`}
                         placeholder="0.00"
                         data-testid="input-unit-price-new"
                       />
@@ -1496,6 +1582,14 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                       </div>
                     </div>
                   </div>
+                  
+                  {/* Validation Errors */}
+                  {(newItemErrors.quantity || newItemErrors.unitPrice) && (
+                    <div className="text-xs text-red-500 space-y-1">
+                      {newItemErrors.quantity && <p>• {newItemErrors.quantity}</p>}
+                      {newItemErrors.unitPrice && <p>• {newItemErrors.unitPrice}</p>}
+                    </div>
+                  )}
 
                   {/* Advanced Controls */}
                   {showAdvancedFields && (
