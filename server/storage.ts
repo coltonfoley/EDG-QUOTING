@@ -420,8 +420,8 @@ export class DatabaseStorage implements IStorage {
     const term = searchTerm.trim().toLowerCase();
     const normalizedPhone = normalizePhoneNumber(searchTerm);
     
-    // Search across multiple fields
-    const results = await db
+    // Search across account fields
+    const accountResults = await db
       .select()
       .from(accounts)
       .where(
@@ -435,7 +435,43 @@ export class DatabaseStorage implements IStorage {
       )
       .limit(10);
     
-    return results;
+    // Also search through contacts and return their associated accounts
+    const contactResults = await db
+      .select({
+        id: accounts.id,
+        name: accounts.name,
+        email: accounts.email,
+        phone: accounts.phone,
+        company: accounts.company,
+        accountType: accounts.accountType,
+        paymentTerms: accounts.paymentTerms,
+        billingAddress: accounts.billingAddress,
+        createdAt: accounts.createdAt,
+        updatedAt: accounts.updatedAt,
+      })
+      .from(contacts)
+      .innerJoin(accounts, eq(contacts.accountId, accounts.id))
+      .where(
+        or(
+          ilike(contacts.firstName, `%${term}%`),
+          ilike(contacts.lastName, `%${term}%`),
+          ilike(contacts.email, `%${term}%`),
+          sql`REPLACE(REPLACE(REPLACE(REPLACE(${contacts.phone}, '-', ''), '(', ''), ')', ''), ' ', '') LIKE ${`%${normalizedPhone}%`}`,
+          // Also search full name combinations
+          sql`LOWER(CONCAT(${contacts.firstName}, ' ', ${contacts.lastName})) LIKE ${`%${term}%`}`,
+          sql`LOWER(CONCAT(${contacts.lastName}, ', ', ${contacts.firstName})) LIKE ${`%${term}%`}`
+        )
+      )
+      .limit(10);
+    
+    // Combine results and remove duplicates by account ID
+    const allResults = [...accountResults, ...contactResults];
+    const uniqueResults = allResults.filter((account, index, self) => 
+      index === self.findIndex(a => a.id === account.id)
+    );
+    
+    // Limit to 10 total results
+    return uniqueResults.slice(0, 10);
   }
 
   // Legacy method for backward compatibility
