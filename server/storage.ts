@@ -204,10 +204,6 @@ export class MemStorage {
       customerSignature: insertQuote.customerSignature || null,
       customerSignatureDate: insertQuote.customerSignatureDate || null,
       signatureStatus: insertQuote.signatureStatus || "unsigned",
-      docusignEnvelopeId: insertQuote.docusignEnvelopeId || null,
-      docusignStatus: insertQuote.docusignStatus || null,
-      docusignSentDate: insertQuote.docusignSentDate || null,
-      docusignViewUrl: insertQuote.docusignViewUrl || null,
       createdAt: new Date(),
     };
     this.quotes.set(id, quote);
