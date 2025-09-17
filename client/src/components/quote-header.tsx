@@ -81,9 +81,9 @@ export function QuoteHeader({ quote, onSave, isLoading, onUploadStatesChange }: 
     debouncedSearch(customerSearchTerm);
   }, [customerSearchTerm, debouncedSearch]);
   
-  // Query for customer search
+  // Query for customer search using the accounts endpoint
   const { data: searchResults = [], isLoading: isSearching } = useQuery<Customer[]>({
-    queryKey: [`/api/customers/search?q=${encodeURIComponent(debouncedSearchTerm)}`],
+    queryKey: [`/api/accounts/search?q=${encodeURIComponent(debouncedSearchTerm)}`],
     enabled: debouncedSearchTerm.length >= 2,
   });
   
@@ -128,7 +128,7 @@ export function QuoteHeader({ quote, onSave, isLoading, onUploadStatesChange }: 
       
       try {
         const searchTerm = email || phone;
-        const response = await fetch(`/api/customers/search?q=${encodeURIComponent(searchTerm)}`, {
+        const response = await fetch(`/api/accounts/search?q=${encodeURIComponent(searchTerm)}`, {
           credentials: 'include',
         });
         const results = await response.json();
