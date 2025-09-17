@@ -50,6 +50,32 @@ export function formatCurrency(value: number | string): string {
   }).format(num);
 }
 
+/**
+ * Calculates the total price for a line item with proper order of operations.
+ * 
+ * Order of Operations:
+ * 1. Calculate base total: quantity × unitPrice
+ * 2. Apply manufacturer discount (if any) to the base total
+ *    - Percentage: baseTotal - (baseTotal × discount%)
+ *    - Fixed: baseTotal - discountAmount
+ * 3. Apply markup to the discounted amount
+ *    - Percentage: discountedTotal + (discountedTotal × markup%)
+ *    - Fixed: discountedTotal + markupAmount
+ * 
+ * This order ensures:
+ * - Manufacturer discounts are applied to the original price
+ * - Markup is calculated on the discounted cost (actual cost to reseller)
+ * - All values are clamped to safe ranges to prevent overflow
+ * - Final result is rounded to 2 decimal places for currency
+ * 
+ * @param quantity - Number of items (0.01 to 999,999)
+ * @param unitPrice - Price per item (0 to 10,000,000)
+ * @param markupType - "percentage" or "dollar"
+ * @param markupValue - Markup amount (0 to 1000)
+ * @param discountType - "percentage" or "dollar" for manufacturer discount
+ * @param discountValue - Manufacturer discount amount
+ * @returns Total price rounded to 2 decimal places
+ */
 export function calculateLineItemTotal(
   quantity: number | string,
   unitPrice: number | string,
@@ -104,6 +130,24 @@ export function calculateLineItemTotal(
   return roundCurrency(finalTotal);
 }
 
+/**
+ * Calculates the margin (profit) for a line item.
+ * 
+ * Margin Calculation:
+ * - Applies manufacturer discount to base cost first
+ * - Calculates markup amount on the discounted cost
+ * - Returns the markup amount as the margin
+ * 
+ * This ensures margin reflects actual profit after manufacturer discounts.
+ * 
+ * @param quantity - Number of items
+ * @param unitPrice - Price per item
+ * @param markupType - "percentage" or "dollar"
+ * @param markupValue - Markup amount
+ * @param discountType - Manufacturer discount type
+ * @param discountValue - Manufacturer discount amount
+ * @returns Margin amount rounded to 2 decimal places
+ */
 export function calculateLineItemMargin(
   quantity: number | string,
   unitPrice: number | string,
@@ -157,6 +201,29 @@ export function calculateLineItemMargin(
   return roundCurrency(marginAmount);
 }
 
+/**
+ * Calculates all totals for a quote with proper order of operations.
+ * 
+ * Order of Operations:
+ * 1. Calculate subtotal: sum of all line items (with their individual markups/discounts)
+ * 2. Apply quote-level discount to subtotal
+ * 3. Add shipping costs
+ * 4. Calculate tax on (discounted subtotal + shipping)
+ * 5. Calculate final total: discounted subtotal + shipping + tax
+ * 
+ * Business Rules:
+ * - Tax is calculated on the total taxable amount (after discount + shipping)
+ * - Quote-level discounts apply to merchandise only, not shipping
+ * - All percentages are clamped to 0-100%
+ * - All amounts are rounded to 2 decimal places for currency
+ * - Safe math operations prevent overflow/underflow
+ * 
+ * @param lineItems - Array of line items with quantity, unitPrice, markup, etc.
+ * @param taxRate - Tax percentage (0-100)
+ * @param discount - Quote-level discount percentage (0-100)
+ * @param shipping - Fixed shipping amount (0-1,000,000)
+ * @returns Object with subtotal, discounts, tax, total, and margin
+ */
 export function calculateQuoteTotals(lineItems: any[], taxRate: number | string = 0, discount: number | string = 0, shipping: number | string = 0) {
   // Safely parse and validate inputs
   const tax = typeof taxRate === 'string' ? parseFloat(taxRate) : taxRate;

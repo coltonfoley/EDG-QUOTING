@@ -34,7 +34,34 @@ import type { ExtractedProduct } from "./openai";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 import { ObjectPermission } from "./objectAcl";
 
-// Server-side calculation verification utilities
+/**
+ * Server-side calculation verification utility
+ * 
+ * Ensures calculation integrity by recalculating line item totals server-side.
+ * This prevents client-side manipulation and ensures consistency.
+ * 
+ * Calculation Order (must match client-side):
+ * 1. Calculate base total: quantity × unitPrice
+ * 2. Apply manufacturer discount to base total
+ * 3. Apply markup to the discounted amount
+ * 
+ * Validation Rules:
+ * - Quantity: 0.01 to 999,999
+ * - Unit Price: 0 to 10,000,000
+ * - Markup: 0 to 1000 (percentage or fixed)
+ * - Discount: 0 to 100% or 0 to base total (fixed)
+ * - All results rounded to 2 decimal places
+ * - Tolerance for comparison: ±$0.01 (for floating-point precision)
+ * 
+ * @param quantity - Number of items
+ * @param unitPrice - Price per item
+ * @param markupType - "percentage" or "dollar"
+ * @param markupValue - Markup amount
+ * @param discountType - Manufacturer discount type
+ * @param discountValue - Manufacturer discount amount
+ * @param expectedTotal - Client-calculated total to verify
+ * @returns Validation result with calculated vs expected values
+ */
 function verifyLineItemCalculation(
   quantity: number | string,
   unitPrice: number | string,
