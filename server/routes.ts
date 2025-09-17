@@ -387,6 +387,80 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Account search endpoint for autocomplete - MUST be before :id routes
+  app.get("/api/accounts/search", isAuthenticated, async (req, res) => {
+    try {
+      const searchTerm = req.query.q as string;
+      console.log(`[SEARCH] Account search request: q="${searchTerm}"`);
+      
+      if (!searchTerm || searchTerm.length < 1) {
+        console.log("[SEARCH] Empty or short search term, returning empty array");
+        return res.json([]);
+      }
+      
+      // Direct database query to avoid any storage layer issues
+      const term = searchTerm.toLowerCase();
+      console.log(`[SEARCH] Searching for term: "${term}"`);
+      
+      // Search accounts directly
+      const accountResults = await db
+        .select()
+        .from(accounts)
+        .where(
+          or(
+            ilike(accounts.name, `%${term}%`),
+            ilike(accounts.email, `%${term}%`),
+            ilike(accounts.company, `%${term}%`)
+          )
+        )
+        .limit(10);
+      
+      console.log(`[SEARCH] Found ${accountResults.length} accounts`);
+      
+      // Also search contacts
+      const contactResults = await db
+        .select({
+          id: accounts.id,
+          name: accounts.name,
+          email: accounts.email,
+          phone: accounts.phone,
+          company: accounts.company,
+          accountType: accounts.accountType,
+          paymentTerms: accounts.paymentTerms,
+          billingAddress: accounts.billingAddress,
+          createdAt: accounts.createdAt,
+          updatedAt: accounts.updatedAt,
+        })
+        .from(contacts)
+        .innerJoin(accounts, eq(contacts.accountId, accounts.id))
+        .where(
+          or(
+            ilike(contacts.firstName, `%${term}%`),
+            ilike(contacts.lastName, `%${term}%`)
+          )
+        )
+        .limit(10);
+      
+      console.log(`[SEARCH] Found ${contactResults.length} contact matches`);
+      
+      // Combine and deduplicate
+      const allResults = [...accountResults, ...contactResults];
+      const uniqueResults = allResults.filter((account, index, self) => 
+        index === self.findIndex(a => a.id === account.id)
+      );
+      
+      console.log(`[SEARCH] Returning ${uniqueResults.length} unique results`);
+      res.json(uniqueResults.slice(0, 10));
+    } catch (error) {
+      console.error("[SEARCH ERROR] Account search error:", error);
+      if (error instanceof Error) {
+        console.error("[SEARCH ERROR] Message:", error.message);
+        console.error("[SEARCH ERROR] Stack:", error.stack);
+      }
+      res.status(500).json({ message: "Search failed", error: error instanceof Error ? error.message : "Unknown error" });
+    }
+  });
+
   app.get("/api/accounts/:id", isAuthenticated, async (req, res) => {
     try {
       // Validate ID parameter
@@ -475,80 +549,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(customer);
     } catch (error) {
       res.status(500).json({ message: "Internal server error" });
-    }
-  });
-
-  // Account search endpoint for autocomplete - simple version
-  app.get("/api/accounts/search", isAuthenticated, async (req, res) => {
-    try {
-      const searchTerm = req.query.q as string;
-      console.log(`[SEARCH] Account search request: q="${searchTerm}"`);
-      
-      if (!searchTerm || searchTerm.length < 1) {
-        console.log("[SEARCH] Empty or short search term, returning empty array");
-        return res.json([]);
-      }
-      
-      // Direct database query to avoid any storage layer issues
-      const term = searchTerm.toLowerCase();
-      console.log(`[SEARCH] Searching for term: "${term}"`);
-      
-      // Search accounts directly
-      const accountResults = await db
-        .select()
-        .from(accounts)
-        .where(
-          or(
-            ilike(accounts.name, `%${term}%`),
-            ilike(accounts.email, `%${term}%`),
-            ilike(accounts.company, `%${term}%`)
-          )
-        )
-        .limit(10);
-      
-      console.log(`[SEARCH] Found ${accountResults.length} accounts`);
-      
-      // Also search contacts
-      const contactResults = await db
-        .select({
-          id: accounts.id,
-          name: accounts.name,
-          email: accounts.email,
-          phone: accounts.phone,
-          company: accounts.company,
-          accountType: accounts.accountType,
-          paymentTerms: accounts.paymentTerms,
-          billingAddress: accounts.billingAddress,
-          createdAt: accounts.createdAt,
-          updatedAt: accounts.updatedAt,
-        })
-        .from(contacts)
-        .innerJoin(accounts, eq(contacts.accountId, accounts.id))
-        .where(
-          or(
-            ilike(contacts.firstName, `%${term}%`),
-            ilike(contacts.lastName, `%${term}%`)
-          )
-        )
-        .limit(10);
-      
-      console.log(`[SEARCH] Found ${contactResults.length} contact matches`);
-      
-      // Combine and deduplicate
-      const allResults = [...accountResults, ...contactResults];
-      const uniqueResults = allResults.filter((account, index, self) => 
-        index === self.findIndex(a => a.id === account.id)
-      );
-      
-      console.log(`[SEARCH] Returning ${uniqueResults.length} unique results`);
-      res.json(uniqueResults.slice(0, 10));
-    } catch (error) {
-      console.error("[SEARCH ERROR] Account search error:", error);
-      if (error instanceof Error) {
-        console.error("[SEARCH ERROR] Message:", error.message);
-        console.error("[SEARCH ERROR] Stack:", error.stack);
-      }
-      res.status(500).json({ message: "Search failed", error: error instanceof Error ? error.message : "Unknown error" });
     }
   });
 
