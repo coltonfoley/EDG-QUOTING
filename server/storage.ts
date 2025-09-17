@@ -115,7 +115,15 @@ export interface IStorage {
 
   // Lead methods
   getLead(id: number): Promise<Lead | undefined>;
-  getAllLeads(): Promise<Lead[]>;
+  getLeadByEmail(email: string): Promise<Lead | undefined>;
+  getAllLeads(filters?: {
+    stage?: string;
+    assignedTo?: number;
+    search?: string;
+    priority?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<Lead[]>;
   getLeadsByStage(stage: string): Promise<Lead[]>;
   getLeadsByAssignedUser(userId: number): Promise<Lead[]>;
   searchLeads(searchTerm: string): Promise<Lead[]>;
@@ -1154,12 +1162,85 @@ export class DatabaseStorage implements IStorage {
     return lead || undefined;
   }
 
-  async getAllLeads(): Promise<Lead[]> {
-    const allLeads = await db
-      .select()
-      .from(leads)
-      .orderBy(desc(leads.createdAt));
-    return allLeads;
+  async getLeadByEmail(email: string): Promise<Lead | undefined> {
+    const normalizedEmail = normalizeEmail(email);
+    const [lead] = await db.select().from(leads).where(eq(sql`LOWER(${leads.email})`, normalizedEmail));
+    return lead || undefined;
+  }
+
+  async getAllLeads(filters?: {
+    stage?: string;
+    assignedTo?: number;
+    search?: string;
+    priority?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<Lead[]> {
+    // Build conditions array based on filters - following the exact pattern from getProposalTemplatesByCategory
+    const conditions = [];
+    
+    if (filters?.stage) {
+      conditions.push(eq(leads.stage, filters.stage));
+    }
+    
+    if (filters?.assignedTo) {
+      conditions.push(eq(leads.assignedTo, filters.assignedTo));
+    }
+    
+    if (filters?.priority) {
+      conditions.push(eq(leads.priority, filters.priority));
+    }
+    
+    if (filters?.search && filters.search.trim()) {
+      const searchTerm = `%${filters.search.trim()}%`;
+      conditions.push(
+        or(
+          ilike(leads.title, searchTerm),
+          ilike(leads.description, searchTerm),
+          ilike(leads.contactName, searchTerm),
+          ilike(leads.email, searchTerm),
+          ilike(leads.company, searchTerm),
+          ilike(leads.notes, searchTerm)
+        )
+      );
+    }
+
+    // Use the exact same pattern as getProposalTemplatesByCategory which works
+    if (!filters?.limit && !filters?.offset) {
+      // Simple case - no pagination
+      if (conditions.length === 0) {
+        return await db
+          .select()
+          .from(leads)
+          .orderBy(desc(leads.createdAt));
+      } else {
+        return await db
+          .select()
+          .from(leads)
+          .where(and(...conditions))
+          .orderBy(desc(leads.createdAt));
+      }
+    } else {
+      // Complex case with pagination - use the same pattern as searchCustomers which works
+      if (conditions.length === 0) {
+        const results = await db
+          .select()
+          .from(leads)
+          .orderBy(desc(leads.createdAt))
+          .limit(filters?.limit || 50)
+          .offset(filters?.offset || 0);
+        return results;
+      } else {
+        const results = await db
+          .select()
+          .from(leads)
+          .where(and(...conditions))
+          .orderBy(desc(leads.createdAt))
+          .limit(filters?.limit || 50)
+          .offset(filters?.offset || 0);
+        return results;
+      }
+    }
   }
 
   async getLeadsByStage(stage: string): Promise<Lead[]> {
