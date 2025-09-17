@@ -18,14 +18,16 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { ImageUploader, type UploadedImage } from "@/components/image-uploader";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { cn } from "@/lib/utils";
+import { cn, mapDealStageToStatus } from "@/lib/utils";
 import { debounce } from "lodash";
+import { DEAL_STAGES } from "@shared/dealStageConstants";
 
 const quoteFormSchema = insertQuoteSchema.extend({
   customerName: z.string().min(1, "Customer name is required"),
   customerEmail: z.string().email("Valid email is required"),
   customerPhone: z.string().min(1, "Phone number is required"),
   customerCompany: z.string().optional(),
+  dealStage: z.string().default("new_lead"),
 }).omit({ accountId: true });
 
 type QuoteFormData = z.infer<typeof quoteFormSchema>;
@@ -127,6 +129,7 @@ export function QuoteHeader({ quote, onSave, isLoading, onUploadStatesChange }: 
       estimatedStartDate: quote?.estimatedStartDate || "",
       notes: quote?.notes || "",
       status: quote?.status || "draft",
+      dealStage: quote?.dealStage || "new_lead",
       taxRate: quote?.taxRate || "0",
       discount: quote?.discount || "0",
       shipping: quote?.shipping || "0",
@@ -228,6 +231,7 @@ export function QuoteHeader({ quote, onSave, isLoading, onUploadStatesChange }: 
         estimatedStartDate: quote.estimatedStartDate || "",
         notes: quote.notes || "",
         status: quote.status || "draft",
+        dealStage: quote.dealStage || "new_lead",
         taxRate: quote.taxRate || "0",
         discount: quote.discount || "0",
         shipping: quote.shipping || "0",
@@ -261,26 +265,45 @@ export function QuoteHeader({ quote, onSave, isLoading, onUploadStatesChange }: 
   }, [portfolioImages, technicalDiagrams, companyImages, onUploadStatesChange]);
 
   const updateStatusMutation = useMutation({
-    mutationFn: async ({ status }: { status: string }) => {
+    mutationFn: async ({ status, dealStage }: { status: string; dealStage?: string }) => {
       if (!quote?.id) throw new Error("No quote ID");
-      const response = await apiRequest('PUT', `/api/quotes/${quote.id}`, { status });
+      const updateData: any = { status };
+      if (dealStage !== undefined) {
+        updateData.dealStage = dealStage;
+      }
+      const response = await apiRequest('PUT', `/api/quotes/${quote.id}`, updateData);
       return response.json();
     },
     onSuccess: (updatedQuote, variables) => {
-      // Update form state to match the new status
+      // Update form state to match the new status and dealStage
       form.setValue("status", variables.status);
-      toast({ title: "Quote status updated successfully" });
+      if (variables.dealStage) {
+        form.setValue("dealStage", variables.dealStage);
+      }
+      toast({ title: "Quote updated successfully" });
       queryClient.invalidateQueries({ queryKey: [`/api/quotes/${quote?.id}`] });
       queryClient.invalidateQueries({ queryKey: ["/api/quotes"] });
     },
     onError: (error: Error) => {
       toast({ 
         title: "Error", 
-        description: "Failed to update quote status", 
+        description: "Failed to update quote", 
         variant: "destructive" 
       });
     },
   });
+  
+  // Handle deal stage change with automatic status synchronization
+  const handleDealStageChange = (newDealStage: string) => {
+    const newStatus = mapDealStageToStatus(newDealStage);
+    form.setValue("dealStage", newDealStage);
+    form.setValue("status", newStatus);
+    
+    // If editing an existing quote, update immediately
+    if (quote?.id) {
+      updateStatusMutation.mutate({ status: newStatus, dealStage: newDealStage });
+    }
+  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -365,26 +388,36 @@ export function QuoteHeader({ quote, onSave, isLoading, onUploadStatesChange }: 
           </div>
           <div className="mt-4 lg:mt-0 flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3">
             {quote && (
-              <div className="flex items-center space-x-2">
-                <span className="text-sm font-medium text-gray-700">Status:</span>
-                <Select
-                  value={quote.status}
-                  onValueChange={(value) => {
-                    updateStatusMutation.mutate({ status: value });
-                  }}
-                  disabled={updateStatusMutation.isPending}
-                >
-                  <SelectTrigger className="w-32">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="draft">Draft</SelectItem>
-                    <SelectItem value="sent">Sent</SelectItem>
-                    <SelectItem value="approved">Approved</SelectItem>
-                    <SelectItem value="rejected">Rejected</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              <>
+                <div className="flex items-center space-x-2">
+                  <span className="text-sm font-medium text-gray-700">Pipeline Stage:</span>
+                  <Select
+                    value={form.watch("dealStage")}
+                    onValueChange={handleDealStageChange}
+                    disabled={updateStatusMutation.isPending}
+                  >
+                    <SelectTrigger className="w-48">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {DEAL_STAGES.map((stage) => (
+                        <SelectItem key={stage.id} value={stage.id}>
+                          {stage.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <span className="text-sm font-medium text-gray-700">Status:</span>
+                  <Badge className={getStatusColor(form.watch("status") || "draft")}>
+                    {form.watch("status") === "draft" && "Draft"}
+                    {form.watch("status") === "sent" && "Sent"}
+                    {form.watch("status") === "approved" && "Approved"}
+                    {form.watch("status") === "rejected" && "Rejected"}
+                  </Badge>
+                </div>
+              </>
             )}
             <Button 
               type="submit" 

@@ -195,12 +195,15 @@ export default function QuoteBuilder() {
   }
 
 
-  const currentQuote = quote || {
+  const currentQuote: QuoteWithDetails = quote || {
     id: 0,
     quoteNumber: "",
     customerId: 0,
+    accountId: null,
+    assignedRepId: null,
     projectName: "",
     projectAddress: "",
+    jobsiteAddress: null,
     estimatedStartDate: "",
     notes: "",
     portfolioImages: [],
@@ -209,18 +212,44 @@ export default function QuoteBuilder() {
     taxRate: "8.5",
     discount: "0",
     shipping: "0",
-    status: "draft",
+    status: "draft" as const,
+    dealStage: "new_lead",
+    lostReason: null,
     contractTemplateId: null,
     customContractTerms: null,
     issuerSignature: null,
     issuerSignatureDate: null,
     customerSignature: null,
     customerSignatureDate: null,
-    signatureStatus: "unsigned",
+    signatureStatus: "unsigned" as const,
     createdAt: new Date(),
-    customer: { id: 0, name: "", email: "", phone: "", company: null },
+    updatedAt: new Date(),
+    account: { 
+      id: 0, 
+      name: "", 
+      email: "", 
+      phone: "", 
+      company: null,
+      accountType: "homeowner" as const,
+      paymentTerms: null,
+      billingAddress: null,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    },
+    customer: { 
+      id: 0, 
+      name: "", 
+      email: "", 
+      phone: "", 
+      company: null,
+      accountType: "homeowner" as const,
+      paymentTerms: null,
+      billingAddress: null,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    },
     lineItems: [],
-  } as QuoteWithDetails;
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">

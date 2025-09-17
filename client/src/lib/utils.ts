@@ -51,6 +51,28 @@ export function formatCurrency(value: number | string): string {
 }
 
 /**
+ * Maps a deal stage to the corresponding quote status.
+ * This ensures consistency between pipeline stages and quote statuses.
+ * 
+ * @param dealStage - The deal stage from the pipeline
+ * @returns The corresponding quote status
+ */
+export function mapDealStageToStatus(dealStage: string): string {
+  const stageToStatusMap: Record<string, string> = {
+    'new_lead': 'draft',
+    'qualifying': 'draft',
+    'consultation_scheduled': 'draft',
+    'building_estimate': 'sent',
+    'quote_sent': 'sent',
+    'closed_won': 'approved',
+    'closed_lost': 'rejected',
+    'on_hold': 'rejected'
+  };
+  
+  return stageToStatusMap[dealStage] || 'draft';
+}
+
+/**
  * Calculates the total price for a line item with proper order of operations.
  * 
  * Order of Operations:
