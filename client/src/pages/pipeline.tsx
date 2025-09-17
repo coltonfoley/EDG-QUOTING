@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, useCallback, memo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { AppHeader } from "@/components/app-header";
 import { PipelineCard } from "@/components/pipeline-card";
+import { LeadCreationModal } from "@/components/lead-creation-modal";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -40,21 +41,20 @@ import {
   Clock,
   Filter,
   ChevronRight,
-  AlertCircle
+  AlertCircle,
+  Plus
 } from "lucide-react";
 import { format, subDays, startOfDay, endOfDay, isWithinInterval } from "date-fns";
 import type { QuoteWithDetails } from "@shared/schema";
 
 // Deal stages configuration
 const DEAL_STAGES = [
-  { id: 'new_lead', label: 'New Lead', color: 'bg-blue-100 border-blue-300 text-blue-800' },
-  { id: 'qualifying', label: 'Qualifying', color: 'bg-purple-100 border-purple-300 text-purple-800' },
-  { id: 'consultation_scheduled', label: 'Consultation', color: 'bg-indigo-100 border-indigo-300 text-indigo-800' },
-  { id: 'building_estimate', label: 'Building Estimate', color: 'bg-yellow-100 border-yellow-300 text-yellow-800' },
-  { id: 'quote_sent', label: 'Quote Sent', color: 'bg-orange-100 border-orange-300 text-orange-800' },
-  { id: 'closed_won', label: 'Closed-Won', color: 'bg-green-100 border-green-300 text-green-800' },
-  { id: 'closed_lost', label: 'Closed-Lost', color: 'bg-red-100 border-red-300 text-red-800' },
-  { id: 'on_hold', label: 'On Hold', color: 'bg-gray-100 border-gray-300 text-gray-800' }
+  { id: 'lead', label: 'New Lead', color: 'bg-blue-100 border-blue-300 text-blue-800' },
+  { id: 'qualified', label: 'Qualified', color: 'bg-purple-100 border-purple-300 text-purple-800' },
+  { id: 'proposal', label: 'Proposal', color: 'bg-indigo-100 border-indigo-300 text-indigo-800' },
+  { id: 'negotiation', label: 'Negotiation', color: 'bg-yellow-100 border-yellow-300 text-yellow-800' },
+  { id: 'won', label: 'Closed-Won', color: 'bg-green-100 border-green-300 text-green-800' },
+  { id: 'lost', label: 'Closed-Lost', color: 'bg-red-100 border-red-300 text-red-800' }
 ];
 
 // Sortable Column Component - Memoized for performance
@@ -180,6 +180,7 @@ export default function Pipeline() {
   const [filterDateRange, setFilterDateRange] = useState("all");
   const [filterAccountType, setFilterAccountType] = useState("all");
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [leadModalOpen, setLeadModalOpen] = useState(false);
   const [lostReasonDialog, setLostReasonDialog] = useState<{
     open: boolean;
     quoteId: number | null;
@@ -336,7 +337,7 @@ export default function Pipeline() {
     });
 
     filteredQuotes.forEach(quote => {
-      const stage = quote.dealStage || 'new_lead';
+      const stage = quote.dealStage || 'lead';
       if (grouped[stage]) {
         grouped[stage].push(quote);
       }
@@ -362,7 +363,7 @@ export default function Pipeline() {
       return sum + quoteTotal;
     }, 0);
 
-    const wonDeals = filteredQuotes.filter(q => q.dealStage === 'closed_won').length;
+    const wonDeals = filteredQuotes.filter(q => q.dealStage === 'won').length;
     const conversionRate = totalDeals > 0 ? (wonDeals / totalDeals) * 100 : 0;
 
     const avgDealSize = totalDeals > 0 ? totalValue / totalDeals : 0;
@@ -403,7 +404,7 @@ export default function Pipeline() {
       // Dropped on another quote card - find which column it's in
       const targetQuote = overData.quote;
       if (targetQuote) {
-        targetStage = targetQuote.dealStage || 'new_lead';
+        targetStage = targetQuote.dealStage || 'lead';
       }
     }
 
@@ -411,8 +412,8 @@ export default function Pipeline() {
       const quote = activeData.quote;
 
       if (quote && targetStage && quote.dealStage !== targetStage) {
-        // If moving to closed_lost, show dialog for lost reason
-        if (targetStage === 'closed_lost') {
+        // If moving to lost, show dialog for lost reason
+        if (targetStage === 'lost') {
           setLostReasonDialog({
             open: true,
             quoteId: quote.id,
@@ -435,7 +436,7 @@ export default function Pipeline() {
     if (lostReasonDialog.quoteId && lostReason.trim()) {
       updateStageMutation.mutate({
         quoteId: lostReasonDialog.quoteId,
-        dealStage: 'closed_lost',
+        dealStage: 'lost',
         lostReason: lostReason.trim()
       });
       setLostReasonDialog({ open: false, quoteId: null, quoteName: '' });
@@ -471,9 +472,19 @@ export default function Pipeline() {
       
       <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
-        <div className="mb-8">
-          <h2 className="text-3xl font-bold text-edg-black">Sales Pipeline</h2>
-          <p className="text-edg-grey mt-2">Track and manage your sales opportunities</p>
+        <div className="mb-8 flex justify-between items-center">
+          <div>
+            <h2 className="text-3xl font-bold text-edg-black">Sales Pipeline</h2>
+            <p className="text-edg-grey mt-2">Track and manage your sales opportunities</p>
+          </div>
+          <Button 
+            onClick={() => setLeadModalOpen(true)}
+            className="bg-blue-600 hover:bg-blue-700"
+            data-testid="button-new-lead"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            New Lead
+          </Button>
         </div>
 
         {/* Stats Cards */}
@@ -627,6 +638,12 @@ export default function Pipeline() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Lead Creation Modal */}
+      <LeadCreationModal 
+        open={leadModalOpen} 
+        onClose={() => setLeadModalOpen(false)} 
+      />
 
       {/* Lost Reason Dialog */}
       <Dialog open={lostReasonDialog.open} onOpenChange={(open) => {
