@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -96,6 +96,25 @@ export function QuoteImporter({ onImportComplete, onClose }: QuoteImporterProps)
     });
   }, [quotesData]);
 
+  // Update customer fields when an existing account is selected
+  useEffect(() => {
+    if (accountMode === "existing" && selectedAccountId && accountsData && editedData) {
+      const selectedAccount = accountsData.find(acc => acc.id.toString() === selectedAccountId);
+      if (selectedAccount) {
+        setEditedData({
+          ...editedData,
+          customer: {
+            name: selectedAccount.name || editedData.customer.name,
+            email: selectedAccount.email || editedData.customer.email,
+            phone: selectedAccount.phone || editedData.customer.phone,
+            company: selectedAccount.company || editedData.customer.company,
+            address: editedData.customer.address, // Keep address from PDF if available
+          },
+        });
+      }
+    }
+  }, [selectedAccountId, accountMode, accountsData]);
+
   // PDF processing mutation
   const processPdfMutation = useMutation({
     mutationFn: async (file: File) => {
@@ -171,6 +190,7 @@ export function QuoteImporter({ onImportComplete, onClose }: QuoteImporterProps)
         
         const quoteData = {
           accountId: accountId,
+          customerId: accountId, // Backend requires this for backward compatibility
           quoteNumber: data.quoteNumber || `QT-${Date.now()}`,
           projectName: data.projectDescription || "Imported Project",
           projectAddress: data.customer.address || "",
