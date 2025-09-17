@@ -28,23 +28,52 @@ export const users = pgTable("users", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-export const customers = pgTable("customers", {
+// Accounts table (formerly customers) - represents business entities
+export const accounts = pgTable("accounts", {
   id: serial("id").primaryKey(),
-  name: text("name").notNull(),
+  name: text("name").notNull(), // Company or individual name
   email: text("email").notNull(),
   phone: text("phone").notNull(),
   company: text("company"), // Company name for business clients
+  accountType: text("account_type").notNull().default("homeowner"), // general_contractor, homeowner, commercial
+  paymentTerms: text("payment_terms").default("net_30"), // net_30, net_60, due_on_receipt, etc.
+  billingAddress: text("billing_address"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => [
-  index("idx_customers_email").on(table.email),
-  index("idx_customers_phone").on(table.phone),
+  index("idx_accounts_email").on(table.email),
+  index("idx_accounts_phone").on(table.phone),
+  index("idx_accounts_type").on(table.accountType),
+]);
+
+// Legacy alias for backward compatibility
+export const customers = accounts;
+
+// Contacts table - individuals associated with accounts
+export const contacts = pgTable("contacts", {
+  id: serial("id").primaryKey(),
+  accountId: integer("account_id").notNull(),
+  firstName: text("first_name").notNull(),
+  lastName: text("last_name").notNull(),
+  email: text("email").notNull(),
+  phone: text("phone"),
+  role: text("role").notNull().default("primary_contact"), // project_manager, primary_contact, accounting, etc.
+  isPrimary: boolean("is_primary").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_contacts_account_id").on(table.accountId),
+  index("idx_contacts_email").on(table.email),
 ]);
 
 export const quotes = pgTable("quotes", {
   id: serial("id").primaryKey(),
   quoteNumber: text("quote_number").notNull().unique(),
-  customerId: integer("customer_id").notNull(),
+  accountId: integer("account_id").notNull(), // renamed from customerId for consistency
+  assignedRepId: text("assigned_rep_id"), // foreign key to users table (for sales rep assignment)
   projectName: text("project_name"),
   projectAddress: text("project_address"),
+  jobsiteAddress: text("jobsite_address"), // if different from project address
   estimatedStartDate: text("estimated_start_date"),
   notes: text("notes"),
   // Image fields for comprehensive image integration
@@ -55,6 +84,8 @@ export const quotes = pgTable("quotes", {
   discount: decimal("discount", { precision: 5, scale: 2 }).default("0"),
   shipping: decimal("shipping", { precision: 10, scale: 2 }).default("0"),
   status: text("status").notNull().default("draft"), // draft, sent, approved, rejected
+  dealStage: text("deal_stage").notNull().default("lead"), // lead, qualified, proposal, negotiation, won, lost
+  lostReason: text("lost_reason"), // price, timeline, competitor, no_budget, etc.
   // Contract and signature fields
   contractTemplateId: integer("contract_template_id"), // reference to contract template
   customContractTerms: text("custom_contract_terms"), // custom contract text for this quote
@@ -64,10 +95,13 @@ export const quotes = pgTable("quotes", {
   customerSignatureDate: timestamp("customer_signature_date"),
   signatureStatus: text("signature_status").notNull().default("unsigned"), // unsigned, signed
   createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => [
-  index("idx_quotes_customer_id").on(table.customerId),
+  index("idx_quotes_account_id").on(table.accountId),
   index("idx_quotes_status").on(table.status),
-  index("idx_quotes_customer_created").on(table.customerId, table.createdAt),
+  index("idx_quotes_deal_stage").on(table.dealStage),
+  index("idx_quotes_assigned_rep").on(table.assignedRepId),
+  index("idx_quotes_account_created").on(table.accountId, table.createdAt),
 ]);
 
 // Contract templates for reusable contract terms
@@ -186,9 +220,29 @@ export const lineItems = pgTable("line_items", {
 
 
 
-export const insertCustomerSchema = createInsertSchema(customers).omit({
+// Insert schemas for accounts and contacts
+export const insertAccountSchema = createInsertSchema(accounts).omit({
   id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  accountType: z.enum(["general_contractor", "homeowner", "commercial"]).default("homeowner"),
+  paymentTerms: z.string().optional().nullable(),
+  billingAddress: z.string().optional().nullable(),
 });
+
+export const insertContactSchema = createInsertSchema(contacts).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  role: z.string().default("primary_contact"),
+  phone: z.string().optional().nullable(),
+  isPrimary: z.boolean().default(false),
+});
+
+// Legacy alias for backward compatibility
+export const insertCustomerSchema = insertAccountSchema;
 
 // Zod schemas for image metadata structures
 export const imageMetadataSchema = z.object({
@@ -223,14 +277,19 @@ export const productImageSchema = imageMetadataSchema.extend({
 export const insertQuoteSchema = createInsertSchema(quotes).omit({
   id: true,
   createdAt: true,
+  updatedAt: true,
 }).extend({
   taxRate: z.union([z.string(), z.number(), z.null()]).transform(val => val === null ? "0" : (typeof val === 'string' ? val : val.toString())),
   discount: z.union([z.string(), z.number(), z.null()]).transform(val => val === null ? "0" : (typeof val === 'string' ? val : val.toString())),
   shipping: z.union([z.string(), z.number(), z.null()]).transform(val => val === null ? "0" : (typeof val === 'string' ? val : val.toString())),
   projectName: z.union([z.string(), z.null()]).transform(val => val === null ? "" : val),
   projectAddress: z.union([z.string(), z.null()]).transform(val => val === null ? "" : val),
+  jobsiteAddress: z.union([z.string(), z.null()]).transform(val => val === null ? "" : val).optional(),
   estimatedStartDate: z.union([z.string(), z.null()]).transform(val => val === null ? "" : val),
   notes: z.union([z.string(), z.null()]).transform(val => val === null ? "" : val),
+  dealStage: z.enum(["lead", "qualified", "proposal", "negotiation", "won", "lost"]).default("lead"),
+  lostReason: z.string().optional().nullable(),
+  assignedRepId: z.string().optional().nullable(),
   // Image fields
   portfolioImages: z.array(portfolioImageSchema).optional(),
   technicalDiagrams: z.array(technicalDiagramSchema).optional(),
@@ -303,7 +362,10 @@ export const insertProposalTemplateSchema = createInsertSchema(proposalTemplates
 
 
 
-export type Customer = typeof customers.$inferSelect;
+// Type exports
+export type Account = typeof accounts.$inferSelect;
+export type Contact = typeof contacts.$inferSelect;
+export type Customer = typeof accounts.$inferSelect; // Legacy alias
 export type Quote = typeof quotes.$inferSelect;
 export type Product = typeof products.$inferSelect;
 export type LineItem = typeof lineItems.$inferSelect;
@@ -312,7 +374,9 @@ export type ProposalTemplate = typeof proposalTemplates.$inferSelect;
 export type PricingTable = typeof pricingTables.$inferSelect;
 export type ProductAccessory = typeof productAccessories.$inferSelect;
 
-export type InsertCustomer = z.infer<typeof insertCustomerSchema>;
+export type InsertAccount = z.infer<typeof insertAccountSchema>;
+export type InsertContact = z.infer<typeof insertContactSchema>;
+export type InsertCustomer = z.infer<typeof insertAccountSchema>; // Legacy alias
 export type InsertQuote = z.infer<typeof insertQuoteSchema>;
 export type InsertProduct = z.infer<typeof insertProductSchema>;
 export type InsertLineItem = z.infer<typeof insertLineItemSchema>;
@@ -322,10 +386,12 @@ export type InsertPricingTable = z.infer<typeof insertPricingTableSchema>;
 export type InsertProductAccessory = z.infer<typeof insertProductAccessorySchema>;
 
 export type QuoteWithDetails = Quote & {
-  customer: Customer;
+  account: Account;
+  customer: Customer; // Legacy alias for backward compatibility
   lineItems: LineItem[];
   contractTemplate?: ContractTemplate;
   proposalTemplate?: ProposalTemplate;
+  contacts?: Contact[]; // Associated contacts for the project
 };
 
 // DTO types for API responses that include calculated fields

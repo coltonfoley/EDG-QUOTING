@@ -1,4 +1,4 @@
-import { customers, quotes, lineItems, products, users, contractTemplates, proposalTemplates, pricingTables, productAccessories, type Customer, type Quote, type LineItem, type Product, type User, type ContractTemplate, type ProposalTemplate, type PricingTable, type ProductAccessory, type InsertCustomer, type InsertQuote, type InsertLineItem, type InsertProduct, type InsertUser, type InsertContractTemplate, type InsertProposalTemplate, type InsertPricingTable, type InsertProductAccessory, type QuoteWithDetails, type ProductWithDetails } from "@shared/schema";
+import { accounts, customers, contacts, quotes, lineItems, products, users, contractTemplates, proposalTemplates, pricingTables, productAccessories, type Account, type Customer, type Contact, type Quote, type LineItem, type Product, type User, type ContractTemplate, type ProposalTemplate, type PricingTable, type ProductAccessory, type InsertAccount, type InsertCustomer, type InsertContact, type InsertQuote, type InsertLineItem, type InsertProduct, type InsertUser, type InsertContractTemplate, type InsertProposalTemplate, type InsertPricingTable, type InsertProductAccessory, type QuoteWithDetails, type ProductWithDetails } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, inArray, sql, and, ne, or, ilike } from "drizzle-orm";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
@@ -38,13 +38,29 @@ export function normalizeEmail(email: string): string {
 }
 
 export interface IStorage {
-  // Customer methods
+  // Account methods (formerly customer methods)
+  getAccount(id: number): Promise<Account | undefined>;
+  getAccountByEmail(email: string): Promise<Account | undefined>;
+  findDuplicateAccount(account: InsertAccount): Promise<Account | undefined>;
+  searchAccounts(searchTerm: string): Promise<Account[]>;
+  createAccount(account: InsertAccount, options?: { allowDuplicate?: boolean; updateIfExists?: boolean }): Promise<Account>;
+  updateAccount(id: number, account: Partial<InsertAccount>): Promise<Account | undefined>;
+  
+  // Legacy customer methods (backward compatibility)
   getCustomer(id: number): Promise<Customer | undefined>;
   getCustomerByEmail(email: string): Promise<Customer | undefined>;
   findDuplicateCustomer(customer: InsertCustomer): Promise<Customer | undefined>;
   searchCustomers(searchTerm: string): Promise<Customer[]>;
   createCustomer(customer: InsertCustomer, options?: { allowDuplicate?: boolean; updateIfExists?: boolean }): Promise<Customer>;
   updateCustomer(id: number, customer: Partial<InsertCustomer>): Promise<Customer | undefined>;
+  
+  // Contact methods
+  getContact(id: number): Promise<Contact | undefined>;
+  getContactsByAccountId(accountId: number): Promise<Contact[]>;
+  createContact(contact: InsertContact): Promise<Contact>;
+  updateContact(id: number, contact: Partial<InsertContact>): Promise<Contact | undefined>;
+  deleteContact(id: number): Promise<boolean>;
+  getPrimaryContact(accountId: number): Promise<Contact | undefined>;
 
   // Quote methods
   getQuote(id: number): Promise<Quote | undefined>;
@@ -179,7 +195,7 @@ export class MemStorage {
     const quote = this.quotes.get(id);
     if (!quote) return undefined;
 
-    const customer = this.customers.get(quote.customerId);
+    const customer = this.customers.get(quote.accountId);
     if (!customer) return undefined;
 
     const quoteLineItems = Array.from(this.lineItems.values()).filter(item => item.quoteId === id);
@@ -195,7 +211,7 @@ export class MemStorage {
     const result: QuoteWithDetails[] = [];
     
     for (const quote of Array.from(this.quotes.values())) {
-      const customer = this.customers.get(quote.customerId);
+      const customer = this.customers.get(quote.accountId);
       if (customer) {
         const quoteLineItems = Array.from(this.lineItems.values()).filter(item => item.quoteId === quote.id);
         result.push({
@@ -317,53 +333,69 @@ export class DatabaseStorage implements IStorage {
       errorLog: () => {}, // Suppress session error logs in production
     });
   }
+  // Account methods
+  async getAccount(id: number): Promise<Account | undefined> {
+    const [account] = await db.select().from(accounts).where(eq(accounts.id, id));
+    return account || undefined;
+  }
+
+  // Legacy method for backward compatibility
   async getCustomer(id: number): Promise<Customer | undefined> {
-    const [user] = await db.select().from(customers).where(eq(customers.id, id));
-    return user || undefined;
+    return this.getAccount(id);
   }
 
-  async getCustomerByEmail(email: string): Promise<Customer | undefined> {
+  async getAccountByEmail(email: string): Promise<Account | undefined> {
     const normalizedEmail = normalizeEmail(email);
-    const [user] = await db.select().from(customers).where(eq(sql`LOWER(${customers.email})`, normalizedEmail));
-    return user || undefined;
+    const [account] = await db.select().from(accounts).where(eq(sql`LOWER(${accounts.email})`, normalizedEmail));
+    return account || undefined;
   }
 
-  async findDuplicateCustomer(customer: InsertCustomer): Promise<Customer | undefined> {
+  // Legacy method for backward compatibility
+  async getCustomerByEmail(email: string): Promise<Customer | undefined> {
+    return this.getAccountByEmail(email);
+  }
+
+  async findDuplicateAccount(account: InsertAccount): Promise<Account | undefined> {
     // Normalize the input data
-    const normalizedEmail = normalizeEmail(customer.email);
-    const normalizedPhone = normalizePhoneNumber(customer.phone);
+    const normalizedEmail = normalizeEmail(account.email);
+    const normalizedPhone = normalizePhoneNumber(account.phone);
     
     // Build conditions for duplicate detection
     const conditions = [];
     
     // Check for email match (case-insensitive)
-    conditions.push(eq(sql`LOWER(${customers.email})`, normalizedEmail));
+    conditions.push(eq(sql`LOWER(${accounts.email})`, normalizedEmail));
     
     // Check for phone match (after normalization)
     // We need to compare normalized versions of the stored phone numbers
-    conditions.push(sql`REPLACE(REPLACE(REPLACE(REPLACE(${customers.phone}, '-', ''), '(', ''), ')', ''), ' ', '') LIKE '%${normalizedPhone}'`);
+    conditions.push(sql`REPLACE(REPLACE(REPLACE(REPLACE(${accounts.phone}, '-', ''), '(', ''), ')', ''), ' ', '') LIKE '%${normalizedPhone}'`);
     
-    // For business customers, also check name + company combination
-    if (customer.company) {
+    // For business accounts, also check name + company combination
+    if (account.company) {
       conditions.push(
         and(
-          eq(sql`LOWER(${customers.name})`, customer.name.toLowerCase()),
-          eq(sql`LOWER(${customers.company})`, customer.company.toLowerCase())
+          eq(sql`LOWER(${accounts.name})`, account.name.toLowerCase()),
+          eq(sql`LOWER(${accounts.company})`, account.company.toLowerCase())
         )
       );
     }
     
-    // Query for any matching customers
+    // Query for any matching accounts
     const duplicates = await db
       .select()
-      .from(customers)
+      .from(accounts)
       .where(or(...conditions))
       .limit(1);
     
     return duplicates[0] || undefined;
   }
 
-  async searchCustomers(searchTerm: string): Promise<Customer[]> {
+  // Legacy method for backward compatibility
+  async findDuplicateCustomer(customer: InsertCustomer): Promise<Customer | undefined> {
+    return this.findDuplicateAccount(customer as InsertAccount);
+  }
+
+  async searchAccounts(searchTerm: string): Promise<Account[]> {
     if (!searchTerm || searchTerm.trim().length === 0) {
       return [];
     }
@@ -374,14 +406,14 @@ export class DatabaseStorage implements IStorage {
     // Search across multiple fields
     const results = await db
       .select()
-      .from(customers)
+      .from(accounts)
       .where(
         or(
-          ilike(customers.name, `%${term}%`),
-          ilike(customers.email, `%${term}%`),
-          ilike(customers.company, `%${term}%`),
+          ilike(accounts.name, `%${term}%`),
+          ilike(accounts.email, `%${term}%`),
+          ilike(accounts.company, `%${term}%`),
           // For phone, try to match the normalized version
-          sql`REPLACE(REPLACE(REPLACE(REPLACE(${customers.phone}, '-', ''), '(', ''), ')', ''), ' ', '') LIKE '%${normalizedPhone}%'`
+          sql`REPLACE(REPLACE(REPLACE(REPLACE(${accounts.phone}, '-', ''), '(', ''), ')', ''), ' ', '') LIKE '%${normalizedPhone}%'`
         )
       )
       .limit(10);
@@ -389,52 +421,108 @@ export class DatabaseStorage implements IStorage {
     return results;
   }
 
-  async createCustomer(insertCustomer: InsertCustomer, options?: { allowDuplicate?: boolean; updateIfExists?: boolean }): Promise<Customer> {
+  // Legacy method for backward compatibility
+  async searchCustomers(searchTerm: string): Promise<Customer[]> {
+    return this.searchAccounts(searchTerm);
+  }
+
+  async createAccount(insertAccount: InsertAccount, options?: { allowDuplicate?: boolean; updateIfExists?: boolean }): Promise<Account> {
     // Set default options
     const { allowDuplicate = false, updateIfExists = true } = options || {};
     
     // Check for duplicates unless explicitly allowed
     if (!allowDuplicate) {
-      const duplicate = await this.findDuplicateCustomer(insertCustomer);
+      const duplicate = await this.findDuplicateAccount(insertAccount);
       
       if (duplicate) {
         if (updateIfExists) {
-          // Update the existing customer with new information (merge)
-          const updated = await this.updateCustomer(duplicate.id, {
+          // Update the existing account with new information (merge)
+          const updated = await this.updateAccount(duplicate.id, {
             // Only update fields that have values in the new data
-            ...(insertCustomer.name && { name: insertCustomer.name }),
-            ...(insertCustomer.email && { email: insertCustomer.email }),
-            ...(insertCustomer.phone && { phone: insertCustomer.phone }),
-            ...(insertCustomer.company !== undefined && { company: insertCustomer.company }),
+            ...(insertAccount.name && { name: insertAccount.name }),
+            ...(insertAccount.email && { email: insertAccount.email }),
+            ...(insertAccount.phone && { phone: insertAccount.phone }),
+            ...(insertAccount.company !== undefined && { company: insertAccount.company }),
+            ...(insertAccount.accountType && { accountType: insertAccount.accountType }),
+            ...(insertAccount.paymentTerms !== undefined && { paymentTerms: insertAccount.paymentTerms }),
+            ...(insertAccount.billingAddress !== undefined && { billingAddress: insertAccount.billingAddress }),
           });
           
-          console.log(`Updated existing customer ${duplicate.id} instead of creating duplicate`);
+          console.log(`Updated existing account ${duplicate.id} instead of creating duplicate`);
           return updated || duplicate;
         } else {
-          // Return the existing customer without updating
-          console.log(`Found existing customer ${duplicate.id}, returning without update`);
+          // Return the existing account without updating
+          console.log(`Found existing account ${duplicate.id}, returning without update`);
           return duplicate;
         }
       }
     }
     
-    // No duplicate found or duplicates allowed, create new customer
-    const [customer] = await db
-      .insert(customers)
-      .values(insertCustomer)
+    // No duplicate found or duplicates allowed, create new account
+    const [account] = await db
+      .insert(accounts)
+      .values(insertAccount)
       .returning();
     
-    console.log(`Created new customer ${customer.id}`);
-    return customer;
+    console.log(`Created new account ${account.id}`);
+    return account;
   }
 
-  async updateCustomer(id: number, customerData: Partial<InsertCustomer>): Promise<Customer | undefined> {
+  // Legacy method for backward compatibility
+  async createCustomer(insertCustomer: InsertCustomer, options?: { allowDuplicate?: boolean; updateIfExists?: boolean }): Promise<Customer> {
+    return this.createAccount(insertCustomer as InsertAccount, options);
+  }
+
+  async updateAccount(id: number, accountData: Partial<InsertAccount>): Promise<Account | undefined> {
     const [updated] = await db
-      .update(customers)
-      .set(customerData)
-      .where(eq(customers.id, id))
+      .update(accounts)
+      .set({...accountData, updatedAt: new Date()}) 
+      .where(eq(accounts.id, id))
       .returning();
     return updated || undefined;
+  }
+
+  // Legacy method for backward compatibility
+  async updateCustomer(id: number, customerData: Partial<InsertCustomer>): Promise<Customer | undefined> {
+    return this.updateAccount(id, customerData as Partial<InsertAccount>);
+  }
+
+  // Contact methods
+  async getContact(id: number): Promise<Contact | undefined> {
+    const [contact] = await db.select().from(contacts).where(eq(contacts.id, id));
+    return contact || undefined;
+  }
+
+  async getContactsByAccountId(accountId: number): Promise<Contact[]> {
+    const results = await db.select().from(contacts).where(eq(contacts.accountId, accountId));
+    return results;
+  }
+
+  async createContact(contact: InsertContact): Promise<Contact> {
+    const [newContact] = await db.insert(contacts).values(contact).returning();
+    return newContact;
+  }
+
+  async updateContact(id: number, contact: Partial<InsertContact>): Promise<Contact | undefined> {
+    const [updated] = await db.update(contacts)
+      .set({...contact, updatedAt: new Date()})
+      .where(eq(contacts.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteContact(id: number): Promise<boolean> {
+    const result = await db.delete(contacts).where(eq(contacts.id, id));
+    return result.rowCount! > 0;
+  }
+
+  async getPrimaryContact(accountId: number): Promise<Contact | undefined> {
+    const [contact] = await db.select().from(contacts)
+      .where(and(
+        eq(contacts.accountId, accountId),
+        eq(contacts.isPrimary, true)
+      ));
+    return contact || undefined;
   }
 
   async getQuote(id: number): Promise<Quote | undefined> {
@@ -446,10 +534,11 @@ export class DatabaseStorage implements IStorage {
     const [quote] = await db.select().from(quotes).where(eq(quotes.id, id));
     if (!quote) return undefined;
 
-    const [customer] = await db.select().from(customers).where(eq(customers.id, quote.customerId));
-    if (!customer) return undefined;
+    const [account] = await db.select().from(accounts).where(eq(accounts.id, quote.accountId));
+    if (!account) return undefined;
 
     const quoteLineItems = await db.select().from(lineItems).where(eq(lineItems.quoteId, id));
+    const projectContacts = await db.select().from(contacts).where(eq(contacts.accountId, quote.accountId));
 
     // Get contract template if referenced
     let contractTemplate: ContractTemplate | undefined;
@@ -459,9 +548,11 @@ export class DatabaseStorage implements IStorage {
 
     return {
       ...quote,
-      customer,
+      account,
+      customer: account, // Legacy alias for backward compatibility
       lineItems: quoteLineItems,
       contractTemplate,
+      contacts: projectContacts,
     };
   }
 
@@ -470,9 +561,10 @@ export class DatabaseStorage implements IStorage {
     const result: QuoteWithDetails[] = [];
 
     for (const quote of allQuotes) {
-      const [customer] = await db.select().from(customers).where(eq(customers.id, quote.customerId));
-      if (customer) {
+      const [account] = await db.select().from(accounts).where(eq(accounts.id, quote.accountId));
+      if (account) {
         const quoteLineItems = await db.select().from(lineItems).where(eq(lineItems.quoteId, quote.id));
+        const projectContacts = await db.select().from(contacts).where(eq(contacts.accountId, quote.accountId));
         
         // Get contract template if referenced
         let contractTemplate: ContractTemplate | undefined;
@@ -482,9 +574,11 @@ export class DatabaseStorage implements IStorage {
         
         result.push({
           ...quote,
-          customer,
+          account,
+          customer: account, // Legacy alias for backward compatibility
           lineItems: quoteLineItems,
           contractTemplate,
+          contacts: projectContacts,
         });
       }
     }

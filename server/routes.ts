@@ -4,6 +4,8 @@ import { storage } from "./storage";
 import { z } from "zod";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import {
+  insertAccountSchema,
+  insertContactSchema,
   insertCustomerSchema,
   insertQuoteSchema,
   insertLineItemSchema,
@@ -350,7 +352,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Customer routes (protected)
+  // Account routes (formerly customer routes)
+  app.get("/api/accounts/:id", isAuthenticated, async (req, res) => {
+    try {
+      // Validate ID parameter
+      const params = idParamSchema.safeParse(req.params);
+      if (!params.success) {
+        return res.status(400).json({ 
+          message: "Invalid request parameters", 
+          errors: params.error.errors 
+        });
+      }
+      
+      const account = await storage.getAccount(params.data.id);
+      if (!account) {
+        return res.status(404).json({ message: "Account not found" });
+      }
+      res.json(account);
+    } catch (error) {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // Legacy customer route for backward compatibility
   app.get("/api/customers/:id", isAuthenticated, async (req, res) => {
     try {
       // Validate ID parameter
@@ -372,7 +396,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Customer search endpoint for autocomplete
+  // Account search endpoint for autocomplete
+  app.get("/api/accounts/search", isAuthenticated, async (req, res) => {
+    try {
+      const searchTerm = req.query.q as string;
+      if (!searchTerm) {
+        return res.json([]);
+      }
+      
+      const accounts = await storage.searchAccounts(searchTerm);
+      res.json(accounts);
+    } catch (error) {
+      console.error("Account search error:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // Legacy customer search endpoint for backward compatibility
   app.get("/api/customers/search", isAuthenticated, async (req, res) => {
     try {
       const searchTerm = req.query.q as string;
@@ -388,6 +428,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/accounts", isAuthenticated, async (req, res) => {
+    try {
+      const accountData = insertAccountSchema.parse(req.body);
+      
+      // Options for duplicate handling
+      const allowDuplicate = req.body.allowDuplicate === true;
+      const updateIfExists = req.body.updateIfExists !== false; // Default to true
+      
+      const account = await storage.createAccount(accountData, {
+        allowDuplicate,
+        updateIfExists
+      });
+      
+      // Check if this was an update of existing account or new creation
+      // by checking if the account existed before (we can detect this from logs)
+      const duplicate = await storage.findDuplicateAccount(accountData);
+      
+      if (duplicate && duplicate.id === account.id && !allowDuplicate) {
+        // This was an update of existing account
+        res.status(200).json({
+          ...account,
+          _wasExisting: true,
+          _message: "Account already existed and was updated with new information"
+        });
+      } else {
+        // This was a new account creation
+        res.status(201).json(account);
+      }
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid account data", errors: error.errors });
+      }
+      console.error("Account creation error:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // Legacy customer route for backward compatibility
   app.post("/api/customers", isAuthenticated, async (req, res) => {
     try {
       const customerData = insertCustomerSchema.parse(req.body);
@@ -425,6 +503,120 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Contact routes
+  app.get("/api/contacts/account/:accountId", isAuthenticated, async (req, res) => {
+    try {
+      const accountId = parseInt(req.params.accountId);
+      if (isNaN(accountId)) {
+        return res.status(400).json({ message: "Invalid account ID" });
+      }
+      
+      const contacts = await storage.getContactsByAccountId(accountId);
+      res.json(contacts);
+    } catch (error) {
+      console.error("Error fetching contacts:", error);
+      res.status(500).json({ message: "Failed to fetch contacts" });
+    }
+  });
+
+  app.get("/api/contacts/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ message: "Invalid contact ID" });
+      }
+      
+      const contact = await storage.getContact(id);
+      if (!contact) {
+        return res.status(404).json({ message: "Contact not found" });
+      }
+      res.json(contact);
+    } catch (error) {
+      console.error("Error fetching contact:", error);
+      res.status(500).json({ message: "Failed to fetch contact" });
+    }
+  });
+
+  app.post("/api/contacts", isAuthenticated, async (req, res) => {
+    try {
+      const contactData = insertContactSchema.parse(req.body);
+      const contact = await storage.createContact(contactData);
+      res.status(201).json(contact);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid contact data", errors: error.errors });
+      }
+      console.error("Contact creation error:", error);
+      res.status(500).json({ message: "Failed to create contact" });
+    }
+  });
+
+  app.put("/api/contacts/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ message: "Invalid contact ID" });
+      }
+      
+      const contactData = insertContactSchema.partial().parse(req.body);
+      const contact = await storage.updateContact(id, contactData);
+      if (!contact) {
+        return res.status(404).json({ message: "Contact not found" });
+      }
+      res.json(contact);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid contact data", errors: error.errors });
+      }
+      console.error("Contact update error:", error);
+      res.status(500).json({ message: "Failed to update contact" });
+    }
+  });
+
+  app.delete("/api/contacts/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ message: "Invalid contact ID" });
+      }
+      
+      const deleted = await storage.deleteContact(id);
+      if (!deleted) {
+        return res.status(404).json({ message: "Contact not found" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      console.error("Contact deletion error:", error);
+      res.status(500).json({ message: "Failed to delete contact" });
+    }
+  });
+
+  app.put("/api/accounts/:id", isAuthenticated, async (req, res) => {
+    try {
+      // Validate ID parameter
+      const params = idParamSchema.safeParse(req.params);
+      if (!params.success) {
+        return res.status(400).json({ 
+          message: "Invalid request parameters", 
+          errors: params.error.errors 
+        });
+      }
+      
+      const accountData = insertAccountSchema.partial().parse(req.body);
+      const account = await storage.updateAccount(params.data.id, accountData);
+      if (!account) {
+        return res.status(404).json({ message: "Account not found" });
+      }
+      res.json(account);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid account data", errors: error.errors });
+      }
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // Legacy customer route for backward compatibility
   app.put("/api/customers/:id", isAuthenticated, async (req, res) => {
     try {
       // Validate ID parameter
