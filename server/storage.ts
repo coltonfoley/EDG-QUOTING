@@ -288,7 +288,7 @@ export class DatabaseStorage implements IStorage {
       tableName: "sessions",
       ttl: 7 * 24 * 60 * 60, // 7 days in seconds
       pruneSessionInterval: 60 * 60, // prune expired sessions every hour
-      errorLog: console.error.bind(console),
+      errorLog: () => {}, // Suppress session error logs in production
     });
   }
   async getCustomer(id: number): Promise<Customer | undefined> {
@@ -409,7 +409,7 @@ export class DatabaseStorage implements IStorage {
         
         finalQuoteData[field] = [...existingImages, ...uniqueNewImages] as any;
         
-        console.log(`📸 Merged ${field}: ${existingImages.length} existing + ${uniqueNewImages.length} new = ${(finalQuoteData[field] as any[]).length} total`);
+        // Images merged successfully
       }
     }
 
