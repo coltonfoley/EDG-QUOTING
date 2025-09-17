@@ -26,7 +26,7 @@ const quoteFormSchema = insertQuoteSchema.extend({
   customerEmail: z.string().email("Valid email is required"),
   customerPhone: z.string().min(1, "Phone number is required"),
   customerCompany: z.string().optional(),
-}).omit({ customerId: true });
+}).omit({ accountId: true });
 
 type QuoteFormData = z.infer<typeof quoteFormSchema>;
 
