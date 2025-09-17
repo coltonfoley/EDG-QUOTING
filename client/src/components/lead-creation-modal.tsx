@@ -215,8 +215,11 @@ export function LeadCreationModal({ open, onClose }: LeadCreationModalProps) {
         accountId: accountId!,
         projectName: data.projectName,
         jobsiteAddress: data.jobsiteAddress,
-        dealStage: "lead", // Always set to lead for new projects
+        dealStage: "new_lead", // Always set to new_lead for new projects
         status: "draft",
+        taxRate: "0", // Required field
+        discount: "0", // Required field
+        shipping: "0", // Required field
         validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days from now
         notes: data.description || ""
       };

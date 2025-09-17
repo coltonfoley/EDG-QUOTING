@@ -30,16 +30,19 @@ async function comparePasswords(supplied: string, stored: string) {
 }
 
 export function setupAuth(app: Express) {
+  // Check if we're in production (Replit) or development
+  const isProduction = process.env.NODE_ENV === 'production' || process.env.REPL_ID;
+  
   const sessionSettings: session.SessionOptions = {
     secret: process.env.SESSION_SECRET || 'dev-secret-change-in-production',
     resave: false,
     saveUninitialized: false,
     store: storage.sessionStore,
     cookie: {
-      secure: true, // Always secure for iframe compatibility
+      secure: isProduction, // Use secure cookies in production
       httpOnly: true,
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days in milliseconds
-      sameSite: 'none' // Required for iframe/third-party context
+      sameSite: isProduction ? 'none' : 'lax' // 'none' for production with HTTPS, 'lax' for development
     },
     name: 'sessionId', // Custom session name for security
   };
@@ -65,7 +68,7 @@ export function setupAuth(app: Express) {
   );
 
   passport.serializeUser((user, done) => done(null, user.id));
-  passport.deserializeUser(async (id: number, done) => {
+  passport.deserializeUser(async (id: string, done) => {
     try {
       const user = await storage.getUser(id);
       done(null, user);
