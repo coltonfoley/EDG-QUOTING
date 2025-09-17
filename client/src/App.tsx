@@ -48,12 +48,12 @@ function Router() {
         <>
           <Route path="/" component={Home} />
           <Route path="/accounts" component={Accounts} />
-          <Route path={/\/accounts\/\d+$/} component={AccountDetail} />
+          <Route path="/accounts/:id" component={AccountDetail} />
           <Route path="/quotes" component={Quotes} />
           <Route path="/pipeline" component={Pipeline} />
           <Route path="/quotes/new" component={QuoteBuilder} />
-          <Route path={/\/quotes\/\d+$/} component={QuoteDetail} />
-          <Route path={/\/quotes\/\d+\/edit$/} component={QuoteBuilder} />
+          <Route path="/quotes/:id/edit" component={QuoteBuilder} />
+          <Route path="/quotes/:id" component={QuoteDetail} />
           <Route path="/products" component={Products} />
           <Route path="/contracts" component={ContractsPage} />
           <Route path="/admin" component={AdminPage} />
