@@ -161,6 +161,11 @@ export function applyDiscountToPrice(
 
 export function generateQuoteNumber(): string {
   const year = new Date().getFullYear();
-  const timestamp = Date.now().toString().slice(-6);
-  return `QT-${year}-${timestamp}`;
+  // Use full timestamp including milliseconds for better uniqueness
+  const timestamp = Date.now();
+  // Add a random component for additional uniqueness (3-digit random number)
+  const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+  // Use last 8 digits of timestamp + random component for uniqueness
+  const uniqueId = `${timestamp.toString().slice(-8)}${random}`;
+  return `QT-${year}-${uniqueId}`;
 }
