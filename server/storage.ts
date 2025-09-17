@@ -419,11 +419,9 @@ export class DatabaseStorage implements IStorage {
     
     try {
       const term = searchTerm.trim().toLowerCase();
-      const normalizedPhone = normalizePhoneNumber(searchTerm);
-      
       console.log(`Searching for: "${term}"`);
       
-      // Search across account fields
+      // Simple search across account fields first
       const accountResults = await db
         .select()
         .from(accounts)
@@ -431,16 +429,14 @@ export class DatabaseStorage implements IStorage {
           or(
             ilike(accounts.name, `%${term}%`),
             ilike(accounts.email, `%${term}%`),
-            ilike(accounts.company, `%${term}%`),
-            // For phone, try to match the normalized version
-            sql`REPLACE(REPLACE(REPLACE(REPLACE(${accounts.phone}, '-', ''), '(', ''), ')', ''), ' ', '') LIKE ${`%${normalizedPhone}%`}`
+            ilike(accounts.company, `%${term}%`)
           )
         )
         .limit(10);
       
       console.log(`Account results: ${accountResults.length}`);
       
-      // Also search through contacts and return their associated accounts
+      // Search through contacts and return their associated accounts
       const contactResults = await db
         .select({
           id: accounts.id,
