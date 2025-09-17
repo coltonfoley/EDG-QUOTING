@@ -39,6 +39,7 @@ export async function apiRequest(
   method: string,
   url: string,
   data?: unknown | undefined,
+  options?: { timeout?: number },
 ): Promise<Response> {
   // Handle FormData differently - don't set Content-Type and don't stringify
   const isFormData = data instanceof FormData;
@@ -49,7 +50,7 @@ export async function apiRequest(
       headers: isFormData ? {} : (data ? { "Content-Type": "application/json" } : {}),
       body: isFormData ? data : (data ? JSON.stringify(data) : undefined),
       credentials: "include",
-      signal: AbortSignal.timeout(30000), // 30 second timeout
+      signal: AbortSignal.timeout(options?.timeout || 30000), // Default 30 second timeout, customizable
     });
 
     await throwIfResNotOk(res);

@@ -94,7 +94,8 @@ export function QuoteImporter({ onImportComplete, onClose }: QuoteImporterProps)
       const formData = new FormData();
       formData.append("pdf", file);
       
-      const response = await apiRequest("POST", "/api/quotes/import-pdf", formData);
+      // Use a longer timeout for PDF processing (120 seconds)
+      const response = await apiRequest("POST", "/api/quotes/import-pdf", formData, { timeout: 120000 });
       return response.json();
     },
     onSuccess: (data) => {
@@ -137,7 +138,7 @@ export function QuoteImporter({ onImportComplete, onClose }: QuoteImporterProps)
           company: data.customer.company || null,
         };
         
-        const customerResponse = await apiRequest("POST", "/api/customers", customerData);
+        const customerResponse = await apiRequest("POST", "/api/customers", customerData, { timeout: 10000 });
         const customer = await customerResponse.json();
         
         const quoteData = {
@@ -153,7 +154,7 @@ export function QuoteImporter({ onImportComplete, onClose }: QuoteImporterProps)
           status: "draft" as const,
         };
         
-        const quoteResponse = await apiRequest("POST", "/api/quotes", quoteData);
+        const quoteResponse = await apiRequest("POST", "/api/quotes", quoteData, { timeout: 10000 });
         const quote = await quoteResponse.json();
         
         // Add line items
