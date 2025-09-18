@@ -1,4 +1,4 @@
-import { Switch, Route, Redirect } from "wouter";
+import { Switch, Route, Redirect, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider, useIsFetching, useIsMutating } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -7,6 +7,9 @@ import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { LoadingBar } from "@/components/loading-bar";
 import { LoadingSpinner } from "@/components/loading-spinner";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { AlertTriangle, RefreshCw } from "lucide-react";
 import NotFound from "@/pages/not-found";
 import Quotes from "@/pages/quotes";
 import QuoteBuilder from "@/pages/quote-builder";
@@ -31,22 +34,64 @@ function GlobalLoadingIndicator() {
 }
 
 function Router() {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, error } = useAuth();
+  const [location, setLocation] = useLocation();
 
+  // Show loading spinner while auth is being checked
   if (isLoading) {
     return <LoadingSpinner fullScreen text="Loading application..." />;
+  }
+
+  // If there's an error (timeout or network issue), show error state with retry
+  if (error && !isAuthenticated) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+        <div className="max-w-md w-full">
+          <Alert className="border-red-200 bg-red-50">
+            <AlertTriangle className="h-4 w-4 text-red-600" />
+            <AlertTitle className="text-red-900">Connection Error</AlertTitle>
+            <AlertDescription className="text-red-700">
+              {error.message || "Unable to verify authentication status. Please check your connection and try again."}
+            </AlertDescription>
+          </Alert>
+          <div className="flex gap-4 mt-6 justify-center">
+            <Button
+              onClick={() => window.location.reload()}
+              className="flex items-center gap-2"
+              data-testid="button-retry-auth"
+            >
+              <RefreshCw className="h-4 w-4" />
+              Retry
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setLocation("/auth")}
+              data-testid="button-go-to-login"
+            >
+              Go to Login
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
     <Switch>
       {!isAuthenticated ? (
         <>
-          <Route path="/" component={AuthPage} />
           <Route path="/auth" component={AuthPage} />
+          {/* Redirect all other paths to auth when not authenticated */}
+          <Route>
+            <Redirect to="/auth" />
+          </Route>
         </>
       ) : (
         <>
           <Route path="/" component={Home} />
+          <Route path="/auth">
+            <Redirect to="/" />
+          </Route>
           <Route path="/accounts" component={Accounts} />
           <Route path="/accounts/:id" component={AccountDetail} />
           <Route path="/quotes" component={Quotes} />
@@ -61,6 +106,8 @@ function Router() {
           <Route path="/admin" component={AdminPage} />
           <Route path="/admin/templates" component={AdminTemplatesPage} />
           <Route path="/admin/contracts" component={ContractsPage} />
+          {/* Catch-all for not found pages */}
+          <Route component={NotFound} />
         </>
       )}
     </Switch>

@@ -1,4 +1,4 @@
-import React, { createContext, ReactNode, useContext } from "react";
+import React, { createContext, ReactNode, useContext, useEffect, useState } from "react";
 import {
   useQuery,
   useMutation,
@@ -25,15 +25,95 @@ export const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const { toast } = useToast();
+  const [hasTimedOut, setHasTimedOut] = useState(false);
+  
   const {
     data: user,
     error,
     isLoading,
+    isError,
   } = useQuery<SelectUser | undefined, Error>({
     queryKey: ["/api/user"],
-    queryFn: getQueryFn({ on401: "returnNull" }),
+    queryFn: async ({ queryKey, signal }) => {
+      try {
+        // Create a timeout promise that rejects after 5 seconds
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          const timeoutId = setTimeout(() => {
+            reject(new Error(ERROR_MESSAGES.NETWORK_TIMEOUT));
+          }, 5000);
+          
+          // Clean up timeout if signal aborts
+          signal?.addEventListener('abort', () => clearTimeout(timeoutId));
+        });
+        
+        // Race between the actual fetch and timeout
+        const fetchPromise = fetch(queryKey[0] as string, {
+          credentials: "include",
+          signal,
+        });
+        
+        const res = await Promise.race([fetchPromise, timeoutPromise]) as Response;
+        
+        // Handle 401 by returning null (user not authenticated)
+        if (res.status === 401) {
+          return null;
+        }
+        
+        // Handle other non-ok responses
+        if (!res.ok) {
+          let errorMessage = res.statusText;
+          try {
+            const contentType = res.headers.get('content-type');
+            if (contentType && contentType.includes('application/json')) {
+              const errorData = await res.json();
+              errorMessage = errorData.message || errorData.error || res.statusText;
+            }
+          } catch {
+            // Use status text if can't parse JSON
+          }
+          throw new Error(errorMessage);
+        }
+        
+        return await res.json();
+      } catch (error: any) {
+        // Check if offline
+        if (!navigator.onLine) {
+          throw new Error(ERROR_MESSAGES.NETWORK_OFFLINE);
+        }
+        
+        // Check if timeout
+        if (error.message === ERROR_MESSAGES.NETWORK_TIMEOUT) {
+          console.error('Authentication check timed out after 5 seconds');
+          setHasTimedOut(true);
+        }
+        
+        throw error;
+      }
+    },
     retry: false, // Don't retry auth queries
+    staleTime: 0, // Always check fresh auth status
+    gcTime: 0, // Don't cache auth status
   });
+  
+  // Handle timeout and error states
+  useEffect(() => {
+    if (hasTimedOut || (isError && error?.message === ERROR_MESSAGES.NETWORK_TIMEOUT)) {
+      toast({
+        title: "Connection timeout",
+        description: "Unable to verify authentication. Please refresh the page or login again.",
+        variant: "destructive",
+      });
+    } else if (isError && !hasTimedOut) {
+      const errorMessage = error?.message || "Authentication check failed";
+      if (!errorMessage.includes('401')) { // Don't show error for normal 401s
+        toast({
+          title: "Authentication error",
+          description: errorMessage,
+          variant: "destructive",
+        });
+      }
+    }
+  }, [isError, error, hasTimedOut, toast]);
 
   const loginMutation = useMutation({
     mutationFn: async (credentials: LoginData) => {
@@ -148,12 +228,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
   });
 
+  // Determine effective loading state - stop loading if timed out or errored
+  const effectiveIsLoading = isLoading && !hasTimedOut && !isError;
+  
   return (
     <AuthContext.Provider
       value={{
         user: user ?? null,
-        isLoading,
-        error,
+        isLoading: effectiveIsLoading,
+        error: (hasTimedOut || isError) ? error : null,
         isAuthenticated: !!user,
         loginMutation,
         logoutMutation,
