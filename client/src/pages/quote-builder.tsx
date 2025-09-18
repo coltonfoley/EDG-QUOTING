@@ -45,19 +45,20 @@ export default function QuoteBuilder() {
 
   const createQuoteMutation = useMutation({
     mutationFn: async (data: any) => {
-      // First create or get customer
-      const customerResponse = await apiRequest("POST", "/api/customers", {
+      // First create or get account (using accounts endpoint)
+      const accountResponse = await apiRequest("POST", "/api/accounts", {
         name: data.customerName,
         email: data.customerEmail,
         phone: data.customerPhone,
         company: data.customerCompany || null,
       });
-      const customer = await customerResponse.json();
+      const account = await accountResponse.json();
 
-      // Then create quote
+      // Then create quote with accountId (and customerId for backward compatibility)
       const quoteData = {
         ...data,
-        customerId: customer.id,
+        accountId: account.id,
+        customerId: account.id, // Keep for backward compatibility
         quoteNumber: generateQuoteNumber(),
       };
       delete quoteData.customerName;
@@ -83,9 +84,10 @@ export default function QuoteBuilder() {
     mutationFn: async (data: any) => {
       if (!quoteId) throw new Error("No quote ID");
       
-      // Update customer first
-      if (quote?.customer) {
-        await apiRequest("PUT", `/api/customers/${quote.customer.id}`, {
+      // Update account first (check both quote.account and quote.customer for backward compatibility)
+      const accountId = quote?.account?.id || quote?.customer?.id;
+      if (accountId) {
+        await apiRequest("PUT", `/api/accounts/${accountId}`, {
           name: data.customerName,
           email: data.customerEmail,
           phone: data.customerPhone,
@@ -124,13 +126,16 @@ export default function QuoteBuilder() {
   const handleUpdateQuote = (field: string, value: any) => {
     if (!quote || !quoteId) return;
     
+    // Use account data if available, fall back to customer for backward compatibility
+    const customerData = quote.account || quote.customer;
+    
     // Only send the specific field being updated, not the entire quote object
     updateQuoteMutation.mutate({
       [field]: value,
-      customerName: quote.customer.name,
-      customerEmail: quote.customer.email,
-      customerPhone: quote.customer.phone,
-      customerCompany: quote.customer.company || "",
+      customerName: customerData.name,
+      customerEmail: customerData.email,
+      customerPhone: customerData.phone,
+      customerCompany: customerData.company || "",
     });
   };
 
