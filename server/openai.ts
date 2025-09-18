@@ -2,7 +2,11 @@ import OpenAI from "openai";
 import { z } from "zod";
 
 // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const openai = new OpenAI({ 
+  apiKey: process.env.OPENAI_API_KEY,
+  timeout: 240000, // 4 minutes timeout for complex PDF processing
+  maxRetries: 2 // Retry failed requests up to 2 times
+});
 
 // Schema for extracted product data
 const ExtractedProductSchema = z.object({
