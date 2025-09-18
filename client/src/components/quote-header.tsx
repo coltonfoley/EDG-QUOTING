@@ -28,7 +28,7 @@ const quoteFormSchema = insertQuoteSchema.extend({
   customerPhone: z.string().min(1, "Phone number is required"),
   customerCompany: z.string().optional(),
   dealStage: z.string().default("new_lead"),
-}).omit({ accountId: true });
+}).omit({ accountId: true, customerId: true });
 
 type QuoteFormData = z.infer<typeof quoteFormSchema>;
 
@@ -321,12 +321,8 @@ export function QuoteHeader({ quote, onSave, isLoading, onUploadStatesChange }: 
   };
 
   const handleSubmit = (data: QuoteFormData) => {
-    console.log('🎯 Form submitted with data:', data);
-    console.log('🔍 Form errors:', form.formState.errors);
-    
     // If images are still uploading, set pending save and return
     if (isUploading) {
-      console.log('📋 Images still uploading, setting pending save flag');
       setPendingSave(true);
       toast({
         title: "Upload in progress",
@@ -431,7 +427,6 @@ export function QuoteHeader({ quote, onSave, isLoading, onUploadStatesChange }: 
                 // Check for validation errors and show them
                 const errors = form.formState.errors;
                 if (Object.keys(errors).length > 0) {
-                  console.log('Form validation errors:', errors);
                   const errorMessages = Object.entries(errors)
                     .map(([field, error]) => `${field}: ${error?.message}`)
                     .join(', ');
