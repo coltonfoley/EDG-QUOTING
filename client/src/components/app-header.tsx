@@ -26,7 +26,7 @@ export function AppHeader() {
         <div className="flex justify-between items-center h-16">
           <div className="flex items-center space-x-8">
             <div className="flex-shrink-0 flex items-center">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 160" className="h-12 mr-3" role="img" aria-label="EDG Rainmaker — primary logo (light)">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 160" className="h-16 mr-3" role="img" aria-label="EDG Rainmaker — primary logo (light)">
                 <defs>
                   <linearGradient id="tealGrad1" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="#00bfa5"/>
