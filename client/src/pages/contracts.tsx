@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Link } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,16 +8,36 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Edit, Trash2, FileText } from "lucide-react";
+import { Plus, Edit, Trash2, FileText, Shield, User as UserIcon, Settings } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { AppHeader } from "@/components/app-header";
 import type { ContractTemplate, InsertContractTemplate } from "@shared/schema";
 
 export default function ContractsPage() {
+  const { user } = useAuth();
   const { toast } = useToast();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<ContractTemplate | null>(null);
+
+  // Check if user is admin
+  if (!user || user.role !== "admin") {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <AppHeader />
+        <div className="max-w-4xl mx-auto px-4 py-8">
+          <Card>
+            <CardContent className="text-center py-12">
+              <Shield className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h2>
+              <p className="text-gray-600">You need administrator privileges to access this page.</p>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
 
   const { data: templates = [], isLoading } = useQuery<ContractTemplate[]>({
     queryKey: ["/api/contract-templates"],
@@ -110,23 +131,51 @@ export default function ContractsPage() {
   }
 
   return (
-    <>
+    <div className="min-h-screen bg-gray-50">
       <AppHeader />
-      <div className="container mx-auto py-8">
-      <div className="flex justify-between items-center mb-8">
-        <div>
-          <h1 className="text-3xl font-bold">Contract Templates</h1>
-          <p className="text-gray-600 mt-2">
-            Manage reusable contract templates for your quotes
-          </p>
+      <div className="max-w-6xl mx-auto px-4 py-8">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Administration</h1>
+          <p className="text-gray-600">Manage system settings, users, and templates</p>
+          
+          {/* Admin Navigation Tabs */}
+          <div className="flex space-x-1 mt-6 border-b">
+            <Link 
+              href="/admin"
+              className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-edg-black hover:border-b-2 hover:border-gray-300 transition-colors"
+              data-testid="link-admin-users"
+            >
+              <UserIcon className="inline mr-2 h-4 w-4" />
+              Users & Access
+            </Link>
+            <Link 
+              href="/admin/templates"
+              className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-edg-black hover:border-b-2 hover:border-gray-300 transition-colors"
+              data-testid="link-admin-templates"
+            >
+              <FileText className="inline mr-2 h-4 w-4" />
+              Templates
+            </Link>
+            <button 
+              className="px-4 py-2 text-sm font-medium text-edg-black border-b-2 border-edg-black bg-white"
+              data-testid="button-admin-contracts-active"
+            >
+              <Settings className="inline mr-2 h-4 w-4" />
+              Contracts
+            </button>
+          </div>
         </div>
-        <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-          <DialogTrigger asChild>
-            <Button className="bg-edg-black hover:bg-edg-grey text-white">
-              <Plus className="mr-2 h-4 w-4" />
-              Create Template
-            </Button>
-          </DialogTrigger>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle>Contract Templates</CardTitle>
+            <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+              <DialogTrigger asChild>
+                <Button className="bg-edg-black hover:bg-edg-grey text-white">
+                  <Plus className="mr-2 h-4 w-4" />
+                  Create Template
+                </Button>
+              </DialogTrigger>
           <DialogContent className="max-w-4xl">
             <DialogHeader>
               <DialogTitle>Create Contract Template</DialogTitle>
@@ -188,11 +237,11 @@ export default function ContractsPage() {
                 </Button>
               </div>
             </form>
-          </DialogContent>
-        </Dialog>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              </DialogContent>
+            </Dialog>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {templates.map((template) => (
           <Card key={template.id} className="h-fit">
             <CardHeader>
@@ -286,7 +335,7 @@ export default function ContractsPage() {
                             id="isDefault"
                             name="isDefault"
                             className="rounded"
-                            defaultChecked={template.isDefault}
+                            defaultChecked={template.isDefault ?? false}
                           />
                           <Label htmlFor="isDefault">Set as default template</Label>
                         </div>
@@ -323,27 +372,26 @@ export default function ContractsPage() {
             </CardContent>
           </Card>
         ))}
-      </div>
-
-      {templates.length === 0 && (
-        <Card className="text-center py-12">
-          <CardContent>
-            <FileText className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-            <h3 className="text-lg font-semibold mb-2">No contract templates</h3>
-            <p className="text-gray-600 mb-4">
-              Create your first contract template to use with quotes
-            </p>
-            <Button
-              onClick={() => setShowCreateDialog(true)}
-              className="bg-edg-black hover:bg-edg-grey text-white"
-            >
-              <Plus className="mr-2 h-4 w-4" />
-              Create Template
-            </Button>
+            {templates.length === 0 && (
+              <div className="text-center py-12">
+                <FileText className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+                <h3 className="text-lg font-semibold mb-2">No contract templates</h3>
+                <p className="text-gray-600 mb-4">
+                  Create your first contract template to use with quotes
+                </p>
+                <Button
+                  onClick={() => setShowCreateDialog(true)}
+                  className="bg-edg-black hover:bg-edg-grey text-white"
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  Create Template
+                </Button>
+              </div>
+            )}
+            </div>
           </CardContent>
         </Card>
-      )}
       </div>
-    </>
+    </div>
   );
 }
