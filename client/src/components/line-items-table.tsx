@@ -7,7 +7,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Trash2, Edit, Plus, Package, Search, Filter, X, ChevronDown, ChevronUp, Save, XCircle, Percent, DollarSign, Check, CheckSquare, Square, Minus, Users, Tags, Settings, Eye, EyeOff, Calculator, Receipt, TrendingUp, ShoppingCart, Layers, Target, Image, FileText } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Trash2, Edit, Plus, Package, Search, Filter, X, ChevronDown, ChevronUp, Save, XCircle, Percent, DollarSign, Check, CheckSquare, Square, Minus, Users, Tags, Settings, Eye, EyeOff, Calculator, Receipt, TrendingUp, ShoppingCart, Layers, Target, Image, FileText, Info } from "lucide-react";
 import { formatCurrency, calculateLineItemTotal, calculateLineItemMargin, applyDiscountToPrice, isValidNumber, clampValue, roundCurrency } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -19,6 +20,9 @@ interface LineItemsTableProps {
 }
 
 export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
+  // Check if quote is new (not saved yet)
+  const isUnsavedQuote = !quoteId || quoteId === 0;
+  
   const [editingItem, setEditingItem] = useState<number | null>(null);
   const [editingValues, setEditingValues] = useState<Record<number, Partial<LineItem>>>({});
   const [newItem, setNewItem] = useState({
@@ -503,6 +507,16 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
   const someSelected = selectedItems.size > 0 && selectedItems.size < lineItems.length;
 
   const handleAddItem = () => {
+    // Prevent adding items to unsaved quotes
+    if (isUnsavedQuote) {
+      toast({
+        title: "Cannot add line items",
+        description: "Please save the quote first before adding line items.",
+        variant: "destructive"
+      });
+      return;
+    }
+    
     const itemData = {
       description: newItem.description,
       quantity: newItem.quantity,
@@ -528,6 +542,16 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
   };
 
   const handleStartEdit = (itemId: number, item: LineItem) => {
+    // Prevent editing items on unsaved quotes
+    if (isUnsavedQuote) {
+      toast({
+        title: "Cannot edit line items",
+        description: "Please save the quote first before editing line items.",
+        variant: "destructive"
+      });
+      return;
+    }
+    
     // If another item is being edited, cancel that edit first
     if (editingItem && editingItem !== itemId) {
       handleCancelEdit();
@@ -633,12 +657,32 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
   };
 
   const handleDeleteItem = (id: number) => {
+    // Prevent deleting items on unsaved quotes
+    if (isUnsavedQuote) {
+      toast({
+        title: "Cannot delete line items",
+        description: "Please save the quote first before deleting line items.",
+        variant: "destructive"
+      });
+      return;
+    }
+    
     if (confirm("Are you sure you want to delete this line item?")) {
       deleteLineItemMutation.mutate(id);
     }
   };
 
   const handleAddFromProduct = (product: Product) => {
+    // Prevent adding items to unsaved quotes
+    if (isUnsavedQuote) {
+      toast({
+        title: "Cannot add line items",
+        description: "Please save the quote first before adding line items.",
+        variant: "destructive"
+      });
+      return;
+    }
+    
     if (product.productType === "configurable") {
       // For configurable products, show dimension dialog
       setSelectedConfigurableProduct(product);
@@ -1237,6 +1281,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                 <Button
                   variant="outline"
                   className="border-edg-teal text-edg-teal hover:bg-edg-teal hover:text-white font-medium transition-all duration-200 shadow-sm"
+                  disabled={isUnsavedQuote}
                 >
                   <Package className="mr-2 h-4 w-4" />
                   From Catalog
@@ -1371,6 +1416,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
             <Button
               onClick={() => setShowNewItemForm(true)}
               className="bg-edg-teal hover:bg-edg-dark-teal text-white font-semibold shadow-md transition-all duration-200 hover:shadow-lg"
+              disabled={isUnsavedQuote}
             >
               <Plus className="mr-2 h-4 w-4" />
               Custom Item
@@ -1439,6 +1485,20 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
       )}
 
       <CardContent className="p-0">
+        {/* Alert message for unsaved quotes */}
+        {isUnsavedQuote && (
+          <div className="p-4">
+            <Alert className="border-blue-200 bg-blue-50">
+              <Info className="h-4 w-4 text-blue-600" />
+              <AlertDescription className="text-blue-800">
+                <strong>Save the quote first</strong>
+                <br />
+                You need to save the quote before you can add line items. Please fill in the customer information above and click "Save Quote" to continue.
+              </AlertDescription>
+            </Alert>
+          </div>
+        )}
+        
         {isMobile ? (
           // Mobile Card Layout
           <div className="p-4 space-y-4">
@@ -1482,7 +1542,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
             {lineItems.map(renderMobileCard)}
             
             {/* Mobile New Item Form */}
-            {showNewItemForm && (
+            {showNewItemForm && !isUnsavedQuote && (
               <div className="border-2 border-dashed border-blue-300 rounded-lg p-4 bg-blue-50">
                 <h4 className="font-medium text-blue-900 mb-4">Add New Item</h4>
                 <div className="space-y-4">
@@ -1965,7 +2025,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                 );
               })}
 
-              {showNewItemForm && (
+              {showNewItemForm && !isUnsavedQuote && (
                 <tr className="bg-blue-50">
                   <td className="px-2 py-3 text-center">
                     {/* Empty cell for checkbox column alignment */}
