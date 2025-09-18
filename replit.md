@@ -1,8 +1,8 @@
-# EDG Patio & Shade Estimator - Construction Quote Management System
+# Rainmaker, by EDG - Construction Quote Management System
 
 ## Overview
 
-EDG Patio & Shade Estimator is a full-stack web application designed for EDG Patio & Shade to create, manage, and track project quotes. The system features a React frontend with shadcn/ui components and an Express.js backend with PostgreSQL database storage via Drizzle ORM.
+Rainmaker, by EDG is a full-stack web application designed for EDG to create, manage, and track project quotes. The system features a React frontend with shadcn/ui components and an Express.js backend with PostgreSQL database storage via Drizzle ORM.
 
 ## System Architecture
 
@@ -113,7 +113,7 @@ Preferred communication style: Simple, everyday language.
 - June 27, 2025: Enhanced search to include company names in quote filtering
 - June 25, 2025: Added search functionality to quotes page for finding quotes by number, customer, or project
 - June 25, 2025: Fixed button contrast issues - all action buttons now clearly visible with EDG branding
-- June 25, 2025: Updated branding to EDG Patio & Shade with official color scheme (Black/White/Teal)
+- June 25, 2025: Updated branding to Rainmaker, by EDG with official color scheme (Black/White/Teal)
 - June 25, 2025: Applied brand colors throughout application interface and PDF templates
 - June 25, 2025: Removed markup information from customer-facing PDF quotes for business privacy
 - June 24, 2025: Implemented editable PDF quote template with company branding and terms

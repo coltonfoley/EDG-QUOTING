@@ -400,7 +400,7 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
           {/* Signature Actions */}
           {!quote.issuerSignature && (
             <div className="space-y-3">
-              <Label htmlFor="issuerSignature" className="text-sm font-medium">Sign as EDG Patio & Shade</Label>
+              <Label htmlFor="issuerSignature" className="text-sm font-medium">Sign as EDG</Label>
               <div className="flex gap-2">
                 <Input
                   id="issuerSignature"

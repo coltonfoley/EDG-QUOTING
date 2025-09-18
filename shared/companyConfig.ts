@@ -12,7 +12,7 @@ export interface CompanyInfo {
 }
 
 export const COMPANY_INFO: CompanyInfo = {
-  name: "EDG Patio & Shade",
+  name: "Rainmaker, by EDG",
   address: "123 Patio Drive, Shade City, SC 12345",
   phone: "(555) 123-4567",
   email: "info@edgpatioandshade.com",

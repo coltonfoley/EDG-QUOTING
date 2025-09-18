@@ -27,7 +27,7 @@ export function AppHeader() {
         <div className="flex justify-between items-center h-16">
           <div className="flex items-center space-x-8">
             <div className="flex-shrink-0 flex items-center">
-              <img src={logoPath} alt="EDG Patio & Shade" className="h-8 mr-3" />
+              <img src={logoPath} alt="Rainmaker, by EDG" className="h-8 mr-3" />
               <span className="text-sm text-edg-grey">Estimator</span>
             </div>
             <nav className="hidden md:flex space-x-6">

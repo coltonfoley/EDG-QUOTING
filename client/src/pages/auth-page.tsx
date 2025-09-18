@@ -115,7 +115,7 @@ export default function AuthPage() {
       {/* Right side - Hero section */}
       <div className="hidden lg:flex lg:w-1/2 bg-teal-600 text-white p-12 items-center">
         <div>
-          <h2 className="text-4xl font-bold mb-6">EDG Patio & Shade</h2>
+          <h2 className="text-4xl font-bold mb-6">Rainmaker, by EDG</h2>
           <h3 className="text-2xl font-semibold mb-4">Quote Management System</h3>
           <p className="text-lg text-teal-100 mb-8">
             Streamline your construction quoting process with our comprehensive management platform.

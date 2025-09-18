@@ -123,7 +123,7 @@ export default function Home() {
         {/* Header Section */}
         <div className="mb-8">
           <h2 className="text-3xl font-bold text-edg-black mb-2">CRM Dashboard</h2>
-          <p className="text-edg-grey">EDG Patio & Shade Business Intelligence</p>
+          <p className="text-edg-grey">Rainmaker Business Intelligence</p>
         </div>
 
         {/* Key Metrics Cards */}
