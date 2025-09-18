@@ -28,7 +28,7 @@ export function AppHeader() {
           <div className="flex items-center space-x-8">
             <div className="flex-shrink-0 flex items-center">
               <img src={logoPath} alt="Rainmaker, by EDG" className="h-8 mr-3" />
-              <span className="text-sm text-edg-grey">Estimator</span>
+              <span className="text-sm text-edg-grey">Rainmaker, by EDG</span>
             </div>
             <nav className="hidden md:flex space-x-6">
               <Link href="/" className={`text-sm font-medium transition-colors hover:text-edg-teal ${
