@@ -232,6 +232,14 @@ export default function AdminPage() {
               <FileText className="inline mr-2 h-4 w-4" />
               Templates
             </Link>
+            <Link 
+              href="/admin/contracts"
+              className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-edg-black hover:border-b-2 hover:border-gray-300 transition-colors"
+              data-testid="link-admin-contracts"
+            >
+              <Settings className="inline mr-2 h-4 w-4" />
+              Contracts
+            </Link>
           </div>
         </div>
 

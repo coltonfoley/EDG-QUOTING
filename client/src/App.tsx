@@ -1,4 +1,4 @@
-import { Switch, Route } from "wouter";
+import { Switch, Route, Redirect } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider, useIsFetching, useIsMutating } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -55,9 +55,12 @@ function Router() {
           <Route path="/quotes/:id/edit" component={QuoteBuilder} />
           <Route path="/quotes/:id" component={QuoteDetail} />
           <Route path="/products" component={Products} />
-          <Route path="/contracts" component={ContractsPage} />
+          <Route path="/contracts">
+            <Redirect to="/admin/contracts" />
+          </Route>
           <Route path="/admin" component={AdminPage} />
           <Route path="/admin/templates" component={AdminTemplatesPage} />
+          <Route path="/admin/contracts" component={ContractsPage} />
         </>
       )}
     </Switch>

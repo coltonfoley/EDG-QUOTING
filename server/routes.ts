@@ -1900,8 +1900,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Contract Template routes
-  app.get('/api/contract-templates', isAuthenticated, async (req, res) => {
+  app.get('/api/contract-templates', isAuthenticated, async (req: any, res) => {
     try {
+      const currentUser = await storage.getUser(req.user?.id);
+      if (currentUser?.role !== 'admin') {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+
       const templates = await storage.getAllContractTemplates();
       res.json(templates);
     } catch (error) {
@@ -1910,8 +1915,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/contract-templates/:id', isAuthenticated, async (req, res) => {
+  app.get('/api/contract-templates/:id', isAuthenticated, async (req: any, res) => {
     try {
+      const currentUser = await storage.getUser(req.user?.id);
+      if (currentUser?.role !== 'admin') {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+
       const id = parseInt(req.params.id);
       const template = await storage.getContractTemplate(id);
       if (!template) {
