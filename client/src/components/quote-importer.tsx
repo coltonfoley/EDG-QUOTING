@@ -8,12 +8,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Upload, FileText, Edit3, Check, X, Users } from "lucide-react";
+import { Loader2, Upload, FileText, Edit3, Check, X, Users, Trash2, AlertCircle, FileCheck } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { calculateQuoteTotals } from "@/lib/utils";
 import type { QuoteWithDetails, QuoteListItem } from "@shared/schema";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface ExtractedLineItem {
   description: string;
@@ -45,6 +48,14 @@ interface ExtractedQuote {
   total?: number | null;
   notes?: string | null;
   terms?: string | null;
+  sourceFileName?: string;
+}
+
+interface ProcessedPDF {
+  file: File;
+  data: ExtractedQuote | null;
+  error: string | null;
+  status: "pending" | "processing" | "success" | "failed";
 }
 
 interface QuoteImporterProps {
@@ -53,8 +64,10 @@ interface QuoteImporterProps {
 }
 
 export function QuoteImporter({ onImportComplete, onClose }: QuoteImporterProps) {
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [extractedData, setExtractedData] = useState<ExtractedQuote | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [processedPDFs, setProcessedPDFs] = useState<ProcessedPDF[]>([]);
+  const [currentProcessingIndex, setCurrentProcessingIndex] = useState<number>(-1);
+  const [consolidatedData, setConsolidatedData] = useState<ExtractedQuote[]>([]);
   const [editedData, setEditedData] = useState<ExtractedQuote | null>(null);
   const [activeTab, setActiveTab] = useState("upload");
   const [importType, setImportType] = useState<"new" | "existing">("new");
@@ -62,6 +75,7 @@ export function QuoteImporter({ onImportComplete, onClose }: QuoteImporterProps)
   const [bulkMarkupValue, setBulkMarkupValue] = useState<string>("");
   const [accountMode, setAccountMode] = useState<"new" | "existing">("new");
   const [selectedAccountId, setSelectedAccountId] = useState<string>("");
+  const [importMode, setImportMode] = useState<"combined" | "separate">("combined");
 
   const { toast } = useToast();
 
@@ -115,53 +129,157 @@ export function QuoteImporter({ onImportComplete, onClose }: QuoteImporterProps)
     }
   }, [selectedAccountId, accountMode, accountsData]);
 
-  // PDF processing mutation
-  const processPdfMutation = useMutation({
-    mutationFn: async (file: File) => {
+  // Combine data from all successfully processed PDFs
+  useEffect(() => {
+    const successfulPDFs = processedPDFs.filter(p => p.status === "success" && p.data);
+    if (successfulPDFs.length > 0) {
+      const allData = successfulPDFs.map(p => ({
+        ...p.data!,
+        sourceFileName: p.file.name
+      }));
+      setConsolidatedData(allData);
+      
+      // Create combined data for editing
+      const firstQuote = allData[0];
+      const combinedLineItems = allData.flatMap(quote => 
+        quote.lineItems.map(item => ({
+          ...item,
+          description: `[${quote.sourceFileName}] ${item.description}`
+        }))
+      );
+      
+      const combined: ExtractedQuote = {
+        ...firstQuote,
+        lineItems: combinedLineItems,
+        sourceFileName: "Combined from " + allData.length + " PDFs"
+      };
+      
+      setEditedData(combined);
+    }
+  }, [processedPDFs]);
+
+  // Process a single PDF
+  const processSinglePDF = async (file: File, index: number) => {
+    setCurrentProcessingIndex(index);
+    
+    // Update status to processing
+    setProcessedPDFs(prev => prev.map((p, i) => 
+      i === index ? { ...p, status: "processing" as const } : p
+    ));
+    
+    try {
       const formData = new FormData();
       formData.append("pdf", file);
       
-      // Use a longer timeout for PDF processing (120 seconds)
       const response = await apiRequest("POST", "/api/quotes/import-pdf", formData, { timeout: 120000 });
-      return response.json();
-    },
-    onSuccess: (data) => {
+      const data = await response.json();
+      
       if (data.success && data.data) {
-        setExtractedData(data.data);
-        setEditedData(data.data);
-        setActiveTab("preview");
-        // Auto-select existing account if customer matches
-        if (accountsData && data.data.customer) {
+        // Update with success
+        setProcessedPDFs(prev => prev.map((p, i) => 
+          i === index ? { 
+            ...p, 
+            status: "success" as const, 
+            data: { ...data.data, sourceFileName: file.name },
+            error: null 
+          } : p
+        ));
+        
+        // Auto-select account for first successful PDF
+        if (index === 0 && accountsData && data.data.customer) {
           const matchingAccount = accountsData.find(
             (account: any) => 
-              account.email.toLowerCase() === data.data.customer.email?.toLowerCase() ||
-              account.name.toLowerCase() === data.data.customer.name?.toLowerCase()
+              account.email?.toLowerCase() === data.data.customer.email?.toLowerCase() ||
+              account.name?.toLowerCase() === data.data.customer.name?.toLowerCase()
           );
           if (matchingAccount) {
             setAccountMode("existing");
             setSelectedAccountId(matchingAccount.id.toString());
           }
         }
-        toast({
-          title: "PDF Processed",
-          description: "Quote data extracted successfully. Please review and edit as needed.",
-        });
+        
+        return true;
       } else {
-        toast({
-          title: "Extraction Failed",
-          description: data.message || "Failed to extract quote data from PDF",
-          variant: "destructive",
-        });
+        // Update with failure
+        setProcessedPDFs(prev => prev.map((p, i) => 
+          i === index ? { 
+            ...p, 
+            status: "failed" as const, 
+            error: data.message || "Failed to extract quote data",
+            data: null 
+          } : p
+        ));
+        return false;
       }
-    },
-    onError: (error: Error) => {
+    } catch (error: any) {
+      // Update with error
+      setProcessedPDFs(prev => prev.map((p, i) => 
+        i === index ? { 
+          ...p, 
+          status: "failed" as const, 
+          error: error.message || "Failed to process PDF",
+          data: null 
+        } : p
+      ));
+      return false;
+    }
+  };
+
+  // Process all PDFs sequentially
+  const processAllPDFs = async () => {
+    let successCount = 0;
+    let failCount = 0;
+    
+    for (let i = 0; i < processedPDFs.length; i++) {
+      if (processedPDFs[i].status === "pending") {
+        const success = await processSinglePDF(processedPDFs[i].file, i);
+        if (success) {
+          successCount++;
+        } else {
+          failCount++;
+        }
+      }
+    }
+    
+    setCurrentProcessingIndex(-1);
+    
+    // Show summary toast
+    if (successCount > 0 && failCount === 0) {
+      toast({
+        title: "All PDFs Processed",
+        description: `Successfully processed ${successCount} PDF${successCount > 1 ? 's' : ''}`
+      });
+      setActiveTab("preview");
+    } else if (successCount > 0 && failCount > 0) {
+      toast({
+        title: "Partial Success",
+        description: `Processed ${successCount} PDF${successCount > 1 ? 's' : ''}, ${failCount} failed`,
+        variant: "default"
+      });
+      setActiveTab("preview");
+    } else {
       toast({
         title: "Processing Failed",
-        description: error.message || "Failed to process PDF file",
-        variant: "destructive",
+        description: "All PDFs failed to process",
+        variant: "destructive"
       });
-    },
-  });
+    }
+  };
+
+  // Retry failed PDFs
+  const retryFailedPDFs = async () => {
+    const failedIndexes = processedPDFs
+      .map((p, i) => p.status === "failed" ? i : -1)
+      .filter(i => i >= 0);
+    
+    // Reset failed PDFs to pending
+    setProcessedPDFs(prev => prev.map((p, i) => 
+      failedIndexes.includes(i) ? { ...p, status: "pending" as const, error: null } : p
+    ));
+    
+    // Process only the failed ones
+    await processAllPDFs();
+  };
 
   // Import quote mutation
   const importMutation = useMutation({
@@ -366,27 +484,94 @@ export function QuoteImporter({ onImportComplete, onClose }: QuoteImporterProps)
   });
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file && file.type === "application/pdf") {
-      setSelectedFile(file);
-    } else {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+    
+    const pdfFiles: File[] = [];
+    const nonPdfFiles: string[] = [];
+    
+    for (let i = 0; i < files.length; i++) {
+      if (files[i].type === "application/pdf") {
+        pdfFiles.push(files[i]);
+      } else {
+        nonPdfFiles.push(files[i].name);
+      }
+    }
+    
+    if (nonPdfFiles.length > 0) {
       toast({
-        title: "Invalid File",
-        description: "Please select a PDF file",
-        variant: "destructive",
+        title: "Invalid Files Skipped",
+        description: `Non-PDF files were skipped: ${nonPdfFiles.join(", ")}`,
+        variant: "default",
       });
     }
-  };
-
-  const handleProcessPdf = () => {
-    if (selectedFile) {
-      processPdfMutation.mutate(selectedFile);
+    
+    if (pdfFiles.length > 0) {
+      setSelectedFiles(pdfFiles);
+      setProcessedPDFs(pdfFiles.map(file => ({
+        file,
+        data: null,
+        error: null,
+        status: "pending" as const
+      })));
+      
+      // Reset other state when new files are selected
+      setConsolidatedData([]);
+      setEditedData(null);
+      setActiveTab("upload");
     }
   };
 
-  const handleImport = () => {
-    if (editedData) {
+  const removeFile = (index: number) => {
+    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+    setProcessedPDFs(prev => prev.filter((_, i) => i !== index));
+    
+    if (selectedFiles.length <= 1) {
+      setConsolidatedData([]);
+      setEditedData(null);
+    }
+  };
+
+  const clearAllFiles = () => {
+    setSelectedFiles([]);
+    setProcessedPDFs([]);
+    setConsolidatedData([]);
+    setEditedData(null);
+    setCurrentProcessingIndex(-1);
+    setActiveTab("upload");
+  };
+
+  const handleProcessPdfs = () => {
+    if (processedPDFs.length > 0) {
+      processAllPDFs();
+    }
+  };
+
+  const handleImport = async () => {
+    if (importMode === "combined" && editedData) {
       importMutation.mutate(editedData);
+    } else if (importMode === "separate" && consolidatedData.length > 0) {
+      // Import each PDF as a separate quote
+      let successCount = 0;
+      let failCount = 0;
+      
+      for (const quoteData of consolidatedData) {
+        try {
+          await importMutation.mutateAsync(quoteData);
+          successCount++;
+        } catch (error) {
+          failCount++;
+        }
+      }
+      
+      if (successCount > 0) {
+        toast({
+          title: "Import Complete",
+          description: `Created ${successCount} quote${successCount > 1 ? 's' : ''}${failCount > 0 ? `, ${failCount} failed` : ''}`,
+        });
+        onImportComplete?.();
+        onClose?.();
+      }
     }
   };
 
@@ -507,8 +692,8 @@ export function QuoteImporter({ onImportComplete, onClose }: QuoteImporterProps)
       <CardContent>
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="upload">Upload PDF</TabsTrigger>
-            <TabsTrigger value="preview" disabled={!extractedData}>
+            <TabsTrigger value="upload">Upload PDF{selectedFiles.length > 1 ? 's' : ''}</TabsTrigger>
+            <TabsTrigger value="preview" disabled={!editedData}>
               Preview & Edit
             </TabsTrigger>
             <TabsTrigger value="import" disabled={!editedData}>
@@ -522,10 +707,10 @@ export function QuoteImporter({ onImportComplete, onClose }: QuoteImporterProps)
               <Upload className="h-12 w-12 mx-auto mb-4 text-gray-400" />
               <div className="space-y-2">
                 <Label htmlFor="pdf-upload" className="text-lg font-medium cursor-pointer">
-                  Select PDF Quote to Import
+                  Select PDF Quote(s) to Import
                 </Label>
                 <p className="text-sm text-gray-500">
-                  Upload a PDF quote from external configurators or contractors
+                  Upload one or more PDF quotes from external configurators or contractors
                 </p>
                 <p className="text-xs text-blue-600 bg-blue-50 p-2 rounded">
                   💡 Pro tip: You can upload multiple PDFs to combine quotes from different suppliers into one project
@@ -534,34 +719,120 @@ export function QuoteImporter({ onImportComplete, onClose }: QuoteImporterProps)
                   id="pdf-upload"
                   type="file"
                   accept=".pdf"
+                  multiple
                   onChange={handleFileSelect}
                   className="max-w-sm mx-auto"
+                  data-testid="input-pdf-upload"
                 />
               </div>
             </div>
 
-            {selectedFile && (
-              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                <div className="flex items-center gap-2">
-                  <FileText className="h-4 w-4" />
-                  <span className="font-medium">{selectedFile.name}</span>
-                  <Badge variant="secondary">
-                    {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
-                  </Badge>
-                </div>
-                <Button
-                  onClick={handleProcessPdf}
-                  disabled={processPdfMutation.isPending}
-                >
-                  {processPdfMutation.isPending ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Processing...
-                    </>
-                  ) : (
-                    "Process PDF"
+            {selectedFiles.length > 0 && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-medium">
+                    {selectedFiles.length} PDF{selectedFiles.length > 1 ? 's' : ''} selected
+                  </h3>
+                  {selectedFiles.length > 1 && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={clearAllFiles}
+                      data-testid="button-clear-all-files"
+                    >
+                      <X className="h-3 w-3 mr-1" />
+                      Clear All
+                    </Button>
                   )}
-                </Button>
+                </div>
+
+                <ScrollArea className="h-[200px] w-full rounded-md border p-4">
+                  <div className="space-y-2">
+                    {processedPDFs.map((pdf, index) => (
+                      <div
+                        key={index}
+                        className={`flex items-center justify-between p-3 rounded-lg ${
+                          pdf.status === 'failed' ? 'bg-red-50' :
+                          pdf.status === 'success' ? 'bg-green-50' :
+                          pdf.status === 'processing' ? 'bg-blue-50' :
+                          'bg-gray-50'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 flex-1">
+                          {pdf.status === 'processing' ? (
+                            <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+                          ) : pdf.status === 'success' ? (
+                            <FileCheck className="h-4 w-4 text-green-600" />
+                          ) : pdf.status === 'failed' ? (
+                            <AlertCircle className="h-4 w-4 text-red-600" />
+                          ) : (
+                            <FileText className="h-4 w-4 text-gray-600" />
+                          )}
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium text-sm">{pdf.file.name}</span>
+                              <Badge variant="secondary" className="text-xs">
+                                {(pdf.file.size / 1024 / 1024).toFixed(2)} MB
+                              </Badge>
+                            </div>
+                            {currentProcessingIndex === index && (
+                              <p className="text-xs text-blue-600 mt-1">
+                                Processing file {index + 1} of {processedPDFs.length}...
+                              </p>
+                            )}
+                            {pdf.error && (
+                              <p className="text-xs text-red-600 mt-1">{pdf.error}</p>
+                            )}
+                            {pdf.status === 'success' && pdf.data && (
+                              <p className="text-xs text-green-600 mt-1">
+                                Extracted {pdf.data.lineItems.length} line items
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        {pdf.status !== 'processing' && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => removeFile(index)}
+                            data-testid={`button-remove-file-${index}`}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+
+                <div className="flex gap-2">
+                  <Button
+                    onClick={handleProcessPdfs}
+                    disabled={currentProcessingIndex >= 0 || processedPDFs.every(p => p.status !== 'pending')}
+                    className="flex-1"
+                    data-testid="button-process-pdfs"
+                  >
+                    {currentProcessingIndex >= 0 ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Processing {currentProcessingIndex + 1} of {processedPDFs.length}...
+                      </>
+                    ) : (
+                      <>Process {selectedFiles.length > 1 ? 'All PDFs' : 'PDF'}</>
+                    )}
+                  </Button>
+                  
+                  {processedPDFs.some(p => p.status === 'failed') && (
+                    <Button
+                      variant="outline"
+                      onClick={retryFailedPDFs}
+                      disabled={currentProcessingIndex >= 0}
+                      data-testid="button-retry-failed"
+                    >
+                      Retry Failed
+                    </Button>
+                  )}
+                </div>
               </div>
             )}
           </TabsContent>
@@ -570,6 +841,31 @@ export function QuoteImporter({ onImportComplete, onClose }: QuoteImporterProps)
           <TabsContent value="preview" className="space-y-6">
             {editedData && (
               <>
+                {/* Processing Summary for Multiple PDFs */}
+                {selectedFiles.length > 1 && (
+                  <Alert>
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>
+                      <div className="space-y-1">
+                        <p className="font-medium">Processing Summary:</p>
+                        <p className="text-sm">
+                          • Successfully processed {processedPDFs.filter(p => p.status === 'success').length} of {processedPDFs.length} PDFs
+                        </p>
+                        {consolidatedData.length > 0 && (
+                          <p className="text-sm">
+                            • Total line items: {consolidatedData.reduce((acc, q) => acc + q.lineItems.length, 0)}
+                          </p>
+                        )}
+                        {importMode === "combined" && (
+                          <p className="text-sm text-blue-600">
+                            • All items will be combined into a single quote
+                          </p>
+                        )}
+                      </div>
+                    </AlertDescription>
+                  </Alert>
+                )}
+
                 {/* Account Selection */}
                 <div className="space-y-4">
                   <div className="flex items-center gap-2">
@@ -702,7 +998,9 @@ export function QuoteImporter({ onImportComplete, onClose }: QuoteImporterProps)
                 {/* Line Items */}
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
-                    <h3 className="text-lg font-semibold">Line Items</h3>
+                    <h3 className="text-lg font-semibold">
+                      Line Items {selectedFiles.length > 1 && `(${editedData.lineItems.length} total from ${consolidatedData.length} PDFs)`}
+                    </h3>
                     <div className="flex items-center gap-4">
                       <div className="flex items-center gap-2">
                         <Label htmlFor="bulk-markup">Bulk Markup %:</Label>
@@ -827,6 +1125,28 @@ export function QuoteImporter({ onImportComplete, onClose }: QuoteImporterProps)
           <TabsContent value="import" className="space-y-6">
             <div className="space-y-4">
               <h3 className="text-lg font-semibold">Import Options</h3>
+              
+              {/* Import Mode Selection for Multiple PDFs */}
+              {selectedFiles.length > 1 && (
+                <div className="space-y-4">
+                  <Label>How should the PDFs be imported?</Label>
+                  <RadioGroup value={importMode} onValueChange={(value) => setImportMode(value as "combined" | "separate")}>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="combined" id="combined" />
+                      <Label htmlFor="combined" className="font-normal cursor-pointer">
+                        Combine all PDFs into a single quote (recommended)
+                      </Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="separate" id="separate" />
+                      <Label htmlFor="separate" className="font-normal cursor-pointer">
+                        Create separate quotes for each PDF ({consolidatedData.length} quotes will be created)
+                      </Label>
+                    </div>
+                  </RadioGroup>
+                  <Separator />
+                </div>
+              )}
               
               <div className="space-y-4">
                 <div className="flex items-center space-x-2">
@@ -982,7 +1302,10 @@ export function QuoteImporter({ onImportComplete, onClose }: QuoteImporterProps)
                 ) : (
                   <>
                     <Check className="h-4 w-4 mr-2" />
-                    Import Quote
+                    Import {importMode === 'separate' && selectedFiles.length > 1 ? 
+                      `${consolidatedData.length} Quotes` : 
+                      selectedFiles.length > 1 ? 'Combined Quote' : 'Quote'
+                    }
                   </>
                 )}
               </Button>
