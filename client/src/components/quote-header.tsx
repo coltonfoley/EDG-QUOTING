@@ -321,6 +321,9 @@ export function QuoteHeader({ quote, onSave, isLoading, onUploadStatesChange }: 
   };
 
   const handleSubmit = (data: QuoteFormData) => {
+    console.log('🎯 Form submitted with data:', data);
+    console.log('🔍 Form errors:', form.formState.errors);
+    
     // If images are still uploading, set pending save and return
     if (isUploading) {
       console.log('📋 Images still uploading, setting pending save flag');
