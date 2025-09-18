@@ -34,7 +34,7 @@ export const insertAccountSchema = baseAccountSchema.extend({
     .min(10, "Phone number must be at least 10 digits")
     .max(20, "Phone number is too long")
     .regex(/^[\d\s\-\+\(\)]+$/, "Phone number contains invalid characters"),
-  company: z.string().max(255, "Company name is too long").optional(),
+  company: z.string().max(255, "Company name is too long").optional().nullable(),
   accountType: z.enum(["general_contractor", "homeowner", "commercial"]).default("homeowner"),
   paymentTerms: z.string().max(100, "Payment terms are too long").optional().nullable(),
   billingAddress: z.string().max(500, "Billing address is too long").optional().nullable()
