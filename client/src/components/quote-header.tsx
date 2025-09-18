@@ -427,6 +427,21 @@ export function QuoteHeader({ quote, onSave, isLoading, onUploadStatesChange }: 
               form="quote-form" 
               className="bg-edg-black hover:bg-edg-grey text-edg-white"
               disabled={isLoading || isUploading}
+              onClick={() => {
+                // Check for validation errors and show them
+                const errors = form.formState.errors;
+                if (Object.keys(errors).length > 0) {
+                  console.log('Form validation errors:', errors);
+                  const errorMessages = Object.entries(errors)
+                    .map(([field, error]) => `${field}: ${error?.message}`)
+                    .join(', ');
+                  toast({
+                    title: "Form Validation Error",
+                    description: `Please fix the following: ${errorMessages}`,
+                    variant: "destructive",
+                  });
+                }
+              }}
             >
               <Save className="mr-2 h-4 w-4" />
               {isLoading ? "Saving..." : isUploading ? `Uploading ${uploadingCount} images...` : "Save Quote"}
