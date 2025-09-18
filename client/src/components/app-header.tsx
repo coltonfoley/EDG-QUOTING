@@ -93,13 +93,6 @@ export function AppHeader() {
               }`}>
                 Products
               </Link>
-              <Link href="/contracts" className={`text-sm font-medium transition-colors hover:text-edg-teal ${
-                location.startsWith('/contracts') 
-                  ? 'text-edg-teal border-b-2 border-edg-teal pb-4' 
-                  : 'text-edg-grey'
-              }`}>
-                Contracts
-              </Link>
               {user?.role === 'admin' && (
                 <Link href="/admin" className={`text-sm font-medium transition-colors hover:text-edg-teal ${
                   location.startsWith('/admin') 
