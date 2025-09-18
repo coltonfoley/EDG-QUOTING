@@ -507,18 +507,43 @@ export function QuoteImporter({ onImportComplete, onClose }: QuoteImporterProps)
     }
     
     if (pdfFiles.length > 0) {
-      setSelectedFiles(pdfFiles);
-      setProcessedPDFs(pdfFiles.map(file => ({
-        file,
-        data: null,
-        error: null,
-        status: "pending" as const
-      })));
+      // Filter out duplicate files by name and size
+      setSelectedFiles(prev => {
+        const existingFiles = new Set(prev.map(f => `${f.name}-${f.size}`));
+        const newFiles = pdfFiles.filter(f => !existingFiles.has(`${f.name}-${f.size}`));
+        
+        if (newFiles.length === 0) {
+          toast({
+            title: "Duplicate Files",
+            description: "All selected files are already in the list",
+            variant: "default",
+          });
+          return prev;
+        }
+        
+        return [...prev, ...newFiles];
+      });
       
-      // Reset other state when new files are selected
-      setConsolidatedData([]);
-      setEditedData(null);
-      setActiveTab("upload");
+      setProcessedPDFs(prev => {
+        const existingFiles = new Set(prev.map(p => `${p.file.name}-${p.file.size}`));
+        const newPDFs = pdfFiles
+          .filter(f => !existingFiles.has(`${f.name}-${f.size}`))
+          .map(file => ({
+            file,
+            data: null,
+            error: null,
+            status: "pending" as const
+          }));
+        
+        return [...prev, ...newPDFs];
+      });
+      
+      // Only reset state if this is the first file selection
+      if (selectedFiles.length === 0) {
+        setConsolidatedData([]);
+        setEditedData(null);
+        setActiveTab("upload");
+      }
     }
   };
 
