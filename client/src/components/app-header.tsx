@@ -1,7 +1,6 @@
 import { Bell, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import logoPath from "@assets/my-logo.png_1753970984943.jpg";
 import { 
   DropdownMenu,
   DropdownMenuContent,
@@ -27,8 +26,36 @@ export function AppHeader() {
         <div className="flex justify-between items-center h-16">
           <div className="flex items-center space-x-8">
             <div className="flex-shrink-0 flex items-center">
-              <img src={logoPath} alt="Rainmaker, by EDG" className="h-8 mr-3" />
-              <span className="text-sm text-edg-grey">Rainmaker, by EDG</span>
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 160" className="h-8 mr-3" role="img" aria-label="EDG Rainmaker — primary logo (light)">
+                <defs>
+                  <linearGradient id="tealGrad1" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#00bfa5"/>
+                    <stop offset="100%" stopColor="#00897b"/>
+                  </linearGradient>
+                  <clipPath id="dropClip1">
+                    <path d="M70 20 C70 20, 34 66, 34 94 C34 118, 51 134, 70 134 C89 134, 106 118, 106 94 C106 66, 70 20, 70 20 Z"/>
+                  </clipPath>
+                </defs>
+
+                <path d="M70 20 C70 20, 34 66, 34 94 C34 118, 51 134, 70 134 C89 134, 106 118, 106 94 C106 66, 70 20, 70 20 Z" fill="url(#tealGrad1)"/>
+                <g clipPath="url(#dropClip1)" transform="rotate(-18 70 77)">
+                  <g opacity=".18">
+                    <rect x="10" y="24" width="160" height="10" fill="#ffffff"/>
+                    <rect x="10" y="44" width="160" height="10" fill="#ffffff"/>
+                    <rect x="10" y="64" width="160" height="10" fill="#ffffff"/>
+                    <rect x="10" y="84" width="160" height="10" fill="#ffffff"/>
+                    <rect x="10" y="104" width="160" height="10" fill="#ffffff"/>
+                  </g>
+                </g>
+
+                <g transform="translate(136, 40)">
+                  <text x="0" y="56" fontSize="62" fontWeight="800" fill="#0b1115"
+                        fontFamily="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">Rainmaker</text>
+                  <text x="2" y="84" fontSize="16" fontWeight="600" fill="#6b7785"
+                        fontFamily="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
+                        letterSpacing=".22em" style={{textTransform: 'uppercase'}}>by EDG</text>
+                </g>
+              </svg>
             </div>
             <nav className="hidden md:flex space-x-6">
               <Link href="/" className={`text-sm font-medium transition-colors hover:text-edg-teal ${
