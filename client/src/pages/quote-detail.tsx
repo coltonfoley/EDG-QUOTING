@@ -17,7 +17,6 @@ import {
   DollarSign,
   FileText,
   User,
-  FileEdit
 } from "lucide-react";
 import { format } from "date-fns";
 import type { QuoteWithDetails } from "@shared/schema";
@@ -171,14 +170,6 @@ export default function QuoteDetail() {
             >
               <Edit className="mr-2 h-4 w-4" />
               Edit Quote
-            </Button>
-            <Button 
-              variant="outline"
-              onClick={() => setLocation(`/quotes/${quote.id}/proposal`)}
-              data-testid="button-edit-proposal"
-            >
-              <FileEdit className="mr-2 h-4 w-4" />
-              Edit Proposal
             </Button>
             <Button variant="outline" data-testid="button-download-pdf">
               <Download className="mr-2 h-4 w-4" />
