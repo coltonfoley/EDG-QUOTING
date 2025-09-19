@@ -1931,12 +1931,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
             });
             updated++;
           } else {
-            // Create new product - Phase A compatibility: use manufacturer field for imports
+            // Create new product with manufacturer field for imports
             const productData = {
               name: extractedProduct.sku ? `${extractedProduct.name} (${extractedProduct.sku})` : extractedProduct.name,
               description: extractedProduct.description || '',
-              manufacturer: 'Imported', // Phase A: use manufacturer instead of category for new products
-              category: null, // Phase A: leave category null for imported products
+              manufacturer: 'Imported', // Use manufacturer for imported products
               defaultUnitPrice: extractedProduct.price.toString(),
               defaultMarkupType: 'percentage',
               defaultMarkupValue: '25',

@@ -505,16 +505,3 @@ export const getProductManufacturer = (product: { manufacturer: string | null })
   return product.manufacturer || "Unknown";
 };
 
-// Legacy utility functions - deprecated, will be removed in future cleanup
-export const getPreferredProductCategory = (product: { manufacturer?: string | null }) => {
-  return product.manufacturer || null;
-};
-
-export const validateProductCategoryOrManufacturer = (data: { manufacturer?: string | null }) => {
-  return {
-    hasCategory: false, // Legacy - always false
-    hasManufacturer: !!data.manufacturer,
-    hasBoth: false, // Legacy - always false
-    preferred: data.manufacturer || null,
-  };
-};

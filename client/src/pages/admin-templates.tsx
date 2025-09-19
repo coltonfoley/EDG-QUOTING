@@ -39,7 +39,7 @@ import {
 } from "lucide-react";
 import { z } from "zod";
 import type { ProposalTemplate, TemplateSection, BrandingSettings, LayoutSettings, DefaultContent } from "@shared/schema";
-import { insertProposalTemplateSchema, getPreferredProductCategory, isManufacturerPreferred } from "@shared/schema";
+import { insertProposalTemplateSchema } from "@shared/schema";
 
 // Form validation schema
 const templateFormSchema = insertProposalTemplateSchema.extend({
