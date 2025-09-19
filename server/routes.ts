@@ -39,6 +39,8 @@ import type { ExtractedProduct } from "./openai";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 import { ObjectPermission } from "./objectAcl";
 import type { InsertQuote } from "@shared/schema";
+// REMOVED: import { generateQuotePDFContent } from "./pdfGenerator";
+// PDF generation is now handled entirely client-side for security
 
 /**
  * Helper function to strip internal validation metadata from API responses
@@ -1336,6 +1338,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Internal server error" });
     }
   });
+
+  // REMOVED: Unsafe PDF generation route that used innerHTML with unsanitized user data
+  // PDF generation is now handled entirely client-side using the actual React-rendered DOM
+  // for security and exact preview parity
 
   // Product catalog routes (protected)
   app.get("/api/products", isAuthenticated, async (req, res) => {

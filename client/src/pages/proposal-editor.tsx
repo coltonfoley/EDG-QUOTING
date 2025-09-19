@@ -4,6 +4,8 @@ import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import jsPDF from "jspdf";
+import html2canvas from "html2canvas";
 import { AppHeader } from "@/components/app-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,7 +22,8 @@ import {
   Building2,
   FileText,
   ClipboardList,
-  Loader2
+  Loader2,
+  Download
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -88,6 +91,9 @@ export default function ProposalEditor() {
   const quoteId = id ? parseInt(id) : undefined;
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  
+  // PDF generation state
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
 
   const { data: quote, isLoading, error } = useQuery<QuoteWithDetails>({
     queryKey: [`/api/quotes/${quoteId}`],
@@ -159,6 +165,139 @@ export default function ProposalEditor() {
 
   const onSubmit = (data: ProposalFormData) => {
     saveProposalMutation.mutate(data);
+  };
+
+  // Secure PDF generation function - targets live preview DOM directly
+  const generatePDF = async () => {
+    if (!quoteId) {
+      toast({ title: "Error", description: "No quote ID available", variant: "destructive" });
+      return;
+    }
+
+    setIsGeneratingPDF(true);
+    try {
+      // Step 1: Save current form data first
+      const formData = form.getValues();
+      console.log("🔧 Saving proposal data before PDF generation...");
+      
+      await apiRequest("PUT", `/api/quotes/${quoteId}`, {
+        customContractTerms: JSON.stringify(formData),
+      });
+
+      // Step 2: Target the live preview DOM directly for exact parity
+      console.log("🔧 Targeting live preview DOM for PDF generation...");
+      
+      // Find the BasicQuoteTemplate container in the preview panel
+      const previewContainer = document.querySelector('[data-testid="proposal-preview-container"]') as HTMLElement;
+      
+      if (!previewContainer) {
+        throw new Error('Preview container not found. Please ensure the preview is visible.');
+      }
+
+      // Get the actual dimensions of the content
+      const contentWidth = previewContainer.scrollWidth;
+      const contentHeight = previewContainer.scrollHeight;
+      
+      console.log(`🔧 Content dimensions: ${contentWidth}x${contentHeight}px`);
+
+      // Convert to canvas with proper dimensions (no fixed sizes!)
+      const canvas = await html2canvas(previewContainer, {
+        scale: 2, // High resolution
+        useCORS: true,
+        backgroundColor: '#ffffff',
+        width: contentWidth,
+        height: contentHeight,
+        scrollX: 0,
+        scrollY: 0,
+        allowTaint: false,
+        foreignObjectRendering: true,
+      });
+
+      // Create PDF with proper multi-page handling
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const imgData = canvas.toDataURL('image/png', 1.0);
+      
+      // A4 dimensions in mm
+      const pageWidth = 210;
+      const pageHeight = 297;
+      const margin = 10; // 10mm margins
+      const printableWidth = pageWidth - (margin * 2);
+      const printableHeight = pageHeight - (margin * 2);
+      
+      // Calculate scaling to fit width
+      const scale = printableWidth / (contentWidth * 0.264583); // Convert px to mm (96 DPI)
+      const scaledHeight = (contentHeight * 0.264583) * scale;
+      
+      console.log(`🔧 Scaled content height: ${scaledHeight}mm, Page height: ${printableHeight}mm`);
+      
+      // Check if content fits on single page
+      if (scaledHeight <= printableHeight) {
+        // Single page - simple case
+        pdf.addImage(imgData, 'PNG', margin, margin, printableWidth, scaledHeight);
+        console.log("🔧 Content fits on single page");
+      } else {
+        // Multi-page rendering - split content properly
+        console.log("🔧 Content requires multiple pages");
+        
+        const pagesNeeded = Math.ceil(scaledHeight / printableHeight);
+        console.log(`🔧 Pages needed: ${pagesNeeded}`);
+        
+        for (let pageIndex = 0; pageIndex < pagesNeeded; pageIndex++) {
+          if (pageIndex > 0) {
+            pdf.addPage();
+          }
+          
+          // Calculate the portion of the image for this page
+          const sourceY = (pageIndex * printableHeight) / scale / 0.264583; // Convert back to pixels
+          const sourceHeight = Math.min(
+            printableHeight / scale / 0.264583, 
+            contentHeight - sourceY
+          );
+          
+          // Create a temporary canvas for this page section
+          const pageCanvas = document.createElement('canvas');
+          const pageCtx = pageCanvas.getContext('2d')!;
+          
+          pageCanvas.width = canvas.width;
+          pageCanvas.height = sourceHeight * 2; // Account for scale factor
+          
+          // Draw the section of the original canvas
+          pageCtx.drawImage(
+            canvas,
+            0, sourceY * 2, // Source position (scale factor)
+            canvas.width, sourceHeight * 2, // Source dimensions
+            0, 0, // Destination position
+            canvas.width, sourceHeight * 2 // Destination dimensions
+          );
+          
+          const pageImgData = pageCanvas.toDataURL('image/png', 1.0);
+          const pageScaledHeight = sourceHeight * 0.264583 * scale;
+          
+          pdf.addImage(pageImgData, 'PNG', margin, margin, printableWidth, pageScaledHeight);
+          
+          console.log(`🔧 Added page ${pageIndex + 1}/${pagesNeeded}`);
+        }
+      }
+
+      // Download PDF
+      const filename = `Proposal-${quote.quoteNumber || 'Quote'}.pdf`;
+      pdf.save(filename);
+
+      toast({ 
+        title: "Success", 
+        description: `PDF generated and downloaded as ${filename}. ${scaledHeight > printableHeight ? `Content split across ${Math.ceil(scaledHeight / printableHeight)} pages.` : 'Single page generated.'}` 
+      });
+
+    } catch (error) {
+      console.error("❌ Error generating PDF:", error);
+      toast({ 
+        title: "Error", 
+        description: `Failed to generate PDF: ${(error as Error).message}`, 
+        variant: "destructive" 
+      });
+    } finally {
+      setIsGeneratingPDF(false);
+    }
   };
 
   if (isLoading) {
@@ -267,6 +406,19 @@ export default function ProposalEditor() {
                 <Save className="mr-2 h-4 w-4" />
               )}
               Save Proposal
+            </Button>
+            <Button 
+              variant="secondary"
+              onClick={generatePDF}
+              disabled={saveProposalMutation.isPending || isGeneratingPDF}
+              data-testid="button-generate-pdf"
+            >
+              {isGeneratingPDF ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Download className="mr-2 h-4 w-4" />
+              )}
+              {isGeneratingPDF ? "Generating PDF..." : "Generate PDF"}
             </Button>
           </div>
         </div>
@@ -441,7 +593,10 @@ export default function ProposalEditor() {
                 
                 <div className="h-full overflow-y-auto bg-gray-100 p-6">
                   {/* Professional styled container for screen display */}
-                  <div className="max-w-4xl mx-auto bg-white rounded-lg shadow-lg border p-8">
+                  <div 
+                    className="max-w-4xl mx-auto bg-white rounded-lg shadow-lg border p-8"
+                    data-testid="proposal-preview-container"
+                  >
                     <BasicQuoteTemplate
                       quote={quote}
                       template={createDefaultTemplate()}
