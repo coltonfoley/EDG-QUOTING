@@ -4,6 +4,7 @@ import {
   insertContactSchema as baseContactSchema,
   insertCustomerSchema as baseCustomerSchema,
   insertQuoteSchema as baseQuoteSchema,
+  insertQuoteImageSchema as baseQuoteImageSchema,
   insertLineItemSchema as baseLineItemSchema,
   insertProductSchema as baseProductSchema,
   insertContractTemplateSchema as baseContractTemplateSchema,
@@ -538,4 +539,24 @@ export const insertCompanySettingsSchema = baseCompanySettingsSchema.extend({
   textColor: z.string()
     .regex(/^#[0-9A-Fa-f]{6}$/, "Text color must be a valid hex color")
     .default("#374151")
+});
+
+// Quote Images validation schemas
+export const insertQuoteImageSchema = baseQuoteImageSchema.extend({
+  fileName: z.string().min(1, "File name is required").max(255, "File name is too long"),
+  filePath: z.string().min(1, "File path is required").max(500, "File path is too long"),
+  fileSize: z.number().int().min(1, "File size must be greater than 0").max(10 * 1024 * 1024, "File size cannot exceed 10MB"),
+  mimeType: z.string().regex(/^image\/(jpeg|jpg|png|webp|gif)$/i, "Must be a valid image type (JPEG, PNG, WebP, GIF)"),
+  altText: z.string().max(255, "Alt text is too long").optional().nullable(),
+  displayOrder: z.number().int().min(0, "Display order must be non-negative").default(0),
+});
+
+export const imageIdParamSchema = z.object({
+  id: z.string().regex(/^\d+$/, "Image ID must be a valid positive integer").transform(val => parseInt(val))
+});
+
+export const updateImageOrderSchema = z.object({
+  imageIds: z.array(z.number().int().positive("Image ID must be a positive integer"))
+    .min(1, "At least one image ID is required")
+    .max(20, "Cannot reorder more than 20 images at once")
 });

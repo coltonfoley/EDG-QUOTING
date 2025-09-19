@@ -18,6 +18,7 @@ import {
   FileText,
   User,
 } from "lucide-react";
+import { ImageUpload } from "@/components/image-upload";
 import { format } from "date-fns";
 import type { QuoteWithDetails } from "@shared/schema";
 
@@ -385,6 +386,15 @@ export default function QuoteDetail() {
               </CardContent>
             </Card>
           </div>
+        </div>
+
+        {/* Product Renderings Section */}
+        <div className="mt-8">
+          <ImageUpload 
+            quoteId={quoteId} 
+            className="w-full"
+            data-testid="quote-image-upload" 
+          />
         </div>
       </div>
     </div>
