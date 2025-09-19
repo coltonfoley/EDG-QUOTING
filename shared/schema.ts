@@ -140,6 +140,7 @@ export const products = pgTable("products", {
   name: text("name").notNull(),
   description: text("description"),
   category: text("category"),
+  manufacturer: text("manufacturer"),
   productType: text("product_type").notNull().default("simple"), // simple, configurable
   defaultUnitPrice: decimal("default_unit_price", { precision: 10, scale: 2 }).notNull(),
   defaultMarkupType: text("default_markup_type").notNull().default("percentage"),
@@ -160,6 +161,7 @@ export const products = pgTable("products", {
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => [
   index("idx_products_category").on(table.category),
+  index("idx_products_manufacturer").on(table.manufacturer),
   index("idx_products_product_type").on(table.productType),
 ]);
 
