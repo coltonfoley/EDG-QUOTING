@@ -14,7 +14,6 @@ import NotFound from "@/pages/not-found";
 import Quotes from "@/pages/quotes";
 import QuoteBuilder from "@/pages/quote-builder";
 import QuoteDetail from "@/pages/quote-detail";
-import ProposalEditor from "@/pages/proposal-editor";
 import Products from "@/pages/products";
 import Landing from "@/pages/landing";
 import Home from "@/pages/home";
@@ -99,7 +98,6 @@ function Router() {
           <Route path="/pipeline" component={Pipeline} />
           <Route path="/quotes/new" component={QuoteBuilder} />
           <Route path="/quotes/:id/edit" component={QuoteBuilder} />
-          <Route path="/quotes/:id/proposal" component={ProposalEditor} />
           <Route path="/quotes/:id" component={QuoteDetail} />
           <Route path="/products" component={Products} />
           <Route path="/contracts">
