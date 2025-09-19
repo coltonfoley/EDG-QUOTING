@@ -10,7 +10,8 @@ import {
   insertProposalTemplateSchema as baseProposalTemplateSchema,
   insertPricingTableSchema as basePricingTableSchema,
   insertProductAccessorySchema as baseProductAccessorySchema,
-  insertUserSchema as baseUserSchema
+  insertUserSchema as baseUserSchema,
+  insertCompanySettingsSchema as baseCompanySettingsSchema
 } from "@shared/schema";
 
 // Common validation schemas
@@ -514,4 +515,27 @@ export const insertProductAccessorySchema = baseProductAccessorySchema.extend({
   isRequired: z.boolean().optional(),
   displayOrder: z.number().int().min(0).max(999).optional(),
   category: z.string().max(100, "Category name is too long").optional()
+});
+
+// Company settings validation
+export const insertCompanySettingsSchema = baseCompanySettingsSchema.extend({
+  companyName: z.string().min(1, "Company name is required").max(255, "Company name is too long"),
+  address: z.string().max(1000, "Address is too long").optional().nullable(),
+  phone: z.string()
+    .max(20, "Phone number is too long")
+    .regex(/^[\d\s\-\+\(\)]+$/, "Phone number contains invalid characters")
+    .optional()
+    .nullable(),
+  email: z.string().email("Invalid email format").max(255, "Email is too long").optional().nullable(),
+  website: z.string().url("Must be a valid URL").max(255, "Website URL is too long").optional().nullable(),
+  logo: z.string().max(500, "Logo path is too long").optional().nullable(),
+  primaryColor: z.string()
+    .regex(/^#[0-9A-Fa-f]{6}$/, "Primary color must be a valid hex color")
+    .default("#3b82f6"),
+  accentColor: z.string()
+    .regex(/^#[0-9A-Fa-f]{6}$/, "Accent color must be a valid hex color")
+    .default("#10b981"),
+  textColor: z.string()
+    .regex(/^#[0-9A-Fa-f]{6}$/, "Text color must be a valid hex color")
+    .default("#374151")
 });
