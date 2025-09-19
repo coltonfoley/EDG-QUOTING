@@ -56,7 +56,13 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
   });
   
   // Local state for immediate edit feedback
-  const [localValues, setLocalValues] = useState<Record<string, { description: string; quantity: string; unitPrice: string }>>({});
+  const [localValues, setLocalValues] = useState<Record<string, { 
+    description: string; 
+    quantity: string; 
+    unitPrice: string; 
+    markupType: string; 
+    markupValue: string; 
+  }>>({});
   
   // Validation error states
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
@@ -92,23 +98,33 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
 
   // Initialize local values when lineItems change
   useEffect(() => {
-    const newLocalValues: Record<string, { description: string; quantity: string; unitPrice: string }> = {};
+    const newLocalValues: Record<string, { 
+      description: string; 
+      quantity: string; 
+      unitPrice: string; 
+      markupType: string; 
+      markupValue: string; 
+    }> = {};
     lineItems.forEach(item => {
       newLocalValues[item.id] = {
         description: item.description,
         quantity: item.quantity.toString(),
-        unitPrice: item.unitPrice.toString()
+        unitPrice: item.unitPrice.toString(),
+        markupType: item.markupType,
+        markupValue: item.markupValue.toString()
       };
     });
     setLocalValues(newLocalValues);
   }, [lineItems]);
 
   // Helper function to get current value (local or from props)
-  const getCurrentValue = (itemId: number, field: 'description' | 'quantity' | 'unitPrice') => {
+  const getCurrentValue = (itemId: number, field: 'description' | 'quantity' | 'unitPrice' | 'markupType' | 'markupValue') => {
     return localValues[itemId]?.[field] ?? 
       (field === 'description' ? lineItems.find(item => item.id === itemId)?.description || '' :
        field === 'quantity' ? lineItems.find(item => item.id === itemId)?.quantity.toString() || '0' :
-       lineItems.find(item => item.id === itemId)?.unitPrice.toString() || '0');
+       field === 'unitPrice' ? lineItems.find(item => item.id === itemId)?.unitPrice.toString() || '0' :
+       field === 'markupType' ? lineItems.find(item => item.id === itemId)?.markupType || 'percentage' :
+       lineItems.find(item => item.id === itemId)?.markupValue.toString() || '0');
   };
 
   const { toast } = useToast();
@@ -168,6 +184,19 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
       } else if (num > 10000000) {
         validationError = "Unit price must be less than $10,000,000";
       }
+    } else if (field === "markupValue") {
+      const num = parseFloat(value);
+      if (!value && value !== "0") {
+        validationError = "Markup value is required";
+      } else if (isNaN(num) || num < 0) {
+        validationError = "Markup must be a valid positive number";
+      } else if (num > 1000) {
+        validationError = "Markup must be less than 1000";
+      }
+    } else if (field === "markupType") {
+      if (!value || (value !== "percentage" && value !== "dollar")) {
+        validationError = "Markup type must be percentage or dollar";
+      }
     }
     
     // Update validation errors
@@ -186,11 +215,17 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
       // Set new timer for debounced save
       debounceTimers.current[key] = setTimeout(() => {
         try {
-          const updateData = { [field]: field === "quantity" || field === "unitPrice" ? parseFloat(value) || 0 : value };
+          let updateData;
+          if (field === "quantity" || field === "unitPrice" || field === "markupValue") {
+            updateData = { [field]: parseFloat(value) || 0 };
+          } else {
+            updateData = { [field]: value };
+          }
           updateLineItemMutation.mutate({ id: itemId, data: updateData });
         } catch (error) {
           // Handle any synchronous errors during mutation
-          if (error?.name !== 'AbortError' && !error?.message?.includes('aborted') && !error?.message?.includes('signal is aborted')) {
+          const err = error as Error;
+          if (err?.name !== 'AbortError' && !err?.message?.includes('aborted') && !err?.message?.includes('signal is aborted')) {
             console.error('Error in debounced save:', error);
           }
         } finally {
@@ -201,7 +236,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
   }, []);
   
   // Keyboard navigation helper
-  const handleKeyDown = useCallback((e: React.KeyboardEvent, rowIndex: number, column: 'description' | 'quantity' | 'unitPrice') => {
+  const handleKeyDown = useCallback((e: React.KeyboardEvent, rowIndex: number, column: 'description' | 'quantity' | 'unitPrice' | 'markupValue') => {
     const totalRows = lineItems.length;
     
     if (e.key === 'Enter') {
@@ -209,14 +244,16 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
       if (e.shiftKey) {
         // Move up a row
         if (rowIndex > 0) {
-          const columnTestId = column === 'unitPrice' ? 'unit-price' : column;
+          const columnTestId = column === 'unitPrice' ? 'unit-price' : 
+                              column === 'markupValue' ? 'markup-value' : column;
           const prevInput = document.querySelector(`[data-testid="input-${columnTestId}-${lineItems[rowIndex - 1].id}"]`) as HTMLInputElement;
           prevInput?.focus();
         }
       } else {
         // Move down a row
         if (rowIndex < totalRows - 1) {
-          const columnTestId = column === 'unitPrice' ? 'unit-price' : column;
+          const columnTestId = column === 'unitPrice' ? 'unit-price' : 
+                              column === 'markupValue' ? 'markup-value' : column;
           const nextInput = document.querySelector(`[data-testid="input-${columnTestId}-${lineItems[rowIndex + 1].id}"]`) as HTMLInputElement;
           nextInput?.focus();
         }
@@ -342,7 +379,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
         setNewItem(prev => ({
           ...prev,
           description: `${selectedConfigurableProduct.name} (${dimensions.length}" x ${dimensions.width}")`,
-          unitPrice: data.price?.toString() || selectedConfigurableProduct.unitPrice?.toString() || "0",
+          unitPrice: data.price?.toString() || selectedConfigurableProduct.defaultUnitPrice?.toString() || "0",
         }));
       }
     },
@@ -391,7 +428,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
       setNewItem({
         ...newItem,
         description: product.name,
-        unitPrice: product.unitPrice?.toString() || "0",
+        unitPrice: product.defaultUnitPrice?.toString() || "0",
       });
       setShowProductDialog(false);
     }
@@ -533,9 +570,9 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                                     <p className="text-sm text-gray-600 mt-1">{product.description}</p>
                                   )}
                                   <div className="flex items-center gap-4 mt-2">
-                                    {product.unitPrice && (
+                                    {product.defaultUnitPrice && (
                                       <span className="text-sm font-medium text-gray-900">
-                                        {formatCurrency(Number(product.unitPrice))}
+                                        {formatCurrency(Number(product.defaultUnitPrice))}
                                       </span>
                                     )}
                                     {product.productType === 'configurable' && (
@@ -580,9 +617,12 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
         <div className="overflow-x-auto">
           <table className="w-full border border-gray-300 divide-y divide-gray-300">
             <colgroup>
-              <col style={{width: '40%'}} /> {/* Description */}
+              <col style={{width: '30%'}} /> {/* Description */}
               <col style={{width: '80px'}} /> {/* Quantity */}
-              <col style={{width: '120px'}} /> {/* Unit Price */}
+              <col style={{width: '100px'}} /> {/* Cost */}
+              <col style={{width: '80px'}} /> {/* Markup% */}
+              <col style={{width: '120px'}} /> {/* Price */}
+              <col style={{width: '100px'}} /> {/* Margin$ */}
               <col style={{width: '140px'}} /> {/* Total */}
               <col style={{width: '80px'}} /> {/* Actions */}
             </colgroup>
@@ -594,8 +634,17 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                 <th className="border-r border-gray-300 px-3 py-2 text-center text-sm font-medium text-gray-700">
                   QTY
                 </th>
+                <th className="border-r border-gray-300 px-3 py-2 text-center text-sm font-medium text-gray-700 hidden lg:table-cell">
+                  Cost
+                </th>
+                <th className="border-r border-gray-300 px-3 py-2 text-center text-sm font-medium text-gray-700 hidden lg:table-cell">
+                  Markup%
+                </th>
                 <th className="border-r border-gray-300 px-3 py-2 text-center text-sm font-medium text-gray-700">
-                  Unit Price
+                  Price
+                </th>
+                <th className="border-r border-gray-300 px-3 py-2 text-center text-sm font-medium text-gray-700 hidden md:table-cell">
+                  Margin$
                 </th>
                 <th className="border-r border-gray-300 px-3 py-2 text-center text-sm font-medium text-gray-700">
                   Total
@@ -607,17 +656,43 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
             </thead>
             <tbody className="divide-y divide-gray-300">
               {lineItems.map((item, rowIndex) => {
+                // Calculate values using current local values
+                const currentCost = parseFloat(getCurrentValue(item.id, 'unitPrice')) || 0;
+                const currentMarkupValue = parseFloat(getCurrentValue(item.id, 'markupValue')) || 0;
+                const currentMarkupType = getCurrentValue(item.id, 'markupType') || 'percentage';
+                const currentQuantity = parseFloat(getCurrentValue(item.id, 'quantity')) || 0;
+                
+                // Calculate price (cost + markup)
+                let price = currentCost;
+                if (currentMarkupType === 'percentage') {
+                  price = currentCost + (currentCost * (currentMarkupValue / 100));
+                } else {
+                  price = currentCost + currentMarkupValue;
+                }
+                
+                // Calculate margin (profit amount)
+                const marginAmount = calculateLineItemMargin(
+                  currentQuantity,
+                  currentCost,
+                  currentMarkupType,
+                  currentMarkupValue,
+                  item.discountType,
+                  item.discountValue
+                );
+                
+                // Calculate total
                 const total = calculateLineItemTotal(
-                  item.quantity,
-                  item.unitPrice,
-                  item.markupType,
-                  item.markupValue,
+                  currentQuantity,
+                  currentCost,
+                  currentMarkupType,
+                  currentMarkupValue,
                   item.discountType,
                   item.discountValue
                 );
                 
                 return (
                   <tr key={item.id} className="hover:bg-gray-50">
+                    {/* Description - Always visible */}
                     <td className="border-r border-gray-300 px-3 py-1">
                       <Input
                         value={getCurrentValue(item.id, 'description')}
@@ -630,6 +705,8 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                         <div className="text-xs text-red-500 mt-1">{validationErrors[`${item.id}-description`]}</div>
                       )}
                     </td>
+                    
+                    {/* Quantity - Always visible */}
                     <td className="border-r border-gray-300 px-3 py-1">
                       <Input
                         type="number"
@@ -645,7 +722,9 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                         <div className="text-xs text-red-500 mt-1">{validationErrors[`${item.id}-quantity`]}</div>
                       )}
                     </td>
-                    <td className="border-r border-gray-300 px-3 py-1">
+                    
+                    {/* Cost - Hidden on tablet/mobile */}
+                    <td className="border-r border-gray-300 px-3 py-1 hidden lg:table-cell">
                       <Input
                         type="number"
                         step="0.01"
@@ -654,15 +733,63 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                         onChange={(e) => handleFieldChange(item.id, "unitPrice", e.target.value)}
                         onKeyDown={(e) => handleKeyDown(e, rowIndex, 'unitPrice')}
                         className="border-0 bg-transparent p-1 text-sm text-center tabular-nums focus:ring-1 focus:ring-blue-500"
-                        data-testid={`input-unit-price-${item.id}`}
+                        data-testid={`input-cost-${item.id}`}
                       />
                       {validationErrors[`${item.id}-unitPrice`] && (
                         <div className="text-xs text-red-500 mt-1">{validationErrors[`${item.id}-unitPrice`]}</div>
                       )}
                     </td>
+                    
+                    {/* Markup% - Hidden on tablet/mobile */}
+                    <td className="border-r border-gray-300 px-3 py-1 hidden lg:table-cell">
+                      <div className="flex items-center space-x-1">
+                        <Input
+                          type="number"
+                          step="0.1"
+                          min="0"
+                          max="1000"
+                          value={getCurrentValue(item.id, 'markupValue')}
+                          onChange={(e) => handleFieldChange(item.id, "markupValue", e.target.value)}
+                          onKeyDown={(e) => handleKeyDown(e, rowIndex, 'markupValue')}
+                          className="border-0 bg-transparent p-1 text-sm text-center tabular-nums focus:ring-1 focus:ring-blue-500 w-16"
+                          data-testid={`input-markup-value-${item.id}`}
+                        />
+                        <Select
+                          value={getCurrentValue(item.id, 'markupType')}
+                          onValueChange={(value) => handleFieldChange(item.id, "markupType", value)}
+                        >
+                          <SelectTrigger className="h-6 w-8 border-0 bg-transparent text-xs p-0 focus:ring-1 focus:ring-blue-500">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="percentage">%</SelectItem>
+                            <SelectItem value="dollar">$</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      {validationErrors[`${item.id}-markupValue`] && (
+                        <div className="text-xs text-red-500 mt-1">{validationErrors[`${item.id}-markupValue`]}</div>
+                      )}
+                    </td>
+                    
+                    {/* Price - Always visible */}
+                    <td className="border-r border-gray-300 px-3 py-2 text-center text-sm tabular-nums font-medium">
+                      {formatCurrency(price)}
+                    </td>
+                    
+                    {/* Margin$ - Hidden on mobile */}
+                    <td className={`border-r border-gray-300 px-3 py-2 text-center text-sm tabular-nums font-medium hidden md:table-cell ${
+                      marginAmount >= 0 ? 'text-green-600' : 'text-red-600'
+                    }`}>
+                      {formatCurrency(marginAmount)}
+                    </td>
+                    
+                    {/* Total - Always visible */}
                     <td className="border-r border-gray-300 px-3 py-2 text-center text-sm tabular-nums font-medium">
                       {formatCurrency(total)}
                     </td>
+                    
+                    {/* Actions - Always visible */}
                     <td className="px-3 py-2 text-center">
                       <Button
                         variant="ghost"
@@ -685,8 +812,9 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
         {showNewItemForm && !isUnsavedQuote && (
           <div className="border-t border-gray-300 p-4 bg-gray-50">
             <h4 className="font-medium text-gray-900 mb-3">Add New Item</h4>
-            <div className="grid grid-cols-4 gap-4">
-              <div>
+            <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
+              {/* Description */}
+              <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
                 <Input
                   placeholder="Item description"
@@ -699,6 +827,8 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                   <div className="text-xs text-red-500 mt-1">{newItemErrors.description}</div>
                 )}
               </div>
+              
+              {/* Quantity */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Quantity</label>
                 <Input
@@ -714,8 +844,10 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                   <div className="text-xs text-red-500 mt-1">{newItemErrors.quantity}</div>
                 )}
               </div>
+              
+              {/* Cost */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Unit Price</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Cost</label>
                 <Input
                   type="number"
                   step="0.01"
@@ -723,12 +855,46 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                   value={newItem.unitPrice}
                   onChange={(e) => setNewItem({ ...newItem, unitPrice: e.target.value })}
                   className="text-sm text-center tabular-nums"
-                  data-testid="input-unit-price-new"
+                  data-testid="input-cost-new"
                 />
                 {newItemErrors.unitPrice && (
                   <div className="text-xs text-red-500 mt-1">{newItemErrors.unitPrice}</div>
                 )}
               </div>
+              
+              {/* Markup% */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Markup</label>
+                <div className="flex items-center space-x-1">
+                  <Input
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    max="1000"
+                    value={newItem.markupValue}
+                    onChange={(e) => setNewItem({ ...newItem, markupValue: e.target.value })}
+                    className="text-sm text-center tabular-nums"
+                    data-testid="input-markup-value-new"
+                  />
+                  <Select
+                    value={newItem.markupType}
+                    onValueChange={(value) => setNewItem({ ...newItem, markupType: value as "percentage" | "dollar" })}
+                  >
+                    <SelectTrigger className="w-12 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="percentage">%</SelectItem>
+                      <SelectItem value="dollar">$</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {newItemErrors.markupValue && (
+                  <div className="text-xs text-red-500 mt-1">{newItemErrors.markupValue}</div>
+                )}
+              </div>
+              
+              {/* Add Button */}
               <div className="flex items-end">
                 <Button
                   onClick={handleAddItem}
