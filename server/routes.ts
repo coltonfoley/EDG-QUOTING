@@ -4,8 +4,8 @@ import { storage } from "./storage";
 import { z } from "zod";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import { db } from "./db";
-import { accounts, contacts } from "@shared/schema";
-import { eq, or, ilike } from "drizzle-orm";
+import { accounts, contacts, products } from "@shared/schema";
+import { eq, or, ilike, and } from "drizzle-orm";
 import {
   insertAccountSchema,
   insertContactSchema,
@@ -39,6 +39,55 @@ import type { ExtractedProduct } from "./openai";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 import { ObjectPermission } from "./objectAcl";
 import type { InsertQuote } from "@shared/schema";
+
+/**
+ * Helper function to strip internal validation metadata from API responses
+ * Removes _categoryValidation field that's added during validation but shouldn't be returned to clients
+ */
+function stripValidationMetadata(obj: any): any {
+  if (Array.isArray(obj)) {
+    return obj.map(stripValidationMetadata);
+  } else if (obj && typeof obj === 'object') {
+    const { _categoryValidation, ...cleanObj } = obj;
+    const result: any = {};
+    for (const [key, value] of Object.entries(cleanObj)) {
+      result[key] = stripValidationMetadata(value);
+    }
+    return result;
+  }
+  return obj;
+}
+
+/**
+ * Helper function to build category/manufacturer filtering for Phase A compatibility
+ * Supports filtering by either category or manufacturer, preferring manufacturer when both are provided
+ */
+function buildCategoryManufacturerFilter(categoryQuery?: string, manufacturerQuery?: string) {
+  const filters = [];
+  
+  if (manufacturerQuery) {
+    // Manufacturer filtering takes precedence
+    filters.push(ilike(products.manufacturer, `%${manufacturerQuery}%`));
+  } else if (categoryQuery) {
+    // Fall back to category filtering if no manufacturer specified
+    filters.push(ilike(products.category, `%${categoryQuery}%`));
+  }
+  
+  // Support legacy behavior: if someone searches for a term, check both fields
+  // This ensures COALESCE-like behavior where we prefer manufacturer but check category as fallback
+  if (categoryQuery && manufacturerQuery && categoryQuery === manufacturerQuery) {
+    // If both parameters have the same value, search both fields (OR condition)
+    filters.length = 0; // Clear individual filters
+    filters.push(
+      or(
+        ilike(products.manufacturer, `%${manufacturerQuery}%`),
+        ilike(products.category, `%${categoryQuery}%`)
+      )
+    );
+  }
+  
+  return filters;
+}
 
 /**
  * Server-side calculation verification utility
@@ -1307,9 +1356,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Product catalog routes (protected)
   app.get("/api/products", isAuthenticated, async (req, res) => {
     try {
-      const products = await storage.getAllProducts();
-      res.json(products);
+      // Parse query parameters for filtering
+      const categoryFilter = req.query.category as string;
+      const manufacturerFilter = req.query.manufacturer as string;
+      
+      let productList;
+      
+      // If filtering is requested, use database query with filters
+      if (categoryFilter || manufacturerFilter) {
+        const filters = buildCategoryManufacturerFilter(categoryFilter, manufacturerFilter);
+        if (filters.length > 0) {
+          productList = await db
+            .select()
+            .from(products)
+            .where(and(...filters));
+        } else {
+          productList = await storage.getAllProducts();
+        }
+      } else {
+        // No filtering, get all products
+        productList = await storage.getAllProducts();
+      }
+      
+      // Strip internal metadata and ensure both category and manufacturer fields are included
+      const cleanProducts = stripValidationMetadata(productList);
+      res.json(cleanProducts);
     } catch (error) {
+      console.error("Error fetching products:", error);
       res.status(500).json({ message: "Internal server error" });
     }
   });
@@ -1329,7 +1402,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!product) {
         return res.status(404).json({ message: "Product not found" });
       }
-      res.json(product);
+      
+      // Strip internal metadata and ensure both category and manufacturer fields are included
+      const cleanProduct = stripValidationMetadata(product);
+      res.json(cleanProduct);
     } catch (error) {
       res.status(500).json({ message: "Internal server error" });
     }
@@ -1338,8 +1414,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/products", isAuthenticated, async (req, res) => {
     try {
       const productData = insertProductSchema.parse(req.body);
-      const product = await storage.createProduct(productData);
-      res.status(201).json(product);
+      // Strip validation metadata before passing to storage
+      const cleanProductData = stripValidationMetadata(productData);
+      const product = await storage.createProduct(cleanProductData);
+      
+      // Strip metadata from response
+      const cleanProduct = stripValidationMetadata(product);
+      res.status(201).json(cleanProduct);
     } catch (error) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: "Invalid product data", errors: error.errors });
@@ -1359,12 +1440,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      const productData = insertProductSchema.partial().parse(req.body);
-      const product = await storage.updateProduct(params.data.id, productData);
+      // For partial updates, manually validate only the fields that are present
+      // This avoids the ZodEffects.partial() issue since insertProductSchema has transforms
+      const updateFields: any = {};
+      const body = req.body;
+      
+      // Validate each field individually if present
+      if (body.name !== undefined) updateFields.name = body.name;
+      if (body.description !== undefined) updateFields.description = body.description;
+      if (body.category !== undefined) updateFields.category = body.category;
+      if (body.manufacturer !== undefined) updateFields.manufacturer = body.manufacturer;
+      if (body.productType !== undefined) updateFields.productType = body.productType;
+      if (body.defaultUnitPrice !== undefined) updateFields.defaultUnitPrice = body.defaultUnitPrice;
+      if (body.defaultMarkupType !== undefined) updateFields.defaultMarkupType = body.defaultMarkupType;
+      if (body.defaultMarkupValue !== undefined) updateFields.defaultMarkupValue = body.defaultMarkupValue;
+      if (body.defaultDiscountType !== undefined) updateFields.defaultDiscountType = body.defaultDiscountType;
+      if (body.defaultDiscountValue !== undefined) updateFields.defaultDiscountValue = body.defaultDiscountValue;
+      if (body.unit !== undefined) updateFields.unit = body.unit;
+      if (body.minLength !== undefined) updateFields.minLength = body.minLength;
+      if (body.maxLength !== undefined) updateFields.maxLength = body.maxLength;
+      if (body.minWidth !== undefined) updateFields.minWidth = body.minWidth;
+      if (body.maxWidth !== undefined) updateFields.maxWidth = body.maxWidth;
+      if (body.primaryImage !== undefined) updateFields.primaryImage = body.primaryImage;
+      if (body.galleryImages !== undefined) updateFields.galleryImages = body.galleryImages;
+      if (body.specificationSheets !== undefined) updateFields.specificationSheets = body.specificationSheets;
+      if (body.configFields !== undefined) updateFields.configFields = body.configFields;
+      
+      const productData = updateFields;
+      // Strip validation metadata before passing to storage
+      const cleanProductData = stripValidationMetadata(productData);
+      const product = await storage.updateProduct(params.data.id, cleanProductData);
       if (!product) {
         return res.status(404).json({ message: "Product not found" });
       }
-      res.json(product);
+      
+      // Strip metadata from response
+      const cleanProduct = stripValidationMetadata(product);
+      res.json(cleanProduct);
     } catch (error) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: "Invalid product data", errors: error.errors });
@@ -1410,7 +1522,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!productWithDetails) {
         return res.status(404).json({ message: "Product not found" });
       }
-      res.json(productWithDetails);
+      
+      // Strip internal metadata from the detailed product response
+      const cleanProductWithDetails = stripValidationMetadata(productWithDetails);
+      res.json(cleanProductWithDetails);
     } catch (error) {
       res.status(500).json({ message: "Internal server error" });
     }
@@ -1833,18 +1948,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
             });
             updated++;
           } else {
-            // Create new product
-            await storage.createProduct({
+            // Create new product - Phase A compatibility: use manufacturer field for imports
+            const productData = {
               name: extractedProduct.sku ? `${extractedProduct.name} (${extractedProduct.sku})` : extractedProduct.name,
               description: extractedProduct.description || '',
-              category: 'Imported',
+              manufacturer: 'Imported', // Phase A: use manufacturer instead of category for new products
+              category: null, // Phase A: leave category null for imported products
               defaultUnitPrice: extractedProduct.price.toString(),
               defaultMarkupType: 'percentage',
               defaultMarkupValue: '25',
               defaultDiscountType: 'percentage',
               defaultDiscountValue: '0',
               unit: extractedProduct.unit || 'each',
-            });
+            };
+            // Strip any validation metadata before creating
+            const cleanProductData = stripValidationMetadata(productData);
+            await storage.createProduct(cleanProductData);
             created++;
           }
         } catch (error) {
