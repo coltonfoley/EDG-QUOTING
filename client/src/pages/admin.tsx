@@ -18,7 +18,6 @@ import { useAuth } from "@/hooks/useAuth";
 import { UserPlus, Shield, User as UserIcon, Trash2, Edit, Upload, FileSpreadsheet, AlertCircle, CheckCircle, Package, Settings, FileText } from "lucide-react";
 import { z } from "zod";
 import type { User, Product } from "@shared/schema";
-import { getPreferredProductCategory, isManufacturerPreferred } from "@shared/schema";
 
 const createUserSchema = z.object({
   username: z.string().min(3, "Username must be at least 3 characters"),
@@ -769,7 +768,7 @@ function ProductBulkEditor() {
   const manufacturers = useMemo(() => {
     if (!products) return [];
     const uniqueManufacturers = Array.from(new Set(
-      products.map(p => getPreferredProductCategory(p) || "Unspecified")
+      products.map(p => p.manufacturer || "Unspecified")
     ));
     return uniqueManufacturers.sort();
   }, [products]);
@@ -779,7 +778,7 @@ function ProductBulkEditor() {
     if (!products) return [];
     
     return products.filter(product => {
-      const productManufacturer = getPreferredProductCategory(product) || "Unspecified";
+      const productManufacturer = product.manufacturer || "Unspecified";
       const matchesManufacturer = selectedManufacturer === "all" || 
         productManufacturer === selectedManufacturer;
       
@@ -954,7 +953,7 @@ function ProductBulkEditor() {
                     />
                   </TableCell>
                   <TableCell className="font-medium" data-testid={`text-product-name-${product.id}`}>{product.name}</TableCell>
-                  <TableCell data-testid={`text-manufacturer-${product.id}`}>{getPreferredProductCategory(product) || "Unspecified"}</TableCell>
+                  <TableCell data-testid={`text-manufacturer-${product.id}`}>{product.manufacturer || "Unspecified"}</TableCell>
                   <TableCell>{product.unit}</TableCell>
                   <TableCell>${product.defaultUnitPrice}</TableCell>
                   <TableCell>

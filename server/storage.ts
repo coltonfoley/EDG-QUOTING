@@ -1,4 +1,4 @@
-import { accounts, customers, contacts, quotes, lineItems, products, users, contractTemplates, proposalTemplates, pricingTables, productAccessories, getPreferredProductCategory, validateProductCategoryOrManufacturer, type Account, type Customer, type Contact, type Quote, type LineItem, type Product, type User, type ContractTemplate, type ProposalTemplate, type PricingTable, type ProductAccessory, type InsertAccount, type InsertCustomer, type InsertContact, type InsertQuote, type InsertLineItem, type InsertProduct, type InsertUser, type InsertContractTemplate, type InsertProposalTemplate, type InsertPricingTable, type InsertProductAccessory, type QuoteWithDetails, type ProductWithDetails } from "@shared/schema";
+import { accounts, customers, contacts, quotes, lineItems, products, users, contractTemplates, proposalTemplates, pricingTables, productAccessories, type Account, type Customer, type Contact, type Quote, type LineItem, type Product, type User, type ContractTemplate, type ProposalTemplate, type PricingTable, type ProductAccessory, type InsertAccount, type InsertCustomer, type InsertContact, type InsertQuote, type InsertLineItem, type InsertProduct, type InsertUser, type InsertContractTemplate, type InsertProposalTemplate, type InsertPricingTable, type InsertProductAccessory, type QuoteWithDetails, type ProductWithDetails } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, inArray, sql, and, ne, or, ilike } from "drizzle-orm";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
@@ -686,7 +686,6 @@ export class DatabaseStorage implements IStorage {
         baseProductId: lineItems.baseProductId,
         isAccessory: lineItems.isAccessory,
         productManufacturer: products.manufacturer,
-        productCategory: products.category,
       })
       .from(lineItems)
       .leftJoin(products, eq(lineItems.productId, products.id))
@@ -708,10 +707,7 @@ export class DatabaseStorage implements IStorage {
       configData: item.configData,
       baseProductId: item.baseProductId,
       isAccessory: item.isAccessory,
-      manufacturer: getPreferredProductCategory({
-        manufacturer: item.productManufacturer as string | null,
-        category: item.productCategory as string | null,
-      }) || "Uncategorized",
+      manufacturer: item.productManufacturer || "Uncategorized",
     }));
 
     const projectContacts = await db.select().from(contacts).where(eq(contacts.accountId, accountIdToUse));
@@ -758,7 +754,6 @@ export class DatabaseStorage implements IStorage {
             baseProductId: lineItems.baseProductId,
             isAccessory: lineItems.isAccessory,
             productManufacturer: products.manufacturer,
-            productCategory: products.category,
           })
           .from(lineItems)
           .leftJoin(products, eq(lineItems.productId, products.id))
@@ -780,10 +775,7 @@ export class DatabaseStorage implements IStorage {
           configData: item.configData,
           baseProductId: item.baseProductId,
           isAccessory: item.isAccessory,
-          manufacturer: getPreferredProductCategory({
-            manufacturer: item.productManufacturer as string | null,
-            category: item.productCategory as string | null,
-          }) || "Uncategorized",
+          manufacturer: item.productManufacturer || "Uncategorized",
         }));
 
         const projectContacts = await db.select().from(contacts).where(eq(contacts.accountId, accountIdToUse));
@@ -1035,34 +1027,28 @@ export class DatabaseStorage implements IStorage {
 
   // Product methods
   async getAllProducts(): Promise<Product[]> {
-    // Phase A compatibility: Use COALESCE to prefer manufacturer over category for ordering
+    // Order by manufacturer field
     return await db
       .select()
       .from(products)
-      .orderBy(sql`COALESCE(${products.manufacturer}, ${products.category})`, products.name);
+      .orderBy(products.manufacturer, products.name);
   }
 
   async getProduct(id: number): Promise<Product | undefined> {
-    // Phase A compatibility: Return product with both category and manufacturer fields
+    // Return product data
     const [product] = await db.select().from(products).where(eq(products.id, id));
     return product || undefined;
   }
 
   async createProduct(insertProduct: InsertProduct): Promise<Product> {
-    // Phase A compatibility: Handle both category and manufacturer fields
-    // Strip any _categoryValidation metadata field if present
+    // Strip any validation metadata field if present
     const { _categoryValidation, ...cleanProduct } = insertProduct as any;
     
-    // Phase A transition logic: Write to both fields when possible
     const productData = { ...cleanProduct };
     
-    // If manufacturer is provided but category is not, use manufacturer as category for consistency
-    if (productData.manufacturer && !productData.category) {
-      productData.category = productData.manufacturer;
-    }
-    // If category is provided but manufacturer is not, use category as manufacturer for consistency
-    else if (productData.category && !productData.manufacturer) {
-      productData.manufacturer = productData.category;
+    // Ensure manufacturer field is present
+    if (!productData.manufacturer) {
+      throw new Error("Manufacturer is required for all products");
     }
     
     const [product] = await db
@@ -1073,28 +1059,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateProduct(id: number, productData: Partial<InsertProduct>): Promise<Product | undefined> {
-    // Phase A compatibility: Handle both category and manufacturer fields
-    // Strip any _categoryValidation metadata field if present
+    // Strip any validation metadata field if present
     const { _categoryValidation, ...cleanProductData } = productData as any;
     
-    // Phase A transition logic: Maintain consistency between both fields
     const updateData = { ...cleanProductData };
-    
-    // Only apply field consistency if one of the fields is being updated
-    if ('manufacturer' in updateData || 'category' in updateData) {
-      // Get current product to understand existing state
-      const existingProduct = await this.getProduct(id);
-      if (existingProduct) {
-        // If updating manufacturer but not category, also update category for consistency
-        if ('manufacturer' in updateData && !('category' in updateData) && updateData.manufacturer) {
-          updateData.category = updateData.manufacturer;
-        }
-        // If updating category but not manufacturer, also update manufacturer for consistency
-        else if ('category' in updateData && !('manufacturer' in updateData) && updateData.category) {
-          updateData.manufacturer = updateData.category;
-        }
-      }
-    }
     
     const [updated] = await db
       .update(products)
@@ -1110,21 +1078,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   async bulkUpdateProducts(productIds: number[], updates: Partial<InsertProduct>): Promise<number> {
-    // Phase A compatibility: Handle both category and manufacturer fields
-    // Strip any _categoryValidation metadata field if present
+    // Strip any validation metadata field if present
     const { _categoryValidation, ...cleanUpdates } = updates as any;
     
-    // Phase A transition logic: Maintain consistency between both fields
     const updateData = { ...cleanUpdates };
-    
-    // If updating manufacturer but not category, also update category for consistency
-    if ('manufacturer' in updateData && !('category' in updateData) && updateData.manufacturer) {
-      updateData.category = updateData.manufacturer;
-    }
-    // If updating category but not manufacturer, also update manufacturer for consistency
-    else if ('category' in updateData && !('manufacturer' in updateData) && updateData.category) {
-      updateData.manufacturer = updateData.category;
-    }
     
     const result = await db
       .update(products)
