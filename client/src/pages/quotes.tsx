@@ -15,14 +15,12 @@ import { isUnauthorizedError } from "@/lib/authUtils";
 import { useAuth } from "@/hooks/useAuth";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { QuoteImporter } from "@/components/quote-importer";
 import { LoadingSpinner } from "@/components/loading-spinner";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { QuoteWithDetails } from "@shared/schema";
 
 export default function Quotes() {
   const [searchTerm, setSearchTerm] = useState("");
-  const [importDialogOpen, setImportDialogOpen] = useState(false);
   const { toast } = useToast();
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const [, navigate] = useLocation();
@@ -206,28 +204,6 @@ export default function Quotes() {
               />
             </div>
 
-            <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
-              <DialogTrigger asChild>
-                <Button variant="outline" className="w-full sm:w-auto">
-                  <Upload className="mr-2 h-4 w-4" />
-                  Import PDF
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
-                <DialogHeader>
-                  <DialogTitle>Import Quote from PDF</DialogTitle>
-                </DialogHeader>
-                <QuoteImporter 
-                  onImportComplete={() => {
-                    setImportDialogOpen(false);
-                    // Refetch quotes to show the new import
-                    queryClient.invalidateQueries({ queryKey: ["/api/quotes"] });
-                    queryClient.invalidateQueries({ queryKey: ["/api/accounts"] });
-                  }}
-                  onClose={() => setImportDialogOpen(false)}
-                />
-              </DialogContent>
-            </Dialog>
 
             <Link href="/quotes/new">
               <Button className="bg-edg-black hover:bg-edg-grey text-edg-white w-full sm:w-auto">
@@ -378,7 +354,7 @@ export default function Quotes() {
                       return (
                         <tr key={quote.id} className="hover:bg-gray-50">
                           <td className="px-6 py-4 text-sm font-medium text-edg-teal">
-                            <Link href={`/quotes/${quote.id}`} className="hover:underline">
+                            <Link href={`/quotes/${quote.id}/edit`} className="hover:underline">
                               {quote.quoteNumber}
                             </Link>
                           </td>
@@ -414,7 +390,7 @@ export default function Quotes() {
                           </td>
                           <td className="px-6 py-4 text-center text-sm">
                             <div className="flex items-center justify-center space-x-2">
-                              <Link href={`/quotes/${quote.id}`}>
+                              <Link href={`/quotes/${quote.id}/edit`}>
                                 <Button variant="ghost" size="sm" className="text-edg-teal hover:text-edg-dark-teal" data-testid={`button-edit-quote-${quote.id}`}>
                                   Edit
                                 </Button>

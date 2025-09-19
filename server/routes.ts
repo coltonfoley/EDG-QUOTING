@@ -37,14 +37,11 @@ import {
 } from "./validation-schemas";
 import multer from "multer";
 import * as XLSX from "xlsx";
-import { parsePDF } from "./pdf-parser";
 import { extractProductsFromImage, extractProductsFromText, extractQuoteDataFromText } from "./openai";
 import type { ExtractedProduct } from "./openai";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 import { ObjectPermission } from "./objectAcl";
 import type { InsertQuote } from "@shared/schema";
-// REMOVED: import { generateQuotePDFContent } from "./pdfGenerator";
-// PDF generation is now handled entirely client-side for security
 
 /**
  * Helper function to strip internal validation metadata from API responses
@@ -1029,98 +1026,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // PDF Quote Import endpoint
-  app.post("/api/quotes/import-pdf", isAuthenticated, upload.single('pdf'), async (req, res) => {
-    try {
-      if (!req.file) {
-        return res.status(400).json({ 
-          message: "No PDF file uploaded. Please select a PDF file to import.",
-          code: "NO_FILE"
-        });
-      }
-
-      if (req.file.mimetype !== 'application/pdf') {
-        return res.status(400).json({ 
-          message: "Invalid file type. Please upload a PDF file only.",
-          code: "INVALID_FILE_TYPE"
-        });
-      }
-
-      // Check file size (limit to 10MB)
-      if (req.file.size > 10 * 1024 * 1024) {
-        return res.status(400).json({ 
-          message: "PDF file is too large. Please upload a file smaller than 10MB.",
-          code: "FILE_TOO_LARGE"
-        });
-      }
-
-      // Extract text from PDF with enhanced error handling
-      const pdfData = await parsePDF(req.file.buffer);
-      
-      // Check if PDF parsing returned an error
-      if (pdfData.error) {
-        return res.status(400).json({ 
-          message: pdfData.error,
-          code: "PDF_PARSE_ERROR"
-        });
-      }
-      
-      if (!pdfData.text.trim()) {
-        return res.status(400).json({ 
-          message: "No text could be extracted from the PDF. The document may be scanned or contain only images.",
-          code: "NO_TEXT_EXTRACTED"
-        });
-      }
-
-      // Extract quote data using AI
-      let extractedQuoteData;
-      try {
-        extractedQuoteData = await extractQuoteDataFromText(pdfData.text);
-      } catch (aiError: any) {
-        console.error("AI extraction error:", aiError);
-        return res.status(503).json({ 
-          message: "The AI service is temporarily unavailable. Please try again in a few moments.",
-          code: "AI_SERVICE_ERROR"
-        });
-      }
-      
-      if (!extractedQuoteData) {
-        return res.status(400).json({ 
-          message: "Could not extract quote data from the PDF. Please ensure the PDF contains a valid quote with line items and pricing.",
-          code: "EXTRACTION_FAILED"
-        });
-      }
-
-      res.json({
-        success: true,
-        data: extractedQuoteData,
-        originalText: pdfData.text.substring(0, 500) + '...' // Preview of extracted text
-      });
-
-    } catch (error: any) {
-      console.error("Error processing PDF quote import:", error);
-      
-      // Provide specific error messages based on error type
-      if (error.message?.includes('memory')) {
-        return res.status(413).json({ 
-          message: "The PDF file is too complex to process. Please try a simpler document.",
-          code: "PROCESSING_ERROR"
-        });
-      }
-      
-      if (error.message?.includes('timeout')) {
-        return res.status(504).json({ 
-          message: "Processing took too long. Please try again with a smaller PDF.",
-          code: "TIMEOUT_ERROR"
-        });
-      }
-      
-      res.status(500).json({ 
-        message: "An unexpected error occurred while processing the PDF. Please try again or contact support if the problem persists.",
-        code: "INTERNAL_ERROR"
-      });
-    }
-  });
 
   // Line item routes (protected)
   app.get("/api/quotes/:quoteId/line-items", isAuthenticated, async (req, res) => {
@@ -1327,25 +1232,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // PDF template route - now handled client-side
-  app.get("/api/quotes/:id/pdf-template", isAuthenticated, async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      const quote = await storage.getQuoteWithDetails(id);
-      if (!quote) {
-        return res.status(404).json({ message: "Quote not found" });
-      }
-
-      // Return quote data for PDF template
-      res.json(quote);
-    } catch (error) {
-      res.status(500).json({ message: "Internal server error" });
-    }
-  });
-
-  // REMOVED: Unsafe PDF generation route that used innerHTML with unsanitized user data
-  // PDF generation is now handled entirely client-side using the actual React-rendered DOM
-  // for security and exact preview parity
 
   // Product catalog routes (protected)
   app.get("/api/products", isAuthenticated, async (req, res) => {

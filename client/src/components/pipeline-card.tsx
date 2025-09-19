@@ -30,7 +30,7 @@ export function PipelineCard({ quote, isDragging }: PipelineCardProps) {
   const isAssigned = !!quote.assignedRepId;
 
   return (
-    <Link href={`/quotes/${quote.id}`}>
+    <Link href={`/quotes/${quote.id}/edit`}>
       <Card 
         className={`cursor-pointer hover:shadow-md transition-all ${
           isDragging ? 'opacity-50 rotate-3 scale-105' : 'hover:scale-[1.02]'

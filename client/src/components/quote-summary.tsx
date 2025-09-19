@@ -10,7 +10,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { FileText, Bookmark, Plus, Eye, Send, Mail, CheckCircle, AlertCircle, Clock } from "lucide-react";
 import { formatCurrency, calculateQuoteTotals } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
-import { QuotePDFTemplate } from "./quote-pdf-template";
 import type { QuoteWithDetails, ContractTemplate } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
 
@@ -20,7 +19,6 @@ interface QuoteSummaryProps {
 }
 
 export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
-  const [showPDFTemplate, setShowPDFTemplate] = useState(false);
   const [issuerSignatureInput, setIssuerSignatureInput] = useState("");
   const [localTaxRate, setLocalTaxRate] = useState<string>("");
   const [localDiscount, setLocalDiscount] = useState<string>("");
@@ -29,22 +27,6 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const generatePDFMutation = useMutation({
-    mutationFn: async () => {
-      setShowPDFTemplate(true);
-      return Promise.resolve();
-    },
-    onSuccess: () => {
-      // PDF template dialog will handle the actual generation
-    },
-    onError: () => {
-      toast({ 
-        title: "Error", 
-        description: "Failed to open PDF template", 
-        variant: "destructive" 
-      });
-    },
-  });
 
   // Fetch available contract templates
   const { data: contractTemplates = [] } = useQuery<ContractTemplate[]>({
@@ -358,14 +340,6 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
 
         {/* Action Buttons */}
         <div className="space-y-3">
-          <Button
-            onClick={() => generatePDFMutation.mutate()}
-            disabled={generatePDFMutation.isPending}
-            className="w-full bg-edg-black hover:bg-edg-grey text-edg-white"
-          >
-            <FileText className="mr-2 h-4 w-4" />
-            Generate PDF Quote
-          </Button>
 
           {/* Signature Status */}
           <div className="p-3 bg-gray-50 rounded">
@@ -436,11 +410,6 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
         </div>
       </div>
 
-      <QuotePDFTemplate
-        quote={quote}
-        isOpen={showPDFTemplate}
-        onClose={() => setShowPDFTemplate(false)}
-      />
     </div>
   );
 }
