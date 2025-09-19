@@ -471,12 +471,12 @@ export function ImageUploader({
                             value={String((image.metadata as any).category || '')}
                             onValueChange={(value) => updateImageMetadata(image.id, 'category', value)}
                           >
-                            <SelectTrigger className="h-8 text-xs">
+                            <SelectTrigger className="h-8 text-xs" data-testid={`select-image-category-${image.id}`}>
                               <SelectValue placeholder="Select category" />
                             </SelectTrigger>
                             <SelectContent>
                               {categoryOptions.map(option => (
-                                <SelectItem key={option.value} value={option.value}>
+                                <SelectItem key={option.value} value={option.value} data-testid={`image-category-option-${option.value.toLowerCase().replace(/\s+/g, '-')}`}>
                                   {option.label}
                                 </SelectItem>
                               ))}

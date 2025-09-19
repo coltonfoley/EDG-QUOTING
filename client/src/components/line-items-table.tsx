@@ -33,7 +33,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
   const [showNewItemForm, setShowNewItemForm] = useState(false);
   const [showProductDialog, setShowProductDialog] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState<string>("all");
+  const [selectedManufacturer, setSelectedManufacturer] = useState<string>("all");
   const [showDimensionDialog, setShowDimensionDialog] = useState(false);
   const [selectedConfigurableProduct, setSelectedConfigurableProduct] = useState<Product | null>(null);
   const [dimensions, setDimensions] = useState({ length: "", width: "" });
@@ -547,10 +547,10 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
   };
 
   // Product filtering logic
-  const categories = useMemo(() => {
+  const manufacturers = useMemo(() => {
     if (!products) return [];
-    const uniqueCategories = Array.from(new Set(products.map(p => p.category || "Uncategorized")));
-    return uniqueCategories.sort();
+    const uniqueManufacturers = Array.from(new Set(products.map(p => p.manufacturer || p.category || "Uncategorized")));
+    return uniqueManufacturers.sort();
   }, [products]);
 
   const filteredProducts = useMemo(() => {
@@ -561,20 +561,21 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
         product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (product.description || "").toLowerCase().includes(searchTerm.toLowerCase());
       
-      const matchesCategory = selectedCategory === "all" || 
-        (product.category || "Uncategorized") === selectedCategory;
+      const productManufacturer = product.manufacturer || product.category || "Uncategorized";
+      const matchesManufacturer = selectedManufacturer === "all" || 
+        productManufacturer === selectedManufacturer;
       
-      return matchesSearch && matchesCategory;
+      return matchesSearch && matchesManufacturer;
     });
-  }, [products, searchTerm, selectedCategory]);
+  }, [products, searchTerm, selectedManufacturer]);
 
   const groupedProducts = useMemo(() => {
     return filteredProducts.reduce((groups, product) => {
-      const category = product.category || "Uncategorized";
-      if (!groups[category]) {
-        groups[category] = [];
+      const manufacturer = product.manufacturer || product.category || "Uncategorized";
+      if (!groups[manufacturer]) {
+        groups[manufacturer] = [];
       }
-      groups[category].push(product);
+      groups[manufacturer].push(product);
       return groups;
     }, {} as Record<string, Product[]>);
   }, [filteredProducts]);
@@ -631,20 +632,20 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                       />
                     </div>
                     
-                    <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                      <SelectTrigger className="w-48">
+                    <Select value={selectedManufacturer} onValueChange={setSelectedManufacturer}>
+                      <SelectTrigger className="w-48" data-testid="select-manufacturer-filter">
                         <SelectValue>
                           <div className="flex items-center gap-2">
                             <Filter className="h-4 w-4" />
-                            {selectedCategory === "all" ? "All Categories" : selectedCategory}
+                            {selectedManufacturer === "all" ? "All Manufacturers" : selectedManufacturer}
                           </div>
                         </SelectValue>
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="all">All Categories</SelectItem>
-                        {categories.map(category => (
-                          <SelectItem key={category} value={category}>
-                            {category}
+                        <SelectItem value="all" data-testid="manufacturer-option-all">All Manufacturers</SelectItem>
+                        {manufacturers.map(manufacturer => (
+                          <SelectItem key={manufacturer} value={manufacturer} data-testid={`manufacturer-option-${manufacturer.toLowerCase().replace(/\s+/g, '-')}`}>
+                            {manufacturer}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -658,12 +659,12 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                         No products found. Try adjusting your search or filters.
                       </div>
                     ) : (
-                      Object.entries(groupedProducts).map(([category, categoryProducts]) => (
-                        <div key={category} className="border-b border-gray-100 last:border-b-0">
-                          <div className="bg-gray-50 px-4 py-2 font-medium text-gray-900 text-sm sticky top-0">
-                            {category} ({categoryProducts.length})
+                      Object.entries(groupedProducts).map(([manufacturer, manufacturerProducts]) => (
+                        <div key={manufacturer} className="border-b border-gray-100 last:border-b-0">
+                          <div className="bg-gray-50 px-4 py-2 font-medium text-gray-900 text-sm sticky top-0" data-testid={`manufacturer-group-${manufacturer.toLowerCase().replace(/\s+/g, '-')}`}>
+                            {manufacturer} ({manufacturerProducts.length})
                           </div>
-                          {categoryProducts.map((product) => (
+                          {manufacturerProducts.map((product) => (
                             <div 
                               key={product.id}
                               className="p-4 border-b border-gray-50 last:border-b-0 hover:bg-gray-50 cursor-pointer transition-colors"
