@@ -42,13 +42,14 @@ import type { InsertQuote } from "@shared/schema";
 
 /**
  * Helper function to strip internal validation metadata from API responses
- * Removes _categoryValidation field that's added during validation but shouldn't be returned to clients
+ * Removes any internal metadata fields that shouldn't be returned to clients
  */
 function stripValidationMetadata(obj: any): any {
   if (Array.isArray(obj)) {
     return obj.map(stripValidationMetadata);
   } else if (obj && typeof obj === 'object') {
-    const { _categoryValidation, ...cleanObj } = obj;
+    // Remove any internal validation metadata fields
+    const { _categoryValidation, _categoryUpdate, ...cleanObj } = obj;
     const result: any = {};
     for (const [key, value] of Object.entries(cleanObj)) {
       result[key] = stripValidationMetadata(value);
@@ -59,31 +60,14 @@ function stripValidationMetadata(obj: any): any {
 }
 
 /**
- * Helper function to build category/manufacturer filtering for Phase A compatibility
- * Supports filtering by either category or manufacturer, preferring manufacturer when both are provided
+ * Helper function to build manufacturer filtering
+ * Phase B: Only manufacturer field is supported
  */
-function buildCategoryManufacturerFilter(categoryQuery?: string, manufacturerQuery?: string) {
+function buildManufacturerFilter(manufacturerQuery?: string) {
   const filters = [];
   
   if (manufacturerQuery) {
-    // Manufacturer filtering takes precedence
     filters.push(ilike(products.manufacturer, `%${manufacturerQuery}%`));
-  } else if (categoryQuery) {
-    // Fall back to category filtering if no manufacturer specified
-    filters.push(ilike(products.category, `%${categoryQuery}%`));
-  }
-  
-  // Support legacy behavior: if someone searches for a term, check both fields
-  // This ensures COALESCE-like behavior where we prefer manufacturer but check category as fallback
-  if (categoryQuery && manufacturerQuery && categoryQuery === manufacturerQuery) {
-    // If both parameters have the same value, search both fields (OR condition)
-    filters.length = 0; // Clear individual filters
-    filters.push(
-      or(
-        ilike(products.manufacturer, `%${manufacturerQuery}%`),
-        ilike(products.category, `%${categoryQuery}%`)
-      )
-    );
   }
   
   return filters;
@@ -1357,14 +1341,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/products", isAuthenticated, async (req, res) => {
     try {
       // Parse query parameters for filtering
-      const categoryFilter = req.query.category as string;
       const manufacturerFilter = req.query.manufacturer as string;
       
       let productList;
       
       // If filtering is requested, use database query with filters
-      if (categoryFilter || manufacturerFilter) {
-        const filters = buildCategoryManufacturerFilter(categoryFilter, manufacturerFilter);
+      if (manufacturerFilter) {
+        const filters = buildManufacturerFilter(manufacturerFilter);
         if (filters.length > 0) {
           productList = await db
             .select()
@@ -1378,7 +1361,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         productList = await storage.getAllProducts();
       }
       
-      // Strip internal metadata and ensure both category and manufacturer fields are included
+      // Strip internal metadata from products
       const cleanProducts = stripValidationMetadata(productList);
       res.json(cleanProducts);
     } catch (error) {
@@ -1403,7 +1386,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Product not found" });
       }
       
-      // Strip internal metadata and ensure both category and manufacturer fields are included
+      // Strip internal metadata from product
       const cleanProduct = stripValidationMetadata(product);
       res.json(cleanProduct);
     } catch (error) {

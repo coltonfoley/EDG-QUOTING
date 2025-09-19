@@ -139,8 +139,7 @@ export const products = pgTable("products", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
   description: text("description"),
-  category: text("category"),
-  manufacturer: text("manufacturer"),
+  manufacturer: text("manufacturer").notNull(),
   productType: text("product_type").notNull().default("simple"), // simple, configurable
   defaultUnitPrice: decimal("default_unit_price", { precision: 10, scale: 2 }).notNull(),
   defaultMarkupType: text("default_markup_type").notNull().default("percentage"),
@@ -160,7 +159,6 @@ export const products = pgTable("products", {
   specificationSheets: jsonb("specification_sheets"), // Technical specification documents/images
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => [
-  index("idx_products_category").on(table.category),
   index("idx_products_manufacturer").on(table.manufacturer),
   index("idx_products_product_type").on(table.productType),
 ]);
@@ -301,10 +299,7 @@ export const insertProductSchema = createInsertSchema(products).omit({
   id: true,
   createdAt: true,
 }).extend({
-  // Phase A compatibility: Both category and manufacturer fields are optional
-  // manufacturer is preferred when both are present
-  category: z.string().optional().nullable(),
-  manufacturer: z.string().optional().nullable(),
+  manufacturer: z.string().min(1, "Manufacturer is required"),
   defaultUnitPrice: z.union([z.string(), z.number()]).transform(val => typeof val === 'string' ? val : val.toString()),
   defaultMarkupValue: z.union([z.string(), z.number()]).transform(val => typeof val === 'string' ? val : val.toString()),
   defaultDiscountValue: z.union([z.string(), z.number()]).transform(val => typeof val === 'string' ? val : val.toString()),
@@ -316,23 +311,6 @@ export const insertProductSchema = createInsertSchema(products).omit({
   primaryImage: z.string().url().optional(),
   galleryImages: z.array(productImageSchema).optional(),
   specificationSheets: z.array(productImageSchema).optional(),
-}).refine(
-  (data) => {
-    // Phase A validation: At least one of category or manufacturer should be provided
-    // but both are optional for backward compatibility
-    return true; // Allow both to be null/undefined during transition
-  },
-  {
-    message: "During Phase A transition, both category and manufacturer fields are optional",
-  }
-).transform((data) => {
-  // Phase A transformation: Prefer manufacturer when both are present
-  // This ensures manufacturer takes precedence in business logic
-  return {
-    ...data,
-    // Keep both fields as-is for backward compatibility
-    // Business logic elsewhere can check manufacturer first, then fall back to category
-  };
 });
 
 export const insertPricingTableSchema = createInsertSchema(pricingTables).omit({
@@ -522,25 +500,21 @@ export const insertUserSchema = createInsertSchema(users).omit({
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 
-// Phase A compatibility utility functions
-export const getPreferredProductCategory = (product: { category?: string | null; manufacturer?: string | null }) => {
-  // Phase A logic: prefer manufacturer over category, fall back to category if manufacturer not available
-  return product.manufacturer || product.category || null;
+// Utility function for manufacturer field
+export const getProductManufacturer = (product: { manufacturer: string | null }) => {
+  return product.manufacturer || "Unknown";
 };
 
-export const isManufacturerPreferred = (product: { category?: string | null; manufacturer?: string | null }) => {
-  // Returns true if manufacturer should be used, false if category should be used
-  return !!product.manufacturer;
+// Legacy utility functions - deprecated, will be removed in future cleanup
+export const getPreferredProductCategory = (product: { manufacturer?: string | null }) => {
+  return product.manufacturer || null;
 };
 
-// Validation helper for Phase A transition
-export const validateProductCategoryOrManufacturer = (data: { category?: string | null; manufacturer?: string | null }) => {
-  // During Phase A, allow both to be null/undefined for backward compatibility
-  // In future phases, this could be made stricter
+export const validateProductCategoryOrManufacturer = (data: { manufacturer?: string | null }) => {
   return {
-    hasCategory: !!data.category,
+    hasCategory: false, // Legacy - always false
     hasManufacturer: !!data.manufacturer,
-    hasBoth: !!(data.category && data.manufacturer),
-    preferred: getPreferredProductCategory(data),
+    hasBoth: false, // Legacy - always false
+    preferred: data.manufacturer || null,
   };
 };

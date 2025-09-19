@@ -196,7 +196,7 @@ export default function Products() {
     form.reset({
       name: product.name,
       description: product.description || "",
-      manufacturer: product.manufacturer || product.category || "",
+      manufacturer: product.manufacturer || "",
       productType: product.productType || "simple",
       defaultUnitPrice: product.defaultUnitPrice,
       defaultMarkupType: product.defaultMarkupType,
@@ -226,7 +226,7 @@ export default function Products() {
   // Get unique manufacturers and filter/search products
   const manufacturers = useMemo(() => {
     if (!products) return [];
-    const uniqueManufacturers = Array.from(new Set(products.map(p => p.manufacturer || p.category || "Uncategorized")));
+    const uniqueManufacturers = Array.from(new Set(products.map(p => p.manufacturer || "Unknown")));
     return uniqueManufacturers.sort();
   }, [products]);
 
@@ -239,7 +239,7 @@ export default function Products() {
         (product.description || "").toLowerCase().includes(searchTerm.toLowerCase());
       
       const matchesManufacturer = selectedManufacturer === "all" || 
-        (product.manufacturer || product.category || "Uncategorized") === selectedManufacturer;
+        (product.manufacturer || "Unknown") === selectedManufacturer;
       
       return matchesSearch && matchesManufacturer;
     });
@@ -247,7 +247,7 @@ export default function Products() {
 
   const groupedProducts = useMemo(() => {
     return filteredProducts.reduce((groups, product) => {
-      const manufacturer = product.manufacturer || product.category || "Uncategorized";
+      const manufacturer = product.manufacturer || "Unknown";
       if (!groups[manufacturer]) {
         groups[manufacturer] = [];
       }
@@ -995,7 +995,7 @@ function ProductTable({ products, onEdit, onDelete, onManagePricing }: ProductTa
                   </div>
                 </TableCell>
                 <TableCell>
-                  <Badge variant="outline" data-testid={`text-manufacturer-${product.id}`}>{product.manufacturer || product.category || "Uncategorized"}</Badge>
+                  <Badge variant="outline" data-testid={`text-manufacturer-${product.id}`}>{product.manufacturer || "Unknown"}</Badge>
                 </TableCell>
                 <TableCell>
                   <Badge variant={product.productType === "configurable" ? "default" : "secondary"}>
