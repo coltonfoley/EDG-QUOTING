@@ -1,4 +1,4 @@
-import { accounts, customers, contacts, quotes, lineItems, products, users, contractTemplates, proposalTemplates, pricingTables, productAccessories, type Account, type Customer, type Contact, type Quote, type LineItem, type Product, type User, type ContractTemplate, type ProposalTemplate, type PricingTable, type ProductAccessory, type InsertAccount, type InsertCustomer, type InsertContact, type InsertQuote, type InsertLineItem, type InsertProduct, type InsertUser, type InsertContractTemplate, type InsertProposalTemplate, type InsertPricingTable, type InsertProductAccessory, type QuoteWithDetails, type ProductWithDetails } from "@shared/schema";
+import { accounts, customers, contacts, quotes, lineItems, products, users, contractTemplates, proposalTemplates, pricingTables, productAccessories, companySettings, type Account, type Customer, type Contact, type Quote, type LineItem, type Product, type User, type ContractTemplate, type ProposalTemplate, type PricingTable, type ProductAccessory, type CompanySettings, type InsertAccount, type InsertCustomer, type InsertContact, type InsertQuote, type InsertLineItem, type InsertProduct, type InsertUser, type InsertContractTemplate, type InsertProposalTemplate, type InsertPricingTable, type InsertProductAccessory, type InsertCompanySettings, type QuoteWithDetails, type ProductWithDetails } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, inArray, sql, and, ne, or, ilike } from "drizzle-orm";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
@@ -131,6 +131,10 @@ export interface IStorage {
   getDefaultProposalTemplate(): Promise<ProposalTemplate | undefined>;
   getDefaultProposalTemplateByCategory(category: string): Promise<ProposalTemplate | undefined>;
   getProposalTemplatesByCategory(category: string, includeInactive?: boolean): Promise<ProposalTemplate[]>;
+
+  // Company settings methods
+  getCompanySettings(): Promise<CompanySettings | undefined>;
+  updateCompanySettings(settings: InsertCompanySettings): Promise<CompanySettings>;
   
   
   // Session store for authentication
@@ -1473,6 +1477,38 @@ export class DatabaseStorage implements IStorage {
 
     const result = await db.execute(updateSql);
     return { updated: result.rowCount || 0 };
+  }
+
+  // Company settings methods
+  async getCompanySettings(): Promise<CompanySettings | undefined> {
+    // Company settings should be a single record - get the first one
+    const [settings] = await db.select().from(companySettings).limit(1);
+    return settings || undefined;
+  }
+
+  async updateCompanySettings(settings: InsertCompanySettings): Promise<CompanySettings> {
+    // Check if a company settings record exists
+    const existing = await this.getCompanySettings();
+    
+    if (existing) {
+      // Update existing record
+      const [updated] = await db
+        .update(companySettings)
+        .set({
+          ...settings,
+          updatedAt: new Date(),
+        })
+        .where(eq(companySettings.id, existing.id))
+        .returning();
+      return updated;
+    } else {
+      // Create new record (first time setup)
+      const [created] = await db
+        .insert(companySettings)
+        .values(settings)
+        .returning();
+      return created;
+    }
   }
 
 }

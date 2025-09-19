@@ -17,6 +17,7 @@ import {
   insertProposalTemplateSchema,
   insertPricingTableSchema,
   insertProductAccessorySchema,
+  insertCompanySettingsSchema,
   createUserSchema,
   updateUserSchema,
   idParamSchema,
@@ -2311,6 +2312,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error signing quote as customer:", error);
       res.status(500).json({ message: "Failed to sign quote" });
+    }
+  });
+
+  // Company settings routes (protected)
+  app.get('/api/company-settings', isAuthenticated, async (req, res) => {
+    try {
+      let settings = await storage.getCompanySettings();
+      
+      // If no settings exist, create default record
+      if (!settings) {
+        const defaultSettings = {
+          companyName: "EDG",
+          address: "",
+          phone: "",
+          email: "",
+          website: "",
+          logo: "",
+          primaryColor: "#3b82f6",
+          accentColor: "#10b981",
+          textColor: "#374151"
+        };
+        
+        // Create the default record in the database to ensure proper typing
+        settings = await storage.updateCompanySettings(defaultSettings);
+      }
+      
+      res.json(settings);
+    } catch (error) {
+      console.error("Error fetching company settings:", error);
+      res.status(500).json({ message: "Failed to fetch company settings" });
+    }
+  });
+
+  app.put('/api/company-settings', isAuthenticated, async (req: any, res) => {
+    try {
+      const currentUser = await storage.getUser(req.user?.id);
+      if (currentUser?.role !== 'admin') {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+
+      const validatedData = insertCompanySettingsSchema.parse(req.body);
+      const settings = await storage.updateCompanySettings(validatedData);
+      
+      res.json(settings);
+    } catch (error) {
+      console.error("Error updating company settings:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          message: "Validation error", 
+          errors: error.errors 
+        });
+      }
+      res.status(500).json({ message: "Failed to update company settings" });
     }
   });
 

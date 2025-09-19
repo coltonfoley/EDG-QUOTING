@@ -20,6 +20,7 @@ import Home from "@/pages/home";
 import AuthPage from "@/pages/auth-page";
 import AdminPage from "@/pages/admin";
 import AdminTemplatesPage from "@/pages/admin-templates";
+import AdminSettings from "@/pages/admin-settings";
 import ContractsPage from "@/pages/contracts";
 import Accounts from "@/pages/accounts";
 import AccountDetail from "@/pages/account-detail";
@@ -105,6 +106,7 @@ function Router() {
           </Route>
           <Route path="/admin" component={AdminPage} />
           <Route path="/admin/templates" component={AdminTemplatesPage} />
+          <Route path="/admin/settings" component={AdminSettings} />
           <Route path="/admin/contracts" component={ContractsPage} />
           {/* Catch-all for not found pages */}
           <Route component={NotFound} />
