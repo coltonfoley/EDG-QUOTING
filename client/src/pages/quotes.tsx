@@ -10,6 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, FileText, Users, DollarSign, Search, Upload, Trash2, Loader2 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
+import { getDealStageColor, getDealStageLabel } from "@shared/dealStageConstants";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { useAuth } from "@/hooks/useAuth";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -393,8 +394,8 @@ export default function Quotes() {
                             {quote.projectName}
                           </td>
                           <td className="px-6 py-4 text-center">
-                            <Badge className={getStatusColor(quote.status)}>
-                              {quote.status.charAt(0).toUpperCase() + quote.status.slice(1)}
+                            <Badge className={getDealStageColor(quote.dealStage)}>
+                              {getDealStageLabel(quote.dealStage)}
                             </Badge>
                           </td>
                           <td className="px-6 py-4 text-center">
