@@ -668,7 +668,52 @@ export class DatabaseStorage implements IStorage {
     const [account] = await db.select().from(accounts).where(eq(accounts.id, accountIdToUse));
     if (!account) return undefined;
 
-    const quoteLineItems = await db.select().from(lineItems).where(eq(lineItems.quoteId, id));
+    // Join line items with products to get manufacturer data
+    const quoteLineItemsWithProducts = await db
+      .select({
+        id: lineItems.id,
+        quoteId: lineItems.quoteId,
+        productId: lineItems.productId,
+        description: lineItems.description,
+        quantity: lineItems.quantity,
+        retailPrice: lineItems.retailPrice,
+        unitPrice: lineItems.unitPrice,
+        markupType: lineItems.markupType,
+        markupValue: lineItems.markupValue,
+        discountType: lineItems.discountType,
+        discountValue: lineItems.discountValue,
+        configData: lineItems.configData,
+        baseProductId: lineItems.baseProductId,
+        isAccessory: lineItems.isAccessory,
+        productManufacturer: products.manufacturer,
+        productCategory: products.category,
+      })
+      .from(lineItems)
+      .leftJoin(products, eq(lineItems.productId, products.id))
+      .where(eq(lineItems.quoteId, id));
+    
+    // Add manufacturer field to line items using fallback logic
+    const quoteLineItems = quoteLineItemsWithProducts.map(item => ({
+      id: item.id,
+      quoteId: item.quoteId,
+      productId: item.productId,
+      description: item.description,
+      quantity: item.quantity,
+      retailPrice: item.retailPrice,
+      unitPrice: item.unitPrice,
+      markupType: item.markupType,
+      markupValue: item.markupValue,
+      discountType: item.discountType,
+      discountValue: item.discountValue,
+      configData: item.configData,
+      baseProductId: item.baseProductId,
+      isAccessory: item.isAccessory,
+      manufacturer: getPreferredProductCategory({
+        manufacturer: item.productManufacturer as string | null,
+        category: item.productCategory as string | null,
+      }) || "Uncategorized",
+    }));
+
     const projectContacts = await db.select().from(contacts).where(eq(contacts.accountId, accountIdToUse));
 
     // Get contract template if referenced
@@ -695,7 +740,52 @@ export class DatabaseStorage implements IStorage {
       const accountIdToUse = quote.accountId || quote.customerId;
       const [account] = await db.select().from(accounts).where(eq(accounts.id, accountIdToUse));
       if (account) {
-        const quoteLineItems = await db.select().from(lineItems).where(eq(lineItems.quoteId, quote.id));
+        // Join line items with products to get manufacturer data
+        const quoteLineItemsWithProducts = await db
+          .select({
+            id: lineItems.id,
+            quoteId: lineItems.quoteId,
+            productId: lineItems.productId,
+            description: lineItems.description,
+            quantity: lineItems.quantity,
+            retailPrice: lineItems.retailPrice,
+            unitPrice: lineItems.unitPrice,
+            markupType: lineItems.markupType,
+            markupValue: lineItems.markupValue,
+            discountType: lineItems.discountType,
+            discountValue: lineItems.discountValue,
+            configData: lineItems.configData,
+            baseProductId: lineItems.baseProductId,
+            isAccessory: lineItems.isAccessory,
+            productManufacturer: products.manufacturer,
+            productCategory: products.category,
+          })
+          .from(lineItems)
+          .leftJoin(products, eq(lineItems.productId, products.id))
+          .where(eq(lineItems.quoteId, quote.id));
+        
+        // Add manufacturer field to line items using fallback logic
+        const quoteLineItems = quoteLineItemsWithProducts.map(item => ({
+          id: item.id,
+          quoteId: item.quoteId,
+          productId: item.productId,
+          description: item.description,
+          quantity: item.quantity,
+          retailPrice: item.retailPrice,
+          unitPrice: item.unitPrice,
+          markupType: item.markupType,
+          markupValue: item.markupValue,
+          discountType: item.discountType,
+          discountValue: item.discountValue,
+          configData: item.configData,
+          baseProductId: item.baseProductId,
+          isAccessory: item.isAccessory,
+          manufacturer: getPreferredProductCategory({
+            manufacturer: item.productManufacturer as string | null,
+            category: item.productCategory as string | null,
+          }) || "Uncategorized",
+        }));
+
         const projectContacts = await db.select().from(contacts).where(eq(contacts.accountId, accountIdToUse));
         
         // Get contract template if referenced

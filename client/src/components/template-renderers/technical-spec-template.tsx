@@ -306,6 +306,7 @@ export function TechnicalSpecTemplate({ quote, template, companyInfo, quoteTerms
             <tr className="bg-gray-200">
               <th className="border border-gray-400 px-2 py-2 text-left">Category</th>
               <th className="border border-gray-400 px-2 py-2 text-left">Description</th>
+              <th className="border border-gray-400 px-2 py-2 text-left">Manufacturer</th>
               <th className="border border-gray-400 px-2 py-2 text-center">Qty</th>
               <th className="border border-gray-400 px-2 py-2 text-right">Unit Price</th>
               <th className="border border-gray-400 px-2 py-2 text-right">Total</th>
@@ -322,12 +323,16 @@ export function TechnicalSpecTemplate({ quote, template, companyInfo, quoteTerms
                 : baseTotal + markup;
               const rateWithMarkup = total / qty;
 
+              // Use actual manufacturer data from line item (includes fallback logic from backend)
+              const manufacturer = item.manufacturer || "Uncategorized";
+
               return (
                 <tr key={index} className={index % 2 === 0 ? 'bg-gray-50' : ''}>
                   <td className="border border-gray-400 px-2 py-2 font-medium">
                     {index < 3 ? 'Materials' : index < 6 ? 'Labor' : 'Hardware'}
                   </td>
                   <td className="border border-gray-400 px-2 py-2">{item.description}</td>
+                  <td className="border border-gray-400 px-2 py-2">{manufacturer}</td>
                   <td className="border border-gray-400 px-2 py-2 text-center">{item.quantity}</td>
                   <td className="border border-gray-400 px-2 py-2 text-right">{formatCurrency(rateWithMarkup)}</td>
                   <td className="border border-gray-400 px-2 py-2 text-right font-medium">
@@ -339,21 +344,21 @@ export function TechnicalSpecTemplate({ quote, template, companyInfo, quoteTerms
           </tbody>
           <tfoot>
             <tr className="bg-gray-100 font-medium">
-              <td colSpan={4} className="border border-gray-400 px-2 py-2 text-right">Subtotal:</td>
+              <td colSpan={5} className="border border-gray-400 px-2 py-2 text-right">Subtotal:</td>
               <td className="border border-gray-400 px-2 py-2 text-right">{formatCurrency(totals.subtotal)}</td>
             </tr>
             {totals.discountAmount > 0 && (
               <tr className="bg-gray-100">
-                <td colSpan={4} className="border border-gray-400 px-2 py-2 text-right">Discount ({quote.discount}%):</td>
+                <td colSpan={5} className="border border-gray-400 px-2 py-2 text-right">Discount ({quote.discount}%):</td>
                 <td className="border border-gray-400 px-2 py-2 text-right text-red-600">-{formatCurrency(totals.discountAmount)}</td>
               </tr>
             )}
             <tr className="bg-gray-100">
-              <td colSpan={4} className="border border-gray-400 px-2 py-2 text-right">Tax ({quote.taxRate}%):</td>
+              <td colSpan={5} className="border border-gray-400 px-2 py-2 text-right">Tax ({quote.taxRate}%):</td>
               <td className="border border-gray-400 px-2 py-2 text-right">{formatCurrency(totals.taxAmount)}</td>
             </tr>
             <tr className="bg-gray-200 font-bold">
-              <td colSpan={4} className="border border-gray-400 px-2 py-2 text-right">Total Project Cost:</td>
+              <td colSpan={5} className="border border-gray-400 px-2 py-2 text-right">Total Project Cost:</td>
               <td className="border border-gray-400 px-2 py-2 text-right" style={{ color: branding.primaryColor }}>
                 {formatCurrency(totals.total)}
               </td>

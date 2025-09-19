@@ -238,6 +238,7 @@ export function FullProposalTemplate({ quote, template, companyInfo, quoteTerms 
           <thead>
             <tr className="bg-gray-100">
               <th className="border border-gray-300 px-4 py-3 text-left">Component Description</th>
+              <th className="border border-gray-300 px-4 py-3 text-left">Manufacturer</th>
               <th className="border border-gray-300 px-4 py-3 text-center">Quantity</th>
               <th className="border border-gray-300 px-4 py-3 text-right">Rate</th>
               <th className="border border-gray-300 px-4 py-3 text-right">Investment</th>
@@ -254,9 +255,13 @@ export function FullProposalTemplate({ quote, template, companyInfo, quoteTerms 
                 : baseTotal + markup;
               const rateWithMarkup = total / qty;
 
+              // Use actual manufacturer data from line item (includes fallback logic from backend)
+              const manufacturer = item.manufacturer || "Uncategorized";
+
               return (
                 <tr key={index}>
                   <td className="border border-gray-300 px-4 py-3">{item.description}</td>
+                  <td className="border border-gray-300 px-4 py-3">{manufacturer}</td>
                   <td className="border border-gray-300 px-4 py-3 text-center">{item.quantity}</td>
                   <td className="border border-gray-300 px-4 py-3 text-right">{formatCurrency(rateWithMarkup)}</td>
                   <td className="border border-gray-300 px-4 py-3 text-right font-medium">

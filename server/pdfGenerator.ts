@@ -110,9 +110,9 @@ export function generateQuotePDFContent(quote: QuoteWithDetails): string {
       color: #0F766E;
     }
     
-    .line-items-table td:nth-child(2),
-    .line-items-table td:nth-child(4),
-    .line-items-table td:nth-child(5) {
+    .line-items-table td:nth-child(3),
+    .line-items-table td:nth-child(5),
+    .line-items-table td:nth-child(6) {
       text-align: right;
     }
     
@@ -208,6 +208,7 @@ export function generateQuotePDFContent(quote: QuoteWithDetails): string {
     <thead>
       <tr>
         <th>Description</th>
+        <th>Manufacturer</th>
         <th>Qty</th>
         <th>Unit</th>
         <th>Rate</th>
@@ -219,9 +220,14 @@ export function generateQuotePDFContent(quote: QuoteWithDetails): string {
         const qty = typeof item.quantity === 'string' ? parseFloat(item.quantity) : item.quantity;
         const price = typeof item.unitPrice === 'string' ? parseFloat(item.unitPrice) : item.unitPrice;
         const lineTotal = qty * price;
+        
+        // Use actual manufacturer data from line item (includes fallback logic from backend)
+        const manufacturer = item.manufacturer || "Uncategorized";
+        
         return `
           <tr>
             <td>${item.description}</td>
+            <td>${manufacturer}</td>
             <td>${item.quantity}</td>
             <td>ea</td>
             <td>${formatCurrency(price)}</td>
