@@ -42,6 +42,19 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
   // Debounced save timeout refs
   const debounceTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   
+  // Refs for tracking pending mutations to cancel them on unmount
+  const pendingMutations = useRef<{
+    create: any;
+    update: Record<string, any>;
+    delete: any;
+    calculate: any;
+  }>({
+    create: null,
+    update: {},
+    delete: null,
+    calculate: null,
+  });
+  
   // Local state for immediate edit feedback
   const [localValues, setLocalValues] = useState<Record<string, { description: string; quantity: string; unitPrice: string }>>({});
   
@@ -49,10 +62,31 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
   const [newItemErrors, setNewItemErrors] = useState<Record<string, string>>({});
 
-  // Cleanup debounce timers on unmount
+  // Cleanup debounce timers and cancel pending mutations on unmount
   useEffect(() => {
     return () => {
+      // Clear debounce timers
       Object.values(debounceTimers.current).forEach(timer => clearTimeout(timer));
+      
+      // Cancel all pending mutations using React Query's built-in cancellation
+      try {
+        if (pendingMutations.current.create) {
+          pendingMutations.current.create.abort?.();
+        }
+        if (pendingMutations.current.delete) {
+          pendingMutations.current.delete.abort?.();
+        }
+        if (pendingMutations.current.calculate) {
+          pendingMutations.current.calculate.abort?.();
+        }
+        Object.values(pendingMutations.current.update).forEach(mutation => {
+          if (mutation?.abort) {
+            mutation.abort();
+          }
+        });
+      } catch (error) {
+        // Silently handle any abort errors during cleanup
+      }
     };
   }, []);
 
@@ -151,9 +185,17 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
     if (!validationError) {
       // Set new timer for debounced save
       debounceTimers.current[key] = setTimeout(() => {
-        const updateData = { [field]: field === "quantity" || field === "unitPrice" ? parseFloat(value) || 0 : value };
-        updateLineItemMutation.mutate({ id: itemId, data: updateData });
-        delete debounceTimers.current[key];
+        try {
+          const updateData = { [field]: field === "quantity" || field === "unitPrice" ? parseFloat(value) || 0 : value };
+          updateLineItemMutation.mutate({ id: itemId, data: updateData });
+        } catch (error) {
+          // Handle any synchronous errors during mutation
+          if (error?.name !== 'AbortError' && !error?.message?.includes('aborted') && !error?.message?.includes('signal is aborted')) {
+            console.error('Error in debounced save:', error);
+          }
+        } finally {
+          delete debounceTimers.current[key];
+        }
       }, 300);
     }
   }, []);
@@ -188,6 +230,9 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
       return response.json();
     },
     onSuccess: () => {
+      // Clear the pending mutation reference
+      pendingMutations.current.create = null;
+      
       queryClient.invalidateQueries({ queryKey: ["/api/quotes"] });
       queryClient.invalidateQueries({ queryKey: [`/api/quotes/${quoteId}`] });
       setNewItem({
@@ -203,7 +248,15 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
       setShowNewItemForm(false);
       toast({ title: "Line item added successfully" });
     },
-    onError: () => {
+    onError: (error: any) => {
+      // Clear the pending mutation reference
+      pendingMutations.current.create = null;
+      
+      // Check if the error is due to abort and handle gracefully
+      if (error?.name === 'AbortError' || error?.message?.includes('aborted') || error?.message?.includes('signal is aborted')) {
+        // Silent abort - don't show error toast for user-initiated cancellations
+        return;
+      }
       toast({ title: "Error", description: "Failed to add line item", variant: "destructive" });
     },
   });
@@ -214,6 +267,10 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
       return response.json();
     },
     onSuccess: (_, { id }) => {
+      // Clear the pending mutation reference
+      const updateKey = `update-${id}`;
+      delete pendingMutations.current.update[updateKey];
+      
       queryClient.invalidateQueries({ queryKey: ["/api/quotes"] });
       queryClient.invalidateQueries({ queryKey: [`/api/quotes/${quoteId}`] });
       // Clear validation errors for this item on successful save
@@ -227,7 +284,16 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
         return newErrors;
       });
     },
-    onError: () => {
+    onError: (error: any, variables) => {
+      // Clear the pending mutation reference
+      const updateKey = `update-${variables.id}`;
+      delete pendingMutations.current.update[updateKey];
+      
+      // Check if the error is due to abort and handle gracefully
+      if (error?.name === 'AbortError' || error?.message?.includes('aborted') || error?.message?.includes('signal is aborted')) {
+        // Silent abort - don't show error toast for user-initiated cancellations
+        return;
+      }
       toast({ title: "Error", description: "Failed to update line item", variant: "destructive" });
     },
   });
@@ -237,11 +303,22 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
       await apiRequest("DELETE", `/api/line-items/${id}`);
     },
     onSuccess: () => {
+      // Clear the pending mutation reference
+      pendingMutations.current.delete = null;
+      
       queryClient.invalidateQueries({ queryKey: ["/api/quotes"] });
       queryClient.invalidateQueries({ queryKey: [`/api/quotes/${quoteId}`] });
       toast({ title: "Line item deleted successfully" });
     },
-    onError: () => {
+    onError: (error: any) => {
+      // Clear the pending mutation reference
+      pendingMutations.current.delete = null;
+      
+      // Check if the error is due to abort and handle gracefully
+      if (error?.name === 'AbortError' || error?.message?.includes('aborted') || error?.message?.includes('signal is aborted')) {
+        // Silent abort - don't show error toast for user-initiated cancellations
+        return;
+      }
       toast({ title: "Error", description: "Failed to delete line item", variant: "destructive" });
     },
   });
@@ -256,6 +333,9 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
       return response.json();
     },
     onSuccess: (data) => {
+      // Clear the pending mutation reference
+      pendingMutations.current.calculate = null;
+      
       setCalculatedPrice(data.price);
       // Update newItem with calculated price after successful calculation
       if (selectedConfigurableProduct) {
@@ -266,7 +346,15 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
         }));
       }
     },
-    onError: () => {
+    onError: (error: any) => {
+      // Clear the pending mutation reference
+      pendingMutations.current.calculate = null;
+      
+      // Check if the error is due to abort and handle gracefully
+      if (error?.name === 'AbortError' || error?.message?.includes('aborted') || error?.message?.includes('signal is aborted')) {
+        // Silent abort - don't show error toast for user-initiated cancellations
+        return;
+      }
       toast({ title: "Error", description: "Failed to calculate pricing", variant: "destructive" });
     },
   });
