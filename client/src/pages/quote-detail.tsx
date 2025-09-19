@@ -141,6 +141,7 @@ export default function QuoteDetail() {
         
         htmlContent += `
           <style>
+            /* Base Document Styles */
             body { 
               font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
               line-height: 1.6;
@@ -148,6 +149,12 @@ export default function QuoteDetail() {
               margin: 0;
               padding: 0;
               background: #ffffff;
+              counter-reset: page-counter;
+            }
+            
+            html, body {
+              font-size: 12pt;
+              font-weight: 400;
             }
             
             /* Professional Cover Page Styles */
@@ -302,26 +309,254 @@ export default function QuoteDetail() {
               font-weight: 600;
             }
             
-            /* Existing content styles */
-            .header { border-bottom: 2px solid ${primaryColor}; padding-bottom: 20px; margin-bottom: 20px; }
-            .section { margin: 20px 0; page-break-inside: avoid; }
-            .section-title { font-size: 18px; font-weight: bold; margin-bottom: 10px; border-bottom: 1px solid #ddd; padding-bottom: 5px; color: ${primaryColor}; }
-            table { width: 100%; border-collapse: collapse; margin: 10px 0; }
-            th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-            th { background-color: #f5f5f5; font-weight: bold; color: ${primaryColor}; }
-            .total-row { font-weight: bold; background-color: #f9f9f9; }
-            .image-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin: 20px 0; }
-            .image-item { text-align: center; }
-            .image-item img { max-width: 100%; height: auto; max-height: 300px; border-radius: 8px; }
             
-            @media print { 
-              @page { 
-                margin: 15mm;
+            /* Enhanced Section Styles */
+            .section { 
+              margin: 40px 0; 
+              page-break-inside: avoid;
+              padding: 20px 0;
+            }
+            
+            .section-title { 
+              font-size: 22px; 
+              font-weight: 700; 
+              margin-bottom: 20px; 
+              padding: 15px 20px;
+              background: linear-gradient(90deg, ${primaryColor} 0%, ${accentColor} 100%);
+              color: #ffffff;
+              border-radius: 8px;
+              text-transform: uppercase;
+              letter-spacing: 1px;
+              box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            }
+            
+            .subsection-title {
+              font-size: 16px;
+              font-weight: 600;
+              color: ${primaryColor};
+              margin: 20px 0 10px 0;
+              padding-bottom: 8px;
+              border-bottom: 2px solid ${accentColor};
+            }
+            
+            /* Enhanced Table Styles with Zebra Striping */
+            .data-table {
+              width: 100%;
+              border-collapse: collapse;
+              margin: 20px 0;
+              box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+              border-radius: 8px;
+              overflow: hidden;
+              page-break-inside: auto;
+            }
+            
+            .data-table thead {
+              background: linear-gradient(135deg, ${primaryColor} 0%, ${accentColor} 100%);
+              color: #ffffff;
+            }
+            
+            .data-table th {
+              padding: 15px 12px;
+              font-weight: 600;
+              text-align: left;
+              font-size: 11pt;
+              border: none;
+              text-transform: uppercase;
+              letter-spacing: 0.5px;
+            }
+            
+            .data-table td {
+              padding: 12px;
+              border: none;
+              border-bottom: 1px solid #e5e7eb;
+              font-size: 10pt;
+              vertical-align: top;
+            }
+            
+            .data-table tbody tr:nth-child(even) {
+              background-color: #f8fafc;
+            }
+            
+            .data-table tbody tr:hover {
+              background-color: #f1f5f9;
+            }
+            
+            .total-row {
+              font-weight: 700;
+              background: linear-gradient(90deg, #f8fafc 0%, #e2e8f0 100%) !important;
+              color: ${primaryColor};
+              font-size: 11pt;
+            }
+            
+            .total-row td {
+              border-top: 2px solid ${primaryColor};
+              padding: 15px 12px;
+            }
+            
+            .grand-total-row {
+              background: linear-gradient(90deg, ${primaryColor} 0%, ${accentColor} 100%) !important;
+              color: #ffffff;
+              font-size: 13pt;
+              font-weight: 700;
+            }
+            
+            .grand-total-row td {
+              border-top: 3px solid ${accentColor};
+              padding: 18px 12px;
+            }
+            
+            /* No-break utility classes */
+            .no-break {
+              page-break-inside: avoid;
+              break-inside: avoid;
+            }
+            
+            /* Enhanced Image Grid for Product Renderings */
+            .image-grid {
+              display: grid;
+              grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+              gap: 25px;
+              margin: 30px 0;
+              page-break-inside: avoid;
+            }
+            
+            .image-item {
+              text-align: center;
+              background: #ffffff;
+              border-radius: 12px;
+              padding: 15px;
+              box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+              page-break-inside: avoid;
+            }
+            
+            .image-item img {
+              max-width: 100%;
+              height: auto;
+              max-height: 400px;
+              border-radius: 8px;
+              border: 2px solid #e5e7eb;
+              box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            }
+            
+            .image-caption {
+              font-size: 11pt;
+              color: ${textColor};
+              margin-top: 10px;
+              font-style: italic;
+              line-height: 1.4;
+            }
+            
+            /* Professional Information Grids */
+            .info-grid {
+              display: grid;
+              grid-template-columns: 1fr 1fr;
+              gap: 30px;
+              margin: 25px 0;
+            }
+            
+            .info-section {
+              background: #f8fafc;
+              padding: 20px;
+              border-radius: 8px;
+              border-left: 4px solid ${accentColor};
+            }
+            
+            .info-section h4 {
+              font-size: 14pt;
+              font-weight: 600;
+              color: ${primaryColor};
+              margin: 0 0 15px 0;
+              text-transform: uppercase;
+              letter-spacing: 0.5px;
+            }
+            
+            .info-section p {
+              margin: 8px 0;
+              font-size: 10pt;
+              line-height: 1.5;
+            }
+            
+            .info-section strong {
+              color: ${textColor};
+              font-weight: 600;
+            }
+            
+            /* Enhanced Print Media Styles */
+            @media print {
+              @page {
+                margin: 1in;
                 size: letter;
               }
-              .page-break { page-break-before: always; }
-              .cover-page { height: 100vh; }
-              body { -webkit-print-color-adjust: exact; color-adjust: exact; }
+              
+              /* Ensure table headers repeat on page breaks */
+              thead {
+                display: table-header-group;
+              }
+              
+              tfoot {
+                display: table-footer-group;
+              }
+              
+              /* Prevent awkward breaks */
+              .no-break,
+              .image-item,
+              .info-block,
+              .section-title {
+                page-break-inside: avoid;
+                break-inside: avoid;
+              }
+              
+              /* Page break controls */
+              .page-break {
+                page-break-before: always;
+                break-before: page;
+              }
+              
+              .cover-page {
+                height: 100vh;
+                page-break-after: always;
+              }
+              
+              /* Print color accuracy */
+              body {
+                -webkit-print-color-adjust: exact;
+                color-adjust: exact;
+                print-color-adjust: exact;
+              }
+              
+              /* Hide screen-only elements */
+              .no-print {
+                display: none !important;
+              }
+              
+              /* Optimize table printing */
+              .data-table {
+                page-break-inside: auto;
+              }
+              
+              .data-table tr {
+                page-break-inside: avoid;
+                break-inside: avoid;
+              }
+              
+              /* Ensure proper image sizing for print */
+              .image-item img {
+                max-height: 350px;
+                page-break-inside: avoid;
+              }
+              
+              /* Adjust font sizes for better print readability */
+              body {
+                font-size: 11pt;
+              }
+              
+              .section-title {
+                font-size: 20pt;
+              }
+              
+              .subsection-title {
+                font-size: 14pt;
+              }
             }
           </style>
         `;
@@ -389,44 +624,46 @@ export default function QuoteDetail() {
           `;
         }
 
-        // Quote Details Section - CSS page-break-after on .cover-page handles page break automatically
+        // Quote Details Section - Enhanced with professional layout
         htmlContent += `
-          <div class="section">
-            <h2 class="section-title">Quote Details</h2>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
-              <div>
-                <h3>Customer Information</h3>
+          <div class="section no-break">
+            <h2 class="section-title">💼 Quote Details</h2>
+            <div class="info-grid">
+              <div class="info-section">
+                <h4>👤 Customer Information</h4>
                 <p><strong>Name:</strong> ${escapeHtml(quote.customer?.name) || 'N/A'}</p>
                 ${quote.customer?.company ? `<p><strong>Company:</strong> ${escapeHtml(quote.customer.company)}</p>` : ''}
                 <p><strong>Email:</strong> ${escapeHtml(quote.customer?.email) || 'N/A'}</p>
                 <p><strong>Phone:</strong> ${escapeHtml(quote.customer?.phone) || 'N/A'}</p>
               </div>
-              <div>
-                <h3>Project Information</h3>
+              <div class="info-section">
+                <h4>🏗️ Project Information</h4>
                 <p><strong>Quote Number:</strong> ${escapeHtml(quote.quoteNumber)}</p>
                 ${quote.projectName ? `<p><strong>Project:</strong> ${escapeHtml(quote.projectName)}</p>` : ''}
                 ${quote.projectAddress ? `<p><strong>Address:</strong> ${escapeHtml(quote.projectAddress)}</p>` : ''}
                 <p><strong>Date:</strong> ${quote.createdAt ? format(new Date(quote.createdAt), 'PPP') : 'N/A'}</p>
+                ${quote.estimatedStartDate ? `<p><strong>Estimated Start:</strong> ${escapeHtml(quote.estimatedStartDate)}</p>` : ''}
+                ${quote.jobsiteAddress && quote.jobsiteAddress !== quote.projectAddress ? `<p><strong>Jobsite Address:</strong> ${escapeHtml(quote.jobsiteAddress)}</p>` : ''}
               </div>
             </div>
           </div>
         `;
 
-        // Line Items Section
+        // Enhanced Line Items Section with professional table styling
         if (quote.lineItems && quote.lineItems.length > 0) {
           htmlContent += `
             <div class="section">
-              <h2 class="section-title">Line Items</h2>
-              <table>
+              <h2 class="section-title">📋 Line Items & Materials</h2>
+              <table class="data-table">
                 <thead>
                   <tr>
                     <th>Description</th>
-                    <th style="text-align: right;">Manufacturer</th>
-                    <th style="text-align: right;">Qty</th>
-                    <th style="text-align: right;">Unit</th>
+                    <th style="text-align: center;">Manufacturer</th>
+                    <th style="text-align: center;">Qty</th>
+                    <th style="text-align: center;">Unit</th>
                     ${options.showPricing ? '<th style="text-align: right;">Unit Price</th>' : ''}
-                    ${options.showPricing ? '<th style="text-align: right;">Markup</th>' : ''}
-                    ${options.showPricing ? '<th style="text-align: right;">Discount</th>' : ''}
+                    ${options.showPricing ? '<th style="text-align: center;">Markup</th>' : ''}
+                    ${options.showPricing ? '<th style="text-align: center;">Discount</th>' : ''}
                     ${options.showPricing ? '<th style="text-align: right;">Amount</th>' : ''}
                   </tr>
                 </thead>
@@ -452,26 +689,26 @@ export default function QuoteDetail() {
             }
 
             htmlContent += `
-              <tr>
-                <td>${escapeHtml(item.description)}</td>
-                <td style="text-align: right;">${escapeHtml(item.manufacturer || 'N/A')}</td>
-                <td style="text-align: right;">${quantity}</td>
-                <td style="text-align: right;">each</td>
-                ${options.showPricing ? `<td style="text-align: right;">${formatCurrency(unitPrice)}</td>` : ''}
-                ${options.showPricing ? `<td style="text-align: right;">
+              <tr class="no-break">
+                <td><strong>${escapeHtml(item.description)}</strong></td>
+                <td style="text-align: center;">${escapeHtml(item.manufacturer || 'N/A')}</td>
+                <td style="text-align: center;">${quantity}</td>
+                <td style="text-align: center;">each</td>
+                ${options.showPricing ? `<td style="text-align: right; font-weight: 600;">${formatCurrency(unitPrice)}</td>` : ''}
+                ${options.showPricing ? `<td style="text-align: center;">
                   ${item.markupType === 'percentage' ? `${markupValue}%` : formatCurrency(markupValue)}
                 </td>` : ''}
-                ${options.showPricing ? `<td style="text-align: right;">
+                ${options.showPricing ? `<td style="text-align: center;">
                   ${discountValue > 0 ? (item.discountType === 'percentage' ? `-${discountValue}%` : `-${formatCurrency(discountValue)}`) : '-'}
                 </td>` : ''}
-                ${options.showPricing ? `<td style="text-align: right;">${formatCurrency(itemTotal)}</td>` : ''}
+                ${options.showPricing ? `<td style="text-align: right; font-weight: 600;">${formatCurrency(itemTotal)}</td>` : ''}
               </tr>
             `;
           });
 
           htmlContent += '</tbody>';
 
-          // Totals section - only show if pricing is enabled
+          // Enhanced Totals section with professional styling - Fixed HTML structure
           if (options.showPricing) {
             const subtotal = calculateSubtotal();
             const discount = parseFloat(quote?.discount || '0');
@@ -483,83 +720,130 @@ export default function QuoteDetail() {
             // Calculate correct colspan - 4 base columns + 4 pricing columns when pricing is shown
             const colspanCount = 7; // Description, Manufacturer, Qty, Unit, Unit Price, Markup, Discount (total: 7)
 
-            htmlContent += `
+            // Build all totals rows inside a single proper tfoot structure
+            let totalsContent = `
               <tfoot>
-                <tr class="total-row">
-                  <td colspan="${colspanCount}" style="text-align: right;"><strong>Subtotal:</strong></td>
+                <tr class="total-row no-break">
+                  <td colspan="${colspanCount}" style="text-align: right;">💰 <strong>Subtotal:</strong></td>
                   <td style="text-align: right;"><strong>${formatCurrency(subtotal)}</strong></td>
                 </tr>
             `;
 
             if (discount > 0) {
-              htmlContent += `
-                <tr>
-                  <td colspan="${colspanCount}" style="text-align: right;">Discount:</td>
-                  <td style="text-align: right;">-${formatCurrency(discount)}</td>
+              totalsContent += `
+                <tr class="total-row no-break">
+                  <td colspan="${colspanCount}" style="text-align: right;">🎯 Discount Applied:</td>
+                  <td style="text-align: right; color: #dc2626;">-${formatCurrency(discount)}</td>
                 </tr>
               `;
             }
 
             if (taxAmount > 0) {
-              htmlContent += `
-                <tr>
-                  <td colspan="${colspanCount}" style="text-align: right;">Tax (${taxRate}%):</td>
+              totalsContent += `
+                <tr class="total-row no-break">
+                  <td colspan="${colspanCount}" style="text-align: right;">📊 Tax (${taxRate}%):</td>
                   <td style="text-align: right;">${formatCurrency(taxAmount)}</td>
                 </tr>
               `;
             }
 
             if (shipping > 0) {
-              htmlContent += `
-                <tr>
-                  <td colspan="${colspanCount}" style="text-align: right;">Shipping:</td>
+              totalsContent += `
+                <tr class="total-row no-break">
+                  <td colspan="${colspanCount}" style="text-align: right;">🚚 Shipping & Handling:</td>
                   <td style="text-align: right;">${formatCurrency(shipping)}</td>
                 </tr>
               `;
             }
 
-            htmlContent += `
-                <tr class="total-row" style="font-size: 18px;">
-                  <td colspan="${colspanCount}" style="text-align: right;"><strong>Total:</strong></td>
+            totalsContent += `
+                <tr class="grand-total-row no-break">
+                  <td colspan="${colspanCount}" style="text-align: right;">🏆 <strong>TOTAL AMOUNT:</strong></td>
                   <td style="text-align: right;"><strong>${formatCurrency(total)}</strong></td>
                 </tr>
               </tfoot>
             `;
+            
+            htmlContent += totalsContent;
           }
 
           htmlContent += '</table></div>';
         }
 
-        // Product Renderings Section
+        // Enhanced Product Renderings Section with professional layout - Ensure page break
         if (options.productRenderings && quote.images && quote.images.length > 0) {
           htmlContent += '<div class="page-break"></div>';
           htmlContent += `
             <div class="section">
-              <h2 class="section-title">Product Renderings</h2>
+              <h2 class="section-title">🎨 Product Renderings & Visualizations</h2>
+              <div class="subsection-title">
+                🖼️ Project Gallery - ${quote.images.length} Image${quote.images.length > 1 ? 's' : ''}
+              </div>
               <div class="image-grid">
           `;
 
           quote.images.forEach((image, index) => {
             htmlContent += `
-              <div class="image-item">
-                <img src="${escapeHtml(image.url)}" alt="${escapeHtml(image.altText || `Image ${index + 1}`)}" />
-                ${image.caption ? `<p style="font-size: 12px; color: #666; margin-top: 5px;">${escapeHtml(image.caption)}</p>` : ''}
+              <div class="image-item no-break">
+                <img src="${escapeHtml(image.url)}" alt="${escapeHtml(image.altText || `Product Rendering ${index + 1}`)}" />
+                <div class="image-caption">
+                  <strong>Figure ${index + 1}:</strong> ${escapeHtml(image.caption || image.altText || `Product Rendering ${index + 1}`)}
+                </div>
               </div>
             `;
           });
 
-          htmlContent += '</div></div>';
-        }
-
-        // Notes Section
-        if (quote.notes) {
           htmlContent += `
-            <div class="section">
-              <h2 class="section-title">Additional Notes</h2>
-              <p style="white-space: pre-wrap;">${escapeHtml(quote.notes)}</p>
+              </div>
+              <div style="margin-top: 30px; padding: 15px; background: #f8fafc; border-radius: 8px; border-left: 4px solid ${accentColor};">
+                <p style="font-size: 10pt; color: ${textColor}; margin: 0; font-style: italic;">
+                  📌 <strong>Note:</strong> All renderings are conceptual representations. Final installation may vary based on site conditions, 
+                  local building codes, and material availability. Please consult with our design team for specific details.
+                </p>
+              </div>
             </div>
           `;
         }
+
+        // Enhanced Notes Section with professional styling
+        if (quote.notes) {
+          htmlContent += `
+            <div class="section no-break">
+              <h2 class="section-title">📝 Additional Notes & Terms</h2>
+              <div style="background: #f8fafc; padding: 25px; border-radius: 8px; border-left: 4px solid ${primaryColor}; margin: 20px 0;">
+                <div style="white-space: pre-wrap; font-size: 11pt; line-height: 1.6; color: ${textColor};">${escapeHtml(quote.notes)}</div>
+              </div>
+            </div>
+          `;
+        }
+        
+        // Professional Footer Section
+        htmlContent += `
+          <div class="section no-break" style="margin-top: 40px; border-top: 2px solid ${primaryColor}; padding-top: 30px;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px; font-size: 10pt;">
+              <div>
+                <h4 style="color: ${primaryColor}; margin-bottom: 15px; font-size: 12pt;">📜 Terms & Conditions</h4>
+                <ul style="margin: 0; padding-left: 20px; line-height: 1.6;">
+                  <li>Quote valid for 30 days from issue date</li>
+                  <li>All work performed according to industry standards</li>
+                  <li>Material costs subject to market fluctuations</li>
+                  <li>Final pricing confirmed upon contract signing</li>
+                </ul>
+              </div>
+              <div>
+                <h4 style="color: ${primaryColor}; margin-bottom: 15px; font-size: 12pt;">📧 Contact Information</h4>
+                <div style="line-height: 1.8;">
+                  ${settings.phone ? `<p style="margin: 5px 0;"><strong>Phone:</strong> ${escapeHtml(settings.phone)}</p>` : ''}
+                  ${settings.email ? `<p style="margin: 5px 0;"><strong>Email:</strong> ${escapeHtml(settings.email)}</p>` : ''}
+                  ${settings.website ? `<p style="margin: 5px 0;"><strong>Website:</strong> ${escapeHtml(settings.website)}</p>` : ''}
+                  <p style="margin: 15px 0 5px 0; font-style: italic; color: ${accentColor};">
+                    Thank you for considering ${escapeHtml(settings.companyName)} for your construction needs.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
 
         return htmlContent;
       };
@@ -580,6 +864,8 @@ export default function QuoteDetail() {
           <title>${filename}</title>
           <meta charset="utf-8">
           <meta name="viewport" content="width=device-width, initial-scale=1">
+          <meta name="description" content="Professional construction quote for ${escapeHtml(quote.projectName || 'project')} - ${escapeHtml(settings.companyName)}">
+          <meta name="author" content="${escapeHtml(settings.companyName)}">
         </head>
         <body>
           ${htmlContent}
