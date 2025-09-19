@@ -31,7 +31,7 @@ export default function Products() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState<string>("all");
+  const [selectedManufacturer, setSelectedManufacturer] = useState<string>("all");
   const [viewMode, setViewMode] = useState<"grid" | "table">("table");
   const [showPricingManager, setShowPricingManager] = useState(false);
   const [managingPricingProduct, setManagingPricingProduct] = useState<Product | null>(null);
@@ -53,7 +53,7 @@ export default function Products() {
     defaultValues: {
       name: "",
       description: "",
-      category: "",
+      manufacturer: "",
       productType: "simple",
       defaultUnitPrice: "0",
       defaultMarkupType: "percentage",
@@ -196,7 +196,7 @@ export default function Products() {
     form.reset({
       name: product.name,
       description: product.description || "",
-      category: product.category || "",
+      manufacturer: product.manufacturer || product.category || "",
       productType: product.productType || "simple",
       defaultUnitPrice: product.defaultUnitPrice,
       defaultMarkupType: product.defaultMarkupType,
@@ -223,11 +223,11 @@ export default function Products() {
     setShowPricingManager(true);
   };
 
-  // Get unique categories and filter/search products
-  const categories = useMemo(() => {
+  // Get unique manufacturers and filter/search products
+  const manufacturers = useMemo(() => {
     if (!products) return [];
-    const uniqueCategories = Array.from(new Set(products.map(p => p.category || "Uncategorized")));
-    return uniqueCategories.sort();
+    const uniqueManufacturers = Array.from(new Set(products.map(p => p.manufacturer || p.category || "Uncategorized")));
+    return uniqueManufacturers.sort();
   }, [products]);
 
   const filteredProducts = useMemo(() => {
@@ -238,20 +238,20 @@ export default function Products() {
         product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (product.description || "").toLowerCase().includes(searchTerm.toLowerCase());
       
-      const matchesCategory = selectedCategory === "all" || 
-        (product.category || "Uncategorized") === selectedCategory;
+      const matchesManufacturer = selectedManufacturer === "all" || 
+        (product.manufacturer || product.category || "Uncategorized") === selectedManufacturer;
       
-      return matchesSearch && matchesCategory;
+      return matchesSearch && matchesManufacturer;
     });
-  }, [products, searchTerm, selectedCategory]);
+  }, [products, searchTerm, selectedManufacturer]);
 
   const groupedProducts = useMemo(() => {
     return filteredProducts.reduce((groups, product) => {
-      const category = product.category || "Uncategorized";
-      if (!groups[category]) {
-        groups[category] = [];
+      const manufacturer = product.manufacturer || product.category || "Uncategorized";
+      if (!groups[manufacturer]) {
+        groups[manufacturer] = [];
       }
-      groups[category].push(product);
+      groups[manufacturer].push(product);
       return groups;
     }, {} as Record<string, Product[]>);
   }, [filteredProducts]);
@@ -361,6 +361,7 @@ export default function Products() {
                   setGalleryImages([]);
                   setSpecificationSheets([]);
                 }}
+                data-testid="button-new-product"
               >
                 <Plus className="mr-2 h-4 w-4" />
                 New Product
@@ -403,12 +404,12 @@ export default function Products() {
                     />
                     <FormField
                       control={form.control}
-                      name="category"
+                      name="manufacturer"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Category</FormLabel>
+                          <FormLabel>Manufacturer</FormLabel>
                           <FormControl>
-                            <Input {...field} value={field.value || ""} placeholder="e.g. Concrete, Framing, Electrical" />
+                            <Input {...field} value={field.value || ""} placeholder="e.g. Brustor, SunSetter, Sunsail" data-testid="input-manufacturer" />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -631,6 +632,7 @@ export default function Products() {
                       type="submit"
                       className="bg-edg-black hover:bg-edg-grey text-edg-white"
                       disabled={createProductMutation.isPending || updateProductMutation.isPending}
+                      data-testid="button-submit-product"
                     >
                       {(createProductMutation.isPending || updateProductMutation.isPending) ? (
                         <>
@@ -657,20 +659,21 @@ export default function Products() {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-10"
+              data-testid="input-search-products"
             />
           </div>
           
           <div className="flex gap-2">
-            <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+            <Select value={selectedManufacturer} onValueChange={setSelectedManufacturer} data-testid="select-manufacturer-filter">
               <SelectTrigger className="w-48">
                 <Filter className="h-4 w-4 mr-2" />
-                <SelectValue placeholder="All Categories" />
+                <SelectValue placeholder="All Manufacturers" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Categories</SelectItem>
-                {categories.map(category => (
-                  <SelectItem key={category} value={category}>
-                    {category}
+                <SelectItem value="all">All Manufacturers</SelectItem>
+                {manufacturers.map(manufacturer => (
+                  <SelectItem key={manufacturer} value={manufacturer}>
+                    {manufacturer}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -698,18 +701,18 @@ export default function Products() {
         </div>
 
         {/* Active Filters */}
-        {(searchTerm || selectedCategory !== "all") && (
+        {(searchTerm || selectedManufacturer !== "all") && (
           <div className="flex gap-2 mb-4">
             {searchTerm && (
-              <Badge variant="secondary" className="flex items-center gap-1">
+              <Badge variant="secondary" className="flex items-center gap-1" data-testid="filter-search-active">
                 Search: "{searchTerm}"
                 <X className="h-3 w-3 cursor-pointer" onClick={() => setSearchTerm("")} />
               </Badge>
             )}
-            {selectedCategory !== "all" && (
-              <Badge variant="secondary" className="flex items-center gap-1">
-                Category: {selectedCategory}
-                <X className="h-3 w-3 cursor-pointer" onClick={() => setSelectedCategory("all")} />
+            {selectedManufacturer !== "all" && (
+              <Badge variant="secondary" className="flex items-center gap-1" data-testid="filter-manufacturer-active">
+                Manufacturer: {selectedManufacturer}
+                <X className="h-3 w-3 cursor-pointer" onClick={() => setSelectedManufacturer("all")} />
               </Badge>
             )}
           </div>
@@ -723,7 +726,7 @@ export default function Products() {
               <p className="text-gray-500 mb-6">Create your first product to start building a reusable catalog.</p>
               <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                 <DialogTrigger asChild>
-                  <Button className="bg-edg-black hover:bg-edg-grey text-edg-white">
+                  <Button className="bg-edg-black hover:bg-edg-grey text-edg-white" data-testid="button-create-first-product">
                     <Plus className="mr-2 h-4 w-4" />
                     Create First Product
                   </Button>
@@ -741,8 +744,9 @@ export default function Products() {
                 variant="outline"
                 onClick={() => {
                   setSearchTerm("");
-                  setSelectedCategory("all");
+                  setSelectedManufacturer("all");
                 }}
+                data-testid="button-clear-filters"
               >
                 Clear Filters
               </Button>
@@ -757,14 +761,14 @@ export default function Products() {
           />
         ) : (
           <div className="space-y-8">
-            {Object.entries(groupedProducts).map(([category, categoryProducts]) => (
-              <div key={category}>
-                <h3 className="text-xl font-semibold text-charcoal mb-4 flex items-center gap-2">
-                  {category}
-                  <Badge variant="outline">{categoryProducts.length}</Badge>
+            {Object.entries(groupedProducts).map(([manufacturer, manufacturerProducts]) => (
+              <div key={manufacturer}>
+                <h3 className="text-xl font-semibold text-charcoal mb-4 flex items-center gap-2" data-testid={`text-manufacturer-${manufacturer.toLowerCase().replace(/\s+/g, '-')}`}>
+                  {manufacturer}
+                  <Badge variant="outline">{manufacturerProducts.length}</Badge>
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {categoryProducts.map((product) => {
+                  {manufacturerProducts.map((product) => {
                     // Get primary image or first gallery image
                     const galleryImages = product.galleryImages as any[] | null;
                     const specificationSheets = product.specificationSheets as any[] | null;
@@ -829,6 +833,7 @@ export default function Products() {
                               onClick={() => handleEdit(product)}
                               className="text-edg-teal hover:text-edg-dark-teal"
                               title="Edit Product"
+                              data-testid={`button-edit-${product.id}`}
                             >
                               <Edit className="h-4 w-4" />
                             </Button>
@@ -849,6 +854,7 @@ export default function Products() {
                               onClick={() => handleDelete(product.id)}
                               className="text-red-600 hover:text-red-800"
                               title="Delete Product"
+                              data-testid={`button-delete-${product.id}`}
                             >
                               <Trash2 className="h-4 w-4" />
                             </Button>
@@ -924,7 +930,7 @@ function ProductTable({ products, onEdit, onDelete, onManagePricing }: ProductTa
             <TableRow>
               <TableHead className="w-[80px]">Image</TableHead>
               <TableHead className="w-[280px]">Product Name</TableHead>
-              <TableHead>Category</TableHead>
+              <TableHead>Manufacturer</TableHead>
               <TableHead>Type</TableHead>
               <TableHead>Unit</TableHead>
               <TableHead className="text-right">Unit Price</TableHead>
@@ -989,7 +995,7 @@ function ProductTable({ products, onEdit, onDelete, onManagePricing }: ProductTa
                   </div>
                 </TableCell>
                 <TableCell>
-                  <Badge variant="outline">{product.category || "Uncategorized"}</Badge>
+                  <Badge variant="outline" data-testid={`text-manufacturer-${product.id}`}>{product.manufacturer || product.category || "Uncategorized"}</Badge>
                 </TableCell>
                 <TableCell>
                   <Badge variant={product.productType === "configurable" ? "default" : "secondary"}>
@@ -1017,6 +1023,7 @@ function ProductTable({ products, onEdit, onDelete, onManagePricing }: ProductTa
                       onClick={() => onEdit(product)}
                       className="text-edg-teal hover:text-edg-dark-teal h-8 w-8 p-0"
                       title="Edit Product"
+                      data-testid={`button-edit-table-${product.id}`}
                     >
                       <Edit className="h-4 w-4" />
                     </Button>
@@ -1037,6 +1044,7 @@ function ProductTable({ products, onEdit, onDelete, onManagePricing }: ProductTa
                       onClick={() => onDelete(product.id)}
                       className="text-red-600 hover:text-red-800 h-8 w-8 p-0"
                       title="Delete Product"
+                      data-testid={`button-delete-table-${product.id}`}
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
