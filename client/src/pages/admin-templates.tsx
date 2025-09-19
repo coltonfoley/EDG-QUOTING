@@ -39,7 +39,7 @@ import {
 } from "lucide-react";
 import { z } from "zod";
 import type { ProposalTemplate, TemplateSection, BrandingSettings, LayoutSettings, DefaultContent } from "@shared/schema";
-import { insertProposalTemplateSchema } from "@shared/schema";
+import { insertProposalTemplateSchema, getPreferredProductCategory, isManufacturerPreferred } from "@shared/schema";
 
 // Form validation schema
 const templateFormSchema = insertProposalTemplateSchema.extend({
@@ -90,7 +90,7 @@ const templateFormSchema = insertProposalTemplateSchema.extend({
 type TemplateFormData = z.infer<typeof templateFormSchema>;
 
 // Default template configuration
-const getDefaultTemplateConfig = (category: string): Partial<TemplateFormData> => ({
+const getDefaultTemplateConfig = (manufacturer: string): Partial<TemplateFormData> => ({
   sections: [
     { id: 'header', name: 'Header & Company Info', order: 1, required: true, defaultContent: '' },
     { id: 'customer', name: 'Customer Information', order: 2, required: true, defaultContent: '' },
@@ -174,7 +174,7 @@ export default function AdminTemplatesPage() {
       templateType: "pdf",
       isActive: true,
       isDefault: false,
-      ...getDefaultTemplateConfig("basic_quote")
+      ...getDefaultTemplateConfig("default")
     }
   });
 
@@ -317,10 +317,10 @@ export default function AdminTemplatesPage() {
       templateType: template.templateType as any,
       isActive: template.isActive ?? true,
       isDefault: template.isDefault ?? false,
-      sections: (template.sections as TemplateSection[]) || getDefaultTemplateConfig(template.category).sections!,
-      brandingSettings: (template.brandingSettings as BrandingSettings) || getDefaultTemplateConfig(template.category).brandingSettings!,
-      layoutSettings: (template.layoutSettings as LayoutSettings) || getDefaultTemplateConfig(template.category).layoutSettings!,
-      defaultContent: (template.defaultContent as DefaultContent) || getDefaultTemplateConfig(template.category).defaultContent!
+      sections: (template.sections as TemplateSection[]) || getDefaultTemplateConfig(template.category || "default").sections!,
+      brandingSettings: (template.brandingSettings as BrandingSettings) || getDefaultTemplateConfig(template.category || "default").brandingSettings!,
+      layoutSettings: (template.layoutSettings as LayoutSettings) || getDefaultTemplateConfig(template.category || "default").layoutSettings!,
+      defaultContent: (template.defaultContent as DefaultContent) || getDefaultTemplateConfig(template.category || "default").defaultContent!
     });
     setShowEditDialog(true);
   };
@@ -431,7 +431,7 @@ export default function AdminTemplatesPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Name</TableHead>
-                    <TableHead>Category</TableHead>
+                    <TableHead data-testid="header-manufacturer">Manufacturer</TableHead>
                     <TableHead>Type</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Default</TableHead>
