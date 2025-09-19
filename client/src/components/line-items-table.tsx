@@ -549,7 +549,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
   // Product filtering logic
   const manufacturers = useMemo(() => {
     if (!products) return [];
-    const uniqueManufacturers = Array.from(new Set(products.map(p => p.manufacturer || p.category || "Uncategorized")));
+    const uniqueManufacturers = Array.from(new Set(products.map(p => p.manufacturer || "Unknown")));
     return uniqueManufacturers.sort();
   }, [products]);
 
@@ -561,7 +561,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
         product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (product.description || "").toLowerCase().includes(searchTerm.toLowerCase());
       
-      const productManufacturer = product.manufacturer || product.category || "Uncategorized";
+      const productManufacturer = product.manufacturer || "Unknown";
       const matchesManufacturer = selectedManufacturer === "all" || 
         productManufacturer === selectedManufacturer;
       
@@ -571,7 +571,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
 
   const groupedProducts = useMemo(() => {
     return filteredProducts.reduce((groups, product) => {
-      const manufacturer = product.manufacturer || product.category || "Uncategorized";
+      const manufacturer = product.manufacturer || "Unknown";
       if (!groups[manufacturer]) {
         groups[manufacturer] = [];
       }
