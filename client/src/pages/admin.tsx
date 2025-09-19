@@ -18,6 +18,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { UserPlus, Shield, User as UserIcon, Trash2, Edit, Upload, FileSpreadsheet, AlertCircle, CheckCircle, Package, Settings, FileText } from "lucide-react";
 import { z } from "zod";
 import type { User, Product } from "@shared/schema";
+import { getPreferredProductCategory, isManufacturerPreferred } from "@shared/schema";
 
 const createUserSchema = z.object({
   username: z.string().min(3, "Username must be at least 3 characters"),
@@ -41,7 +42,7 @@ type CreateUserData = z.infer<typeof createUserSchema>;
 type EditUserData = z.infer<typeof editUserSchema>;
 
 const bulkUpdateSchema = z.object({
-  category: z.string().optional(),
+  manufacturer: z.string().optional(),
   defaultMarkupType: z.enum(["percentage", "dollar"]).optional(),
   defaultMarkupValue: z.string().optional(),
   unit: z.string().optional(),
@@ -395,37 +396,37 @@ export default function AdminPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {users.map((user) => (
-                    <TableRow key={user.id}>
-                      <TableCell className="font-medium">{user.username}</TableCell>
+                  {users.map((rowUser) => (
+                    <TableRow key={rowUser.id}>
+                      <TableCell className="font-medium">{rowUser.username}</TableCell>
                       <TableCell>
-                        {user.firstName || user.lastName 
-                          ? `${user.firstName || ''} ${user.lastName || ''}`.trim()
+                        {rowUser.firstName || rowUser.lastName 
+                          ? `${rowUser.firstName || ''} ${rowUser.lastName || ''}`.trim()
                           : '—'
                         }
                       </TableCell>
-                      <TableCell>{user.email || '—'}</TableCell>
+                      <TableCell>{rowUser.email || '—'}</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1">
-                          {user.role === 'admin' ? (
+                          {rowUser.role === 'admin' ? (
                             <Shield className="h-4 w-4 text-blue-600" />
                           ) : (
                             <UserIcon className="h-4 w-4 text-gray-600" />
                           )}
-                          <span className={user.role === 'admin' ? 'text-blue-600 font-medium' : ''}>
-                            {user.role}
+                          <span className={rowUser.role === 'admin' ? 'text-blue-600 font-medium' : ''}>
+                            {rowUser.role}
                           </span>
                         </div>
                       </TableCell>
                       <TableCell>
-                        {user.createdAt ? new Date(user.createdAt).toLocaleDateString() : '—'}
+                        {rowUser.createdAt ? new Date(rowUser.createdAt).toLocaleDateString() : '—'}
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex gap-1 justify-end">
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => openEditDialog(user)}
+                            onClick={() => openEditDialog(rowUser)}
                             className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
                           >
                             <Edit className="h-4 w-4" />
@@ -433,8 +434,8 @@ export default function AdminPage() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => handleDeleteUser(user.id)}
-                            disabled={user.id === user.id}
+                            onClick={() => handleDeleteUser(rowUser.id)}
+                            disabled={user.id === rowUser.id}
                             className="text-red-600 hover:text-red-700 hover:bg-red-50"
                           >
                             <Trash2 className="h-4 w-4" />
@@ -700,6 +701,7 @@ function PriceListUploader() {
           accept=".pdf,.xls,.xlsx,.jpg,.jpeg,.png"
           className="hidden"
           disabled={uploading}
+          data-testid="input-price-list-upload"
         />
       </div>
 
@@ -755,7 +757,7 @@ function ProductBulkEditor() {
   const queryClient = useQueryClient();
   const [selectedProducts, setSelectedProducts] = useState<number[]>([]);
   const [showBulkEditForm, setShowBulkEditForm] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState<string>("all");
+  const [selectedManufacturer, setSelectedManufacturer] = useState<string>("all");
   const [searchTerm, setSearchTerm] = useState<string>("");
 
   // Fetch all products
@@ -763,33 +765,36 @@ function ProductBulkEditor() {
     queryKey: ["/api/products"],
   });
 
-  // Get unique categories
-  const categories = useMemo(() => {
+  // Get unique manufacturers
+  const manufacturers = useMemo(() => {
     if (!products) return [];
-    const uniqueCategories = Array.from(new Set(products.map(p => p.category || "Uncategorized")));
-    return uniqueCategories.sort();
+    const uniqueManufacturers = Array.from(new Set(
+      products.map(p => getPreferredProductCategory(p) || "Unspecified")
+    ));
+    return uniqueManufacturers.sort();
   }, [products]);
 
-  // Filter products by category and search term
+  // Filter products by manufacturer and search term
   const filteredProducts = useMemo(() => {
     if (!products) return [];
     
     return products.filter(product => {
-      const matchesCategory = selectedCategory === "all" || 
-        (product.category || "Uncategorized") === selectedCategory;
+      const productManufacturer = getPreferredProductCategory(product) || "Unspecified";
+      const matchesManufacturer = selectedManufacturer === "all" || 
+        productManufacturer === selectedManufacturer;
       
       const matchesSearch = searchTerm === "" || 
         product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (product.description || "").toLowerCase().includes(searchTerm.toLowerCase());
       
-      return matchesCategory && matchesSearch;
+      return matchesManufacturer && matchesSearch;
     });
-  }, [products, selectedCategory, searchTerm]);
+  }, [products, selectedManufacturer, searchTerm]);
 
   const bulkUpdateForm = useForm<BulkUpdateData>({
     resolver: zodResolver(bulkUpdateSchema),
     defaultValues: {
-      category: "",
+      manufacturer: "",
       defaultMarkupType: "percentage",
       defaultMarkupValue: "",
       unit: "",
@@ -871,6 +876,7 @@ function ProductBulkEditor() {
           <Button
             onClick={() => setShowBulkEditForm(true)}
             className="bg-edg-teal hover:bg-edg-teal/90 text-white"
+            data-testid="button-bulk-edit-products"
           >
             <Settings className="h-4 w-4 mr-2" />
             Edit {selectedProducts.length} Products
@@ -881,25 +887,26 @@ function ProductBulkEditor() {
       {/* Filter Controls */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-gray-50 rounded-lg">
         <div>
-          <Label htmlFor="category-filter">Filter by Category</Label>
-          <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-            <SelectTrigger id="category-filter">
-              <SelectValue placeholder="Select category" />
+          <Label htmlFor="manufacturer-filter" data-testid="label-manufacturer-filter">Filter by Manufacturer</Label>
+          <Select value={selectedManufacturer} onValueChange={setSelectedManufacturer}>
+            <SelectTrigger id="manufacturer-filter" data-testid="select-manufacturer-filter">
+              <SelectValue placeholder="Select manufacturer" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Categories</SelectItem>
-              {categories.map((category) => (
-                <SelectItem key={category} value={category}>
-                  {category}
+              <SelectItem value="all" data-testid="option-all-manufacturers">All Manufacturers</SelectItem>
+              {manufacturers.map((manufacturer) => (
+                <SelectItem key={manufacturer} value={manufacturer} data-testid={`option-manufacturer-${manufacturer.replace(/\s+/g, '-').toLowerCase()}`}>
+                  {manufacturer}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
         </div>
         <div>
-          <Label htmlFor="search-products">Search Products</Label>
+          <Label htmlFor="search-products" data-testid="label-search-products">Search Products</Label>
           <Input
             id="search-products"
+            data-testid="input-search-products"
             type="text"
             placeholder="Search by name or description..."
             value={searchTerm}
@@ -925,10 +932,11 @@ function ProductBulkEditor() {
                     checked={selectedProducts.length === filteredProducts.length && filteredProducts.length > 0}
                     onChange={(e) => handleSelectAll(e.target.checked)}
                     className="rounded border-gray-300"
+                    data-testid="checkbox-select-all-products"
                   />
                 </TableHead>
                 <TableHead>Product Name</TableHead>
-                <TableHead>Category</TableHead>
+                <TableHead data-testid="header-manufacturer">Manufacturer</TableHead>
                 <TableHead>Unit</TableHead>
                 <TableHead>Price</TableHead>
                 <TableHead>Markup</TableHead>
@@ -945,8 +953,8 @@ function ProductBulkEditor() {
                       className="rounded border-gray-300"
                     />
                   </TableCell>
-                  <TableCell className="font-medium">{product.name}</TableCell>
-                  <TableCell>{product.category}</TableCell>
+                  <TableCell className="font-medium" data-testid={`text-product-name-${product.id}`}>{product.name}</TableCell>
+                  <TableCell data-testid={`text-manufacturer-${product.id}`}>{getPreferredProductCategory(product) || "Unspecified"}</TableCell>
                   <TableCell>{product.unit}</TableCell>
                   <TableCell>${product.defaultUnitPrice}</TableCell>
                   <TableCell>
@@ -972,12 +980,12 @@ function ProductBulkEditor() {
             <form onSubmit={bulkUpdateForm.handleSubmit(handleBulkUpdate)} className="space-y-4">
               <FormField
                 control={bulkUpdateForm.control}
-                name="category"
+                name="manufacturer"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Category</FormLabel>
+                    <FormLabel data-testid="label-manufacturer-bulk">Manufacturer</FormLabel>
                     <FormControl>
-                      <Input {...field} placeholder="Leave blank to keep current" />
+                      <Input {...field} placeholder="Leave blank to keep current" data-testid="input-manufacturer-bulk" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
