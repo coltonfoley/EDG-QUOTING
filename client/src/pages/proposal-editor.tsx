@@ -25,7 +25,8 @@ import {
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { formatCurrency } from "@/lib/utils";
-import type { QuoteWithDetails } from "@shared/schema";
+import { BasicQuoteTemplate } from "@/components/template-renderers/basic-quote-template";
+import type { QuoteWithDetails, ProposalTemplate, BrandingSettings, DefaultContent } from "@shared/schema";
 import { COMPANY_INFO, QUOTE_TERMS } from "@shared/companyConfig";
 
 // Form validation schema
@@ -42,6 +43,44 @@ const proposalFormSchema = z.object({
 });
 
 type ProposalFormData = z.infer<typeof proposalFormSchema>;
+
+// Create a default template for preview
+const createDefaultTemplate = (): ProposalTemplate => ({
+  id: 0,
+  name: "Default Basic Quote",
+  description: "Basic quote template",
+  category: "basic_quote",
+  templateType: "pdf",
+  sections: [],
+  layoutSettings: {
+    pageSize: "letter" as const,
+    margins: { top: 20, bottom: 20, left: 20, right: 20 },
+    spacing: { sectionGap: 16, paragraphGap: 8 },
+    pageBreaks: { beforeSections: [], avoidBreakInSections: [] }
+  },
+  brandingSettings: {
+    primaryColor: "#1e40af",
+    accentColor: "#3b82f6",
+    textColor: "#1f2937",
+    backgroundColor: "#ffffff",
+    logoSize: "medium" as const,
+    headerStyle: "standard" as const,
+    footerStyle: "minimal" as const
+  } as BrandingSettings,
+  defaultContent: {
+    companyDescription: "Professional outdoor living solutions",
+    projectScope: "Custom pergola installation",
+    timeline: "2-3 weeks from approval",
+    credentials: "Licensed and insured contractor",
+    warranty: "1 year limited warranty",
+    paymentTerms: "50% deposit, 50% on completion",
+    additionalTerms: "Materials subject to availability"
+  } as DefaultContent,
+  isActive: true,
+  isDefault: true,
+  createdAt: new Date(),
+  updatedAt: new Date()
+});
 
 export default function ProposalEditor() {
   const { id } = useParams();
@@ -400,137 +439,30 @@ export default function ProposalEditor() {
                   </div>
                 </div>
                 
-                <div className="h-full overflow-y-auto p-6 bg-white">
-                  {/* Preview Content */}
-                  <div className="max-w-2xl mx-auto space-y-6">
-                    {/* Header */}
-                    <div className="text-center border-b pb-6">
-                      <h2 className="text-2xl font-bold text-gray-900">
-                        {form.watch("companyName") || COMPANY_INFO.name}
-                      </h2>
-                      <p className="text-gray-600 mt-2">
-                        {form.watch("companyAddress") || COMPANY_INFO.address}
-                      </p>
-                      <div className="flex justify-center gap-6 mt-3 text-sm text-gray-600">
-                        <span>{form.watch("companyPhone") || COMPANY_INFO.phone}</span>
-                        <span>{form.watch("companyEmail") || COMPANY_INFO.email}</span>
-                      </div>
-                    </div>
-
-                    {/* Quote Information */}
-                    <div className="space-y-4">
-                      <h3 className="text-xl font-semibold text-gray-900">Quote Details</h3>
-                      <div className="grid grid-cols-2 gap-4 text-sm">
-                        <div>
-                          <p className="text-gray-600">Quote Number:</p>
-                          <p className="font-medium">{quote.quoteNumber}</p>
-                        </div>
-                        <div>
-                          <p className="text-gray-600">Project:</p>
-                          <p className="font-medium">{quote.projectName || 'N/A'}</p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Customer Information */}
-                    <div className="space-y-4">
-                      <h3 className="text-xl font-semibold text-gray-900">Customer Details</h3>
-                      <div className="bg-gray-50 p-4 rounded-lg">
-                        <p className="font-medium">{quote.customer?.name || quote.account?.name}</p>
-                        {quote.customer?.company && (
-                          <p className="text-gray-600">{quote.customer.company}</p>
-                        )}
-                        <p className="text-gray-600">{quote.customer?.email || quote.account?.email}</p>
-                        <p className="text-gray-600">{quote.customer?.phone || quote.account?.phone}</p>
-                      </div>
-                    </div>
-
-                    {/* Project Description */}
-                    {form.watch("projectDescription") && (
-                      <div className="space-y-4">
-                        <h3 className="text-xl font-semibold text-gray-900">Project Description</h3>
-                        <p className="text-gray-700 whitespace-pre-wrap">
-                          {form.watch("projectDescription")}
-                        </p>
-                      </div>
-                    )}
-
-                    {/* Line Items Summary */}
-                    <div className="space-y-4">
-                      <h3 className="text-xl font-semibold text-gray-900">Line Items</h3>
-                      {quote.lineItems && quote.lineItems.length > 0 ? (
-                        <div className="space-y-2">
-                          {quote.lineItems.slice(0, 3).map((item, index) => (
-                            <div key={index} className="flex justify-between py-2 border-b">
-                              <span className="text-gray-700">{item.description}</span>
-                              <span className="font-medium">
-                                {formatCurrency(parseFloat(item.quantity) * parseFloat(item.unitPrice))}
-                              </span>
-                            </div>
-                          ))}
-                          {quote.lineItems.length > 3 && (
-                            <p className="text-gray-500 text-sm italic">
-                              ...and {quote.lineItems.length - 3} more items
-                            </p>
-                          )}
-                        </div>
-                      ) : (
-                        <p className="text-gray-500">No line items</p>
-                      )}
-                    </div>
-
-                    {/* Totals */}
-                    <div className="border-t pt-4">
-                      <div className="space-y-2">
-                        <div className="flex justify-between">
-                          <span>Subtotal:</span>
-                          <span>{formatCurrency(subtotal)}</span>
-                        </div>
-                        {discount > 0 && (
-                          <div className="flex justify-between text-red-600">
-                            <span>Discount:</span>
-                            <span>-{formatCurrency(discount)}</span>
-                          </div>
-                        )}
-                        {taxAmount > 0 && (
-                          <div className="flex justify-between">
-                            <span>Tax ({taxRate}%):</span>
-                            <span>{formatCurrency(taxAmount)}</span>
-                          </div>
-                        )}
-                        {shipping > 0 && (
-                          <div className="flex justify-between">
-                            <span>Shipping:</span>
-                            <span>{formatCurrency(shipping)}</span>
-                          </div>
-                        )}
-                        <div className="flex justify-between text-lg font-bold border-t pt-2">
-                          <span>Total:</span>
-                          <span className="text-green-600">{formatCurrency(total)}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Terms Preview */}
-                    <div className="space-y-4">
-                      <h3 className="text-xl font-semibold text-gray-900">Terms & Conditions</h3>
-                      <div className="space-y-3 text-sm text-gray-700">
-                        <div>
-                          <span className="font-medium">Payment Terms: </span>
-                          {form.watch("paymentTerms") || QUOTE_TERMS.paymentTerms}
-                        </div>
-                        <div>
-                          <span className="font-medium">Warranty: </span>
-                          {form.watch("warranty") || QUOTE_TERMS.warranty}
-                        </div>
-                        {form.watch("additionalNotes") && (
-                          <div>
-                            <span className="font-medium">Additional Notes: </span>
-                            <span className="whitespace-pre-wrap">{form.watch("additionalNotes")}</span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
+                <div className="h-full overflow-y-auto bg-gray-100 p-6">
+                  {/* Professional styled container for screen display */}
+                  <div className="max-w-4xl mx-auto bg-white rounded-lg shadow-lg border p-8">
+                    <BasicQuoteTemplate
+                      quote={quote}
+                      template={createDefaultTemplate()}
+                      companyInfo={{
+                        name: form.watch("companyName") || COMPANY_INFO.name,
+                        address: form.watch("companyAddress") || COMPANY_INFO.address,
+                        phone: form.watch("companyPhone") || COMPANY_INFO.phone,
+                        email: form.watch("companyEmail") || COMPANY_INFO.email,
+                        license: COMPANY_INFO.license,
+                        customerName: quote.customer?.name || quote.account?.name || "",
+                        customerCompany: quote.customer?.company || quote.account?.company || "",
+                        customerEmail: quote.customer?.email || quote.account?.email || "",
+                        customerPhone: quote.customer?.phone || quote.account?.phone || "",
+                      }}
+                      quoteTerms={{
+                        validFor: QUOTE_TERMS.validFor,
+                        paymentTerms: form.watch("paymentTerms") || QUOTE_TERMS.paymentTerms,
+                        warranty: form.watch("warranty") || QUOTE_TERMS.warranty,
+                        additionalNotes: form.watch("additionalNotes") || QUOTE_TERMS.additionalNotes,
+                      }}
+                    />
                   </div>
                 </div>
               </div>
