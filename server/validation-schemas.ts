@@ -10,7 +10,9 @@ import {
   insertProposalTemplateSchema as baseProposalTemplateSchema,
   insertPricingTableSchema as basePricingTableSchema,
   insertProductAccessorySchema as baseProductAccessorySchema,
-  insertUserSchema as baseUserSchema
+  insertUserSchema as baseUserSchema,
+  getPreferredProductCategory,
+  validateProductCategoryOrManufacturer
 } from "@shared/schema";
 
 // Common validation schemas
@@ -179,11 +181,13 @@ export const insertLineItemSchema = baseLineItemSchema.extend({
   configData: z.any().optional()
 });
 
-// Enhanced Product validation
-export const insertProductSchema = baseProductSchema.extend({
+// Enhanced Product validation - Phase A compatibility for category/manufacturer
+export const insertProductSchema = z.object({
   name: z.string().min(1, "Product name is required").max(500, "Product name is too long"),
   description: z.string().max(5000, "Description is too long").optional(),
-  category: z.string().max(100, "Category name is too long").optional(),
+  // Phase A: Both category and manufacturer are optional for backward compatibility
+  category: z.string().max(100, "Category name is too long").optional().nullable(),
+  manufacturer: z.string().max(100, "Manufacturer name is too long").optional().nullable(),
   productType: z.enum(['simple', 'configurable'], {
     errorMap: () => ({ message: "Product type must be either 'simple' or 'configurable'" })
   }).optional(),
@@ -248,6 +252,34 @@ export const insertProductSchema = baseProductSchema.extend({
   galleryImages: z.array(z.any()).optional(),
   specificationSheets: z.array(z.any()).optional(),
   configFields: z.any().optional()
+}).refine(
+  (data: { category?: string | null; manufacturer?: string | null }) => {
+    // Phase A validation using helper function
+    const validation = validateProductCategoryOrManufacturer(data);
+    // Allow both to be null/undefined for backward compatibility during Phase A
+    return true;
+  },
+  {
+    message: "Phase A: Both category and manufacturer fields are optional for backward compatibility",
+  }
+).transform((data: { category?: string | null; manufacturer?: string | null; [key: string]: any }) => {
+  // Phase A transformation: Apply business logic for field preference
+  // Manufacturer takes precedence when both are provided
+  const preferred = getPreferredProductCategory(data);
+  const validation = validateProductCategoryOrManufacturer(data);
+  
+  return {
+    ...data,
+    // Keep both fields as-is for backward compatibility
+    // Business logic can use getPreferredProductCategory to determine which to use
+    _categoryValidation: {
+      preferred,
+      hasCategory: validation.hasCategory,
+      hasManufacturer: validation.hasManufacturer,
+      hasBoth: validation.hasBoth,
+      manufacturerPreferred: validation.hasManufacturer
+    }
+  };
 });
 
 // Enhanced Pricing Table validation
@@ -443,8 +475,49 @@ export const bulkUpdateProductsSchema = z.object({
         return !isNaN(num) && num >= 0 && num <= 100;
       }, "Default discount value must be between 0 and 100")
       .optional(),
-    category: z.string().max(100, "Category name is too long").optional()
+    // Phase A: Support both category and manufacturer fields
+    category: z.string().max(100, "Category name is too long").optional().nullable(),
+    manufacturer: z.string().max(100, "Manufacturer name is too long").optional().nullable()
   }).refine(val => Object.keys(val).length > 0, "At least one field must be provided for update")
+    .refine(val => {
+      // Phase A validation: Allow bulk updates with category/manufacturer fields
+      // Use helper function to validate the combination
+      if (val.category !== undefined || val.manufacturer !== undefined) {
+        const validation = validateProductCategoryOrManufacturer({
+          category: val.category,
+          manufacturer: val.manufacturer
+        });
+        // During Phase A, allow any combination for backward compatibility
+        return true;
+      }
+      return true;
+    }, "Phase A: Category and manufacturer fields are handled with backward compatibility")
+    .transform(val => {
+      // Apply Phase A transformation logic if category/manufacturer fields are present
+      if (val.category !== undefined || val.manufacturer !== undefined) {
+        const preferred = getPreferredProductCategory({
+          category: val.category,
+          manufacturer: val.manufacturer
+        });
+        const validation = validateProductCategoryOrManufacturer({
+          category: val.category,
+          manufacturer: val.manufacturer
+        });
+        
+        return {
+          ...val,
+          // Add metadata for business logic to use
+          _categoryUpdate: {
+            preferred,
+            hasCategory: validation.hasCategory,
+            hasManufacturer: validation.hasManufacturer,
+            hasBoth: validation.hasBoth,
+            manufacturerPreferred: validation.hasManufacturer
+          }
+        };
+      }
+      return val;
+    })
 });
 
 // Bulk upload pricing table validation
