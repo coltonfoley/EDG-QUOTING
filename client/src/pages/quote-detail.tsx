@@ -1,11 +1,16 @@
 import { useParams, useLocation } from "wouter";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { useState, useEffect } from "react";
 import { AppHeader } from "@/components/app-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
 import { LoadingSpinner } from "@/components/loading-spinner";
+import { useToast } from "@/hooks/use-toast";
 import { 
   ArrowLeft, 
   Edit, 
@@ -17,20 +22,391 @@ import {
   DollarSign,
   FileText,
   User,
+  Settings,
+  ImageIcon,
+  Eye,
+  EyeOff,
+  Info,
+  Loader2,
 } from "lucide-react";
 import { ImageUpload } from "@/components/image-upload";
 import { format } from "date-fns";
 import type { QuoteWithDetails } from "@shared/schema";
+import { companySettings as companySettingsTable } from "@shared/schema";
 
 export default function QuoteDetail() {
   const { id } = useParams();
   const [, setLocation] = useLocation();
   const quoteId = id ? parseInt(id) : undefined;
+  const { toast } = useToast();
+
+  // PDF Options State Management
+  const [pdfOptions, setPdfOptions] = useState({
+    brandedCover: true,
+    productRenderings: true,
+    showPricing: true,
+  });
+
+  // Load saved preferences from localStorage
+  useEffect(() => {
+    if (quoteId) {
+      const savedOptions = localStorage.getItem(`pdf-options-${quoteId}`);
+      if (savedOptions) {
+        try {
+          setPdfOptions(JSON.parse(savedOptions));
+        } catch (error) {
+          console.warn('Failed to load saved PDF options:', error);
+        }
+      }
+    }
+  }, [quoteId]);
+
+  // Save preferences to localStorage when they change
+  useEffect(() => {
+    if (quoteId) {
+      localStorage.setItem(`pdf-options-${quoteId}`, JSON.stringify(pdfOptions));
+    }
+  }, [pdfOptions, quoteId]);
 
   const { data: quote, isLoading, error } = useQuery<QuoteWithDetails>({
     queryKey: [`/api/quotes/${quoteId}`],
     enabled: !!quoteId,
   });
+
+  // Company settings query for dynamic branding
+  const { data: settings } = useQuery<typeof companySettingsTable.$inferSelect>({
+    queryKey: ["/api/company-settings"],
+  });
+
+  // HTML escape function to prevent XSS attacks
+  const escapeHtml = (text: string | null | undefined) => {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  };
+
+  // CSS color validation function to prevent XSS injection
+  const isValidCSSColor = (color: string): boolean => {
+    // Allow hex colors (#RGB, #RRGGBB)
+    if (/^#([0-9A-Fa-f]{3}){1,2}$/.test(color)) return true;
+    // Allow rgb/rgba/hsl/hsla and named colors
+    if (/^(rgb|rgba|hsl|hsla)\([^)]+\)$/.test(color)) return true;
+    // Allow common color names
+    const validNames = ['black', 'white', 'red', 'blue', 'green', 'yellow', 'gray', 'grey', 'orange', 'purple', 'brown', 'pink', 'cyan', 'magenta', 'lime', 'indigo', 'violet', 'maroon', 'navy', 'olive', 'teal', 'silver', 'gold'];
+    return validNames.includes(color.toLowerCase());
+  };
+
+  // Safe color function that validates and returns safe color or default
+  const getSafeColor = (color: string | undefined | null, defaultColor: string = '#0066cc'): string => {
+    if (!color || !isValidCSSColor(color)) {
+      return defaultColor;
+    }
+    return color;
+  };
+
+  // PDF Generation mutation with simplified logic based on toggles
+  const generatePDFMutation = useMutation({
+    mutationFn: async (options: typeof pdfOptions) => {
+      if (!quote) throw new Error('Quote data not available');
+      if (!settings) throw new Error('Company settings not loaded');
+      
+      // Create a simple HTML structure based on the toggle options
+      const generatePDFContent = () => {
+        let htmlContent = '';
+        
+        // Add common styles
+        htmlContent += `
+          <style>
+            body { 
+              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+              line-height: 1.6;
+              color: #000;
+              margin: 0;
+              padding: 20px;
+            }
+            .header { border-bottom: 2px solid #0066cc; padding-bottom: 20px; margin-bottom: 20px; }
+            .company-info { font-size: 14px; color: #666; }
+            .quote-title { font-size: 24px; font-weight: bold; color: #0066cc; margin: 10px 0; }
+            .section { margin: 20px 0; page-break-inside: avoid; }
+            .section-title { font-size: 18px; font-weight: bold; margin-bottom: 10px; border-bottom: 1px solid #ddd; padding-bottom: 5px; }
+            table { width: 100%; border-collapse: collapse; margin: 10px 0; }
+            th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+            th { background-color: #f5f5f5; font-weight: bold; }
+            .total-row { font-weight: bold; background-color: #f9f9f9; }
+            .cover-page { text-align: center; page-break-after: always; padding: 100px 20px; }
+            .image-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin: 20px 0; }
+            .image-item { text-align: center; }
+            .image-item img { max-width: 100%; height: auto; max-height: 300px; border-radius: 8px; }
+            @media print { 
+              @page { margin: 20mm; }
+              .page-break { page-break-before: always; }
+            }
+          </style>
+        `;
+
+        // Branded Cover Page
+        if (options.brandedCover) {
+          const safeColor = getSafeColor(settings.primaryColor);
+          htmlContent += `
+            <div class="cover-page">
+              <div class="header">
+                <h1 style="font-size: 32px; color: ${safeColor}; margin-bottom: 10px;">${escapeHtml(settings.companyName)}</h1>
+                <div class="company-info">
+                  ${settings.address ? `<p>${escapeHtml(settings.address)}</p>` : ''}
+                  <p>
+                    ${settings.phone ? `Phone: ${escapeHtml(settings.phone)}` : ''}
+                    ${settings.phone && settings.email ? ' | ' : ''}
+                    ${settings.email ? `Email: ${escapeHtml(settings.email)}` : ''}
+                  </p>
+                  ${settings.website ? `<p>Website: ${escapeHtml(settings.website)}</p>` : ''}
+                </div>
+              </div>
+              <div style="margin: 40px 0;">
+                <h2 class="quote-title" style="color: ${safeColor};">${escapeHtml(quote.projectName || `Quote ${quote.quoteNumber}`)}</h2>
+                <p style="font-size: 18px; color: #666;">Quote #${escapeHtml(quote.quoteNumber)}</p>
+                <p style="font-size: 16px; color: #666;">Prepared for: ${escapeHtml(quote.customer?.name || 'Customer')}</p>
+                ${quote.customer?.company ? `<p style="font-size: 16px; color: #666;">${escapeHtml(quote.customer.company)}</p>` : ''}
+                <p style="font-size: 14px; color: #999; margin-top: 40px;">
+                  Generated on ${format(new Date(), 'MMMM do, yyyy')}
+                </p>
+              </div>
+            </div>
+          `;
+        }
+
+        // Quote Details Section - only add page break if branded cover was shown
+        if (options.brandedCover) {
+          htmlContent += '<div class="page-break"></div>';
+        }
+        htmlContent += `
+          <div class="section">
+            <h2 class="section-title">Quote Details</h2>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+              <div>
+                <h3>Customer Information</h3>
+                <p><strong>Name:</strong> ${escapeHtml(quote.customer?.name) || 'N/A'}</p>
+                ${quote.customer?.company ? `<p><strong>Company:</strong> ${escapeHtml(quote.customer.company)}</p>` : ''}
+                <p><strong>Email:</strong> ${escapeHtml(quote.customer?.email) || 'N/A'}</p>
+                <p><strong>Phone:</strong> ${escapeHtml(quote.customer?.phone) || 'N/A'}</p>
+              </div>
+              <div>
+                <h3>Project Information</h3>
+                <p><strong>Quote Number:</strong> ${escapeHtml(quote.quoteNumber)}</p>
+                ${quote.projectName ? `<p><strong>Project:</strong> ${escapeHtml(quote.projectName)}</p>` : ''}
+                ${quote.projectAddress ? `<p><strong>Address:</strong> ${escapeHtml(quote.projectAddress)}</p>` : ''}
+                <p><strong>Date:</strong> ${quote.createdAt ? format(new Date(quote.createdAt), 'PPP') : 'N/A'}</p>
+              </div>
+            </div>
+          </div>
+        `;
+
+        // Line Items Section
+        if (quote.lineItems && quote.lineItems.length > 0) {
+          htmlContent += `
+            <div class="section">
+              <h2 class="section-title">Line Items</h2>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Description</th>
+                    <th style="text-align: right;">Manufacturer</th>
+                    <th style="text-align: right;">Qty</th>
+                    <th style="text-align: right;">Unit</th>
+                    ${options.showPricing ? '<th style="text-align: right;">Unit Price</th>' : ''}
+                    ${options.showPricing ? '<th style="text-align: right;">Markup</th>' : ''}
+                    ${options.showPricing ? '<th style="text-align: right;">Discount</th>' : ''}
+                    ${options.showPricing ? '<th style="text-align: right;">Amount</th>' : ''}
+                  </tr>
+                </thead>
+                <tbody>
+          `;
+
+          quote.lineItems.forEach((item) => {
+            const quantity = parseFloat(item.quantity);
+            const unitPrice = parseFloat(item.unitPrice);
+            const markupValue = parseFloat(item.markupValue);
+            const discountValue = parseFloat(item.discountValue);
+
+            let itemTotal = quantity * unitPrice;
+            if (item.markupType === 'percentage') {
+              itemTotal = itemTotal * (1 + markupValue / 100);
+            } else {
+              itemTotal = itemTotal + markupValue;
+            }
+            if (item.discountType === 'percentage') {
+              itemTotal = itemTotal * (1 - discountValue / 100);
+            } else {
+              itemTotal = itemTotal - discountValue;
+            }
+
+            htmlContent += `
+              <tr>
+                <td>${escapeHtml(item.description)}</td>
+                <td style="text-align: right;">${escapeHtml(item.manufacturer || 'N/A')}</td>
+                <td style="text-align: right;">${quantity}</td>
+                <td style="text-align: right;">each</td>
+                ${options.showPricing ? `<td style="text-align: right;">${formatCurrency(unitPrice)}</td>` : ''}
+                ${options.showPricing ? `<td style="text-align: right;">
+                  ${item.markupType === 'percentage' ? `${markupValue}%` : formatCurrency(markupValue)}
+                </td>` : ''}
+                ${options.showPricing ? `<td style="text-align: right;">
+                  ${discountValue > 0 ? (item.discountType === 'percentage' ? `-${discountValue}%` : `-${formatCurrency(discountValue)}`) : '-'}
+                </td>` : ''}
+                ${options.showPricing ? `<td style="text-align: right;">${formatCurrency(itemTotal)}</td>` : ''}
+              </tr>
+            `;
+          });
+
+          htmlContent += '</tbody>';
+
+          // Totals section - only show if pricing is enabled
+          if (options.showPricing) {
+            const subtotal = calculateSubtotal();
+            const discount = parseFloat(quote?.discount || '0');
+            const taxRate = parseFloat(quote?.taxRate || '0');
+            const shipping = parseFloat(quote?.shipping || '0');
+            const taxAmount = (subtotal - discount) * (taxRate / 100);
+            const total = subtotal - discount + taxAmount + shipping;
+
+            // Calculate correct colspan - 4 base columns + 4 pricing columns when pricing is shown
+            const colspanCount = 7; // Description, Manufacturer, Qty, Unit, Unit Price, Markup, Discount (total: 7)
+
+            htmlContent += `
+              <tfoot>
+                <tr class="total-row">
+                  <td colspan="${colspanCount}" style="text-align: right;"><strong>Subtotal:</strong></td>
+                  <td style="text-align: right;"><strong>${formatCurrency(subtotal)}</strong></td>
+                </tr>
+            `;
+
+            if (discount > 0) {
+              htmlContent += `
+                <tr>
+                  <td colspan="${colspanCount}" style="text-align: right;">Discount:</td>
+                  <td style="text-align: right;">-${formatCurrency(discount)}</td>
+                </tr>
+              `;
+            }
+
+            if (taxAmount > 0) {
+              htmlContent += `
+                <tr>
+                  <td colspan="${colspanCount}" style="text-align: right;">Tax (${taxRate}%):</td>
+                  <td style="text-align: right;">${formatCurrency(taxAmount)}</td>
+                </tr>
+              `;
+            }
+
+            if (shipping > 0) {
+              htmlContent += `
+                <tr>
+                  <td colspan="${colspanCount}" style="text-align: right;">Shipping:</td>
+                  <td style="text-align: right;">${formatCurrency(shipping)}</td>
+                </tr>
+              `;
+            }
+
+            htmlContent += `
+                <tr class="total-row" style="font-size: 18px;">
+                  <td colspan="${colspanCount}" style="text-align: right;"><strong>Total:</strong></td>
+                  <td style="text-align: right;"><strong>${formatCurrency(total)}</strong></td>
+                </tr>
+              </tfoot>
+            `;
+          }
+
+          htmlContent += '</table></div>';
+        }
+
+        // Product Renderings Section
+        if (options.productRenderings && quote.images && quote.images.length > 0) {
+          htmlContent += '<div class="page-break"></div>';
+          htmlContent += `
+            <div class="section">
+              <h2 class="section-title">Product Renderings</h2>
+              <div class="image-grid">
+          `;
+
+          quote.images.forEach((image, index) => {
+            htmlContent += `
+              <div class="image-item">
+                <img src="${escapeHtml(image.url)}" alt="${escapeHtml(image.altText || `Image ${index + 1}`)}" />
+                ${image.caption ? `<p style="font-size: 12px; color: #666; margin-top: 5px;">${escapeHtml(image.caption)}</p>` : ''}
+              </div>
+            `;
+          });
+
+          htmlContent += '</div></div>';
+        }
+
+        // Notes Section
+        if (quote.notes) {
+          htmlContent += `
+            <div class="section">
+              <h2 class="section-title">Additional Notes</h2>
+              <p style="white-space: pre-wrap;">${escapeHtml(quote.notes)}</p>
+            </div>
+          `;
+        }
+
+        return htmlContent;
+      };
+
+      // Create and open print window
+      const printWindow = window.open('', '_blank');
+      if (!printWindow) {
+        throw new Error('Popup blocked. Please allow popups and try again.');
+      }
+
+      const htmlContent = generatePDFContent();
+      const filename = `${escapeHtml(quote.projectName || 'Quote')}-${escapeHtml(quote.quoteNumber)}`;
+
+      printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>${filename}</title>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1">
+        </head>
+        <body>
+          ${htmlContent}
+          <script>
+            window.onload = function() {
+              setTimeout(function() {
+                window.print();
+                setTimeout(function() {
+                  window.close();
+                }, 1000);
+              }, 500);
+            };
+          </script>
+        </body>
+        </html>
+      `);
+
+      printWindow.document.close();
+    },
+    onSuccess: () => {
+      toast({ 
+        title: "PDF Generated", 
+        description: "Print dialog opened - save as PDF to download" 
+      });
+    },
+    onError: (error) => {
+      console.error('PDF generation error:', error);
+      toast({ 
+        title: "Error", 
+        description: error instanceof Error ? error.message : "Failed to generate PDF. Please try again.", 
+        variant: "destructive" 
+      });
+    },
+  });
+
+  const handleGeneratePDF = () => {
+    generatePDFMutation.mutate(pdfOptions);
+  };
 
   if (isLoading) {
     return (
@@ -172,9 +548,18 @@ export default function QuoteDetail() {
               <Edit className="mr-2 h-4 w-4" />
               Edit Quote
             </Button>
-            <Button variant="outline" data-testid="button-download-pdf">
-              <Download className="mr-2 h-4 w-4" />
-              Download PDF
+            <Button 
+              variant="outline" 
+              onClick={handleGeneratePDF}
+              disabled={generatePDFMutation.isPending}
+              data-testid="button-download-pdf"
+            >
+              {generatePDFMutation.isPending ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Download className="mr-2 h-4 w-4" />
+              )}
+              {generatePDFMutation.isPending ? "Generating..." : "Download PDF"}
             </Button>
           </div>
         </div>
@@ -359,6 +744,126 @@ export default function QuoteDetail() {
                   <p className="text-2xl font-bold text-green-600" data-testid={`text-total-${quote.id}`}>
                     {formatCurrency(total)}
                   </p>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* PDF Options */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Settings className="h-5 w-5" />
+                  PDF Options
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {/* Branded Cover Page Toggle */}
+                <div className="flex items-start justify-between" data-testid="pdf-option-branded-cover">
+                  <div className="flex-1">
+                    <Label htmlFor="branded-cover" className="text-sm font-medium cursor-pointer">
+                      Branded Cover Page
+                    </Label>
+                    <p className="text-xs text-gray-600 mt-1">
+                      Include professional cover page with company branding and project details
+                    </p>
+                  </div>
+                  <Switch
+                    id="branded-cover"
+                    checked={pdfOptions.brandedCover}
+                    onCheckedChange={(checked) => 
+                      setPdfOptions(prev => ({ ...prev, brandedCover: checked }))
+                    }
+                    data-testid="switch-branded-cover"
+                  />
+                </div>
+
+                <Separator />
+
+                {/* Product Renderings Toggle */}
+                <div className="flex items-start justify-between" data-testid="pdf-option-product-renderings">
+                  <div className="flex-1">
+                    <Label htmlFor="product-renderings" className="text-sm font-medium cursor-pointer">
+                      <div className="flex items-center gap-1">
+                        Product Renderings
+                        <ImageIcon className="h-3 w-3" />
+                      </div>
+                    </Label>
+                    <p className="text-xs text-gray-600 mt-1">
+                      Include uploaded product images and renderings
+                      {quote?.images && quote.images.length > 0 && (
+                        <span className="text-green-600 ml-1">
+                          ({quote.images.length} image{quote.images.length !== 1 ? 's' : ''} available)
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                  <Switch
+                    id="product-renderings"
+                    checked={pdfOptions.productRenderings}
+                    onCheckedChange={(checked) => 
+                      setPdfOptions(prev => ({ ...prev, productRenderings: checked }))
+                    }
+                    disabled={!quote?.images || quote.images.length === 0}
+                    data-testid="switch-product-renderings"
+                  />
+                </div>
+
+                <Separator />
+
+                {/* Show Pricing Toggle */}
+                <div className="flex items-start justify-between" data-testid="pdf-option-show-pricing">
+                  <div className="flex-1">
+                    <Label htmlFor="show-pricing" className="text-sm font-medium cursor-pointer">
+                      <div className="flex items-center gap-1">
+                        Show Pricing
+                        {pdfOptions.showPricing ? (
+                          <Eye className="h-3 w-3 text-green-600" />
+                        ) : (
+                          <EyeOff className="h-3 w-3 text-gray-400" />
+                        )}
+                      </div>
+                    </Label>
+                    <p className="text-xs text-gray-600 mt-1">
+                      {pdfOptions.showPricing 
+                        ? "All pricing information will be visible" 
+                        : "Pricing information will be hidden"
+                      }
+                    </p>
+                  </div>
+                  <Switch
+                    id="show-pricing"
+                    checked={pdfOptions.showPricing}
+                    onCheckedChange={(checked) => 
+                      setPdfOptions(prev => ({ ...prev, showPricing: checked }))
+                    }
+                    data-testid="switch-show-pricing"
+                  />
+                </div>
+
+                <Separator />
+
+                {/* PDF Preview Info */}
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                  <div className="flex items-start gap-2">
+                    <Info className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                    <div className="text-xs text-blue-800">
+                      <p className="font-medium mb-1">PDF Preview:</p>
+                      <ul className="space-y-1 list-disc list-inside">
+                        {pdfOptions.brandedCover && (
+                          <li>Page 1: Professional cover page with company branding</li>
+                        )}
+                        <li>Quote details with customer information</li>
+                        <li>
+                          Line items table 
+                          {pdfOptions.showPricing ? " with pricing" : " without pricing"}
+                        </li>
+                        {pdfOptions.productRenderings && quote?.images && quote.images.length > 0 && (
+                          <li>Product renderings section ({quote.images.length} images)</li>
+                        )}
+                        {quote.notes && <li>Additional notes</li>}
+                      </ul>
+                    </div>
+                  </div>
                 </div>
               </CardContent>
             </Card>
