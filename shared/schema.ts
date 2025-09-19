@@ -410,7 +410,7 @@ export type InsertProductAccessory = z.infer<typeof insertProductAccessorySchema
 export type QuoteWithDetails = Quote & {
   account: Account;
   customer: Account; // Legacy alias for backward compatibility
-  lineItems: LineItem[];
+  lineItems: (LineItem & { manufacturer?: string })[];
   contractTemplate?: ContractTemplate;
   proposalTemplate?: ProposalTemplate;
   contacts?: Contact[]; // Associated contacts for the project

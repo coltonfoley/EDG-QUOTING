@@ -217,7 +217,6 @@ export default function QuoteBuilder() {
     taxRate: "8.5",
     discount: "0",
     shipping: "0",
-    status: "draft" as const,
     dealStage: "new_lead",
     lostReason: null,
     contractTemplateId: null,

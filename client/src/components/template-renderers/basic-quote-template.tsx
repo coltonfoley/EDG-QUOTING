@@ -134,6 +134,7 @@ export function BasicQuoteTemplate({ quote, template, companyInfo, quoteTerms }:
           <thead>
             <tr className="bg-gray-50">
               <th className="border border-gray-300 px-3 py-2 text-left">Description</th>
+              <th className="border border-gray-300 px-3 py-2 text-left">Manufacturer</th>
               <th className="border border-gray-300 px-3 py-2 text-center">Qty</th>
               <th className="border border-gray-300 px-3 py-2 text-right">Rate</th>
               <th className="border border-gray-300 px-3 py-2 text-right">Amount</th>
@@ -150,9 +151,13 @@ export function BasicQuoteTemplate({ quote, template, companyInfo, quoteTerms }:
                 : baseTotal + markup;
               const rateWithMarkup = total / qty;
 
+              // Use actual manufacturer data from line item (includes fallback logic from backend)
+              const manufacturer = item.manufacturer || "Uncategorized";
+
               return (
                 <tr key={index}>
                   <td className="border border-gray-300 px-3 py-2">{item.description}</td>
+                  <td className="border border-gray-300 px-3 py-2">{manufacturer}</td>
                   <td className="border border-gray-300 px-3 py-2 text-center">{item.quantity}</td>
                   <td className="border border-gray-300 px-3 py-2 text-right">{formatCurrency(rateWithMarkup)}</td>
                   <td className="border border-gray-300 px-3 py-2 text-right font-medium">
