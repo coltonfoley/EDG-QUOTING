@@ -706,6 +706,25 @@ export function QuoteImporter({ onImportComplete, onClose }: QuoteImporterProps)
     });
   };
 
+  const cleanDescriptions = () => {
+    if (!editedData) return;
+    
+    const updatedLineItems = editedData.lineItems.map(item => ({
+      ...item,
+      description: item.description.replace(/^\[.*?\]\s+/, ''),
+    }));
+    
+    setEditedData({
+      ...editedData,
+      lineItems: updatedLineItems,
+    });
+    
+    toast({
+      title: "Descriptions Cleaned",
+      description: "Removed filename prefixes from all line items",
+    });
+  };
+
   return (
     <Card className="w-full max-w-4xl mx-auto">
       <CardHeader>
@@ -1057,6 +1076,14 @@ export function QuoteImporter({ onImportComplete, onClose }: QuoteImporterProps)
                       >
                         Clear Costs
                       </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={cleanDescriptions}
+                        data-testid="button-clean-descriptions"
+                      >
+                        Clean Descriptions
+                      </Button>
                     </div>
                   </div>
                   <p className="text-sm text-gray-600">
@@ -1234,8 +1261,8 @@ export function QuoteImporter({ onImportComplete, onClose }: QuoteImporterProps)
                           <div className="space-y-2">
                             <div className="flex justify-between items-center">
                               <h4 className="font-semibold text-sm">Selected Quote: {selectedQuote.quoteNumber}</h4>
-                              <Badge variant={selectedQuote.status === 'approved' ? 'default' : 'secondary'}>
-                                {selectedQuote.status}
+                              <Badge variant={selectedQuote.dealStage === 'closed_won' ? 'default' : 'secondary'}>
+                                {selectedQuote.dealStage}
                               </Badge>
                             </div>
                             <div className="grid grid-cols-2 gap-4 text-sm">
