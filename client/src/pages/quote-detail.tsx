@@ -105,6 +105,25 @@ export default function QuoteDetail() {
     return color;
   };
 
+  // Safe background color function for PDF generation
+  const getBackgroundColor = (color: string): string => {
+    if (/^#([0-9A-Fa-f]{3}){1,2}$/.test(color)) {
+      // It's a hex color - handle both 3-digit and 6-digit
+      let hexValue = color.replace('#', '');
+      
+      // Expand 3-digit hex to 6-digit (e.g., 'abc' -> 'aabbcc')
+      if (hexValue.length === 3) {
+        hexValue = hexValue.split('').map(char => char + char).join('');
+      }
+      
+      // Convert to rgba
+      const rgb = hexValue.match(/.{2}/g)?.map(x => parseInt(x, 16)).join(', ');
+      return rgb ? `rgba(${rgb}, 0.05)` : 'rgba(0, 0, 0, 0.03)';
+    }
+    // Non-hex color - use safe fallback
+    return 'rgba(0, 0, 0, 0.03)';
+  };
+
   // PDF Generation mutation with simplified logic based on toggles
   const generatePDFMutation = useMutation({
     mutationFn: async (options: typeof pdfOptions) => {
@@ -115,70 +134,262 @@ export default function QuoteDetail() {
       const generatePDFContent = () => {
         let htmlContent = '';
         
-        // Add common styles
+        // Add enhanced professional styles
+        const primaryColor = getSafeColor(settings.primaryColor, '#0066cc');
+        const accentColor = getSafeColor(settings.accentColor, '#10b981');
+        const textColor = getSafeColor(settings.textColor, '#374151');
+        
         htmlContent += `
           <style>
             body { 
-              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
               line-height: 1.6;
-              color: #000;
+              color: ${textColor};
               margin: 0;
-              padding: 20px;
+              padding: 0;
+              background: #ffffff;
             }
-            .header { border-bottom: 2px solid #0066cc; padding-bottom: 20px; margin-bottom: 20px; }
-            .company-info { font-size: 14px; color: #666; }
-            .quote-title { font-size: 24px; font-weight: bold; color: #0066cc; margin: 10px 0; }
+            
+            /* Professional Cover Page Styles */
+            .cover-page { 
+              width: 100vw;
+              height: 100vh;
+              padding: 40px 60px;
+              page-break-after: always; 
+              display: flex;
+              flex-direction: column;
+              justify-content: space-between;
+              box-sizing: border-box;
+              background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+            }
+            
+            .cover-header {
+              display: flex;
+              align-items: center;
+              justify-content: space-between;
+              padding-bottom: 30px;
+              border-bottom: 3px solid ${primaryColor};
+              margin-bottom: 40px;
+            }
+            
+            .logo-section {
+              display: flex;
+              align-items: center;
+              gap: 20px;
+            }
+            
+            .company-logo {
+              max-height: 80px;
+              max-width: 120px;
+              object-fit: contain;
+            }
+            
+            .company-name {
+              font-size: 32px;
+              font-weight: 700;
+              color: ${primaryColor};
+              margin: 0;
+              letter-spacing: -0.5px;
+            }
+            
+            .contact-info {
+              text-align: right;
+              color: ${textColor};
+              font-size: 14px;
+              line-height: 1.8;
+            }
+            
+            .contact-info strong {
+              color: ${primaryColor};
+              font-weight: 600;
+            }
+            
+            .quote-header {
+              text-align: center;
+              margin: 60px 0;
+              padding: 40px 0;
+              background: ${getBackgroundColor(primaryColor)};
+              border-radius: 12px;
+              border: 2px solid ${accentColor};
+            }
+            
+            .construction-quote-title {
+              font-size: 28px;
+              font-weight: 800;
+              color: ${primaryColor};
+              text-transform: uppercase;
+              letter-spacing: 2px;
+              margin: 0 0 20px 0;
+            }
+            
+            .quote-meta {
+              display: grid;
+              grid-template-columns: 1fr 1fr;
+              gap: 40px;
+              margin: 30px 0;
+            }
+            
+            .quote-number {
+              font-size: 20px;
+              font-weight: 700;
+              color: ${primaryColor};
+            }
+            
+            .quote-date {
+              font-size: 16px;
+              color: ${textColor};
+              font-weight: 600;
+            }
+            
+            .customer-project-section {
+              display: grid;
+              grid-template-columns: 1fr 1fr;
+              gap: 50px;
+              margin: 40px 0;
+            }
+            
+            .info-block {
+              background: #ffffff;
+              padding: 25px;
+              border-radius: 8px;
+              border-left: 4px solid ${accentColor};
+              box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+            }
+            
+            .info-block h3 {
+              font-size: 18px;
+              font-weight: 700;
+              color: ${primaryColor};
+              margin: 0 0 15px 0;
+              text-transform: uppercase;
+              letter-spacing: 0.5px;
+            }
+            
+            .info-block p {
+              margin: 8px 0;
+              font-size: 14px;
+              line-height: 1.6;
+            }
+            
+            .info-block strong {
+              color: ${textColor};
+              font-weight: 600;
+            }
+            
+            .separator-line {
+              width: 100%;
+              height: 2px;
+              background: linear-gradient(90deg, ${primaryColor} 0%, ${accentColor} 50%, ${primaryColor} 100%);
+              margin: 30px 0;
+              border: none;
+            }
+            
+            .footer-branding {
+              text-align: center;
+              padding: 30px 0;
+              border-top: 2px solid ${accentColor};
+              margin-top: auto;
+            }
+            
+            .footer-text {
+              font-size: 14px;
+              color: ${textColor};
+              font-style: italic;
+            }
+            
+            .footer-accent {
+              color: ${primaryColor};
+              font-weight: 600;
+            }
+            
+            /* Existing content styles */
+            .header { border-bottom: 2px solid ${primaryColor}; padding-bottom: 20px; margin-bottom: 20px; }
             .section { margin: 20px 0; page-break-inside: avoid; }
-            .section-title { font-size: 18px; font-weight: bold; margin-bottom: 10px; border-bottom: 1px solid #ddd; padding-bottom: 5px; }
+            .section-title { font-size: 18px; font-weight: bold; margin-bottom: 10px; border-bottom: 1px solid #ddd; padding-bottom: 5px; color: ${primaryColor}; }
             table { width: 100%; border-collapse: collapse; margin: 10px 0; }
             th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-            th { background-color: #f5f5f5; font-weight: bold; }
+            th { background-color: #f5f5f5; font-weight: bold; color: ${primaryColor}; }
             .total-row { font-weight: bold; background-color: #f9f9f9; }
-            .cover-page { text-align: center; page-break-after: always; padding: 100px 20px; }
             .image-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin: 20px 0; }
             .image-item { text-align: center; }
             .image-item img { max-width: 100%; height: auto; max-height: 300px; border-radius: 8px; }
+            
             @media print { 
-              @page { margin: 20mm; }
+              @page { 
+                margin: 15mm;
+                size: letter;
+              }
               .page-break { page-break-before: always; }
+              .cover-page { height: 100vh; }
+              body { -webkit-print-color-adjust: exact; color-adjust: exact; }
             }
           </style>
         `;
 
-        // Branded Cover Page
+        // Professional Branded Cover Page
         if (options.brandedCover) {
-          const safeColor = getSafeColor(settings.primaryColor);
           htmlContent += `
             <div class="cover-page">
-              <div class="header">
-                <h1 style="font-size: 32px; color: ${safeColor}; margin-bottom: 10px;">${escapeHtml(settings.companyName)}</h1>
-                <div class="company-info">
-                  ${settings.address ? `<p>${escapeHtml(settings.address)}</p>` : ''}
-                  <p>
-                    ${settings.phone ? `Phone: ${escapeHtml(settings.phone)}` : ''}
-                    ${settings.phone && settings.email ? ' | ' : ''}
-                    ${settings.email ? `Email: ${escapeHtml(settings.email)}` : ''}
-                  </p>
-                  ${settings.website ? `<p>Website: ${escapeHtml(settings.website)}</p>` : ''}
+              <!-- Company Header Section -->
+              <div class="cover-header">
+                <div class="logo-section">
+                  ${settings.logo ? `<img src="${escapeHtml(settings.logo)}" alt="${escapeHtml(settings.companyName)} Logo" class="company-logo" />` : ''}
+                  <h1 class="company-name">${escapeHtml(settings.companyName)}</h1>
+                </div>
+                <div class="contact-info">
+                  ${settings.address ? `<div><strong>Address:</strong><br>${escapeHtml(settings.address).replace(/\n/g, '<br>')}</div>` : ''}
+                  <div style="margin-top: 10px;">
+                    ${settings.phone ? `<strong>Phone:</strong> ${escapeHtml(settings.phone)}<br>` : ''}
+                    ${settings.email ? `<strong>Email:</strong> ${escapeHtml(settings.email)}<br>` : ''}
+                    ${settings.website ? `<strong>Website:</strong> ${escapeHtml(settings.website)}` : ''}
+                  </div>
                 </div>
               </div>
-              <div style="margin: 40px 0;">
-                <h2 class="quote-title" style="color: ${safeColor};">${escapeHtml(quote.projectName || `Quote ${quote.quoteNumber}`)}</h2>
-                <p style="font-size: 18px; color: #666;">Quote #${escapeHtml(quote.quoteNumber)}</p>
-                <p style="font-size: 16px; color: #666;">Prepared for: ${escapeHtml(quote.customer?.name || 'Customer')}</p>
-                ${quote.customer?.company ? `<p style="font-size: 16px; color: #666;">${escapeHtml(quote.customer.company)}</p>` : ''}
-                <p style="font-size: 14px; color: #999; margin-top: 40px;">
-                  Generated on ${format(new Date(), 'MMMM do, yyyy')}
+              
+              <hr class="separator-line" />
+              
+              <!-- Quote Header Section -->
+              <div class="quote-header">
+                <h2 class="construction-quote-title">Construction Quote</h2>
+                <div class="quote-meta">
+                  <div class="quote-number">Quote #: ${escapeHtml(quote.quoteNumber)}</div>
+                  <div class="quote-date">Date: ${format(new Date(), 'MMMM do, yyyy')}</div>
+                </div>
+              </div>
+              
+              <!-- Customer and Project Information -->
+              <div class="customer-project-section">
+                <div class="info-block">
+                  <h3>Prepared for:</h3>
+                  <p><strong>Name:</strong> ${escapeHtml(quote.customer?.name || 'Customer Name Not Provided')}</p>
+                  ${quote.customer?.company ? `<p><strong>Company:</strong> ${escapeHtml(quote.customer.company)}</p>` : ''}
+                  ${quote.customer?.email ? `<p><strong>Email:</strong> ${escapeHtml(quote.customer.email)}</p>` : ''}
+                  ${quote.customer?.phone ? `<p><strong>Phone:</strong> ${escapeHtml(quote.customer.phone)}</p>` : ''}
+                </div>
+                
+                <div class="info-block">
+                  <h3>Project:</h3>
+                  ${quote.projectName ? `<p><strong>Project Name:</strong> ${escapeHtml(quote.projectName)}</p>` : `<p><strong>Project Name:</strong> Quote ${escapeHtml(quote.quoteNumber)}</p>`}
+                  ${quote.projectAddress ? `<p><strong>Project Address:</strong><br>${escapeHtml(quote.projectAddress).replace(/\n/g, '<br>')}</p>` : ''}
+                  ${quote.jobsiteAddress && quote.jobsiteAddress !== quote.projectAddress ? `<p><strong>Jobsite Address:</strong><br>${escapeHtml(quote.jobsiteAddress).replace(/\n/g, '<br>')}</p>` : ''}
+                  ${quote.estimatedStartDate ? `<p><strong>Estimated Start:</strong> ${escapeHtml(quote.estimatedStartDate)}</p>` : ''}
+                </div>
+              </div>
+              
+              <hr class="separator-line" />
+              
+              <!-- Footer Branding -->
+              <div class="footer-branding">
+                <p class="footer-text">
+                  Professional construction services by <span class="footer-accent">${escapeHtml(settings.companyName)}</span>
                 </p>
+                ${settings.website ? `<p class="footer-text" style="margin-top: 10px;">Learn more at <span class="footer-accent">${escapeHtml(settings.website)}</span></p>` : ''}
               </div>
             </div>
           `;
         }
 
-        // Quote Details Section - only add page break if branded cover was shown
-        if (options.brandedCover) {
-          htmlContent += '<div class="page-break"></div>';
-        }
+        // Quote Details Section - CSS page-break-after on .cover-page handles page break automatically
         htmlContent += `
           <div class="section">
             <h2 class="section-title">Quote Details</h2>
