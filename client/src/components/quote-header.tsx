@@ -18,7 +18,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { ImageUploader, type UploadedImage } from "@/components/image-uploader";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { cn, mapDealStageToStatus } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import { debounce } from "lodash";
 import { DEAL_STAGES } from "@shared/dealStageConstants";
 
@@ -128,7 +128,6 @@ export function QuoteHeader({ quote, onSave, isLoading, onUploadStatesChange }: 
       projectAddress: quote?.projectAddress || "",
       estimatedStartDate: quote?.estimatedStartDate || "",
       notes: quote?.notes || "",
-      status: quote?.status || "draft",
       dealStage: quote?.dealStage || "new_lead",
       taxRate: quote?.taxRate || "0",
       discount: quote?.discount || "0",
@@ -230,7 +229,6 @@ export function QuoteHeader({ quote, onSave, isLoading, onUploadStatesChange }: 
         projectAddress: quote.projectAddress || "",
         estimatedStartDate: quote.estimatedStartDate || "",
         notes: quote.notes || "",
-        status: quote.status || "draft",
         dealStage: quote.dealStage || "new_lead",
         taxRate: quote.taxRate || "0",
         discount: quote.discount || "0",
@@ -264,22 +262,15 @@ export function QuoteHeader({ quote, onSave, isLoading, onUploadStatesChange }: 
     }
   }, [portfolioImages, technicalDiagrams, companyImages, onUploadStatesChange]);
 
-  const updateStatusMutation = useMutation({
-    mutationFn: async ({ status, dealStage }: { status: string; dealStage?: string }) => {
+  const updateDealStageMutation = useMutation({
+    mutationFn: async ({ dealStage }: { dealStage: string }) => {
       if (!quote?.id) throw new Error("No quote ID");
-      const updateData: any = { status };
-      if (dealStage !== undefined) {
-        updateData.dealStage = dealStage;
-      }
-      const response = await apiRequest('PUT', `/api/quotes/${quote.id}`, updateData);
+      const response = await apiRequest('PUT', `/api/quotes/${quote.id}`, { dealStage });
       return response.json();
     },
     onSuccess: (updatedQuote, variables) => {
-      // Update form state to match the new status and dealStage
-      form.setValue("status", variables.status);
-      if (variables.dealStage) {
-        form.setValue("dealStage", variables.dealStage);
-      }
+      // Update form state to match the new dealStage
+      form.setValue("dealStage", variables.dealStage);
       toast({ title: "Quote updated successfully" });
       queryClient.invalidateQueries({ queryKey: [`/api/quotes/${quote?.id}`] });
       queryClient.invalidateQueries({ queryKey: ["/api/quotes"] });
@@ -293,32 +284,16 @@ export function QuoteHeader({ quote, onSave, isLoading, onUploadStatesChange }: 
     },
   });
   
-  // Handle deal stage change with automatic status synchronization
+  // Handle deal stage change
   const handleDealStageChange = (newDealStage: string) => {
-    const newStatus = mapDealStageToStatus(newDealStage);
     form.setValue("dealStage", newDealStage);
-    form.setValue("status", newStatus);
     
     // If editing an existing quote, update immediately
     if (quote?.id) {
-      updateStatusMutation.mutate({ status: newStatus, dealStage: newDealStage });
+      updateDealStageMutation.mutate({ dealStage: newDealStage });
     }
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "draft":
-        return "bg-yellow-100 text-yellow-800";
-      case "sent":
-        return "bg-blue-100 text-blue-800";
-      case "approved":
-        return "bg-green-100 text-green-800";
-      case "rejected":
-        return "bg-red-100 text-red-800";
-      default:
-        return "bg-gray-100 text-gray-800";
-    }
-  };
 
   const handleSubmit = (data: QuoteFormData) => {
     // If images are still uploading, set pending save and return
@@ -393,7 +368,7 @@ export function QuoteHeader({ quote, onSave, isLoading, onUploadStatesChange }: 
                   <Select
                     value={form.watch("dealStage")}
                     onValueChange={handleDealStageChange}
-                    disabled={updateStatusMutation.isPending}
+                    disabled={updateDealStageMutation.isPending}
                   >
                     <SelectTrigger className="w-48">
                       <SelectValue />
@@ -406,15 +381,6 @@ export function QuoteHeader({ quote, onSave, isLoading, onUploadStatesChange }: 
                       ))}
                     </SelectContent>
                   </Select>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <span className="text-sm font-medium text-gray-700">Status:</span>
-                  <Badge className={getStatusColor(form.watch("status") || "draft")}>
-                    {form.watch("status") === "draft" && "Draft"}
-                    {form.watch("status") === "sent" && "Sent"}
-                    {form.watch("status") === "approved" && "Approved"}
-                    {form.watch("status") === "rejected" && "Rejected"}
-                  </Badge>
                 </div>
               </>
             )}

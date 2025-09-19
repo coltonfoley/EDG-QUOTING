@@ -369,12 +369,6 @@ export default function QuoteDetail() {
               </CardHeader>
               <CardContent className="space-y-3">
                 <div>
-                  <p className="text-sm text-gray-600">Status</p>
-                  <p className="font-medium capitalize">
-                    {quote.status || 'draft'}
-                  </p>
-                </div>
-                <div>
                   <p className="text-sm text-gray-600">Created</p>
                   <p className="font-medium">
                     {quote.createdAt ? format(new Date(quote.createdAt), 'PPP') : 'N/A'}
