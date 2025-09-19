@@ -1,4 +1,4 @@
-import { accounts, customers, contacts, quotes, lineItems, products, users, contractTemplates, proposalTemplates, pricingTables, productAccessories, companySettings, type Account, type Customer, type Contact, type Quote, type LineItem, type Product, type User, type ContractTemplate, type ProposalTemplate, type PricingTable, type ProductAccessory, type CompanySettings, type InsertAccount, type InsertCustomer, type InsertContact, type InsertQuote, type InsertLineItem, type InsertProduct, type InsertUser, type InsertContractTemplate, type InsertProposalTemplate, type InsertPricingTable, type InsertProductAccessory, type InsertCompanySettings, type QuoteWithDetails, type ProductWithDetails } from "@shared/schema";
+import { accounts, customers, contacts, quotes, quoteImages, lineItems, products, users, contractTemplates, proposalTemplates, pricingTables, productAccessories, companySettings, type Account, type Customer, type Contact, type Quote, type QuoteImage, type LineItem, type Product, type User, type ContractTemplate, type ProposalTemplate, type PricingTable, type ProductAccessory, type CompanySettings, type InsertAccount, type InsertCustomer, type InsertContact, type InsertQuote, type InsertQuoteImage, type InsertLineItem, type InsertProduct, type InsertUser, type InsertContractTemplate, type InsertProposalTemplate, type InsertPricingTable, type InsertProductAccessory, type InsertCompanySettings, type QuoteWithDetails, type ProductWithDetails } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, inArray, sql, and, ne, or, ilike } from "drizzle-orm";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
@@ -72,6 +72,12 @@ export interface IStorage {
   createQuote(quote: InsertQuote): Promise<Quote>;
   updateQuote(id: number, quote: Partial<InsertQuote>): Promise<Quote | undefined>;
   deleteQuote(id: number): Promise<boolean>;
+
+  // Quote images methods
+  getQuoteImages(quoteId: number): Promise<QuoteImage[]>;
+  addQuoteImage(quoteId: number, imageData: InsertQuoteImage): Promise<QuoteImage>;
+  deleteQuoteImage(imageId: number): Promise<boolean>;
+  updateQuoteImageOrder(quoteId: number, imageIds: number[]): Promise<boolean>;
 
   // Product methods
   getAllProducts(): Promise<Product[]>;
@@ -937,9 +943,56 @@ export class DatabaseStorage implements IStorage {
     // Delete associated line items first
     await db.delete(lineItems).where(eq(lineItems.quoteId, id));
     
+    // Delete associated quote images
+    await db.delete(quoteImages).where(eq(quoteImages.quoteId, id));
+    
     // Then delete the quote
     const result = await db.delete(quotes).where(eq(quotes.id, id));
     return (result.rowCount || 0) > 0;
+  }
+
+  // Quote images methods
+  async getQuoteImages(quoteId: number): Promise<QuoteImage[]> {
+    return await db
+      .select()
+      .from(quoteImages)
+      .where(eq(quoteImages.quoteId, quoteId))
+      .orderBy(quoteImages.displayOrder, quoteImages.createdAt);
+  }
+
+  async addQuoteImage(quoteId: number, imageData: InsertQuoteImage): Promise<QuoteImage> {
+    // Set the quoteId and ensure the insert data is valid
+    const insertData = {
+      ...imageData,
+      quoteId,
+    };
+
+    const [image] = await db
+      .insert(quoteImages)
+      .values(insertData)
+      .returning();
+    return image;
+  }
+
+  async deleteQuoteImage(imageId: number): Promise<boolean> {
+    const result = await db.delete(quoteImages).where(eq(quoteImages.id, imageId));
+    return (result.rowCount || 0) > 0;
+  }
+
+  async updateQuoteImageOrder(quoteId: number, imageIds: number[]): Promise<boolean> {
+    try {
+      // Update display order for each image
+      for (let i = 0; i < imageIds.length; i++) {
+        await db
+          .update(quoteImages)
+          .set({ displayOrder: i })
+          .where(and(eq(quoteImages.id, imageIds[i]), eq(quoteImages.quoteId, quoteId)));
+      }
+      return true;
+    } catch (error) {
+      console.error('Error updating quote image order:', error);
+      return false;
+    }
   }
 
   async getLineItem(id: number): Promise<LineItem | undefined> {

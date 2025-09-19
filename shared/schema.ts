@@ -103,6 +103,23 @@ export const quotes = pgTable("quotes", {
   index("idx_quotes_account_created").on(table.accountId, table.createdAt),
 ]);
 
+// Quote images table for product renderings and visual assets per quote
+export const quoteImages = pgTable("quote_images", {
+  id: serial("id").primaryKey(),
+  quoteId: integer("quote_id").notNull(),
+  fileName: text("file_name").notNull(), // original filename
+  filePath: text("file_path").notNull(), // storage path or URL
+  fileSize: integer("file_size").notNull(), // file size in bytes
+  mimeType: text("mime_type").notNull(), // image mime type
+  altText: text("alt_text"), // optional accessibility text
+  displayOrder: integer("display_order").notNull().default(0), // ordering for display
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_quote_images_quote_id").on(table.quoteId),
+  index("idx_quote_images_display_order").on(table.quoteId, table.displayOrder),
+]);
+
 // Contract templates for reusable contract terms
 export const contractTemplates = pgTable("contract_templates", {
   id: serial("id").primaryKey(),
@@ -311,6 +328,19 @@ export const insertQuoteSchema = createInsertSchema(quotes).omit({
   companyImages: z.array(companyImageSchema).optional(),
 });
 
+export const insertQuoteImageSchema = createInsertSchema(quoteImages).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  fileName: z.string().min(1, "File name is required"),
+  filePath: z.string().min(1, "File path is required"),
+  fileSize: z.number().min(1, "File size must be greater than 0").max(10 * 1024 * 1024, "File size cannot exceed 10MB"),
+  mimeType: z.string().regex(/^image\/(jpeg|jpg|png|webp|gif)$/i, "Must be a valid image type (JPEG, PNG, WebP, GIF)"),
+  altText: z.string().optional().nullable(),
+  displayOrder: z.number().int().min(0).default(0),
+});
+
 export const insertProductSchema = createInsertSchema(products).omit({
   id: true,
   createdAt: true,
@@ -399,6 +429,7 @@ export type Account = typeof accounts.$inferSelect;
 export type Contact = typeof contacts.$inferSelect;
 export type Customer = typeof accounts.$inferSelect; // Legacy alias
 export type Quote = typeof quotes.$inferSelect;
+export type QuoteImage = typeof quoteImages.$inferSelect;
 export type Product = typeof products.$inferSelect;
 export type LineItem = typeof lineItems.$inferSelect;
 export type ContractTemplate = typeof contractTemplates.$inferSelect;
@@ -411,6 +442,7 @@ export type InsertAccount = z.infer<typeof insertAccountSchema>;
 export type InsertContact = z.infer<typeof insertContactSchema>;
 export type InsertCustomer = z.infer<typeof insertAccountSchema>; // Legacy alias
 export type InsertQuote = z.infer<typeof insertQuoteSchema>;
+export type InsertQuoteImage = z.infer<typeof insertQuoteImageSchema>;
 export type InsertProduct = z.infer<typeof insertProductSchema>;
 export type InsertLineItem = z.infer<typeof insertLineItemSchema>;
 export type InsertContractTemplate = z.infer<typeof insertContractTemplateSchema>;
