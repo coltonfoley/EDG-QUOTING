@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { Trash2, Plus, Package, Search, Filter, X } from "lucide-react";
+import { Trash2, Plus, Package, Search, Filter, X, FileText, Loader2 } from "lucide-react";
 import { formatCurrency, calculateLineItemTotal, calculateLineItemMargin, applyDiscountToPrice, isValidNumber, clampValue, roundCurrency } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -38,6 +38,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
   const [selectedConfigurableProduct, setSelectedConfigurableProduct] = useState<Product | null>(null);
   const [dimensions, setDimensions] = useState({ length: "", width: "" });
   const [calculatedPrice, setCalculatedPrice] = useState<number | null>(null);
+  const [isCleaningDescriptions, setIsCleaningDescriptions] = useState(false);
   
   // Debounced save timeout refs
   const debounceTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
@@ -148,7 +149,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
     setLocalValues(prev => ({
       ...prev,
       [itemId]: {
-        ...prev[itemId],
+        ...(prev[itemId] ?? {}),
         [field]: value
       }
     }));
@@ -299,17 +300,21 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
   });
 
   const updateLineItemMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: number; data: any }) => {
+    mutationFn: async ({ id, data, skipInvalidation }: { id: number; data: any; skipInvalidation?: boolean }) => {
       const response = await apiRequest("PUT", `/api/line-items/${id}`, data);
-      return response.json();
+      return { ...response.json(), skipInvalidation };
     },
-    onSuccess: (_, { id }) => {
+    onSuccess: (result, { id }) => {
       // Clear the pending mutation reference
       const updateKey = `update-${id}`;
       delete pendingMutations.current.update[updateKey];
       
-      queryClient.invalidateQueries({ queryKey: ["/api/quotes"] });
-      queryClient.invalidateQueries({ queryKey: [`/api/quotes/${quoteId}`] });
+      // Only invalidate if not skipping (batch operations will handle invalidation separately)
+      if (!result.skipInvalidation) {
+        queryClient.invalidateQueries({ queryKey: ["/api/quotes"] });
+        queryClient.invalidateQueries({ queryKey: [`/api/quotes/${quoteId}`] });
+      }
+      
       // Clear validation errors for this item on successful save
       setValidationErrors(prev => {
         const newErrors = { ...prev };
@@ -453,6 +458,94 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
     }
   };
 
+  // Clean descriptions function to remove PDF filename prefixes
+  const cleanDescriptions = async () => {
+    if (!lineItems.length) {
+      toast({ title: "No Items", description: "No line items to clean", variant: "destructive" });
+      return;
+    }
+
+    // Find items that have filename prefixes to clean
+    const itemsToClean = lineItems.filter(item => 
+      /^\[.*?\]\s+/.test(item.description)
+    );
+
+    if (itemsToClean.length === 0) {
+      toast({ title: "Nothing to Clean", description: "No filename prefixes found in descriptions" });
+      return;
+    }
+
+    setIsCleaningDescriptions(true);
+    let successCount = 0;
+    let errorCount = 0;
+
+    // Cancel any outstanding debounced saves to prevent race conditions
+    Object.values(debounceTimers.current).forEach(timer => clearTimeout(timer));
+    debounceTimers.current = {};
+
+    try {
+      // Update each item that needs cleaning (with batch invalidation)
+      for (const item of itemsToClean) {
+        try {
+          const cleanedDescription = item.description.replace(/^\[.*?\]\s+/, '');
+          
+          // Update local state immediately for feedback
+          setLocalValues(prev => ({
+            ...prev,
+            [item.id]: {
+              ...(prev[item.id] ?? {}),
+              description: cleanedDescription
+            }
+          }));
+
+          // Update on server with skipInvalidation to prevent individual query refetches
+          await updateLineItemMutation.mutateAsync({ 
+            id: item.id, 
+            data: { description: cleanedDescription },
+            skipInvalidation: true
+          });
+          
+          successCount++;
+        } catch (error) {
+          errorCount++;
+          console.error(`Failed to clean description for item ${item.id}:`, error);
+        }
+      }
+
+      // Perform batch invalidation after all updates are complete
+      queryClient.invalidateQueries({ queryKey: ["/api/quotes"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/quotes/${quoteId}`] });
+
+      // Show results
+      if (successCount > 0 && errorCount === 0) {
+        toast({ 
+          title: "Descriptions Cleaned", 
+          description: `Successfully cleaned ${successCount} description${successCount > 1 ? 's' : ''}` 
+        });
+      } else if (successCount > 0 && errorCount > 0) {
+        toast({ 
+          title: "Partial Success", 
+          description: `Cleaned ${successCount} descriptions, ${errorCount} failed`,
+          variant: "default"
+        });
+      } else {
+        toast({ 
+          title: "Cleanup Failed", 
+          description: "Failed to clean any descriptions",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      toast({ 
+        title: "Error", 
+        description: "An error occurred while cleaning descriptions",
+        variant: "destructive"
+      });
+    } finally {
+      setIsCleaningDescriptions(false);
+    }
+  };
+
   // Product filtering logic
   const categories = useMemo(() => {
     if (!products) return [];
@@ -494,6 +587,20 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
             Line Items
           </h2>
           <div className="flex space-x-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={cleanDescriptions}
+              disabled={isUnsavedQuote || isCleaningDescriptions}
+              data-testid="button-clean-descriptions"
+            >
+              {isCleaningDescriptions ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <FileText className="mr-2 h-4 w-4" />
+              )}
+              Clean Descriptions
+            </Button>
             <Dialog open={showProductDialog} onOpenChange={setShowProductDialog}>
               <DialogTrigger asChild>
                 <Button
