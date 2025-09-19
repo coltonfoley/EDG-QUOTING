@@ -13,14 +13,12 @@ import { AlertTriangle, RefreshCw } from "lucide-react";
 import NotFound from "@/pages/not-found";
 import Quotes from "@/pages/quotes";
 import QuoteBuilder from "@/pages/quote-builder";
-import QuoteDetail from "@/pages/quote-detail";
 import Products from "@/pages/products";
 import Landing from "@/pages/landing";
 import Home from "@/pages/home";
 import AuthPage from "@/pages/auth-page";
 import AdminPage from "@/pages/admin";
 import AdminTemplatesPage from "@/pages/admin-templates";
-import AdminSettings from "@/pages/admin-settings";
 import ContractsPage from "@/pages/contracts";
 import Accounts from "@/pages/accounts";
 import AccountDetail from "@/pages/account-detail";
@@ -99,14 +97,12 @@ function Router() {
           <Route path="/pipeline" component={Pipeline} />
           <Route path="/quotes/new" component={QuoteBuilder} />
           <Route path="/quotes/:id/edit" component={QuoteBuilder} />
-          <Route path="/quotes/:id" component={QuoteDetail} />
           <Route path="/products" component={Products} />
           <Route path="/contracts">
             <Redirect to="/admin/contracts" />
           </Route>
           <Route path="/admin" component={AdminPage} />
           <Route path="/admin/templates" component={AdminTemplatesPage} />
-          <Route path="/admin/settings" component={AdminSettings} />
           <Route path="/admin/contracts" component={ContractsPage} />
           {/* Catch-all for not found pages */}
           <Route component={NotFound} />
