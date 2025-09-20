@@ -11,21 +11,17 @@ import {
   insertContactSchema,
   insertCustomerSchema,
   insertQuoteSchema,
-  insertQuoteImageSchema,
   insertLineItemSchema,
   insertProductSchema,
   insertContractTemplateSchema,
   insertProposalTemplateSchema,
   insertPricingTableSchema,
   insertProductAccessorySchema,
-  insertCompanySettingsSchema,
   createUserSchema,
   updateUserSchema,
   idParamSchema,
   queryIdParamSchema,
   productIdParamSchema,
-  imageIdParamSchema,
-  updateImageOrderSchema,
   uploadUrlSchema,
   finalizeUploadSchema,
   imageProxySchema,
@@ -37,6 +33,7 @@ import {
 } from "./validation-schemas";
 import multer from "multer";
 import * as XLSX from "xlsx";
+import parsePDF from "pdf-parse";
 import { extractProductsFromImage, extractProductsFromText, extractQuoteDataFromText } from "./openai";
 import type { ExtractedProduct } from "./openai";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
@@ -2204,282 +2201,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Company settings routes (protected)
-  app.get('/api/company-settings', isAuthenticated, async (req, res) => {
-    try {
-      let settings = await storage.getCompanySettings();
-      
-      // If no settings exist, create default record
-      if (!settings) {
-        const defaultSettings = {
-          companyName: "EDG",
-          address: "",
-          phone: "",
-          email: "",
-          website: "",
-          logo: "",
-          primaryColor: "#3b82f6",
-          accentColor: "#10b981",
-          textColor: "#374151"
-        };
-        
-        // Create the default record in the database to ensure proper typing
-        settings = await storage.updateCompanySettings(defaultSettings);
-      }
-      
-      res.json(settings);
-    } catch (error) {
-      console.error("Error fetching company settings:", error);
-      res.status(500).json({ message: "Failed to fetch company settings" });
-    }
-  });
 
-  app.put('/api/company-settings', isAuthenticated, async (req: any, res) => {
-    try {
-      const currentUser = await storage.getUser(req.user?.id);
-      if (currentUser?.role !== 'admin') {
-        return res.status(403).json({ message: "Admin access required" });
-      }
 
-      const validatedData = insertCompanySettingsSchema.parse(req.body);
-      const settings = await storage.updateCompanySettings(validatedData);
-      
-      res.json(settings);
-    } catch (error) {
-      console.error("Error updating company settings:", error);
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ 
-          message: "Validation error", 
-          errors: error.errors 
-        });
-      }
-      res.status(500).json({ message: "Failed to update company settings" });
-    }
-  });
 
-  // Quote Images API Routes
-
-  // GET /api/quotes/:id/images - fetch images for quote
-  app.get('/api/quotes/:id/images', isAuthenticated, async (req, res) => {
-    try {
-      const params = idParamSchema.safeParse(req.params);
-      if (!params.success) {
-        return res.status(400).json({
-          message: "Invalid quote ID parameter",
-          errors: params.error.issues
-        });
-      }
-
-      const quoteId = params.data.id;
-      
-      // Verify quote exists and user has access
-      const quote = await storage.getQuote(quoteId);
-      if (!quote) {
-        return res.status(404).json({ message: "Quote not found" });
-      }
-
-      const images = await storage.getQuoteImages(quoteId);
-      res.json(images);
-    } catch (error) {
-      console.error('Error fetching quote images:', error);
-      res.status(500).json({ message: 'Failed to fetch quote images' });
-    }
-  });
-
-  // POST /api/quotes/:id/images - upload new image
-  app.post('/api/quotes/:id/images', isAuthenticated, upload.single('image'), async (req, res) => {
-    try {
-      const params = idParamSchema.safeParse(req.params);
-      if (!params.success) {
-        return res.status(400).json({
-          message: "Invalid quote ID parameter",
-          errors: params.error.issues
-        });
-      }
-
-      const quoteId = params.data.id;
-      
-      if (!req.file) {
-        return res.status(400).json({ message: "No image file uploaded" });
-      }
-
-      // Verify quote exists and user has access
-      const quote = await storage.getQuote(quoteId);
-      if (!quote) {
-        return res.status(404).json({ message: "Quote not found" });
-      }
-
-      // Get existing images count to enforce limit
-      const existingImages = await storage.getQuoteImages(quoteId);
-      if (existingImages.length >= 20) {
-        return res.status(400).json({ 
-          message: "Maximum of 20 images per quote allowed" 
-        });
-      }
-
-      // Upload to object storage
-      const objectStorage = new ObjectStorageService();
-      const fileName = req.file.originalname;
-      const fileExtension = fileName.split('.').pop()?.toLowerCase() || '';
-      const uniqueFileName = `quote-${quoteId}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}.${fileExtension}`;
-      const filePath = `/.private/quote-images/${uniqueFileName}`;
-
-      // Upload file to object storage
-      await objectStorage.writeObject(filePath, req.file.buffer, {
-        acl: ObjectPermission.Private,
-        contentType: req.file.mimetype
-      });
-
-      // Prepare image data
-      const imageData = {
-        fileName: fileName,
-        filePath: filePath,
-        fileSize: req.file.size,
-        mimeType: req.file.mimetype,
-        altText: req.body.altText || null,
-        displayOrder: existingImages.length // Add to end
-      };
-
-      // Validate image data
-      const validatedData = insertQuoteImageSchema.parse(imageData);
-
-      // Save to database
-      const savedImage = await storage.addQuoteImage(quoteId, validatedData);
-      
-      res.status(201).json(savedImage);
-    } catch (error) {
-      console.error('Error uploading quote image:', error);
-      
-      // If it's a validation error, return 400
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({
-          message: "Validation failed",
-          errors: error.issues
-        });
-      }
-      
-      res.status(500).json({ message: 'Failed to upload image' });
-    }
-  });
-
-  // DELETE /api/quote-images/:id - delete specific image
-  app.delete('/api/quote-images/:id', isAuthenticated, async (req, res) => {
-    try {
-      const params = imageIdParamSchema.safeParse(req.params);
-      if (!params.success) {
-        return res.status(400).json({
-          message: "Invalid image ID parameter",
-          errors: params.error.issues
-        });
-      }
-
-      const imageId = params.data.id;
-
-      // Get all images to find the one to delete
-      const allQuotes = await storage.getAllQuotes();
-      let targetImage = null;
-      let targetQuoteId = null;
-
-      for (const quote of allQuotes) {
-        const images = await storage.getQuoteImages(quote.id);
-        const found = images.find(img => img.id === imageId);
-        if (found) {
-          targetImage = found;
-          targetQuoteId = quote.id;
-          break;
-        }
-      }
-      
-      if (!targetImage) {
-        return res.status(404).json({ message: "Image not found" });
-      }
-
-      // Verify user has access to the quote
-      const quote = await storage.getQuote(targetQuoteId);
-      if (!quote) {
-        return res.status(404).json({ message: "Quote not found" });
-      }
-
-      // Delete from object storage
-      try {
-        const objectStorage = new ObjectStorageService();
-        await objectStorage.deleteObject(targetImage.filePath);
-      } catch (storageError) {
-        console.warn('Failed to delete file from object storage:', storageError);
-        // Continue with database deletion even if storage deletion fails
-      }
-
-      // Delete from database
-      const deleted = await storage.deleteQuoteImage(imageId);
-      
-      if (!deleted) {
-        return res.status(404).json({ message: "Image not found" });
-      }
-
-      res.json({ message: "Image deleted successfully" });
-    } catch (error) {
-      console.error('Error deleting quote image:', error);
-      res.status(500).json({ message: 'Failed to delete image' });
-    }
-  });
-
-  // PUT /api/quotes/:id/images/order - update image display order
-  app.put('/api/quotes/:id/images/order', isAuthenticated, async (req, res) => {
-    try {
-      const params = idParamSchema.safeParse(req.params);
-      if (!params.success) {
-        return res.status(400).json({
-          message: "Invalid quote ID parameter",
-          errors: params.error.issues
-        });
-      }
-
-      const quoteId = params.data.id;
-      
-      // Validate request body
-      const bodyValidation = updateImageOrderSchema.safeParse(req.body);
-      if (!bodyValidation.success) {
-        return res.status(400).json({
-          message: "Invalid request body",
-          errors: bodyValidation.error.issues
-        });
-      }
-
-      const { imageIds } = bodyValidation.data;
-
-      // Verify quote exists and user has access
-      const quote = await storage.getQuote(quoteId);
-      if (!quote) {
-        return res.status(404).json({ message: "Quote not found" });
-      }
-
-      // Verify all image IDs belong to this quote
-      const quoteImages = await storage.getQuoteImages(quoteId);
-      const quoteImageIds = quoteImages.map(img => img.id);
-      const invalidIds = imageIds.filter(id => !quoteImageIds.includes(id));
-      
-      if (invalidIds.length > 0) {
-        return res.status(400).json({ 
-          message: "Some image IDs don't belong to this quote",
-          invalidIds 
-        });
-      }
-
-      // Update order
-      const success = await storage.updateQuoteImageOrder(quoteId, imageIds);
-      
-      if (!success) {
-        return res.status(500).json({ message: "Failed to update image order" });
-      }
-
-      // Return updated images
-      const updatedImages = await storage.getQuoteImages(quoteId);
-      res.json(updatedImages);
-    } catch (error) {
-      console.error('Error updating quote image order:', error);
-      res.status(500).json({ message: 'Failed to update image order' });
-    }
-  });
 
   const httpServer = createServer(app);
   return httpServer;
