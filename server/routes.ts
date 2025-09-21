@@ -33,7 +33,6 @@ import {
 } from "./validation-schemas";
 import multer from "multer";
 import * as XLSX from "xlsx";
-import parsePDF from "pdf-parse";
 import { extractProductsFromImage, extractProductsFromText, extractQuoteDataFromText } from "./openai";
 import type { ExtractedProduct } from "./openai";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
@@ -1757,6 +1756,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Process based on file type
       if (file.mimetype === 'application/pdf') {
         // Process PDF
+        const parsePDF = (await import('pdf-parse')).default;
         const pdfData = await parsePDF(file.buffer);
         if (pdfData.text.trim()) {
           extractedProducts = await extractProductsFromText(pdfData.text);
