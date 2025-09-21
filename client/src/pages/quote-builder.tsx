@@ -13,7 +13,8 @@ import { useToast } from "@/hooks/use-toast";
 import { generateQuoteNumber } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { LoadingSpinner } from "@/components/loading-spinner";
-import { Save, Loader2 } from "lucide-react";
+import { SimpleProposalGenerator } from "@/components/simple-proposal-generator";
+import { Save, Loader2, FileText } from "lucide-react";
 import type { QuoteWithDetails } from "@shared/schema";
 import type { UploadedImage } from "@/components/image-uploader";
 
@@ -37,6 +38,9 @@ export default function QuoteBuilder() {
     technicalDiagrams: [],
     companyImages: [],
   });
+
+  // State for proposal generator dialog
+  const [proposalGeneratorOpen, setProposalGeneratorOpen] = useState(false);
 
   const { data: quote, isLoading, error } = useQuery<QuoteWithDetails>({
     queryKey: [`/api/quotes/${quoteId}`],
@@ -289,8 +293,21 @@ export default function QuoteBuilder() {
           onUpdateQuote={handleUpdateQuote}
         />
 
-        {/* Save Button - Show for both new and existing quotes */}
-        <div className="flex justify-end mt-8 pb-8">
+        {/* Action Buttons - Show for both new and existing quotes */}
+        <div className="flex justify-end gap-4 mt-8 pb-8">
+          {/* Generate Proposal Button - Only show for existing quotes with line items */}
+          {!isNewQuote && currentQuote.id && currentQuote.lineItems.length > 0 && (
+            <Button 
+              onClick={() => setProposalGeneratorOpen(true)}
+              variant="outline"
+              className="px-6 py-3 text-lg border-edg-black text-edg-black hover:bg-edg-black hover:text-white"
+              data-testid="button-generate-proposal"
+            >
+              <FileText className="mr-2 h-5 w-5" />
+              Generate Proposal
+            </Button>
+          )}
+          
           <Button 
             type="submit" 
             form="quote-form" 
@@ -310,6 +327,15 @@ export default function QuoteBuilder() {
             )}
           </Button>
         </div>
+
+        {/* Simple Proposal Generator Dialog */}
+        {!isNewQuote && currentQuote.id && (
+          <SimpleProposalGenerator
+            quote={currentQuote}
+            open={proposalGeneratorOpen}
+            onOpenChange={setProposalGeneratorOpen}
+          />
+        )}
 
       </div>
     </div>
