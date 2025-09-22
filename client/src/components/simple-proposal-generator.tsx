@@ -565,7 +565,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         
         // Company contact on right side of brand bar
         setFont('small');
-        pdf.text('www.edgfurniture.com', pageWidth - margin, 12, { align: 'right' });
+        pdf.text('www.edgpatioshade.com', pageWidth - margin, 12, { align: 'right' });
         pdf.text('+1 (815) 581-0138', pageWidth - margin, 20, { align: 'right' });
         
         // 2. Professional Title Section

@@ -99,6 +99,39 @@ export const quotes = pgTable("quotes", {
   index("idx_quotes_account_created").on(table.accountId, table.createdAt),
 ]);
 
+// Quote cover photos - stores metadata for cover page images
+export const quoteCoverPhotos = pgTable("quote_cover_photos", {
+  id: serial("id").primaryKey(),
+  quoteId: integer("quote_id").notNull(),
+  filename: text("filename").notNull(),
+  originalName: text("original_name").notNull(),
+  storageUrl: text("storage_url").notNull(), // Object storage URL
+  fileSize: integer("file_size"),
+  mimeType: text("mime_type").notNull(),
+  isActive: boolean("is_active").default(true), // For soft deletion
+  uploadedAt: timestamp("uploaded_at").defaultNow(),
+}, (table) => [
+  index("idx_quote_cover_photos_quote_id").on(table.quoteId),
+  index("idx_quote_cover_photos_active").on(table.isActive),
+]);
+
+// Quote product renderings - stores metadata for product rendering images
+export const quoteProductRenderings = pgTable("quote_product_renderings", {
+  id: serial("id").primaryKey(),
+  quoteId: integer("quote_id").notNull(),
+  filename: text("filename").notNull(),
+  originalName: text("original_name").notNull(),
+  storageUrl: text("storage_url").notNull(), // Object storage URL
+  displayOrder: integer("display_order").default(0),
+  fileSize: integer("file_size"),
+  mimeType: text("mime_type").notNull(),
+  isActive: boolean("is_active").default(true), // For soft deletion
+  uploadedAt: timestamp("uploaded_at").defaultNow(),
+}, (table) => [
+  index("idx_quote_product_renderings_quote_id").on(table.quoteId),
+  index("idx_quote_product_renderings_active").on(table.isActive),
+  index("idx_quote_product_renderings_order").on(table.quoteId, table.displayOrder),
+]);
 
 // Contract templates for reusable contract terms
 export const contractTemplates = pgTable("contract_templates", {
@@ -345,6 +378,16 @@ export const insertProposalTemplateSchema = createInsertSchema(proposalTemplates
   }).default('pdf'),
 });
 
+export const insertQuoteCoverPhotoSchema = createInsertSchema(quoteCoverPhotos).omit({
+  id: true,
+  uploadedAt: true,
+});
+
+export const insertQuoteProductRenderingSchema = createInsertSchema(quoteProductRenderings).omit({
+  id: true,
+  uploadedAt: true,
+});
+
 
 
 
@@ -360,6 +403,8 @@ export type ContractTemplate = typeof contractTemplates.$inferSelect;
 export type ProposalTemplate = typeof proposalTemplates.$inferSelect;
 export type PricingTable = typeof pricingTables.$inferSelect;
 export type ProductAccessory = typeof productAccessories.$inferSelect;
+export type QuoteCoverPhoto = typeof quoteCoverPhotos.$inferSelect;
+export type QuoteProductRendering = typeof quoteProductRenderings.$inferSelect;
 
 export type InsertAccount = z.infer<typeof insertAccountSchema>;
 export type InsertContact = z.infer<typeof insertContactSchema>;
@@ -371,6 +416,8 @@ export type InsertContractTemplate = z.infer<typeof insertContractTemplateSchema
 export type InsertProposalTemplate = z.infer<typeof insertProposalTemplateSchema>;
 export type InsertPricingTable = z.infer<typeof insertPricingTableSchema>;
 export type InsertProductAccessory = z.infer<typeof insertProductAccessorySchema>;
+export type InsertQuoteCoverPhoto = z.infer<typeof insertQuoteCoverPhotoSchema>;
+export type InsertQuoteProductRendering = z.infer<typeof insertQuoteProductRenderingSchema>;
 
 export type QuoteWithDetails = Quote & {
   account: Account;
@@ -379,6 +426,8 @@ export type QuoteWithDetails = Quote & {
   contractTemplate?: ContractTemplate;
   proposalTemplate?: ProposalTemplate;
   contacts?: Contact[]; // Associated contacts for the project
+  coverPhoto?: QuoteCoverPhoto; // Cover page image
+  productRenderings?: QuoteProductRendering[]; // Product rendering images
 };
 
 // DTO types for API responses that include calculated fields
