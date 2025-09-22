@@ -1,4 +1,5 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,7 +10,9 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { FileText, Upload, X, Download, Loader2, Eye, Image, Camera } from 'lucide-react';
 import { formatCurrency, calculateQuoteTotals } from '@/lib/utils';
-import type { QuoteWithDetails } from '@shared/schema';
+import { getProxiedImageUrl } from '@/lib/image-utils';
+import { apiRequest, queryClient } from '@/lib/queryClient';
+import type { QuoteWithDetails, QuoteCoverPhoto, QuoteProductRendering } from '@shared/schema';
 import jsPDF from 'jspdf';
 
 interface SimpleProposalGeneratorProps {
@@ -25,12 +28,40 @@ interface UploadedFile {
   name: string;
 }
 
+interface PersistentImage {
+  id: number;
+  filename: string;
+  originalName: string;
+  storageUrl: string;
+  mimeType: string;
+  isActive: boolean;
+  uploadedAt: string;
+  displayOrder?: number;
+}
+
+// Unified interface for displaying images regardless of source
+interface DisplayImage {
+  id: string | number;
+  name: string;
+  preview: string;
+  isPersistent: boolean;
+  originalFile?: File; // Only for temp images
+}
+
 export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimpleProposalGeneratorProps) {
   const [showPricing, setShowPricing] = useState(true);
   const [includeCoverPage, setIncludeCoverPage] = useState(false);
-  const [coverPhoto, setCoverPhoto] = useState<UploadedFile | null>(null);
-  const [productRenderings, setProductRenderings] = useState<UploadedFile[]>([]);
+  
+  // Temporary uploads (local files before uploading to server)
+  const [tempCoverPhoto, setTempCoverPhoto] = useState<UploadedFile | null>(null);
+  const [tempProductRenderings, setTempProductRenderings] = useState<UploadedFile[]>([]);
+  
+  // Persistent images (stored in database and object storage)
+  const [persistentCoverPhoto, setPersistentCoverPhoto] = useState<PersistentImage | null>(null);
+  const [persistentProductRenderings, setPersistentProductRenderings] = useState<PersistentImage[]>([]);
+  
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   
   // Contract state and logic
   const hasContractData = !!(quote.contractTemplate || quote.customContractTerms);
@@ -39,6 +70,45 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
   
   const coverPhotoRef = useRef<HTMLInputElement>(null);
   const renderingsRef = useRef<HTMLInputElement>(null);
+
+  // Helper function to convert persistent image to display image
+  const persistentToDisplayImage = (img: PersistentImage): DisplayImage => ({
+    id: img.id,
+    name: img.originalName,
+    preview: getProxiedImageUrl(img.storageUrl),
+    isPersistent: true
+  });
+
+  // Helper function to convert temp image to display image
+  const tempToDisplayImage = (img: UploadedFile): DisplayImage => ({
+    id: img.id,
+    name: img.name,
+    preview: img.preview,
+    isPersistent: false,
+    originalFile: img.file
+  });
+
+  // Helper function to get the effective cover photo (persistent or temp)
+  const getEffectiveCoverPhoto = (): DisplayImage | null => {
+    if (persistentCoverPhoto) {
+      return persistentToDisplayImage(persistentCoverPhoto);
+    }
+    if (tempCoverPhoto) {
+      return tempToDisplayImage(tempCoverPhoto);
+    }
+    return null;
+  };
+
+  // Helper function to get effective product renderings (persistent + temp)
+  const getEffectiveProductRenderings = (): DisplayImage[] => {
+    const persistent = persistentProductRenderings.map(persistentToDisplayImage);
+    const temp = tempProductRenderings.map(tempToDisplayImage);
+    return [...persistent, ...temp];
+  };
+
+  // Expose the legacy interface for backward compatibility
+  const coverPhoto = getEffectiveCoverPhoto();
+  const productRenderings = getEffectiveProductRenderings();
 
   const totals = calculateQuoteTotals(
     quote.lineItems.map(item => ({
@@ -87,7 +157,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         preview: URL.createObjectURL(file),
         name: file.name
       };
-      setCoverPhoto(uploadedFile);
+      setTempCoverPhoto(uploadedFile);
     } else if (type === 'renderings') {
       const newRenderings = validFiles.map(file => ({
         id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
@@ -95,7 +165,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         preview: URL.createObjectURL(file),
         name: file.name
       }));
-      setProductRenderings(prev => [...prev, ...newRenderings].slice(0, 5)); // Max 5 images
+      setTempProductRenderings(prev => [...prev, ...newRenderings].slice(0, 5)); // Max 5 images
     }
   };
 
@@ -151,37 +221,64 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
   };
 
   // Helper function to get the appropriate image data and format for PDF
-  const getImageDataForPDF = async (uploadedFile: UploadedFile): Promise<{ dataUrl: string; format: string }> => {
-    const format = getImageFormat(uploadedFile.file);
-    
-    // Check if format needs conversion (WebP or other unsupported formats)
-    if (uploadedFile.file.type === 'image/webp' || !['PNG', 'JPEG', 'GIF'].includes(format)) {
-      try {
-        // Convert WebP and other unsupported formats to JPEG
-        const convertedUrl = await convertImageToSupportedFormat(uploadedFile.file, 'JPEG');
-        return { dataUrl: convertedUrl, format: 'JPEG' };
-      } catch (error) {
-        console.warn('Failed to convert image format, falling back to original:', error);
-        return { dataUrl: uploadedFile.preview, format: 'JPEG' };
+  const getImageDataForPDF = async (image: DisplayImage): Promise<{ dataUrl: string; format: string }> => {
+    // For temporary images (with original file)
+    if (image.originalFile) {
+      const format = getImageFormat(image.originalFile);
+      
+      // Check if format needs conversion (WebP or other unsupported formats)
+      if (image.originalFile.type === 'image/webp' || !['PNG', 'JPEG', 'GIF'].includes(format)) {
+        try {
+          // Convert WebP and other unsupported formats to JPEG
+          const convertedUrl = await convertImageToSupportedFormat(image.originalFile, 'JPEG');
+          return { dataUrl: convertedUrl, format: 'JPEG' };
+        } catch (error) {
+          console.warn('Failed to convert image format, falling back to original:', error);
+          return { dataUrl: image.preview, format: 'JPEG' };
+        }
       }
+      
+      return { dataUrl: image.preview, format };
     }
     
-    return { dataUrl: uploadedFile.preview, format };
+    // For persistent images (stored in object storage)
+    // Default to JPEG format for persistent images since they're already processed
+    return { dataUrl: image.preview, format: 'JPEG' };
   };
 
-  const removeFile = (id: string, type: 'cover' | 'renderings') => {
+  const removeFile = (id: string | number, type: 'cover' | 'renderings') => {
     if (type === 'cover') {
-      if (coverPhoto?.preview) {
-        URL.revokeObjectURL(coverPhoto.preview);
-      }
-      setCoverPhoto(null);
-    } else {
-      setProductRenderings(prev => {
-        const removed = prev.find(img => img.id === id);
-        if (removed?.preview) {
-          URL.revokeObjectURL(removed.preview);
+      // Check if it's a temp cover photo first
+      if (tempCoverPhoto && tempCoverPhoto.id === id) {
+        if (tempCoverPhoto.preview) {
+          URL.revokeObjectURL(tempCoverPhoto.preview);
         }
-        return prev.filter(img => img.id !== id);
+        setTempCoverPhoto(null);
+      } else if (persistentCoverPhoto && persistentCoverPhoto.id === id) {
+        // TODO: Add API call to delete persistent cover photo
+        setPersistentCoverPhoto(null);
+      }
+    } else {
+      // Try to remove from temp renderings first
+      setTempProductRenderings(prev => {
+        const removed = prev.find(img => img.id === id);
+        if (removed) {
+          if (removed.preview) {
+            URL.revokeObjectURL(removed.preview);
+          }
+          return prev.filter(img => img.id !== id);
+        }
+        return prev;
+      });
+      
+      // Try to remove from persistent renderings
+      setPersistentProductRenderings(prev => {
+        const found = prev.find(img => img.id === id);
+        if (found) {
+          // TODO: Add API call to delete persistent rendering
+          return prev.filter(img => img.id !== id);
+        }
+        return prev;
       });
     }
   };
