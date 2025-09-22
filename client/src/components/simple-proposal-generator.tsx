@@ -252,6 +252,9 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
       };
       
       const drawHeader = () => {
+        // Skip header on cover page - cover has its own branding
+        if (includeCoverPage && currentPage === 1) return;
+        
         // Company header on every page (except cover)
         const headerY = margin;
         setFont('subheading');
