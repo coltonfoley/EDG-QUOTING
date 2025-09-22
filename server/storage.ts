@@ -264,9 +264,6 @@ export class MemStorage {
       customerSignature: insertQuote.customerSignature || null,
       customerSignatureDate: insertQuote.customerSignatureDate || null,
       signatureStatus: insertQuote.signatureStatus || "unsigned",
-      portfolioImages: insertQuote.portfolioImages || null,
-      technicalDiagrams: insertQuote.technicalDiagrams || null,
-      companyImages: insertQuote.companyImages || null,
       createdAt: new Date(),
       updatedAt: new Date()
     };
@@ -905,23 +902,6 @@ export class DatabaseStorage implements IStorage {
     // Prepare the update data
     let finalQuoteData = { ...quoteData };
 
-    // Merge image arrays instead of replacing them
-    const imageFields = ['portfolioImages', 'technicalDiagrams', 'companyImages'] as const;
-    
-    for (const field of imageFields) {
-      if (quoteData[field] && Array.isArray(quoteData[field])) {
-        const existingImages = (existingQuote[field] as any[]) || [];
-        const newImages = quoteData[field] as any[];
-        
-        // Merge arrays, avoiding duplicates based on URL
-        const existingUrls = new Set(existingImages.map(img => img.url));
-        const uniqueNewImages = newImages.filter(img => !existingUrls.has(img.url));
-        
-        finalQuoteData[field] = [...existingImages, ...uniqueNewImages] as any;
-        
-        // Images merged successfully
-      }
-    }
 
     const [updated] = await db
       .update(quotes)
