@@ -14,7 +14,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Plus, Package, Edit, Trash2, Search, Grid, List, Filter, X, Settings, Camera, FileText, Image, Loader2 } from "lucide-react";
 import { DimensionalPricingManager } from "@/components/dimensional-pricing-manager";
-import { ImageUploader, type UploadedImage } from "@/components/image-uploader";
 import { LoadingSpinner } from "@/components/loading-spinner";
 import { formatCurrency } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
@@ -36,10 +35,6 @@ export default function Products() {
   const [showPricingManager, setShowPricingManager] = useState(false);
   const [managingPricingProduct, setManagingPricingProduct] = useState<Product | null>(null);
   
-  // Image management state
-  const [primaryImage, setPrimaryImage] = useState<UploadedImage[]>([]);
-  const [galleryImages, setGalleryImages] = useState<UploadedImage[]>([]);
-  const [specificationSheets, setSpecificationSheets] = useState<UploadedImage[]>([]);
   
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -80,9 +75,6 @@ export default function Products() {
       queryClient.invalidateQueries({ queryKey: ["/api/products"] });
       setIsDialogOpen(false);
       form.reset();
-      setPrimaryImage([]);
-      setGalleryImages([]);
-      setSpecificationSheets([]);
       toast({ title: "Product created successfully" });
     },
     onError: () => {
@@ -100,9 +92,6 @@ export default function Products() {
       setIsDialogOpen(false);
       setEditingProduct(null);
       form.reset();
-      setPrimaryImage([]);
-      setGalleryImages([]);
-      setSpecificationSheets([]);
       toast({ title: "Product updated successfully" });
     },
     onError: () => {
@@ -123,82 +112,18 @@ export default function Products() {
     },
   });
 
-  const convertUploadedImagesToProductImages = (images: UploadedImage[], imageType: 'primary' | 'gallery' | 'specification'): ProductImage[] => {
-    return images.map((img, index) => ({
-      url: img.url || img.preview,
-      filename: img.metadata.filename || '',
-      caption: img.metadata.caption,
-      altText: img.metadata.altText,
-      uploadedAt: img.metadata.uploadedAt || new Date().toISOString(),
-      size: img.metadata.size,
-      thumbnailUrl: img.metadata.thumbnailUrl,
-      imageType,
-      displayOrder: index,
-    }));
-  };
 
   const handleSubmit = (data: ProductFormData) => {
-    // Process image data
-    const processedData = {
-      ...data,
-      primaryImage: primaryImage.length > 0 ? primaryImage[0].url || primaryImage[0].preview : undefined,
-      galleryImages: galleryImages.length > 0 ? convertUploadedImagesToProductImages(galleryImages, 'gallery') : undefined,
-      specificationSheets: specificationSheets.length > 0 ? convertUploadedImagesToProductImages(specificationSheets, 'specification') : undefined,
-    };
-    
     if (editingProduct) {
-      updateProductMutation.mutate({ id: editingProduct.id, data: processedData });
+      updateProductMutation.mutate({ id: editingProduct.id, data });
     } else {
-      createProductMutation.mutate(processedData);
+      createProductMutation.mutate(data);
     }
   };
 
-  const convertProductImagesToUploaded = (images: ProductImage[] | null | undefined, imageType: 'primary' | 'gallery' | 'specification'): UploadedImage[] => {
-    if (!images || !Array.isArray(images)) return [];
-    
-    return images.map((img, index) => ({
-      id: `existing-${imageType}-${index}`,
-      file: new File([], img.filename, { type: 'image/jpeg' }), // Mock file for existing images
-      preview: img.url,
-      uploadProgress: 100,
-      uploaded: true,
-      url: img.url,
-      metadata: {
-        url: img.url,
-        filename: img.filename,
-        caption: img.caption,
-        altText: img.altText,
-        uploadedAt: img.uploadedAt,
-        size: img.size,
-        thumbnailUrl: img.thumbnailUrl,
-      },
-    }));
-  };
 
   const handleEdit = (product: Product) => {
     setEditingProduct(product);
-    
-    // Load existing images
-    if (product.primaryImage) {
-      setPrimaryImage([{
-        id: 'existing-primary-0',
-        file: new File([], 'primary.jpg', { type: 'image/jpeg' }),
-        preview: product.primaryImage,
-        uploadProgress: 100,
-        uploaded: true,
-        url: product.primaryImage,
-        metadata: {
-          url: product.primaryImage,
-          filename: 'Primary Image',
-          uploadedAt: new Date().toISOString(),
-        },
-      }]);
-    } else {
-      setPrimaryImage([]);
-    }
-    
-    setGalleryImages(convertProductImagesToUploaded(product.galleryImages as ProductImage[], 'gallery'));
-    setSpecificationSheets(convertProductImagesToUploaded(product.specificationSheets as ProductImage[], 'specification'));
     
     form.reset({
       name: product.name,
@@ -364,9 +289,6 @@ export default function Products() {
                 onClick={() => {
                   setEditingProduct(null);
                   form.reset();
-                  setPrimaryImage([]);
-                  setGalleryImages([]);
-                  setSpecificationSheets([]);
                 }}
                 data-testid="button-new-product"
               >
@@ -580,49 +502,8 @@ export default function Products() {
                     </TabsContent>
                     
                     <TabsContent value="images" className="space-y-6 mt-4">
-                      <div className="space-y-6">
-                        {/* Primary Image */}
-                        <ImageUploader
-                          imageType="product"
-                          title="Primary Product Image"
-                          description="Main product photo that represents this item in catalogs and line items"
-                          maxFiles={1}
-                          onImagesChange={setPrimaryImage}
-                          initialImages={primaryImage}
-                          categoryOptions={[
-                            { value: 'primary', label: 'Primary Image' }
-                          ]}
-                          data-testid="primary-image-uploader"
-                        />
-                        
-                        {/* Gallery Images */}
-                        <ImageUploader
-                          imageType="product"
-                          title="Product Gallery"
-                          description="Additional product photos showcasing different angles, features, or configurations"
-                          maxFiles={10}
-                          onImagesChange={setGalleryImages}
-                          initialImages={galleryImages}
-                          categoryOptions={[
-                            { value: 'gallery', label: 'Gallery Image' }
-                          ]}
-                          data-testid="gallery-images-uploader"
-                        />
-                        
-                        {/* Specification Sheets */}
-                        <ImageUploader
-                          imageType="product"
-                          title="Technical Specifications"
-                          description="Technical drawings, specification sheets, installation guides, or other technical documentation"
-                          maxFiles={5}
-                          allowedTypes={['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'application/pdf']}
-                          onImagesChange={setSpecificationSheets}
-                          initialImages={specificationSheets}
-                          categoryOptions={[
-                            { value: 'specification', label: 'Technical Document' }
-                          ]}
-                          data-testid="specification-sheets-uploader"
-                        />
+                      <div className="p-6 text-center text-gray-500">
+                        <p>Image management functionality has been temporarily removed.</p>
                       </div>
                     </TabsContent>
                   </Tabs>
