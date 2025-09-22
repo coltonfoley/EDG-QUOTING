@@ -71,6 +71,102 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
   const coverPhotoRef = useRef<HTMLInputElement>(null);
   const renderingsRef = useRef<HTMLInputElement>(null);
 
+  // React Query hooks for loading existing images
+  const { data: existingCoverPhotos, isLoading: loadingCoverPhotos } = useQuery<QuoteCoverPhoto[]>({
+    queryKey: ['/api/quotes', quote.id, 'cover-photos'],
+    enabled: open && !!quote.id,
+  });
+
+  const { data: existingProductRenderings, isLoading: loadingRenderings } = useQuery<QuoteProductRendering[]>({
+    queryKey: ['/api/quotes', quote.id, 'product-renderings'],
+    enabled: open && !!quote.id,
+  });
+
+  // Mutations for uploading images
+  const uploadCoverPhotoMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const formData = new FormData();
+      formData.append('image', file);
+      return await apiRequest('POST', `/api/quotes/${quote.id}/cover-photos`, formData);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/quotes', quote.id, 'cover-photos'] });
+      toast({
+        title: "Cover photo uploaded",
+        description: "Your cover photo has been saved successfully",
+      });
+      setTempCoverPhoto(null); // Clear temp after successful upload
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Upload failed",
+        description: error.message || "Failed to upload cover photo",
+        variant: "destructive"
+      });
+    }
+  });
+
+  const uploadProductRenderingMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const formData = new FormData();
+      formData.append('image', file);
+      return await apiRequest('POST', `/api/quotes/${quote.id}/product-renderings`, formData);
+    },
+    onSuccess: (_, file) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/quotes', quote.id, 'product-renderings'] });
+      toast({
+        title: "Product rendering uploaded",
+        description: "Your product rendering has been saved successfully",
+      });
+      // Clear the temp rendering that was just uploaded
+      setTempProductRenderings(prev => prev.filter(temp => temp.file !== file));
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Upload failed",
+        description: error.message || "Failed to upload product rendering",
+        variant: "destructive"
+      });
+    }
+  });
+
+  // Load existing images into state when data is available
+  useEffect(() => {
+    if (existingCoverPhotos && existingCoverPhotos.length > 0) {
+      const activeCoverPhoto = existingCoverPhotos.find((img: QuoteCoverPhoto) => img.isActive);
+      if (activeCoverPhoto) {
+        setPersistentCoverPhoto({
+          id: activeCoverPhoto.id,
+          filename: activeCoverPhoto.filename,
+          originalName: activeCoverPhoto.originalName,
+          storageUrl: activeCoverPhoto.storageUrl,
+          mimeType: activeCoverPhoto.mimeType,
+          isActive: activeCoverPhoto.isActive ?? true,
+          uploadedAt: activeCoverPhoto.uploadedAt?.toISOString() ?? new Date().toISOString(),
+        });
+      }
+    }
+  }, [existingCoverPhotos]);
+
+  useEffect(() => {
+    if (existingProductRenderings && existingProductRenderings.length > 0) {
+      const activeRenderings = existingProductRenderings
+        .filter((img: QuoteProductRendering) => img.isActive)
+        .sort((a: QuoteProductRendering, b: QuoteProductRendering) => (a.displayOrder || 0) - (b.displayOrder || 0));
+      
+      setPersistentProductRenderings(activeRenderings.map((img: QuoteProductRendering) => ({
+        id: img.id,
+        filename: img.filename,
+        originalName: img.originalName,
+        storageUrl: img.storageUrl,
+        mimeType: img.mimeType,
+        isActive: img.isActive ?? true,
+        uploadedAt: img.uploadedAt?.toISOString() ?? new Date().toISOString(),
+        displayOrder: img.displayOrder ?? 0,
+      })));
+    }
+  }, [existingProductRenderings]);
+
   // Helper function to convert persistent image to display image
   const persistentToDisplayImage = (img: PersistentImage): DisplayImage => ({
     id: img.id,
@@ -88,13 +184,13 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
     originalFile: img.file
   });
 
-  // Helper function to get the effective cover photo (persistent or temp)
+  // Helper function to get the effective cover photo (temp takes priority over persistent)
   const getEffectiveCoverPhoto = (): DisplayImage | null => {
-    if (persistentCoverPhoto) {
-      return persistentToDisplayImage(persistentCoverPhoto);
-    }
     if (tempCoverPhoto) {
       return tempToDisplayImage(tempCoverPhoto);
+    }
+    if (persistentCoverPhoto) {
+      return persistentToDisplayImage(persistentCoverPhoto);
     }
     return null;
   };
@@ -224,26 +320,69 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
   const getImageDataForPDF = async (image: DisplayImage): Promise<{ dataUrl: string; format: string }> => {
     // For temporary images (with original file)
     if (image.originalFile) {
-      const format = getImageFormat(image.originalFile);
-      
-      // Check if format needs conversion (WebP or other unsupported formats)
-      if (image.originalFile.type === 'image/webp' || !['PNG', 'JPEG', 'GIF'].includes(format)) {
-        try {
-          // Convert WebP and other unsupported formats to JPEG
-          const convertedUrl = await convertImageToSupportedFormat(image.originalFile, 'JPEG');
-          return { dataUrl: convertedUrl, format: 'JPEG' };
-        } catch (error) {
-          console.warn('Failed to convert image format, falling back to original:', error);
-          return { dataUrl: image.preview, format: 'JPEG' };
-        }
+      try {
+        // Always convert to data URL using FileReader for reliability
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          
+          reader.onload = () => {
+            const dataUrl = reader.result as string;
+            const format = getImageFormat(image.originalFile!);
+            resolve({ dataUrl, format });
+          };
+          
+          reader.onerror = () => {
+            reject(new Error('Failed to read file as data URL'));
+          };
+          
+          reader.readAsDataURL(image.originalFile!);
+        });
+      } catch (error) {
+        throw new Error(`Failed to process temporary image: ${error}`);
       }
-      
-      return { dataUrl: image.preview, format };
     }
     
     // For persistent images (stored in object storage)
-    // Default to JPEG format for persistent images since they're already processed
-    return { dataUrl: image.preview, format: 'JPEG' };
+    // Fetch image data and convert to data URL for reliable PDF generation
+    try {
+      return new Promise(async (resolve, reject) => {
+        try {
+          // Fetch the image data directly through a secure endpoint
+          const response = await fetch(image.preview, {
+            credentials: 'include',
+            headers: {
+              'Accept': 'image/*',
+            },
+          });
+          
+          if (!response.ok) {
+            throw new Error(`Failed to fetch image: ${response.status}`);
+          }
+          
+          // Convert response to blob
+          const blob = await response.blob();
+          
+          // Convert blob to data URL using FileReader
+          const reader = new FileReader();
+          
+          reader.onload = () => {
+            const dataUrl = reader.result as string;
+            resolve({ dataUrl, format: 'JPEG' });
+          };
+          
+          reader.onerror = () => {
+            reject(new Error('Failed to convert blob to data URL'));
+          };
+          
+          reader.readAsDataURL(blob);
+          
+        } catch (error) {
+          reject(error);
+        }
+      });
+    } catch (error) {
+      throw new Error(`Failed to process persistent image: ${error}`);
+    }
   };
 
   const removeFile = (id: string | number, type: 'cover' | 'renderings') => {
@@ -1044,9 +1183,30 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
                     >
                       <X className="w-4 h-4" />
                     </Button>
+                    {!coverPhoto.isPersistent && (
+                      <Button
+                        variant="default"
+                        size="sm"
+                        className="absolute top-2 right-12"
+                        onClick={() => tempCoverPhoto && uploadCoverPhotoMutation.mutate(tempCoverPhoto.file)}
+                        disabled={uploadCoverPhotoMutation.isPending}
+                        data-testid="button-save-cover-photo"
+                      >
+                        {uploadCoverPhotoMutation.isPending ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          "Save"
+                        )}
+                      </Button>
+                    )}
                     <Badge variant="secondary" className="absolute bottom-2 left-2">
                       {coverPhoto.name}
                     </Badge>
+                    {coverPhoto.isPersistent && (
+                      <Badge variant="default" className="absolute bottom-2 right-2">
+                        Saved
+                      </Badge>
+                    )}
                   </div>
                 )}
                 <input
@@ -1097,9 +1257,35 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
                         >
                           <X className="w-3 h-3" />
                         </Button>
+                        {!rendering.isPersistent && (
+                          <Button
+                            variant="default"
+                            size="sm"
+                            className="absolute top-1 right-8"
+                            onClick={() => {
+                              const tempRendering = tempProductRenderings.find(temp => temp.id === rendering.id);
+                              if (tempRendering) {
+                                uploadProductRenderingMutation.mutate(tempRendering.file);
+                              }
+                            }}
+                            disabled={uploadProductRenderingMutation.isPending}
+                            data-testid={`button-save-rendering-${rendering.id}`}
+                          >
+                            {uploadProductRenderingMutation.isPending ? (
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                            ) : (
+                              "Save"
+                            )}
+                          </Button>
+                        )}
                         <Badge variant="secondary" className="absolute bottom-1 left-1 text-xs">
                           {rendering.name.substring(0, 10)}...
                         </Badge>
+                        {rendering.isPersistent && (
+                          <Badge variant="default" className="absolute bottom-1 right-1 text-xs">
+                            Saved
+                          </Badge>
+                        )}
                       </div>
                     ))}
                   </div>

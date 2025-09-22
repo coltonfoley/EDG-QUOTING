@@ -395,11 +395,60 @@ export const finalizeUploadSchema = z.object({
   objectPath: z.string().min(1, "Object path is required")
 });
 
-// Image proxy validation
+// Image proxy validation with strict SSRF protection
 export const imageProxySchema = z.object({
   url: z.string().url("Invalid URL format")
-    .refine(val => val.includes('storage.replit.com') || val.includes('/objects/'), 
-      "Only Replit storage URLs are allowed")
+    .refine(val => {
+      try {
+        // For internal /objects/ paths, allow only relative paths that start with /objects/
+        if (val.startsWith('/objects/')) {
+          return true;
+        }
+        
+        const url = new URL(val);
+        
+        // Only allow HTTPS protocol
+        if (url.protocol !== 'https:') {
+          return false;
+        }
+        
+        // Block internal/private IP ranges and localhost
+        const hostname = url.hostname.toLowerCase();
+        
+        // Block localhost variants
+        if (hostname === 'localhost' || 
+            hostname === '127.0.0.1' || 
+            hostname === '::1' ||
+            hostname.startsWith('127.') ||
+            hostname.startsWith('0.')) {
+          return false;
+        }
+        
+        // Block private IP ranges (RFC 1918)
+        if (hostname.match(/^10\./) ||
+            hostname.match(/^192\.168\./) ||
+            hostname.match(/^172\.(1[6-9]|2[0-9]|3[0-1])\./) ||
+            hostname.match(/^169\.254\./) || // Link-local
+            hostname.match(/^224\./) || // Multicast
+            hostname.match(/^\[?fe80:/) || // IPv6 link-local
+            hostname.match(/^\[?::1\]?$/) || // IPv6 localhost
+            hostname.match(/^\[?::ffff:/) // IPv4-mapped IPv6
+        ) {
+          return false;
+        }
+        
+        // Only allow specific Replit storage domains (exact match)
+        const allowedHosts = [
+          'storage.replit.com'
+        ];
+        
+        // For external URLs, must be from allowed hosts
+        return allowedHosts.includes(hostname);
+        
+      } catch (error) {
+        return false;
+      }
+    }, "URL must be from approved Replit storage domains only")
 });
 
 // Calculate price validation
