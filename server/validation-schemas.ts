@@ -105,6 +105,14 @@ export const insertQuoteSchema = baseQuoteSchema.extend({
   }).optional(),
   contractTemplateId: z.number().int().positive().optional().nullable(),
   customContractTerms: z.string().max(10000, "Custom contract terms are too long").optional().nullable()
+}).refine((data) => {
+  // Enforce mutual exclusivity: cannot have both template and custom terms
+  const hasTemplate = data.contractTemplateId !== null && data.contractTemplateId !== undefined;
+  const hasCustomTerms = data.customContractTerms !== null && data.customContractTerms !== undefined && data.customContractTerms.trim() !== "";
+  return !(hasTemplate && hasCustomTerms);
+}, {
+  message: "Cannot specify both a contract template and custom contract terms",
+  path: ["contractTemplateId", "customContractTerms"]
 });
 
 // Update schema for quotes - more lenient validation for partial updates
@@ -148,6 +156,14 @@ export const updateQuoteSchema = z.object({
   }).optional(),
   contractTemplateId: z.number().int().positive().optional().nullable(),
   customContractTerms: z.string().max(10000, "Custom contract terms are too long").optional().nullable()
+}).refine((data) => {
+  // Enforce mutual exclusivity: cannot have both template and custom terms
+  const hasTemplate = data.contractTemplateId !== null && data.contractTemplateId !== undefined;
+  const hasCustomTerms = data.customContractTerms !== null && data.customContractTerms !== undefined && data.customContractTerms.trim() !== "";
+  return !(hasTemplate && hasCustomTerms);
+}, {
+  message: "Cannot specify both a contract template and custom contract terms",
+  path: ["contractTemplateId", "customContractTerms"]
 });
 
 // Enhanced LineItem validation
