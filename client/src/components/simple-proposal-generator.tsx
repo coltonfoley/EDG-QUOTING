@@ -542,28 +542,61 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
       const drawProfessionalCoverPage = async () => {
         if (!includeCoverPage) return;
         
-        // Professional cover page with branding
-        setFont('heading');
-        setColor('primary');
-        pdf.text('PROJECT PROPOSAL', pageWidth / 2, 60, { align: 'center' });
+        // === PROFESSIONAL COVER PAGE WITH EDG BRANDING ===
         
-        yPosition = 80;
+        // 1. EDG Teal Brand Header Bar (full width)
+        const brandBarHeight = 28;
+        const [r, g, b] = colors.accent;
+        pdf.setFillColor(r, g, b);
+        pdf.rect(0, 0, pageWidth, brandBarHeight, 'F');
+        
+        // Company logo placeholder and name on brand bar
+        pdf.setTextColor(255, 255, 255); // White text on teal
         setFont('subheading');
-        setColor('primary');
-        pdf.text(quote.projectName || 'Outdoor Living Project', pageWidth / 2, yPosition, { align: 'center' });
+        pdf.text('EDG PATIO & SHADE', margin, 18);
         
-        yPosition = 100;
+        // Company contact on right side of brand bar
+        setFont('small');
+        pdf.text('www.edgfurniture.com', pageWidth - margin, 12, { align: 'right' });
+        pdf.text('+1 (815) 581-0138', pageWidth - margin, 20, { align: 'right' });
+        
+        // 2. Professional Title Section
+        yPosition = brandBarHeight + 35;
+        setColor('primary'); // Back to black text
+        
+        // Large title
+        pdf.setFontSize(28);
+        pdf.setFont('helvetica', 'bold');
+        pdf.text('PROJECT PROPOSAL', margin, yPosition);
+        
+        // Project name subtitle
+        yPosition += 15;
+        setFont('heading');
+        pdf.text(quote.projectName || 'Outdoor Living Project', margin, yPosition);
+        
+        // 3. Hero Cover Image (if provided)
+        yPosition += 25;
+        let imageEndY = yPosition;
+        
         if (coverPhoto) {
           try {
-            // Add cover photo with professional styling
-            const maxPhotoWidth = 120;
-            const maxPhotoHeight = 80;
             const { dataUrl, format } = await getImageDataForPDF(coverPhoto);
             
-            // Center the image
-            const imageX = (pageWidth - maxPhotoWidth) / 2;
-            pdf.addImage(dataUrl, format, imageX, yPosition, maxPhotoWidth, maxPhotoHeight);
-            yPosition += maxPhotoHeight + 20;
+            // Professional hero image sizing - full content width
+            const heroImageWidth = contentWidth;
+            const maxHeroHeight = 120; // Cap height for professional proportions
+            
+            // Safe image loading with single decode pattern
+            const img = document.createElement('img') as HTMLImageElement;
+            img.src = dataUrl;
+            await img.decode(); // Wait for image to fully load
+            
+            // Calculate aspect ratio and fit to width with height limit
+            const aspectRatio = img.width / img.height;
+            const scaledHeight = Math.min(heroImageWidth / aspectRatio, maxHeroHeight);
+            
+            pdf.addImage(dataUrl, format, margin, yPosition, heroImageWidth, scaledHeight);
+            imageEndY = yPosition + scaledHeight;
             
             // Clean up converted image URL if different from original
             if (dataUrl !== coverPhoto.preview) {
@@ -571,25 +604,89 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
             }
           } catch (e) {
             console.warn('Could not add cover photo to PDF:', e);
+            imageEndY = yPosition + 10; // Small buffer if image fails
           }
         }
         
-        // Professional customer info section
-        yPosition = Math.max(yPosition, 200);
-        setFont('body');
-        setColor('primary');
-        pdf.text('Prepared for:', pageWidth / 2, yPosition, { align: 'center' });
-        yPosition += 10;
-        
-        setFont('subheading');
+        // 4. Professional Metadata Panel (right-aligned)
+        const metadataY = Math.max(imageEndY + 30, 180);
+        const panelWidth = 85;
+        const panelX = pageWidth - margin - panelWidth;
         const customer = quote.account ?? quote.customer;
-        pdf.text(customer.name, pageWidth / 2, yPosition, { align: 'center' });
-        yPosition += 8;
         
-        setFont('body');
-        if (quote.projectAddress || customer.company) {
-          pdf.text(quote.projectAddress || customer.company || '', pageWidth / 2, yPosition, { align: 'center' });
+        // Light background panel for metadata
+        pdf.setFillColor(248, 248, 248);
+        pdf.roundedRect(panelX - 5, metadataY - 5, panelWidth + 10, 85, 3, 3, 'F');
+        
+        // Metadata content
+        let metaY = metadataY + 5;
+        setFont('caption');
+        setColor('gray');
+        
+        // Quote/Proposal Number
+        pdf.text('PROPOSAL NUMBER', panelX, metaY);
+        metaY += 6;
+        setFont('small');
+        setColor('primary');
+        pdf.text(quote.quoteNumber || 'PROP-001', panelX, metaY);
+        metaY += 12;
+        
+        // Date
+        setFont('caption');
+        setColor('gray');
+        pdf.text('DATE PREPARED', panelX, metaY);
+        metaY += 6;
+        setFont('small');
+        setColor('primary');
+        const currentDate = new Date().toLocaleDateString('en-US', { 
+          year: 'numeric', month: 'long', day: 'numeric' 
+        });
+        pdf.text(currentDate, panelX, metaY);
+        metaY += 12;
+        
+        // Prepared For
+        setFont('caption');
+        setColor('gray');
+        pdf.text('PREPARED FOR', panelX, metaY);
+        metaY += 6;
+        setFont('small');
+        setColor('primary');
+        
+        // Customer name with text wrapping
+        const nameLines = pdf.splitTextToSize(customer.name, panelWidth - 5);
+        nameLines.forEach((line: string) => {
+          pdf.text(line, panelX, metaY);
+          metaY += 5;
+        });
+        
+        // Project address with text wrapping
+        if (quote.projectAddress) {
+          const addressLines = pdf.splitTextToSize(quote.projectAddress, panelWidth - 5);
+          addressLines.forEach((line: string) => {
+            pdf.text(line, panelX, metaY);
+            metaY += 5;
+          });
         }
+        
+        // Email with text wrapping
+        if (customer.email) {
+          const emailLines = pdf.splitTextToSize(customer.email, panelWidth - 5);
+          emailLines.forEach((line: string) => {
+            pdf.text(line, panelX, metaY);
+            metaY += 5;
+          });
+        }
+        
+        // 5. Footer Brand Band
+        const footerY = pageHeight - 15;
+        pdf.setFillColor(0, 0, 0); // Black footer
+        pdf.rect(0, footerY, pageWidth, 15, 'F');
+        
+        // Footer content in white
+        pdf.setTextColor(255, 255, 255);
+        setFont('small');
+        pdf.text('1802 Holian Drive, Spring Grove, IL 60081  •  info@edgfurniture.com', 
+                pageWidth / 2, footerY + 8, { align: 'center' });
         
         // Add new page for main content
         pdf.addPage();
