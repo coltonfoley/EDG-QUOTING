@@ -42,7 +42,7 @@ import multer from "multer";
 import * as XLSX from "xlsx";
 import { extractProductsFromImage, extractProductsFromText, extractQuoteDataFromText } from "./openai";
 import type { ExtractedProduct } from "./openai";
-import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
+import { ObjectStorageService, ObjectNotFoundError, objectStorageClient } from "./objectStorage";
 import { ObjectPermission } from "./objectAcl";
 import type { InsertQuote } from "@shared/schema";
 
@@ -1140,6 +1140,151 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // File upload endpoints that process FormData and save to database
+  app.post("/api/quotes/:quoteId/cover-photos", isAuthenticated, upload.single('image'), async (req: any, res) => {
+    try {
+      const params = quoteIdParamSchema.safeParse(req.params);
+      if (!params.success) {
+        return res.status(400).json({ 
+          message: "Invalid request parameters", 
+          errors: params.error.errors 
+        });
+      }
+
+      // Validate quote ownership
+      const hasAccess = await storage.validateQuoteOwnership(params.data.quoteId, req.user?.id);
+      if (!hasAccess) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      if (!req.file) {
+        return res.status(400).json({ message: "No file uploaded" });
+      }
+
+      const file = req.file;
+      const objectStorageService = new ObjectStorageService();
+      
+      // Create a custom path for the cover photo
+      const sanitizedFilename = file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
+      const timestamp = Date.now();
+      const customPath = `cover-photos/${timestamp}-${sanitizedFilename}`;
+      
+      // Upload directly to object storage using Google Cloud Storage client
+      const privateDir = objectStorageService.getPrivateObjectDir();
+      const fullPath = `${privateDir}/${customPath}`;
+      
+      // Parse bucket name and object name from the full path
+      const pathParts = fullPath.split('/');
+      const bucketName = pathParts[1]; // Skip the leading slash
+      const objectName = pathParts.slice(2).join('/');
+      
+      // Upload file to Google Cloud Storage
+      const bucket = objectStorageClient.bucket(bucketName);
+      const cloudFile = bucket.file(objectName);
+      
+      await cloudFile.save(file.buffer, {
+        metadata: {
+          contentType: file.mimetype,
+        },
+      });
+      
+      // Make the file publicly readable
+      await cloudFile.makePublic();
+      
+      // Create public URL
+      const publicUrl = `${req.protocol}://${req.get('host')}/objects/${bucketName}/${objectName}`;
+      
+      // Create database record
+      const photoData = {
+        quoteId: params.data.quoteId,
+        filename: sanitizedFilename,
+        originalName: file.originalname,
+        storageUrl: publicUrl,
+        mimeType: file.mimetype,
+        fileSize: file.size
+      };
+      
+      const coverPhoto = await storage.createQuoteCoverPhoto(photoData);
+      console.log(`✅ Cover photo saved: ${coverPhoto.filename}`);
+      res.status(201).json(coverPhoto);
+    } catch (error) {
+      console.error("Error uploading cover photo:", error);
+      res.status(500).json({ message: "Failed to upload cover photo" });
+    }
+  });
+
+  app.post("/api/quotes/:quoteId/product-renderings", isAuthenticated, upload.single('image'), async (req: any, res) => {
+    try {
+      const params = quoteIdParamSchema.safeParse(req.params);
+      if (!params.success) {
+        return res.status(400).json({ 
+          message: "Invalid request parameters", 
+          errors: params.error.errors 
+        });
+      }
+
+      // Validate quote ownership
+      const hasAccess = await storage.validateQuoteOwnership(params.data.quoteId, req.user?.id);
+      if (!hasAccess) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      if (!req.file) {
+        return res.status(400).json({ message: "No file uploaded" });
+      }
+
+      const file = req.file;
+      const objectStorageService = new ObjectStorageService();
+      
+      // Create a custom path for the product rendering
+      const sanitizedFilename = file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
+      const timestamp = Date.now();
+      const customPath = `product-renderings/${timestamp}-${sanitizedFilename}`;
+      
+      // Upload directly to object storage using Google Cloud Storage client
+      const privateDir = objectStorageService.getPrivateObjectDir();
+      const fullPath = `${privateDir}/${customPath}`;
+      
+      // Parse bucket name and object name from the full path
+      const pathParts = fullPath.split('/');
+      const bucketName = pathParts[1]; // Skip the leading slash
+      const objectName = pathParts.slice(2).join('/');
+      
+      // Upload file to Google Cloud Storage
+      const bucket = objectStorageClient.bucket(bucketName);
+      const cloudFile = bucket.file(objectName);
+      
+      await cloudFile.save(file.buffer, {
+        metadata: {
+          contentType: file.mimetype,
+        },
+      });
+      
+      // Make the file publicly readable
+      await cloudFile.makePublic();
+      
+      // Create public URL
+      const publicUrl = `${req.protocol}://${req.get('host')}/objects/${bucketName}/${objectName}`;
+      
+      // Create database record
+      const renderingData = {
+        quoteId: params.data.quoteId,
+        filename: sanitizedFilename,
+        originalName: file.originalname,
+        storageUrl: publicUrl,
+        mimeType: file.mimetype,
+        fileSize: file.size
+      };
+      
+      const rendering = await storage.createQuoteProductRendering(renderingData);
+      console.log(`✅ Product rendering saved: ${rendering.filename}`);
+      res.status(201).json(rendering);
+    } catch (error) {
+      console.error("Error uploading product rendering:", error);
+      res.status(500).json({ message: "Failed to upload product rendering" });
     }
   });
 
