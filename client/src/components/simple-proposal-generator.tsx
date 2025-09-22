@@ -834,6 +834,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         
         // 3. Hero Cover Image (if provided)
         yPosition += 25;
+        let imageStartY = yPosition;
         let imageEndY = yPosition;
         
         if (coverPhoto) {
@@ -866,15 +867,34 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
           }
         }
         
-        // 4. Professional Metadata Panel (right-aligned)
-        const metadataY = Math.max(imageEndY + 30, 180);
+        // 4. Professional Metadata Panel (overlaid on cover photo for beautiful effect)
+        // Use robust positioning logic that ensures panel stays within image bounds
+        const panelHeight = 85;
+        const overlayOffset = 40;
+        
+        let metadataY;
+        let rectTop;
+        if (includeCoverPage && coverPhoto) {
+          // Overlay on cover photo: position within the image bounds with complete clamping
+          const desiredRectTop = imageStartY + overlayOffset - 5; // Account for the -5 offset in roundedRect
+          rectTop = Math.max(imageStartY + 5, Math.min(desiredRectTop, imageEndY - panelHeight - 5));
+          metadataY = rectTop + 5;
+        } else {
+          // No overlay: position below content with spacing
+          metadataY = Math.max(imageEndY + 30, 180);
+          rectTop = metadataY - 5;
+        }
         const panelWidth = 85;
         const panelX = pageWidth - margin - panelWidth;
         const customer = quote.account ?? quote.customer;
         
-        // Light background panel for metadata
-        pdf.setFillColor(248, 248, 248);
-        pdf.roundedRect(panelX - 5, metadataY - 5, panelWidth + 10, 85, 3, 3, 'F');
+        // Background panel styling: white for overlay, light gray otherwise
+        if (includeCoverPage && coverPhoto) {
+          pdf.setFillColor(255, 255, 255); // Pure white for better contrast on photos
+        } else {
+          pdf.setFillColor(248, 248, 248); // Light gray for non-photo background
+        }
+        pdf.roundedRect(panelX - 5, rectTop, panelWidth + 10, panelHeight, 3, 3, 'F');
         
         // Metadata content
         let metaY = metadataY + 5;
