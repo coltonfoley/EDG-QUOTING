@@ -1112,37 +1112,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/quotes/:quoteId/product-renderings", isAuthenticated, async (req, res) => {
-    try {
-      const params = quoteIdParamSchema.safeParse(req.params);
-      if (!params.success) {
-        return res.status(400).json({ 
-          message: "Invalid request parameters", 
-          errors: params.error.errors 
-        });
-      }
-
-      // Validate quote ownership
-      const hasAccess = await storage.validateQuoteOwnership(params.data.quoteId, req.user?.id);
-      if (!hasAccess) {
-        return res.status(403).json({ message: "Access denied" });
-      }
-
-      const renderingData = createQuoteProductRenderingSchema.parse({ ...req.body, quoteId: params.data.quoteId });
-      const rendering = await storage.createQuoteProductRendering(renderingData);
-      res.status(201).json(rendering);
-    } catch (error) {
-      console.error("Error creating quote product rendering:", error);
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ 
-          message: "Invalid request data", 
-          errors: error.errors 
-        });
-      }
-      res.status(500).json({ message: "Internal server error" });
-    }
-  });
-
   // File upload endpoints that process FormData and save to database
   app.post("/api/quotes/:quoteId/cover-photos", isAuthenticated, upload.single('image'), async (req: any, res) => {
     try {
@@ -1191,8 +1160,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         },
       });
       
-      // Make the file publicly readable
-      await cloudFile.makePublic();
+      // Note: File will be served through our object proxy endpoint since bucket has public access prevention
       
       // Create public URL
       const publicUrl = `${req.protocol}://${req.get('host')}/objects/${bucketName}/${objectName}`;
@@ -1263,8 +1231,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         },
       });
       
-      // Make the file publicly readable
-      await cloudFile.makePublic();
+      // Note: File will be served through our object proxy endpoint since bucket has public access prevention
       
       // Create public URL
       const publicUrl = `${req.protocol}://${req.get('host')}/objects/${bucketName}/${objectName}`;
