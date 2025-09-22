@@ -685,16 +685,6 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
           });
         }
         
-        // 5. Footer Brand Band (NO PAGE NUMBERS OR STANDARD FOOTERS ON COVER)
-        const footerY = pageHeight - 15;
-        pdf.setFillColor(0, 0, 0); // Black footer
-        pdf.rect(0, footerY, pageWidth, 15, 'F');
-        
-        // Footer content in white
-        pdf.setTextColor(255, 255, 255);
-        setFont('small');
-        pdf.text('1802 Holian Drive, Spring Grove, IL 60081  •  info@edgfurniture.com', 
-                pageWidth / 2, footerY + 8, { align: 'center' });
         
         // Add new page for main content (this will be page 2)
         pdf.addPage();
@@ -841,21 +831,6 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         }
       }
       
-      // Update all page footers with correct total page count
-      const totalPages = pdf.getNumberOfPages();
-      for (let i = 1; i <= totalPages; i++) {
-        pdf.setPage(i);
-        const footerY = pageHeight - margin + 5;
-        
-        // Clear previous footer
-        pdf.setFillColor(255, 255, 255);
-        pdf.rect(margin, footerY - 5, contentWidth, 10, 'F');
-        
-        // Draw new footer
-        setFont('caption');
-        setColor('gray');
-        pdf.text(`Page ${i} of ${totalPages}`, pageWidth / 2, footerY, { align: 'center' });
-      }
 
       // Save the PDF
       const pdfBlob = pdf.output('blob');
