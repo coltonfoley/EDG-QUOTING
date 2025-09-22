@@ -1096,10 +1096,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const coverPhoto = await storage.getQuoteCoverPhoto(params.data.quoteId);
       if (!coverPhoto) {
-        return res.status(404).json({ message: "Cover photo not found" });
+        return res.json([]); // Return empty array instead of 404
       }
 
-      res.json(coverPhoto);
+      res.json([coverPhoto]); // Return as array to match frontend expectations
     } catch (error) {
       console.error("Error getting quote cover photo:", error);
       res.status(500).json({ message: "Internal server error" });
