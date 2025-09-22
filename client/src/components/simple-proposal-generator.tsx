@@ -99,76 +99,6 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
     }
   };
 
-  // Helper function to detect image format for PDF
-  const getImageFormat = (file: File): string => {
-    const mimeType = file.type.toLowerCase();
-    if (mimeType === 'image/png') return 'PNG';
-    if (mimeType === 'image/jpeg' || mimeType === 'image/jpg') return 'JPEG';
-    if (mimeType === 'image/gif') return 'GIF';
-    // Default to JPEG for other formats or if we need to convert
-    return 'JPEG';
-  };
-
-  // Helper function to convert unsupported formats to supported ones
-  const convertImageToSupportedFormat = async (file: File, targetFormat: 'PNG' | 'JPEG' = 'JPEG'): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-      const img = document.createElement('img') as HTMLImageElement;
-      
-      img.onload = () => {
-        canvas.width = img.width;
-        canvas.height = img.height;
-        
-        if (ctx) {
-          // Clear canvas with white background for JPEG (since JPEG doesn't support transparency)
-          if (targetFormat === 'JPEG') {
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-          }
-          
-          ctx.drawImage(img, 0, 0);
-          
-          const mimeType = targetFormat === 'PNG' ? 'image/png' : 'image/jpeg';
-          const quality = targetFormat === 'JPEG' ? 0.9 : undefined;
-          
-          canvas.toBlob((blob) => {
-            if (blob) {
-              const url = URL.createObjectURL(blob);
-              resolve(url);
-            } else {
-              reject(new Error('Failed to convert image'));
-            }
-          }, mimeType, quality);
-        } else {
-          reject(new Error('Failed to get canvas context'));
-        }
-      };
-      
-      img.onerror = () => reject(new Error('Failed to load image'));
-      img.src = URL.createObjectURL(file);
-    });
-  };
-
-  // Helper function to get the appropriate image data and format for PDF
-  const getImageDataForPDF = async (uploadedFile: UploadedFile): Promise<{ dataUrl: string; format: string }> => {
-    const format = getImageFormat(uploadedFile.file);
-    
-    // Check if format needs conversion (WebP or other unsupported formats)
-    if (uploadedFile.file.type === 'image/webp' || !['PNG', 'JPEG', 'GIF'].includes(format)) {
-      try {
-        // Convert WebP and other unsupported formats to JPEG
-        const convertedUrl = await convertImageToSupportedFormat(uploadedFile.file, 'JPEG');
-        return { dataUrl: convertedUrl, format: 'JPEG' };
-      } catch (error) {
-        console.warn('Failed to convert image format, falling back to original:', error);
-        return { dataUrl: uploadedFile.preview, format: 'JPEG' };
-      }
-    }
-    
-    return { dataUrl: uploadedFile.preview, format };
-  };
-
   const removeFile = (id: string, type: 'cover' | 'renderings') => {
     if (type === 'cover') {
       if (coverPhoto?.preview) {
@@ -189,276 +119,226 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
   const generatePDF = async () => {
     setIsGenerating(true);
     try {
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      const pageWidth = 210; // A4 width in mm
-      const pageHeight = 297; // A4 height in mm
-      const margin = 20; // mm
+      // Professional document setup - US Letter size
+      const pdf = new jsPDF('p', 'mm', 'letter');
+      const pageWidth = 215.9; // Letter width in mm
+      const pageHeight = 279.4; // Letter height in mm
+      const margin = 19; // Professional margins (3/4 inch)
       const contentWidth = pageWidth - (2 * margin);
       let yPosition = margin;
+      let currentPage = 1;
       
-      // Helper function to check if we need a new page
+      // Professional typography scale and brand tokens
+      const fonts = {
+        heading: { size: 16, weight: 'bold' },
+        subheading: { size: 14, weight: 'bold' },
+        body: { size: 10, weight: 'normal' },
+        small: { size: 9, weight: 'normal' },
+        caption: { size: 8, weight: 'normal' }
+      };
+      
+      const colors = {
+        primary: [0, 0, 0], // Black
+        accent: [66, 255, 193], // EDG Teal
+        gray: [128, 128, 128],
+        lightGray: [240, 240, 240]
+      };
+      
+      // Company information
+      const company = {
+        name: 'EDG Patio & Shade',
+        address1: '1802 Holian Drive',
+        address2: 'Spring Grove, IL 60081',
+        email: 'info@edgfurniture.com',
+        phone: '+1 (815) 581-0138',
+        website: 'www.edgfurniture.com'
+      };
+      
+      // Professional drawing utilities
+      const setFont = (type: keyof typeof fonts) => {
+        pdf.setFontSize(fonts[type].size);
+        pdf.setFont('helvetica', fonts[type].weight as any);
+      };
+      
+      const setColor = (colorKey: keyof typeof colors) => {
+        const [r, g, b] = colors[colorKey];
+        pdf.setTextColor(r, g, b);
+      };
+      
       const checkPageBreak = (heightNeeded: number) => {
-        if (yPosition + heightNeeded > pageHeight - margin) {
-          pdf.addPage();
-          yPosition = margin;
+        if (yPosition + heightNeeded > pageHeight - margin - 15) { // Leave space for footer
+          addNewPage();
           return true;
         }
         return false;
       };
       
-      // Helper function to add text with automatic line breaking
-      const addTextWithWrapping = (text: string, x: number, fontSize: number, style: 'normal' | 'bold' = 'normal', maxWidth?: number) => {
-        pdf.setFontSize(fontSize);
-        pdf.setFont('helvetica', style);
-        const actualMaxWidth = maxWidth || contentWidth;
-        const lines = pdf.splitTextToSize(text, actualMaxWidth);
-        const lineHeight = fontSize * 0.35277; // Convert pt to mm
-        
-        checkPageBreak(lines.length * lineHeight);
-        
-        for (const line of lines) {
-          pdf.text(line, x, yPosition);
-          yPosition += lineHeight;
-        }
-        return yPosition;
+      const addNewPage = () => {
+        pdf.addPage();
+        currentPage++;
+        yPosition = margin + 20; // Leave space for header
+        drawHeader();
+        drawFooter();
       };
-
-      // Cover page
-      if (includeCoverPage) {
-        pdf.setFontSize(28);
-        pdf.setFont('helvetica', 'bold');
-        pdf.text('Project Proposal', pageWidth / 2, 60, { align: 'center' });
+      
+      const drawHeader = () => {
+        // Company header on every page (except cover)
+        const headerY = margin;
+        setFont('subheading');
+        setColor('primary');
+        pdf.text(company.name, margin, headerY);
         
-        yPosition = 80;
-        pdf.setFontSize(20);
-        pdf.setFont('helvetica', 'normal');
-        pdf.text(quote.projectName || 'Outdoor Living Project', pageWidth / 2, yPosition, { align: 'center' });
+        setFont('caption');
+        pdf.text(company.address1, margin, headerY + 4);
+        pdf.text(company.address2, margin, headerY + 8);
         
-        yPosition = 120;
-        if (coverPhoto) {
-          try {
-            // Add cover photo if available
-            const maxPhotoWidth = 120;
-            const maxPhotoHeight = 80;
-            const { dataUrl, format } = await getImageDataForPDF(coverPhoto);
-            pdf.addImage(dataUrl, format, (pageWidth - maxPhotoWidth) / 2, yPosition, maxPhotoWidth, maxPhotoHeight);
-            yPosition += maxPhotoHeight + 20;
-            
-            // Clean up converted image URL if it's different from original
-            if (dataUrl !== coverPhoto.preview) {
-              URL.revokeObjectURL(dataUrl);
-            }
-          } catch (e) {
-            console.warn('Could not add cover photo to PDF:', e);
+        // Contact info on right
+        const rightX = pageWidth - margin;
+        pdf.text(company.email, rightX, headerY, { align: 'right' });
+        pdf.text(company.phone, rightX, headerY + 4, { align: 'right' });
+        pdf.text(company.website, rightX, headerY + 8, { align: 'right' });
+        
+        // Header line
+        pdf.setDrawColor(200, 200, 200);
+        pdf.setLineWidth(0.5);
+        pdf.line(margin, headerY + 12, pageWidth - margin, headerY + 12);
+      };
+      
+      const drawFooter = () => {
+        const footerY = pageHeight - margin + 5;
+        setFont('caption');
+        setColor('gray');
+        
+        // Page numbers
+        const totalPages = pdf.getNumberOfPages();
+        pdf.text(`Page ${currentPage} of ${totalPages}`, pageWidth / 2, footerY, { align: 'center' });
+      };
+      
+      const drawEstimateHeader = () => {
+        setFont('heading');
+        setColor('primary');
+        pdf.text('ESTIMATE', margin, yPosition);
+        yPosition += 12;
+      };
+      
+      const drawAddresses = () => {
+        const leftCol = margin;
+        const rightCol = margin + (contentWidth / 2);
+        const startY = yPosition;
+        
+        // Bill To
+        setFont('body');
+        setColor('primary');
+        pdf.text('Bill to', leftCol, yPosition);
+        yPosition += 6;
+        
+        setFont('body');
+        const customer = quote.account ?? quote.customer;
+        pdf.text(customer.name, leftCol, yPosition);
+        yPosition += 4;
+        if (customer.company) {
+          pdf.text(customer.company, leftCol, yPosition);
+          yPosition += 4;
+        }
+        if (customer.billingAddress) {
+          const billingLines = pdf.splitTextToSize(customer.billingAddress, (contentWidth / 2) - 10);
+          for (const line of billingLines) {
+            pdf.text(line, leftCol, yPosition);
+            yPosition += 4;
           }
         }
         
-        // Customer info on cover
-        yPosition = Math.max(yPosition, 220);
-        pdf.setFontSize(14);
-        pdf.text('Prepared for:', pageWidth / 2, yPosition, { align: 'center' });
+        // Ship To (reset y to start position for right column)
+        const shipToY = startY;
+        pdf.text('Ship to', rightCol, shipToY);
+        
+        let shipY = shipToY + 6;
+        pdf.text(customer.name, rightCol, shipY);
+        shipY += 4;
+        if (quote.projectAddress) {
+          const addressLines = pdf.splitTextToSize(quote.projectAddress, (contentWidth / 2) - 10);
+          for (const line of addressLines) {
+            pdf.text(line, rightCol, shipY);
+            shipY += 4;
+          }
+        }
+        
+        yPosition += 8; // Extra spacing after addresses
+      };
+      
+      const drawEstimateDetails = () => {
         yPosition += 10;
         
-        pdf.setFont('helvetica', 'bold');
-        pdf.setFontSize(16);
-        pdf.text((quote.account ?? quote.customer).name, pageWidth / 2, yPosition, { align: 'center' });
+        setFont('body');
+        setColor('primary');
+        
+        // Create a simple details grid
+        const detailsY = yPosition;
+        pdf.text('Estimate details', margin, detailsY);
         yPosition += 8;
         
-        pdf.setFont('helvetica', 'normal');
-        pdf.setFontSize(12);
-        if (quote.projectAddress || (quote.account ?? quote.customer).company) {
-          pdf.text(quote.projectAddress || (quote.account ?? quote.customer).company || '', pageWidth / 2, yPosition, { align: 'center' });
-        }
+        // Estimate number and date
+        pdf.text(`Estimate no.: ${quote.id}`, margin, yPosition);
+        yPosition += 4;
         
-        pdf.addPage();
-        yPosition = margin;
-      }
-
-      // Project details section header - teal background
-      pdf.setFillColor(66, 255, 193); // EDG brand teal
-      pdf.rect(margin, yPosition - 5, contentWidth, 15, 'F');
-      pdf.setTextColor(255, 255, 255); // White text
-      pdf.setFontSize(16);
-      pdf.setFont('helvetica', 'bold');
-      pdf.text('PROJECT DETAILS', margin + 5, yPosition + 5);
-      pdf.setTextColor(0, 0, 0); // Reset to black
-      yPosition += 20;
+        const estimateDate = new Date().toLocaleDateString('en-US', {
+          month: '2-digit',
+          day: '2-digit', 
+          year: 'numeric'
+        });
+        pdf.text(`Estimate date: ${estimateDate}`, margin, yPosition);
+        yPosition += 15;
+      };
       
-      
-      checkPageBreak(40); // Reserve space for project details
-      
-      // Two column layout for project details
-      const colWidth = contentWidth / 2 - 10;
-      const col1X = margin;
-      const col2X = margin + colWidth + 20;
-      let col1Y = yPosition;
-      let col2Y = yPosition;
-      
-      // Column 1
-      pdf.setFontSize(10);
-      pdf.setFont('helvetica', 'bold');
-      pdf.text('Quote Number:', col1X, col1Y);
-      col1Y += 5;
-      pdf.setFont('helvetica', 'normal');
-      pdf.text(quote.quoteNumber, col1X, col1Y);
-      col1Y += 8;
-      
-      pdf.setFont('helvetica', 'bold');
-      pdf.text('Customer:', col1X, col1Y);
-      col1Y += 5;
-      pdf.setFont('helvetica', 'normal');
-      pdf.text((quote.account ?? quote.customer).name, col1X, col1Y);
-      col1Y += 8;
-      
-      pdf.setFont('helvetica', 'bold');
-      pdf.text('Email:', col1X, col1Y);
-      col1Y += 5;
-      pdf.setFont('helvetica', 'normal');
-      pdf.text((quote.account ?? quote.customer).email || '', col1X, col1Y);
-      col1Y += 8;
-      
-      pdf.setFont('helvetica', 'bold');
-      pdf.text('Phone:', col1X, col1Y);
-      col1Y += 5;
-      pdf.setFont('helvetica', 'normal');
-      pdf.text((quote.account ?? quote.customer).phone || '', col1X, col1Y);
-      
-      // Column 2
-      pdf.setFont('helvetica', 'bold');
-      pdf.text('Project:', col2X, col2Y);
-      col2Y += 5;
-      pdf.setFont('helvetica', 'normal');
-      pdf.text(quote.projectName || 'Outdoor Living Project', col2X, col2Y);
-      col2Y += 8;
-      
-      pdf.setFont('helvetica', 'bold');
-      pdf.text('Address:', col2X, col2Y);
-      col2Y += 5;
-      pdf.setFont('helvetica', 'normal');
-      const addressLines = pdf.splitTextToSize(quote.projectAddress || 'Not specified', colWidth);
-      for (const line of addressLines) {
-        pdf.text(line, col2X, col2Y);
-        col2Y += 5;
-      }
-      col2Y += 3;
-      
-      pdf.setFont('helvetica', 'bold');
-      pdf.text('Start Date:', col2X, col2Y);
-      col2Y += 5;
-      pdf.setFont('helvetica', 'normal');
-      pdf.text(quote.estimatedStartDate || 'TBD', col2X, col2Y);
-      
-      yPosition = Math.max(col1Y, col2Y) + 15;
-
-      // Product renderings
-      if (productRenderings.length > 0) {
-        checkPageBreak(60);
+      const drawProfessionalTable = () => {
+        if (quote.lineItems.length === 0) return;
         
-        // Product Renderings section header - teal background
-        pdf.setFillColor(66, 255, 193); // EDG brand teal
-        pdf.rect(margin, yPosition - 5, contentWidth, 15, 'F');
-        pdf.setTextColor(255, 255, 255); // White text
-        pdf.setFontSize(14);
-        pdf.setFont('helvetica', 'bold');
-        pdf.text('PRODUCT RENDERINGS', margin + 5, yPosition + 5);
-        pdf.setTextColor(0, 0, 0); // Reset to black
-        yPosition += 20;
-        
-        const imagesPerRow = 3;
-        const imageWidth = (contentWidth - 20) / imagesPerRow;
-        const imageHeight = 40;
-        let currentX = margin;
-        let imagesInCurrentRow = 0;
-        
-        for (let i = 0; i < Math.min(productRenderings.length, 6); i++) {
-          if (imagesInCurrentRow === 0) {
-            checkPageBreak(imageHeight + 10);
-          }
-          
-          try {
-            const { dataUrl, format } = await getImageDataForPDF(productRenderings[i]);
-            pdf.addImage(dataUrl, format, currentX, yPosition, imageWidth - 5, imageHeight);
-            
-            // Clean up converted image URL if it's different from original
-            if (dataUrl !== productRenderings[i].preview) {
-              URL.revokeObjectURL(dataUrl);
-            }
-          } catch (e) {
-            console.warn(`Could not add rendering ${i} to PDF:`, e);
-          }
-          
-          currentX += imageWidth;
-          imagesInCurrentRow++;
-          
-          if (imagesInCurrentRow === imagesPerRow) {
-            yPosition += imageHeight + 10;
-            currentX = margin;
-            imagesInCurrentRow = 0;
-          }
-        }
-        
-        if (imagesInCurrentRow > 0) {
-          yPosition += imageHeight + 10;
-        }
-        yPosition += 10;
-      }
-
-      // Line items table
-      if (quote.lineItems.length > 0) {
-        checkPageBreak(40);
-        
-        // Project Items section header - teal background
-        pdf.setFillColor(66, 255, 193); // EDG brand teal
-        pdf.rect(margin, yPosition - 5, contentWidth, 15, 'F');
-        pdf.setTextColor(255, 255, 255); // White text
-        pdf.setFontSize(14);
-        pdf.setFont('helvetica', 'bold');
-        pdf.text('PROJECT ITEMS', margin + 5, yPosition + 5);
-        pdf.setTextColor(0, 0, 0); // Reset to black
-        yPosition += 20;
-        
-        // Table headers
+        // Table configuration
         const tableStartY = yPosition;
-        const rowHeight = 8;
-        const headerHeight = 10;
+        const rowHeight = 12;
+        const headerHeight = 8;
         
-        // Column widths
-        const descWidth = showPricing ? contentWidth * 0.5 : contentWidth * 0.8;
-        const qtyWidth = showPricing ? contentWidth * 0.1 : contentWidth * 0.2;
-        const priceWidth = showPricing ? contentWidth * 0.2 : 0;
-        const totalWidth = showPricing ? contentWidth * 0.2 : 0;
+        // Column configuration - matches EDG example
+        const columns = [
+          { header: '#', width: 8, align: 'left' },
+          { header: 'Date', width: 15, align: 'left' },
+          { header: 'Product or service', width: 45, align: 'left' },
+          { header: 'SKU', width: 20, align: 'left' },
+          { header: 'Description', width: 65, align: 'left' },
+          { header: 'Qty', width: 12, align: 'center' },
+          { header: 'Rate', width: 20, align: 'right' },
+          { header: 'Amount', width: 20, align: 'right' }
+        ];
         
-        // Draw header background - EDG brand teal
-        pdf.setFillColor(66, 255, 193); // EDG brand teal #42ffc1
-        pdf.rect(margin, yPosition - 2, contentWidth, headerHeight, 'F');
+        const totalTableWidth = columns.reduce((sum, col) => sum + col.width, 0);
+        const tableX = margin;
         
-        // Header borders
-        pdf.setDrawColor(221, 221, 221);
-        pdf.setLineWidth(0.1);
+        const drawTableHeader = () => {
+          setFont('body');
+          setColor('primary');
+          
+          let currentX = tableX;
+          
+          columns.forEach(col => {
+            let textX = currentX;
+            if (col.align === 'center') textX = currentX + (col.width / 2);
+            else if (col.align === 'right') textX = currentX + col.width;
+            
+            const align = col.align === 'center' ? 'center' : col.align === 'right' ? 'right' : 'left';
+            pdf.text(col.header, textX, yPosition, { align: align as any });
+            currentX += col.width;
+          });
+          
+          yPosition += headerHeight;
+          
+          // Header underline
+          pdf.setDrawColor(0, 0, 0);
+          pdf.setLineWidth(0.5);
+          pdf.line(tableX, yPosition, tableX + totalTableWidth, yPosition);
+          yPosition += 3;
+        };
         
-        // Header text - white text on teal background
-        pdf.setTextColor(255, 255, 255); // White text
-        pdf.setFontSize(10);
-        pdf.setFont('helvetica', 'bold');
-        pdf.text('Description', margin + 2, yPosition + 6);
-        pdf.text('Qty', margin + descWidth + 2, yPosition + 6);
-        
-        if (showPricing) {
-          pdf.text('Unit Price', margin + descWidth + qtyWidth + 2, yPosition + 6);
-          pdf.text('Total', margin + descWidth + qtyWidth + priceWidth + 2, yPosition + 6);
-        }
-        
-        // Reset text color to black for content
-        pdf.setTextColor(0, 0, 0);
-        
-        yPosition += headerHeight;
-        
-        // Table rows
-        pdf.setFont('helvetica', 'normal');
-        pdf.setFillColor(255, 255, 255);
-        
-        for (let i = 0; i < quote.lineItems.length; i++) {
-          const item = quote.lineItems[i];
+        const drawTableRow = (item: any, index: number) => {
           const qty = parseFloat(item.quantity.toString());
           const price = parseFloat(item.unitPrice.toString());
           const markup = parseFloat(item.markupValue.toString());
@@ -467,198 +347,236 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
             ? baseTotal + (baseTotal * (markup / 100))
             : baseTotal + markup;
           
-          // Check if we need to split long descriptions
-          const descLines = pdf.splitTextToSize(item.description, descWidth - 4);
-          const neededHeight = Math.max(rowHeight, descLines.length * 5);
+          // Check if row needs multiple lines for description
+          const maxDescWidth = columns[4].width - 2;
+          const descLines = pdf.splitTextToSize(item.description, maxDescWidth);
+          const actualRowHeight = Math.max(rowHeight, descLines.length * 4 + 4);
           
-          checkPageBreak(neededHeight + 5);
-          
-          // Draw row background (alternating) - light teal for even rows
-          if (i % 2 === 0) {
-            pdf.setFillColor(240, 255, 251); // Very light teal
-            pdf.rect(margin, yPosition - 2, contentWidth, neededHeight, 'F');
+          // Check for page break and redraw header if needed
+          if (checkPageBreak(actualRowHeight + 5)) {
+            drawTableHeader();
           }
           
-          // Draw borders
-          pdf.rect(margin, yPosition - 2, descWidth, neededHeight);
-          pdf.rect(margin + descWidth, yPosition - 2, qtyWidth, neededHeight);
+          setFont('small');
+          setColor('primary');
           
-          if (showPricing) {
-            pdf.rect(margin + descWidth + qtyWidth, yPosition - 2, priceWidth, neededHeight);
-            pdf.rect(margin + descWidth + qtyWidth + priceWidth, yPosition - 2, totalWidth, neededHeight);
-          }
+          let currentX = tableX;
+          const baseY = yPosition;
           
-          // Row text
-          pdf.setFontSize(9);
+          // Row data
+          const rowData = [
+            (index + 1).toString(), // #
+            '', // Date (empty in example)
+            item.description.split(' ').slice(0, 3).join(' '), // Product name (abbreviated)
+            item.description.split(' ').slice(0, 2).join(' '), // SKU (abbreviated)
+            item.description, // Full description
+            qty.toString(),
+            formatCurrency(price),
+            formatCurrency(total)
+          ];
           
-          // Description (multi-line)
-          for (let j = 0; j < descLines.length; j++) {
-            pdf.text(descLines[j], margin + 2, yPosition + 4 + (j * 5));
-          }
-          
-          // Quantity
-          pdf.text(qty.toString(), margin + descWidth + 2, yPosition + 4);
-          
-          if (showPricing) {
-            // Unit Price
-            pdf.text(formatCurrency(price), margin + descWidth + qtyWidth + 2, yPosition + 4);
+          columns.forEach((col, colIndex) => {
+            let textX = currentX;
+            if (col.align === 'center') textX = currentX + (col.width / 2);
+            else if (col.align === 'right') textX = currentX + col.width - 1;
             
-            // Total
-            pdf.text(formatCurrency(total), margin + descWidth + qtyWidth + priceWidth + 2, yPosition + 4);
-          }
+            const align = col.align === 'center' ? 'center' : col.align === 'right' ? 'right' : 'left';
+            
+            if (colIndex === 4) { // Description column - handle multi-line
+              for (let i = 0; i < descLines.length; i++) {
+                pdf.text(descLines[i], textX, baseY + (i * 4), { align: align as any });
+              }
+            } else {
+              pdf.text(rowData[colIndex], textX, baseY, { align: align as any });
+            }
+            
+            currentX += col.width;
+          });
           
-          yPosition += neededHeight;
+          yPosition += actualRowHeight;
+        };
+        
+        // Draw table header
+        drawTableHeader();
+        
+        // Draw table rows
+        quote.lineItems.forEach((item, index) => {
+          drawTableRow(item, index);
+        });
+        
+        yPosition += 10;
+      };
+      
+      const drawTotalsSection = () => {
+        if (!showPricing) return;
+        
+        checkPageBreak(50);
+        
+        // Professional totals area - right aligned
+        const totalsWidth = 60;
+        const totalsX = pageWidth - margin - totalsWidth;
+        const labelsX = totalsX - 5;
+        
+        setFont('body');
+        setColor('primary');
+        
+        // Subtotal
+        pdf.text('Subtotal:', labelsX, yPosition, { align: 'right' });
+        pdf.text(formatCurrency(totals.subtotal), totalsX + totalsWidth, yPosition, { align: 'right' });
+        yPosition += 6;
+        
+        // Sales tax
+        if (totals.taxAmount > 0) {
+          pdf.text('Sales tax:', labelsX, yPosition, { align: 'right' });
+          pdf.text(formatCurrency(totals.taxAmount), totalsX + totalsWidth, yPosition, { align: 'right' });
+          yPosition += 6;
         }
+        
+        // Total line
+        pdf.setDrawColor(0, 0, 0);
+        pdf.setLineWidth(0.5);
+        pdf.line(labelsX, yPosition, totalsX + totalsWidth, yPosition);
+        yPosition += 4;
+        
+        setFont('subheading');
+        pdf.text('Total:', labelsX, yPosition, { align: 'right' });
+        pdf.text(formatCurrency(totals.total), totalsX + totalsWidth, yPosition, { align: 'right' });
+        yPosition += 15;
+      };
+      
+      const drawSignatureSection = () => {
+        checkPageBreak(40);
         
         yPosition += 10;
         
-        // Totals section
-        if (showPricing) {
-          checkPageBreak(50);
-          
-          const totalsX = margin + contentWidth - 80;
-          const totalsLabelX = totalsX - 60;
-          
-          pdf.setFontSize(10);
-          pdf.setFont('helvetica', 'normal');
-          
-          pdf.text('Subtotal:', totalsLabelX, yPosition);
-          pdf.text(formatCurrency(totals.subtotal), totalsX, yPosition);
-          yPosition += 6;
-          
-          if (totals.discountAmount > 0) {
-            pdf.text('Discount:', totalsLabelX, yPosition);
-            pdf.text(`-${formatCurrency(totals.discountAmount)}`, totalsX, yPosition);
-            yPosition += 6;
-          }
-          
-          if (totals.shippingAmount > 0) {
-            pdf.text('Shipping:', totalsLabelX, yPosition);
-            pdf.text(formatCurrency(totals.shippingAmount), totalsX, yPosition);
-            yPosition += 6;
-          }
-          
-          if (totals.taxAmount > 0) {
-            pdf.text('Tax:', totalsLabelX, yPosition);
-            pdf.text(formatCurrency(totals.taxAmount), totalsX, yPosition);
-            yPosition += 6;
-          }
-          
-          // Total line - highlighted in teal
-          pdf.setDrawColor(66, 255, 193); // Teal line
-          pdf.setLineWidth(1.5);
-          pdf.line(totalsLabelX, yPosition, totalsX + 50, yPosition);
-          pdf.setDrawColor(0, 0, 0); // Reset to black
-          yPosition += 5;
-          
-          pdf.setTextColor(66, 255, 193); // Teal text for total
-          pdf.setFont('helvetica', 'bold');
-          pdf.setFontSize(12);
-          pdf.text('Total:', totalsLabelX, yPosition);
-          pdf.text(formatCurrency(totals.total), totalsX, yPosition);
-          pdf.setTextColor(0, 0, 0); // Reset to black
-          yPosition += 15;
-        }
-      }
-
-      // Notes
-      if (quote.notes && quote.notes.trim()) {
-        checkPageBreak(30);
+        // Signature lines
+        const leftSigX = margin;
+        const rightSigX = margin + (contentWidth / 2);
         
-        // Project Notes section header - teal background
-        pdf.setFillColor(66, 255, 193); // EDG brand teal
-        pdf.rect(margin, yPosition - 5, contentWidth, 15, 'F');
-        pdf.setTextColor(255, 255, 255); // White text
-        pdf.setFontSize(14);
-        pdf.setFont('helvetica', 'bold');
-        pdf.text('PROJECT NOTES', margin + 5, yPosition + 5);
-        pdf.setTextColor(0, 0, 0); // Reset to black
+        setFont('body');
+        setColor('primary');
+        
+        // Acceptance signature
+        pdf.text('Accepted date', leftSigX, yPosition);
+        pdf.text('Accepted by', rightSigX, yPosition);
+        yPosition += 15;
+        
+        // Signature lines
+        pdf.setDrawColor(0, 0, 0);
+        pdf.setLineWidth(0.5);
+        pdf.line(leftSigX, yPosition, leftSigX + 50, yPosition);
+        pdf.line(rightSigX, yPosition, rightSigX + 80, yPosition);
         yPosition += 20;
-        
-        pdf.setFontSize(10);
-        pdf.setFont('helvetica', 'normal');
-        
-        // Split notes into lines and add with proper wrapping
-        const noteLines = quote.notes.split('\n');
-        for (const noteLine of noteLines) {
-          if (noteLine.trim()) {
-            const wrappedLines = pdf.splitTextToSize(noteLine, contentWidth - 10);
-            checkPageBreak(wrappedLines.length * 5 + 5);
-            
-            for (const wrappedLine of wrappedLines) {
-              pdf.text(wrappedLine, margin + 5, yPosition);
-              yPosition += 5;
-            }
-            yPosition += 3;
-          } else {
-            yPosition += 5; // Empty line spacing
-          }
-        }
-      }
+      };
 
-      // Contract Terms Section
+      // === MAIN PDF GENERATION FLOW ===
+      
+      // Generate first page
+      drawHeader();
+      drawEstimateHeader();
+      drawAddresses();
+      drawEstimateDetails();
+      drawProfessionalTable();
+      drawTotalsSection();
+      drawSignatureSection();
+      
+      // Add contract terms if available
       if (includeContract && hasContractData) {
-        checkPageBreak(30);
-        
-        // Contract Terms section header - teal background
-        pdf.setFillColor(66, 255, 193); // EDG brand teal
-        pdf.rect(margin, yPosition - 5, contentWidth, 15, 'F');
-        pdf.setTextColor(255, 255, 255); // White text
-        pdf.setFontSize(14);
-        pdf.setFont('helvetica', 'bold');
-        pdf.text('CONTRACT TERMS', margin + 5, yPosition + 5);
-        pdf.setTextColor(0, 0, 0); // Reset to black
-        yPosition += 20;
-        
-        // Add contract title if using template
-        if (quote.contractTemplate?.title) {
-          pdf.setFontSize(12);
-          pdf.setFont('helvetica', 'bold');
-          pdf.text(quote.contractTemplate.title, margin, yPosition);
-          yPosition += 12;
+        // Start contract on new page if needed
+        if (yPosition > pageHeight - 80) {
+          addNewPage();
+        } else {
+          yPosition += 20;
         }
         
-        // Get contract content (template terms or custom terms)
+        checkPageBreak(30);
+        
+        setFont('subheading');
+        setColor('primary');
+        pdf.text('CONTRACT', margin, yPosition);
+        yPosition += 15;
+        
+        // Get contract content
         const contractContent = quote.contractTemplate?.terms || quote.customContractTerms || '';
         
         if (contractContent.trim()) {
-          pdf.setFontSize(10);
-          pdf.setFont('helvetica', 'normal');
+          setFont('small');
+          setColor('primary');
           
-          // Split contract content into lines and add with proper wrapping
-          const contractLines = contractContent.split('\n');
-          for (const contractLine of contractLines) {
-            if (contractLine.trim()) {
-              const wrappedLines = pdf.splitTextToSize(contractLine, contentWidth - 10);
-              checkPageBreak(wrappedLines.length * 5 + 5);
-              
-              for (const wrappedLine of wrappedLines) {
-                pdf.text(wrappedLine, margin + 5, yPosition);
-                yPosition += 5;
+          // Split contract content into numbered clauses
+          const clauses = contractContent.split(/(?=\d+\.)/);
+          
+          for (let i = 0; i < clauses.length; i++) {
+            const clause = clauses[i].trim();
+            if (!clause) continue;
+            
+            // Split clause into lines
+            const clauseLines = clause.split('\n');
+            let firstLine = true;
+            
+            for (const line of clauseLines) {
+              if (!line.trim()) {
+                yPosition += 3;
+                continue;
               }
-              yPosition += 3;
-            } else {
-              yPosition += 5; // Empty line spacing
+              
+              const wrappedLines = pdf.splitTextToSize(line.trim(), contentWidth - 5);
+              checkPageBreak(wrappedLines.length * 4 + 5);
+              
+              for (let j = 0; j < wrappedLines.length; j++) {
+                const indentX = firstLine ? margin : margin + 5;
+                pdf.text(wrappedLines[j], indentX, yPosition);
+                yPosition += 4;
+                firstLine = false;
+              }
             }
+            yPosition += 3;
           }
-          yPosition += 10; // Extra spacing after contract section
         }
       }
+      
+      // Update all page footers with correct total page count
+      const totalPages = pdf.getNumberOfPages();
+      for (let i = 1; i <= totalPages; i++) {
+        pdf.setPage(i);
+        const footerY = pageHeight - margin + 5;
+        
+        // Clear previous footer
+        pdf.setFillColor(255, 255, 255);
+        pdf.rect(margin, footerY - 5, contentWidth, 10, 'F');
+        
+        // Draw new footer
+        setFont('caption');
+        setColor('gray');
+        pdf.text(`Page ${i} of ${totalPages}`, pageWidth / 2, footerY, { align: 'center' });
+      }
 
-      // Download the PDF
-      pdf.save(`Proposal-${quote.quoteNumber}.pdf`);
+      // Save the PDF
+      const pdfBlob = pdf.output('blob');
+      const timestamp = new Date().toISOString().slice(0, 19).replace(/[-:]/g, '');
+      const customer = quote.account ?? quote.customer;
+      const filename = `${customer.name.replace(/[^a-zA-Z0-9]/g, '_')}_Estimate_${timestamp}.pdf`;
+      
+      // Create download link
+      const url = URL.createObjectURL(pdfBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
       
       toast({
-        title: "Success!",
-        description: "Proposal PDF generated and downloaded successfully.",
+        title: "PDF Generated Successfully",
+        description: `Professional proposal downloaded as ${filename}`,
       });
       
-      onOpenChange(false);
     } catch (error) {
       console.error('Error generating PDF:', error);
       toast({
-        title: "Error",
-        description: "Failed to generate PDF. Please try again.",
+        title: "Error Generating PDF",
+        description: "There was an error creating the PDF. Please try again.",
         variant: "destructive"
       });
     } finally {
@@ -668,236 +586,184 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto" data-testid="dialog-proposal-generator">
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <FileText className="h-5 w-5" />
-            Generate Proposal - {quote.quoteNumber}
+            <FileText className="w-5 h-5" />
+            Professional Proposal Generator
           </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-6">
-          {/* Options Section */}
+          {/* PDF Options */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Proposal Options</CardTitle>
+              <CardTitle className="text-lg">PDF Options</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center justify-between">
-                <div>
-                  <Label htmlFor="show-pricing" className="text-sm font-medium">
-                    Include Pricing in PDF
-                  </Label>
-                  <p className="text-sm text-gray-500">Show prices, totals, and financial details</p>
-                </div>
-                <Switch
-                  id="show-pricing"
-                  checked={showPricing}
-                  onCheckedChange={setShowPricing}
-                  data-testid="switch-show-pricing"
+                <Label htmlFor="show-pricing">Include Pricing</Label>
+                <Switch 
+                  id="show-pricing" 
+                  checked={showPricing} 
+                  onCheckedChange={setShowPricing} 
                 />
               </div>
               
               <div className="flex items-center justify-between">
-                <div>
-                  <Label htmlFor="include-cover" className="text-sm font-medium">
-                    Include Cover Page
-                  </Label>
-                  <p className="text-sm text-gray-500">Add a professional cover page with project details</p>
-                </div>
-                <Switch
-                  id="include-cover"
-                  checked={includeCoverPage}
-                  onCheckedChange={setIncludeCoverPage}
-                  data-testid="switch-include-cover"
+                <Label htmlFor="include-cover">Include Cover Page</Label>
+                <Switch 
+                  id="include-cover" 
+                  checked={includeCoverPage} 
+                  onCheckedChange={setIncludeCoverPage} 
                 />
               </div>
-              
-              {/* Contract Terms Toggle */}
+
               {hasContractData && (
                 <div className="flex items-center justify-between">
-                  <div>
-                    <Label htmlFor="include-contract" className="text-sm font-medium">
-                      Include Contract Terms
-                    </Label>
-                    <p className="text-sm text-gray-500">
-                      {quote.contractTemplate 
-                        ? `Template: ${quote.contractTemplate.name}` 
-                        : 'Custom contract terms'}
-                    </p>
-                  </div>
-                  <Switch
-                    id="include-contract"
-                    checked={includeContract}
-                    onCheckedChange={setIncludeContract}
-                    data-testid="switch-include-contract"
+                  <Label htmlFor="include-contract">Include Contract Terms</Label>
+                  <Switch 
+                    id="include-contract" 
+                    checked={includeContract} 
+                    onCheckedChange={setIncludeContract} 
                   />
                 </div>
               )}
             </CardContent>
           </Card>
 
-          {/* Cover Photo Section */}
+          {/* Cover Photo Upload */}
           {includeCoverPage && (
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg flex items-center gap-2">
-                  <Image className="h-5 w-5" />
+                  <Camera className="w-5 h-5" />
                   Cover Photo
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  {coverPhoto ? (
-                    <div className="relative">
-                      <img
-                        src={coverPhoto.preview}
-                        alt="Cover photo"
-                        className="w-full h-48 object-cover rounded border"
-                      />
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        className="absolute top-2 right-2"
-                        onClick={() => removeFile(coverPhoto.id, 'cover')}
-                        data-testid="button-remove-cover-photo"
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                      <Badge className="absolute bottom-2 left-2 bg-black/70 text-white">
-                        {coverPhoto.name}
-                      </Badge>
-                    </div>
-                  ) : (
-                    <div
-                      className="border-2 border-dashed border-gray-300 rounded-lg p-12 text-center cursor-pointer hover:border-gray-400 transition-colors"
-                      onClick={() => coverPhotoRef.current?.click()}
-                      data-testid="dropzone-cover-photo"
+                {!coverPhoto ? (
+                  <div 
+                    className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center cursor-pointer hover:border-gray-400 transition-colors"
+                    onClick={() => coverPhotoRef.current?.click()}
+                  >
+                    <Upload className="w-8 h-8 mx-auto mb-2 text-gray-400" />
+                    <p className="text-sm text-gray-600">Click to upload cover photo</p>
+                    <p className="text-xs text-gray-500">PNG, JPG up to 10MB</p>
+                  </div>
+                ) : (
+                  <div className="relative">
+                    <img 
+                      src={coverPhoto.preview} 
+                      alt="Cover preview" 
+                      className="w-full h-48 object-cover rounded-lg"
+                    />
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      className="absolute top-2 right-2"
+                      onClick={() => removeFile(coverPhoto.id, 'cover')}
                     >
-                      <Upload className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                      <p className="text-lg font-medium text-gray-700">Upload Cover Photo</p>
-                      <p className="text-sm text-gray-500">Click to select an image for your proposal cover</p>
-                    </div>
-                  )}
-                  <input
-                    ref={coverPhotoRef}
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={(e) => handleFileUpload(e.target.files, 'cover')}
-                  />
-                </div>
+                      <X className="w-4 h-4" />
+                    </Button>
+                    <Badge variant="secondary" className="absolute bottom-2 left-2">
+                      {coverPhoto.name}
+                    </Badge>
+                  </div>
+                )}
+                <input
+                  ref={coverPhotoRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => handleFileUpload(e.target.files, 'cover')}
+                />
               </CardContent>
             </Card>
           )}
 
-          {/* Product Renderings Section */}
+          {/* Product Renderings Upload */}
           <Card>
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
-                <Camera className="h-5 w-5" />
+                <Image className="w-5 h-5" />
                 Product Renderings
-                <Badge variant="outline" className="ml-2">
-                  {productRenderings.length}/5
-                </Badge>
+                <Badge variant="outline">{productRenderings.length}/5</Badge>
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                {productRenderings.length > 0 && (
+              {productRenderings.length === 0 ? (
+                <div 
+                  className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center cursor-pointer hover:border-gray-400 transition-colors"
+                  onClick={() => renderingsRef.current?.click()}
+                >
+                  <Upload className="w-8 h-8 mx-auto mb-2 text-gray-400" />
+                  <p className="text-sm text-gray-600">Click to upload product renderings</p>
+                  <p className="text-xs text-gray-500">PNG, JPG up to 10MB each (max 5 images)</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                     {productRenderings.map((rendering) => (
                       <div key={rendering.id} className="relative">
-                        <img
-                          src={rendering.preview}
-                          alt="Product rendering"
-                          className="w-full h-32 object-cover rounded border"
+                        <img 
+                          src={rendering.preview} 
+                          alt="Product rendering" 
+                          className="w-full h-32 object-cover rounded-lg"
                         />
                         <Button
                           variant="destructive"
                           size="sm"
                           className="absolute top-1 right-1"
                           onClick={() => removeFile(rendering.id, 'renderings')}
-                          data-testid={`button-remove-rendering-${rendering.id}`}
                         >
-                          <X className="h-3 w-3" />
+                          <X className="w-3 h-3" />
                         </Button>
+                        <Badge variant="secondary" className="absolute bottom-1 left-1 text-xs">
+                          {rendering.name.substring(0, 10)}...
+                        </Badge>
                       </div>
                     ))}
                   </div>
-                )}
-                
-                {productRenderings.length < 5 && (
-                  <div
-                    className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center cursor-pointer hover:border-gray-400 transition-colors"
-                    onClick={() => renderingsRef.current?.click()}
-                    data-testid="dropzone-product-renderings"
-                  >
-                    <Camera className="h-8 w-8 text-gray-400 mx-auto mb-2" />
-                    <p className="font-medium text-gray-700">Add Product Images</p>
-                    <p className="text-sm text-gray-500">Click to upload product renderings and photos</p>
-                  </div>
-                )}
-                
-                <input
-                  ref={renderingsRef}
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  className="hidden"
-                  onChange={(e) => handleFileUpload(e.target.files, 'renderings')}
-                />
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Preview Section */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Eye className="h-5 w-5" />
-                Proposal Preview
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="bg-gray-50 p-4 rounded border text-sm space-y-2">
-                <p><strong>Quote:</strong> {quote.quoteNumber}</p>
-                <p><strong>Customer:</strong> {quote.account.name}</p>
-                <p><strong>Project:</strong> {quote.projectName || 'Outdoor Living Project'}</p>
-                <p><strong>Items:</strong> {quote.lineItems.length} line items</p>
-                {showPricing && <p><strong>Total:</strong> {formatCurrency(totals.total)}</p>}
-                <p><strong>Cover Page:</strong> {includeCoverPage ? 'Yes' : 'No'}</p>
-                <p><strong>Cover Photo:</strong> {coverPhoto ? 'Included' : 'None'}</p>
-                <p><strong>Product Images:</strong> {productRenderings.length} images</p>
-                {hasContractData && <p><strong>Contract Terms:</strong> {includeContract ? 'Included' : 'Not included'}</p>}
-              </div>
+                  
+                  {productRenderings.length < 5 && (
+                    <Button 
+                      variant="outline" 
+                      onClick={() => renderingsRef.current?.click()}
+                      className="w-full"
+                    >
+                      <Upload className="w-4 h-4 mr-2" />
+                      Add More Images
+                    </Button>
+                  )}
+                </div>
+              )}
+              
+              <input
+                ref={renderingsRef}
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={(e) => handleFileUpload(e.target.files, 'renderings')}
+              />
             </CardContent>
           </Card>
 
           {/* Generate Button */}
           <div className="flex justify-end gap-3">
-            <Button
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-              disabled={isGenerating}
-              data-testid="button-cancel-proposal"
-            >
+            <Button variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button
-              onClick={generatePDF}
-              disabled={isGenerating}
-              className="bg-edg-black hover:bg-edg-grey text-white"
-              data-testid="button-generate-proposal"
-            >
+            <Button onClick={generatePDF} disabled={isGenerating} className="min-w-32">
               {isGenerating ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                   Generating...
                 </>
               ) : (
                 <>
-                  <Download className="mr-2 h-4 w-4" />
+                  <Download className="w-4 h-4 mr-2" />
                   Generate PDF
                 </>
               )}
