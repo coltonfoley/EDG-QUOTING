@@ -248,7 +248,6 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         currentPage++;
         yPosition = margin + 20; // Leave space for header
         drawHeader();
-        drawFooter();
       };
       
       const drawHeader = () => {
@@ -702,7 +701,6 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         currentPage++;
         yPosition = margin + 20; // Leave space for header
         drawHeader(); // This runs on page 2
-        drawFooter(); // This runs on page 2
       };
 
       const drawProductRenderingsSection = async () => {
@@ -773,7 +771,6 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
       if (!includeCoverPage) {
         // Only add header/footer if we didn't create a cover page
         drawHeader();
-        drawFooter();
       }
       // Note: If cover page was created, header/footer are already added in drawProfessionalCoverPage
       
