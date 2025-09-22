@@ -333,6 +333,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Serve quote images without auth (for PDF generation and previews)
+  app.get("/quote-images/:filename", async (req, res) => {
+    try {
+      const { filename } = req.params;
+      const objectStorageService = new ObjectStorageService();
+      
+      // Try to find the file in cover-photos or product-renderings directories
+      const privateDir = objectStorageService.getPrivateObjectDir();
+      const possiblePaths = [
+        `${privateDir}/cover-photos/${filename}`,
+        `${privateDir}/product-renderings/${filename}`
+      ];
+      
+      for (const fullPath of possiblePaths) {
+        try {
+          const objectFile = await objectStorageService.getObjectEntityFile(fullPath);
+          await objectStorageService.downloadObject(objectFile, res);
+          return;
+        } catch (error) {
+          // Continue to next path
+        }
+      }
+      
+      res.status(404).json({ message: "Image not found" });
+    } catch (error) {
+      console.error("Error serving quote image:", error);
+      res.status(500).json({ message: "Failed to serve image" });
+    }
+  });
+
   // Serve uploaded objects (with ACL check)
   app.get("/objects/:objectPath(*)", isAuthenticated, async (req, res) => {
     const userId = req.user?.id;
@@ -1029,7 +1059,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Quote image routes (protected)
-  app.get("/api/quotes/:quoteId/cover-photo", isAuthenticated, async (req, res) => {
+  app.get("/api/quotes/:quoteId/cover-photos", isAuthenticated, async (req, res) => {
     try {
       const params = quoteIdParamSchema.safeParse(req.params);
       if (!params.success) {
@@ -1162,8 +1192,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Note: File will be served through our object proxy endpoint since bucket has public access prevention
       
-      // Create public URL
-      const publicUrl = `${req.protocol}://${req.get('host')}/objects/${bucketName}/${objectName}`;
+      // Create simple accessible URL using our quote images endpoint
+      const publicUrl = `${req.protocol}://${req.get('host')}/quote-images/${sanitizedFilename}`;
       
       // Create database record
       const photoData = {
@@ -1233,8 +1263,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Note: File will be served through our object proxy endpoint since bucket has public access prevention
       
-      // Create public URL
-      const publicUrl = `${req.protocol}://${req.get('host')}/objects/${bucketName}/${objectName}`;
+      // Create simple accessible URL using our quote images endpoint  
+      const publicUrl = `${req.protocol}://${req.get('host')}/quote-images/${sanitizedFilename}`;
       
       // Create database record
       const renderingData = {
