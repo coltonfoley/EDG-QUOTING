@@ -107,6 +107,49 @@ export const insertQuoteSchema = baseQuoteSchema.extend({
   customContractTerms: z.string().max(10000, "Custom contract terms are too long").optional()
 });
 
+// Update schema for quotes - more lenient validation for partial updates
+export const updateQuoteSchema = z.object({
+  quoteNumber: z.string().min(1, "Quote number is required").max(50, "Quote number is too long").optional(),
+  accountId: z.number().int().positive("Account ID must be a positive integer").optional(),
+  assignedRepId: z.string().max(255, "Assigned rep ID is too long").optional().nullable(),
+  dealStage: z.enum(["new_lead", "qualifying", "consultation_scheduled", "building_estimate", "quote_sent", "closed_won", "closed_lost", "on_hold"]).optional(),
+  lostReason: z.string().max(500, "Lost reason is too long").optional().nullable(),
+  jobsiteAddress: z.string().max(1000, "Jobsite address is too long").optional().nullable(),
+  projectName: z.string().max(500, "Project name is too long").optional(),
+  projectAddress: z.string().max(1000, "Project address is too long").optional(),
+  estimatedStartDate: z.string().optional(),
+  notes: z.string().max(5000, "Notes are too long").optional(),
+  taxRate: z.union([z.string(), z.number(), z.null()])
+    .transform(val => val === null ? "0" : (typeof val === 'string' ? val : val.toString()))
+    .refine(val => {
+      const num = parseFloat(val);
+      return !isNaN(num) && num >= 0 && num <= 100;
+    }, "Tax rate must be between 0 and 100")
+    .optional(),
+  discount: z.union([z.string(), z.number(), z.null()])
+    .transform(val => val === null ? "0" : (typeof val === 'string' ? val : val.toString()))
+    .refine(val => {
+      const num = parseFloat(val);
+      return !isNaN(num) && num >= 0 && num <= 100;
+    }, "Discount must be between 0 and 100")
+    .optional(),
+  shipping: z.union([z.string(), z.number(), z.null()])
+    .transform(val => val === null ? "0" : (typeof val === 'string' ? val : val.toString()))
+    .refine(val => {
+      const num = parseFloat(val);
+      return !isNaN(num) && num >= 0 && num <= 1000000;
+    }, "Shipping must be between 0 and 1,000,000")
+    .optional(),
+  status: z.enum(['draft', 'sent', 'approved', 'rejected'], {
+    errorMap: () => ({ message: "Status must be one of: draft, sent, approved, rejected" })
+  }).optional(),
+  signatureStatus: z.enum(['unsigned', 'signed'], {
+    errorMap: () => ({ message: "Signature status must be one of: unsigned, signed" })
+  }).optional(),
+  contractTemplateId: z.number().int().positive().optional(),
+  customContractTerms: z.string().max(10000, "Custom contract terms are too long").optional()
+});
+
 // Enhanced LineItem validation
 export const insertLineItemSchema = baseLineItemSchema.extend({
   quoteId: z.number().int().positive("Quote ID must be a positive integer"),
