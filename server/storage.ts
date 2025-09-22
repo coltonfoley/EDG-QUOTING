@@ -1,4 +1,4 @@
-import { accounts, customers, contacts, quotes, lineItems, products, users, contractTemplates, proposalTemplates, pricingTables, productAccessories, type Account, type Customer, type Contact, type Quote, type LineItem, type Product, type User, type ContractTemplate, type ProposalTemplate, type PricingTable, type ProductAccessory, type InsertAccount, type InsertCustomer, type InsertContact, type InsertQuote, type InsertLineItem, type InsertProduct, type InsertUser, type InsertContractTemplate, type InsertProposalTemplate, type InsertPricingTable, type InsertProductAccessory, type QuoteWithDetails, type ProductWithDetails } from "@shared/schema";
+import { accounts, customers, contacts, quotes, lineItems, products, users, contractTemplates, proposalTemplates, pricingTables, productAccessories, quoteCoverPhotos, quoteProductRenderings, type Account, type Customer, type Contact, type Quote, type LineItem, type Product, type User, type ContractTemplate, type ProposalTemplate, type PricingTable, type ProductAccessory, type QuoteCoverPhoto, type QuoteProductRendering, type InsertAccount, type InsertCustomer, type InsertContact, type InsertQuote, type InsertLineItem, type InsertProduct, type InsertUser, type InsertContractTemplate, type InsertProposalTemplate, type InsertPricingTable, type InsertProductAccessory, type InsertQuoteCoverPhoto, type InsertQuoteProductRendering, type QuoteWithDetails, type ProductWithDetails } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, inArray, sql, and, ne, or, ilike } from "drizzle-orm";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
@@ -137,6 +137,17 @@ export interface IStorage {
   
   // Session store for authentication
   sessionStore: any;
+
+  // Quote image methods
+  getQuoteCoverPhoto(quoteId: number): Promise<QuoteCoverPhoto | undefined>;
+  getQuoteProductRenderings(quoteId: number): Promise<QuoteProductRendering[]>;
+  createQuoteCoverPhoto(photo: InsertQuoteCoverPhoto): Promise<QuoteCoverPhoto>;
+  createQuoteProductRendering(rendering: InsertQuoteProductRendering): Promise<QuoteProductRendering>;
+  updateQuoteCoverPhoto(id: number, photo: Partial<InsertQuoteCoverPhoto>): Promise<QuoteCoverPhoto | undefined>;
+  updateQuoteProductRendering(id: number, rendering: Partial<InsertQuoteProductRendering>): Promise<QuoteProductRendering | undefined>;
+  deleteQuoteCoverPhoto(id: number): Promise<boolean>;
+  deleteQuoteProductRendering(id: number): Promise<boolean>;
+  deleteQuoteImagesByQuoteId(quoteId: number): Promise<boolean>;
 
   // Authorization methods for security
   validateLineItemsOwnership(lineItemIds: number[], userId: any): Promise<{ isValid: boolean; quoteId?: number }>;
@@ -1457,6 +1468,98 @@ export class DatabaseStorage implements IStorage {
 
     const result = await db.execute(updateSql);
     return { updated: result.rowCount || 0 };
+  }
+
+  // Quote image methods
+  async getQuoteCoverPhoto(quoteId: number): Promise<QuoteCoverPhoto | undefined> {
+    const [photo] = await db
+      .select()
+      .from(quoteCoverPhotos)
+      .where(and(eq(quoteCoverPhotos.quoteId, quoteId), eq(quoteCoverPhotos.isActive, true)))
+      .orderBy(desc(quoteCoverPhotos.uploadedAt))
+      .limit(1);
+    return photo || undefined;
+  }
+
+  async getQuoteProductRenderings(quoteId: number): Promise<QuoteProductRendering[]> {
+    return await db
+      .select()
+      .from(quoteProductRenderings)
+      .where(and(eq(quoteProductRenderings.quoteId, quoteId), eq(quoteProductRenderings.isActive, true)))
+      .orderBy(quoteProductRenderings.displayOrder, quoteProductRenderings.uploadedAt);
+  }
+
+  async createQuoteCoverPhoto(photo: InsertQuoteCoverPhoto): Promise<QuoteCoverPhoto> {
+    // Soft delete any existing active cover photos for this quote (business rule: one active cover photo per quote)
+    await db
+      .update(quoteCoverPhotos)
+      .set({ isActive: false })
+      .where(and(eq(quoteCoverPhotos.quoteId, photo.quoteId), eq(quoteCoverPhotos.isActive, true)));
+
+    const [created] = await db
+      .insert(quoteCoverPhotos)
+      .values(photo)
+      .returning();
+    return created;
+  }
+
+  async createQuoteProductRendering(rendering: InsertQuoteProductRendering): Promise<QuoteProductRendering> {
+    const [created] = await db
+      .insert(quoteProductRenderings)
+      .values(rendering)
+      .returning();
+    return created;
+  }
+
+  async updateQuoteCoverPhoto(id: number, photo: Partial<InsertQuoteCoverPhoto>): Promise<QuoteCoverPhoto | undefined> {
+    const [updated] = await db
+      .update(quoteCoverPhotos)
+      .set(photo)
+      .where(eq(quoteCoverPhotos.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async updateQuoteProductRendering(id: number, rendering: Partial<InsertQuoteProductRendering>): Promise<QuoteProductRendering | undefined> {
+    const [updated] = await db
+      .update(quoteProductRenderings)
+      .set(rendering)
+      .where(eq(quoteProductRenderings.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteQuoteCoverPhoto(id: number): Promise<boolean> {
+    // Soft delete by setting isActive to false
+    const result = await db
+      .update(quoteCoverPhotos)
+      .set({ isActive: false })
+      .where(eq(quoteCoverPhotos.id, id));
+    return (result.rowCount || 0) > 0;
+  }
+
+  async deleteQuoteProductRendering(id: number): Promise<boolean> {
+    // Soft delete by setting isActive to false
+    const result = await db
+      .update(quoteProductRenderings)
+      .set({ isActive: false })
+      .where(eq(quoteProductRenderings.id, id));
+    return (result.rowCount || 0) > 0;
+  }
+
+  async deleteQuoteImagesByQuoteId(quoteId: number): Promise<boolean> {
+    // Soft delete all images for a quote when the quote is deleted
+    const coverResult = await db
+      .update(quoteCoverPhotos)
+      .set({ isActive: false })
+      .where(eq(quoteCoverPhotos.quoteId, quoteId));
+
+    const renderingsResult = await db
+      .update(quoteProductRenderings)
+      .set({ isActive: false })
+      .where(eq(quoteProductRenderings.quoteId, quoteId));
+
+    return ((coverResult.rowCount || 0) + (renderingsResult.rowCount || 0)) > 0;
   }
 
 
