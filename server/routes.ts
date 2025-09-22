@@ -929,6 +929,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(quote);
     } catch (error: any) {
       if (error instanceof z.ZodError) {
+        console.error("Quote validation errors:", JSON.stringify(error.errors, null, 2));
         return res.status(400).json({ message: "Invalid quote data", errors: error.errors });
       }
       
