@@ -762,10 +762,12 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
       
       // Step 2: Generate main estimate page
       if (!includeCoverPage) {
-        // Only add header if we didn't create a cover page
+        // Only add header/footer if we didn't create a cover page
         drawHeader();
         drawFooter();
       }
+      // Note: If cover page was created, header/footer are already added in drawProfessionalCoverPage
+      
       drawEstimateHeader();
       drawAddresses();
       drawEstimateDetails();
