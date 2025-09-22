@@ -77,10 +77,6 @@ export const quotes = pgTable("quotes", {
   jobsiteAddress: text("jobsite_address"), // if different from project address
   estimatedStartDate: text("estimated_start_date"),
   notes: text("notes"),
-  // Image fields for comprehensive image integration
-  portfolioImages: jsonb("portfolio_images"), // Array of selected portfolio showcase images
-  technicalDiagrams: jsonb("technical_diagrams"), // Array of technical diagrams and plans
-  companyImages: jsonb("company_images"), // Company branding and team photos
   taxRate: decimal("tax_rate", { precision: 5, scale: 2 }).default("0"),
   discount: decimal("discount", { precision: 5, scale: 2 }).default("0"),
   shipping: decimal("shipping", { precision: 10, scale: 2 }).default("0"),
@@ -257,18 +253,6 @@ export const imageMetadataSchema = z.object({
 });
 
 
-export const portfolioImageSchema = imageMetadataSchema.extend({
-  projectType: z.string().optional(),
-  featured: z.boolean().optional(),
-});
-
-export const technicalDiagramSchema = imageMetadataSchema.extend({
-  diagramType: z.enum(['floorplan', 'elevation', 'detail', 'specification', 'other']),
-});
-
-export const companyImageSchema = imageMetadataSchema.extend({
-  imageType: z.enum(['logo', 'team', 'facility', 'certification', 'other']),
-});
 
 export const productImageSchema = imageMetadataSchema.extend({
   imageType: z.enum(['primary', 'gallery', 'specification']),
@@ -291,10 +275,6 @@ export const insertQuoteSchema = createInsertSchema(quotes).omit({
   dealStage: z.enum(["new_lead", "qualifying", "consultation_scheduled", "building_estimate", "quote_sent", "closed_won", "closed_lost", "on_hold"]).default("new_lead"),
   lostReason: z.string().optional().nullable(),
   assignedRepId: z.string().optional().nullable(),
-  // Image fields
-  portfolioImages: z.array(portfolioImageSchema).optional(),
-  technicalDiagrams: z.array(technicalDiagramSchema).optional(),
-  companyImages: z.array(companyImageSchema).optional(),
 });
 
 
@@ -430,18 +410,6 @@ export interface ImageMetadata {
 }
 
 
-export interface PortfolioImage extends ImageMetadata {
-  projectType?: string;
-  featured?: boolean;
-}
-
-export interface TechnicalDiagram extends ImageMetadata {
-  diagramType: 'floorplan' | 'elevation' | 'detail' | 'specification' | 'other';
-}
-
-export interface CompanyImage extends ImageMetadata {
-  imageType: 'logo' | 'team' | 'facility' | 'certification' | 'other';
-}
 
 export interface ProductImage extends ImageMetadata {
   imageType: 'primary' | 'gallery' | 'specification';
