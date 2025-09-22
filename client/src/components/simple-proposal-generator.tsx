@@ -275,7 +275,11 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
       };
       
       const drawFooter = () => {
-        const footerY = pageHeight - margin + 5;
+        // Skip page numbers on cover page to avoid overlap with cover footer band
+        if (includeCoverPage && currentPage === 1) return;
+        
+        // Position page numbers higher to avoid overlap with any footer decorations
+        const footerY = pageHeight - margin - 2;
         setFont('caption');
         setColor('gray');
         
