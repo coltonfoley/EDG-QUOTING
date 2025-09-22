@@ -8,6 +8,11 @@
  * @returns The proxied URL or original URL if not object storage
  */
 export function getProxiedImageUrl(imageUrl: string): string {
+  // Handle new quote-images URLs - these are already accessible without proxy
+  if (imageUrl.includes('/quote-images/')) {
+    return imageUrl;
+  }
+  
   // Only proxy Replit object storage URLs that have CORS issues
   if (imageUrl.includes('storage.replit.com')) {
     return `/api/image-proxy?url=${encodeURIComponent(imageUrl)}`;
