@@ -337,47 +337,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/quote-images/:filename", async (req, res) => {
     try {
       const { filename } = req.params;
-      console.log(`🖼️ Serving quote image: ${filename}`);
       const objectStorageService = new ObjectStorageService();
       
       // Get the bucket and list files to find the one ending with our filename
       const privateDir = objectStorageService.getPrivateObjectDir();
-      console.log(`🗂️ Private dir: ${privateDir}`);
-      
-      // Try both cover-photos and product-renderings directories
       const directories = ['cover-photos', 'product-renderings'];
       
       for (const dir of directories) {
         try {
-          console.log(`🔍 Searching in: ${dir}`);
           const bucketName = privateDir.split('/')[1]; // Extract bucket name
           const bucket = objectStorageClient.bucket(bucketName);
           const prefix = `${privateDir.split('/').slice(2).join('/')}/${dir}/`;
-          console.log(`🔍 Listing files with prefix: ${prefix}`);
           
           const [files] = await bucket.getFiles({ prefix });
-          console.log(`📁 Found ${files.length} files in ${dir}`);
           
           // Look for a file that ends with our filename
           const matchingFile = files.find(file => file.name.endsWith(filename));
           if (matchingFile) {
-            console.log(`✅ Found matching file: ${matchingFile.name}`);
-            
             // Stream the file to the response
             const stream = matchingFile.createReadStream();
             stream.pipe(res);
             return;
           }
         } catch (error: any) {
-          console.log(`❌ Directory search failed: ${dir} - ${error.message}`);
           continue;
         }
       }
       
-      console.log(`❌ Image not found: ${filename}`);
       res.status(404).json({ message: "Image not found" });
     } catch (error) {
-      console.error("❌ Error serving quote image:", error);
+      console.error("Error serving quote image:", error);
       res.status(500).json({ message: "Failed to serve image" });
     }
   });
