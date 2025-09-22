@@ -20,7 +20,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { insertProductSchema, type Product, type ProductWithDetails, type ProductImage } from "@shared/schema";
+import { insertProductSchema, type Product, type ProductWithDetails } from "@shared/schema";
 import { z } from "zod";
 
 const productFormSchema = insertProductSchema;
@@ -305,14 +305,10 @@ export default function Products() {
               <Form {...form}>
                 <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
                   <Tabs defaultValue="basic" className="w-full">
-                    <TabsList className="grid w-full grid-cols-2">
+                    <TabsList className="grid w-full grid-cols-1">
                       <TabsTrigger value="basic" className="flex items-center gap-2">
                         <Package className="h-4 w-4" />
-                        Basic Info
-                      </TabsTrigger>
-                      <TabsTrigger value="images" className="flex items-center gap-2">
-                        <Camera className="h-4 w-4" />
-                        Images & Media
+                        Product Details
                       </TabsTrigger>
                     </TabsList>
                     
@@ -501,11 +497,6 @@ export default function Products() {
                   </div>
                     </TabsContent>
                     
-                    <TabsContent value="images" className="space-y-6 mt-4">
-                      <div className="p-6 text-center text-gray-500">
-                        <p>Image management functionality has been temporarily removed.</p>
-                      </div>
-                    </TabsContent>
                   </Tabs>
                   
                   <div className="flex justify-end space-x-3 pt-4 border-t">
