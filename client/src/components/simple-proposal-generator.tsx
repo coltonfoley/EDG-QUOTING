@@ -626,16 +626,16 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         const rowHeight = 12;
         const headerHeight = 8;
         
-        // Column configuration - matches EDG example
+        // Column configuration - optimized to fit within page margins (contentWidth ≈ 177mm)
         const columns = [
-          { header: '#', width: 8, align: 'left' },
-          { header: 'Date', width: 15, align: 'left' },
-          { header: 'Product or service', width: 45, align: 'left' },
-          { header: 'SKU', width: 20, align: 'left' },
-          { header: 'Description', width: 65, align: 'left' },
-          { header: 'Qty', width: 12, align: 'center' },
-          { header: 'Rate', width: 20, align: 'right' },
-          { header: 'Amount', width: 20, align: 'right' }
+          { header: '#', width: 6, align: 'left' },
+          { header: 'Date', width: 12, align: 'left' },
+          { header: 'Product or service', width: 35, align: 'left' },
+          { header: 'SKU', width: 18, align: 'left' },
+          { header: 'Description', width: 55, align: 'left' },
+          { header: 'Qty', width: 10, align: 'center' },
+          { header: 'Rate', width: 18, align: 'right' },
+          { header: 'Amount', width: 18, align: 'right' }
         ];
         
         const totalTableWidth = columns.reduce((sum, col) => sum + col.width, 0);
