@@ -62,6 +62,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
   
   const [isGenerating, setIsGenerating] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [generatedPdfUrl, setGeneratedPdfUrl] = useState<string | null>(null);
   
   // Contract state and logic
   const hasContractData = !!(quote.contractTemplate || quote.customContractTerms);
@@ -1074,19 +1075,24 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
       const customer = quote.account ?? quote.customer;
       const filename = `${customer.name.replace(/[^a-zA-Z0-9]/g, '_')}_Estimate_${timestamp}.pdf`;
       
-      // Create download link
+      // Create download link and store URL for viewing
       const url = URL.createObjectURL(pdfBlob);
+      
+      // Store the PDF URL for viewing functionality
+      setGeneratedPdfUrl(url);
+      
+      // Auto-download the PDF
       const link = document.createElement('a');
       link.href = url;
       link.download = filename;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      URL.revokeObjectURL(url);
+      // Note: Don't revoke URL immediately so users can view the PDF
       
       toast({
         title: "PDF Generated Successfully",
-        description: `Professional proposal downloaded as ${filename}`,
+        description: `Professional proposal downloaded as ${filename}. You can also view it using the buttons below.`,
       });
       
     } catch (error) {
@@ -1183,32 +1189,52 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
                     >
                       <X className="w-4 h-4" />
                     </Button>
-                    {!coverPhoto.isPersistent && (
-                      <Button
-                        variant="default"
-                        size="sm"
-                        className="absolute top-2 right-12"
-                        onClick={() => tempCoverPhoto && uploadCoverPhotoMutation.mutate(tempCoverPhoto.file)}
-                        disabled={uploadCoverPhotoMutation.isPending}
-                        data-testid="button-save-cover-photo"
-                      >
-                        {uploadCoverPhotoMutation.isPending ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : (
-                          "Save"
-                        )}
-                      </Button>
-                    )}
                     <Badge variant="secondary" className="absolute bottom-2 left-2">
                       {coverPhoto.name}
                     </Badge>
-                    {coverPhoto.isPersistent && (
+                    {coverPhoto.isPersistent ? (
                       <Badge variant="default" className="absolute bottom-2 right-2">
-                        Saved
+                        ✓ Saved
+                      </Badge>
+                    ) : (
+                      <Badge variant="destructive" className="absolute bottom-2 right-2">
+                        Temporary
                       </Badge>
                     )}
                   </div>
                 )}
+                
+                {/* Prominent save button for cover photo */}
+                {coverPhoto && !coverPhoto.isPersistent && (
+                  <div className="mt-4 p-3 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Badge variant="destructive" className="text-xs">Temporary</Badge>
+                        <span className="text-sm text-amber-800 dark:text-amber-200">
+                          Image will be lost when you close this dialog
+                        </span>
+                      </div>
+                      <Button
+                        onClick={() => tempCoverPhoto && uploadCoverPhotoMutation.mutate(tempCoverPhoto.file)}
+                        disabled={uploadCoverPhotoMutation.isPending}
+                        size="sm"
+                        data-testid="button-save-cover-photo"
+                      >
+                        {uploadCoverPhotoMutation.isPending ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            Saving...
+                          </>
+                        ) : (
+                          <>
+                            💾 Save Permanently
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+                
                 <input
                   ref={coverPhotoRef}
                   type="file"
@@ -1257,33 +1283,16 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
                         >
                           <X className="w-3 h-3" />
                         </Button>
-                        {!rendering.isPersistent && (
-                          <Button
-                            variant="default"
-                            size="sm"
-                            className="absolute top-1 right-8"
-                            onClick={() => {
-                              const tempRendering = tempProductRenderings.find(temp => temp.id === rendering.id);
-                              if (tempRendering) {
-                                uploadProductRenderingMutation.mutate(tempRendering.file);
-                              }
-                            }}
-                            disabled={uploadProductRenderingMutation.isPending}
-                            data-testid={`button-save-rendering-${rendering.id}`}
-                          >
-                            {uploadProductRenderingMutation.isPending ? (
-                              <Loader2 className="w-3 h-3 animate-spin" />
-                            ) : (
-                              "Save"
-                            )}
-                          </Button>
-                        )}
                         <Badge variant="secondary" className="absolute bottom-1 left-1 text-xs">
                           {rendering.name.substring(0, 10)}...
                         </Badge>
-                        {rendering.isPersistent && (
+                        {rendering.isPersistent ? (
                           <Badge variant="default" className="absolute bottom-1 right-1 text-xs">
-                            Saved
+                            ✓ Saved
+                          </Badge>
+                        ) : (
+                          <Badge variant="destructive" className="absolute bottom-1 right-1 text-xs">
+                            Temp
                           </Badge>
                         )}
                       </div>
@@ -1303,6 +1312,39 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
                 </div>
               )}
               
+              {/* Prominent save button for temporary product renderings */}
+              {tempProductRenderings.length > 0 && (
+                <div className="mt-4 p-3 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Badge variant="destructive" className="text-xs">
+                        {tempProductRenderings.length} Temporary
+                      </Badge>
+                      <span className="text-sm text-amber-800 dark:text-amber-200">
+                        Images will be lost when you close this dialog
+                      </span>
+                    </div>
+                    <div className="flex gap-2">
+                      {tempProductRenderings.map((tempRendering) => (
+                        <Button
+                          key={tempRendering.id}
+                          onClick={() => uploadProductRenderingMutation.mutate(tempRendering.file)}
+                          disabled={uploadProductRenderingMutation.isPending}
+                          size="sm"
+                          data-testid={`button-save-rendering-${tempRendering.id}`}
+                        >
+                          {uploadProductRenderingMutation.isPending ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : (
+                            `💾 Save ${tempRendering.name.substring(0, 8)}...`
+                          )}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+              
               <input
                 ref={renderingsRef}
                 type="file"
@@ -1313,6 +1355,53 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
               />
             </CardContent>
           </Card>
+
+          {/* Generated PDF Success */}
+          {generatedPdfUrl && (
+            <Card className="border-green-200 bg-green-50 dark:bg-green-950 dark:border-green-800">
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-green-100 dark:bg-green-900 flex items-center justify-center">
+                      ✓
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-green-800 dark:text-green-200">
+                        PDF Generated Successfully
+                      </p>
+                      <p className="text-xs text-green-600 dark:text-green-400">
+                        Quote {quote.quoteNumber} is ready for review
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        const link = document.createElement('a');
+                        link.href = generatedPdfUrl;
+                        link.download = `Quote-${quote.quoteNumber}.pdf`;
+                        link.click();
+                      }}
+                    >
+                      <Download className="w-4 h-4 mr-2" />
+                      Download
+                    </Button>
+                    <Button
+                      variant="default"
+                      size="sm"
+                      onClick={() => window.open(generatedPdfUrl, '_blank')}
+                      data-testid="button-view-pdf"
+                    >
+                      <Eye className="w-4 h-4 mr-2" />
+                      View PDF
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Generate Button */}
           <div className="flex justify-end gap-3">
