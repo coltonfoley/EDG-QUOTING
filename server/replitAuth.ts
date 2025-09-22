@@ -30,8 +30,9 @@ async function comparePasswords(supplied: string, stored: string) {
 }
 
 export function setupAuth(app: Express) {
-  // Check if we're in production (Replit) or development
-  const isProduction = process.env.NODE_ENV === 'production' || process.env.REPL_ID;
+  // Only consider it production when NODE_ENV is explicitly set to production
+  // REPL_ID exists in both development and production on Replit
+  const isProduction = process.env.NODE_ENV === 'production';
   
   const sessionSettings: session.SessionOptions = {
     secret: process.env.SESSION_SECRET || 'dev-secret-change-in-production',
