@@ -99,6 +99,76 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
     }
   };
 
+  // Helper function to detect image format for PDF
+  const getImageFormat = (file: File): string => {
+    const mimeType = file.type.toLowerCase();
+    if (mimeType === 'image/png') return 'PNG';
+    if (mimeType === 'image/jpeg' || mimeType === 'image/jpg') return 'JPEG';
+    if (mimeType === 'image/gif') return 'GIF';
+    // Default to JPEG for other formats or if we need to convert
+    return 'JPEG';
+  };
+
+  // Helper function to convert unsupported formats to supported ones
+  const convertImageToSupportedFormat = async (file: File, targetFormat: 'PNG' | 'JPEG' = 'JPEG'): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      const img = document.createElement('img') as HTMLImageElement;
+      
+      img.onload = () => {
+        canvas.width = img.width;
+        canvas.height = img.height;
+        
+        if (ctx) {
+          // Clear canvas with white background for JPEG (since JPEG doesn't support transparency)
+          if (targetFormat === 'JPEG') {
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+          }
+          
+          ctx.drawImage(img, 0, 0);
+          
+          const mimeType = targetFormat === 'PNG' ? 'image/png' : 'image/jpeg';
+          const quality = targetFormat === 'JPEG' ? 0.9 : undefined;
+          
+          canvas.toBlob((blob) => {
+            if (blob) {
+              const url = URL.createObjectURL(blob);
+              resolve(url);
+            } else {
+              reject(new Error('Failed to convert image'));
+            }
+          }, mimeType, quality);
+        } else {
+          reject(new Error('Failed to get canvas context'));
+        }
+      };
+      
+      img.onerror = () => reject(new Error('Failed to load image'));
+      img.src = URL.createObjectURL(file);
+    });
+  };
+
+  // Helper function to get the appropriate image data and format for PDF
+  const getImageDataForPDF = async (uploadedFile: UploadedFile): Promise<{ dataUrl: string; format: string }> => {
+    const format = getImageFormat(uploadedFile.file);
+    
+    // Check if format needs conversion (WebP or other unsupported formats)
+    if (uploadedFile.file.type === 'image/webp' || !['PNG', 'JPEG', 'GIF'].includes(format)) {
+      try {
+        // Convert WebP and other unsupported formats to JPEG
+        const convertedUrl = await convertImageToSupportedFormat(uploadedFile.file, 'JPEG');
+        return { dataUrl: convertedUrl, format: 'JPEG' };
+      } catch (error) {
+        console.warn('Failed to convert image format, falling back to original:', error);
+        return { dataUrl: uploadedFile.preview, format: 'JPEG' };
+      }
+    }
+    
+    return { dataUrl: uploadedFile.preview, format };
+  };
+
   const removeFile = (id: string, type: 'cover' | 'renderings') => {
     if (type === 'cover') {
       if (coverPhoto?.preview) {
@@ -469,15 +539,146 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         yPosition += 20;
       };
 
+      const drawProfessionalCoverPage = async () => {
+        if (!includeCoverPage) return;
+        
+        // Professional cover page with branding
+        setFont('heading');
+        setColor('primary');
+        pdf.text('PROJECT PROPOSAL', pageWidth / 2, 60, { align: 'center' });
+        
+        yPosition = 80;
+        setFont('subheading');
+        setColor('primary');
+        pdf.text(quote.projectName || 'Outdoor Living Project', pageWidth / 2, yPosition, { align: 'center' });
+        
+        yPosition = 100;
+        if (coverPhoto) {
+          try {
+            // Add cover photo with professional styling
+            const maxPhotoWidth = 120;
+            const maxPhotoHeight = 80;
+            const { dataUrl, format } = await getImageDataForPDF(coverPhoto);
+            
+            // Center the image
+            const imageX = (pageWidth - maxPhotoWidth) / 2;
+            pdf.addImage(dataUrl, format, imageX, yPosition, maxPhotoWidth, maxPhotoHeight);
+            yPosition += maxPhotoHeight + 20;
+            
+            // Clean up converted image URL if different from original
+            if (dataUrl !== coverPhoto.preview) {
+              URL.revokeObjectURL(dataUrl);
+            }
+          } catch (e) {
+            console.warn('Could not add cover photo to PDF:', e);
+          }
+        }
+        
+        // Professional customer info section
+        yPosition = Math.max(yPosition, 200);
+        setFont('body');
+        setColor('primary');
+        pdf.text('Prepared for:', pageWidth / 2, yPosition, { align: 'center' });
+        yPosition += 10;
+        
+        setFont('subheading');
+        const customer = quote.account ?? quote.customer;
+        pdf.text(customer.name, pageWidth / 2, yPosition, { align: 'center' });
+        yPosition += 8;
+        
+        setFont('body');
+        if (quote.projectAddress || customer.company) {
+          pdf.text(quote.projectAddress || customer.company || '', pageWidth / 2, yPosition, { align: 'center' });
+        }
+        
+        // Add new page for main content
+        pdf.addPage();
+        currentPage++;
+        yPosition = margin + 20; // Leave space for header
+        drawHeader();
+        drawFooter();
+      };
+
+      const drawProductRenderingsSection = async () => {
+        if (productRenderings.length === 0) return;
+        
+        checkPageBreak(60);
+        
+        // Professional section header with teal background - matching our style
+        const [r, g, b] = colors.accent;
+        pdf.setFillColor(r, g, b);
+        pdf.rect(margin, yPosition - 5, contentWidth, 15, 'F');
+        
+        // White text on teal background
+        pdf.setTextColor(255, 255, 255);
+        setFont('subheading');
+        pdf.text('PRODUCT RENDERINGS', margin + 5, yPosition + 5);
+        
+        // Reset to black text
+        setColor('primary');
+        yPosition += 20;
+        
+        // Professional image grid layout
+        const imagesPerRow = 3;
+        const imageWidth = (contentWidth - 20) / imagesPerRow;
+        const imageHeight = 40;
+        let currentX = margin;
+        let imagesInCurrentRow = 0;
+        
+        for (let i = 0; i < Math.min(productRenderings.length, 6); i++) {
+          if (imagesInCurrentRow === 0) {
+            checkPageBreak(imageHeight + 10);
+          }
+          
+          try {
+            const { dataUrl, format } = await getImageDataForPDF(productRenderings[i]);
+            pdf.addImage(dataUrl, format, currentX, yPosition, imageWidth - 5, imageHeight);
+            
+            // Clean up converted image URL if different from original
+            if (dataUrl !== productRenderings[i].preview) {
+              URL.revokeObjectURL(dataUrl);
+            }
+          } catch (e) {
+            console.warn(`Could not add rendering ${i} to PDF:`, e);
+          }
+          
+          currentX += imageWidth;
+          imagesInCurrentRow++;
+          
+          if (imagesInCurrentRow === imagesPerRow) {
+            yPosition += imageHeight + 10;
+            currentX = margin;
+            imagesInCurrentRow = 0;
+          }
+        }
+        
+        if (imagesInCurrentRow > 0) {
+          yPosition += imageHeight + 10;
+        }
+        yPosition += 10;
+      };
+
       // === MAIN PDF GENERATION FLOW ===
       
-      // Generate first page
-      drawHeader();
+      // Step 1: Professional cover page (if enabled)
+      await drawProfessionalCoverPage();
+      
+      // Step 2: Generate main estimate page
+      if (!includeCoverPage) {
+        // Only add header if we didn't create a cover page
+        drawHeader();
+        drawFooter();
+      }
       drawEstimateHeader();
       drawAddresses();
       drawEstimateDetails();
       drawProfessionalTable();
       drawTotalsSection();
+      
+      // Step 3: Add product renderings (if uploaded)
+      await drawProductRenderingsSection();
+      
+      // Step 4: Signature section
       drawSignatureSection();
       
       // Add contract terms if available
