@@ -905,6 +905,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
+      console.log("Raw request body:", JSON.stringify(req.body, null, 2));
       const parsedData = insertQuoteSchema.partial().parse(req.body);
       
       // Ensure optional fields are properly handled
