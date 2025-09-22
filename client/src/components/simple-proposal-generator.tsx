@@ -278,15 +278,17 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
       };
       
       const drawFooter = () => {
-        // Skip page numbers on cover page to avoid overlap with cover footer band
-        if (includeCoverPage && currentPage === 1) return;
+        // ABSOLUTELY NO PAGE NUMBERS ON COVER PAGE - SKIP ENTIRELY
+        if (includeCoverPage && currentPage === 1) {
+          return; // Cover page has its own custom footer band
+        }
         
-        // Position page numbers higher to avoid overlap with any footer decorations
+        // Only draw page numbers on content pages (page 2+)
         const footerY = pageHeight - margin - 2;
         setFont('caption');
         setColor('gray');
         
-        // Page numbers
+        // Page numbers for content pages only
         const totalPages = pdf.getNumberOfPages();
         pdf.text(`Page ${currentPage} of ${totalPages}`, pageWidth / 2, footerY, { align: 'center' });
       };
@@ -684,7 +686,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
           });
         }
         
-        // 5. Footer Brand Band
+        // 5. Footer Brand Band (NO PAGE NUMBERS OR STANDARD FOOTERS ON COVER)
         const footerY = pageHeight - 15;
         pdf.setFillColor(0, 0, 0); // Black footer
         pdf.rect(0, footerY, pageWidth, 15, 'F');
@@ -695,12 +697,12 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         pdf.text('1802 Holian Drive, Spring Grove, IL 60081  •  info@edgfurniture.com', 
                 pageWidth / 2, footerY + 8, { align: 'center' });
         
-        // Add new page for main content
+        // Add new page for main content (this will be page 2)
         pdf.addPage();
         currentPage++;
         yPosition = margin + 20; // Leave space for header
-        drawHeader();
-        drawFooter();
+        drawHeader(); // This runs on page 2
+        drawFooter(); // This runs on page 2
       };
 
       const drawProductRenderingsSection = async () => {
