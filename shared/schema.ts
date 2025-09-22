@@ -275,6 +275,9 @@ export const insertQuoteSchema = createInsertSchema(quotes).omit({
   dealStage: z.enum(["new_lead", "qualifying", "consultation_scheduled", "building_estimate", "quote_sent", "closed_won", "closed_lost", "on_hold"]).default("new_lead"),
   lostReason: z.string().optional().nullable(),
   assignedRepId: z.string().optional().nullable(),
+  // Contract template fields
+  contractTemplateId: z.union([z.number(), z.null()]).optional(),
+  customContractTerms: z.union([z.string(), z.null()]).optional(),
 });
 
 
