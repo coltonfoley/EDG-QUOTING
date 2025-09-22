@@ -871,9 +871,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         jobsiteAddress: parsedData.jobsiteAddress || undefined,
         lostReason: parsedData.lostReason || undefined,
         assignedRepId: parsedData.assignedRepId || undefined,
-        portfolioImages: parsedData.portfolioImages || undefined,
-        technicalDiagrams: parsedData.technicalDiagrams || undefined,
-        companyImages: parsedData.companyImages || undefined,
       };
       const quote = await storage.createQuote(quoteData);
       res.status(201).json(quote);

@@ -169,7 +169,6 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
     }
   }, [watchedEmail, watchedPhone, checkForDuplicates, selectedCustomer]);
   
-  // Initialize image states from database when quote loads
   useEffect(() => {
     if (quote) {
       // Set selected customer if editing existing quote
