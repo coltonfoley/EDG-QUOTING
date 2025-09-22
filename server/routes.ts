@@ -11,6 +11,7 @@ import {
   insertContactSchema,
   insertCustomerSchema,
   insertQuoteSchema,
+  updateQuoteSchema,
   insertLineItemSchema,
   insertProductSchema,
   insertContractTemplateSchema,
@@ -906,7 +907,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       console.log("Raw request body:", JSON.stringify(req.body, null, 2));
-      const parsedData = insertQuoteSchema.partial().parse(req.body);
+      const parsedData = updateQuoteSchema.parse(req.body);
       
       // Ensure optional fields are properly handled
       const quoteData: Partial<InsertQuote> = {
