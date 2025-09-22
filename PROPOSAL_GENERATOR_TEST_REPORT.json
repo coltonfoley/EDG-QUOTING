@@ -1,0 +1,23 @@
+{
+  "timestamp": "2025-09-22T13:11:43.932Z",
+  "summary": {
+    "totalTests": 32,
+    "passed": 29,
+    "failed": 3,
+    "successRate": 90.6
+  },
+  "issues": [
+    {
+      "test": "Error handling for uploads implementation",
+      "details": "Feature not found in component"
+    },
+    {
+      "test": "Dependencies test",
+      "details": "hasDeenedDep is not defined"
+    },
+    {
+      "test": "Functionality: Error handling with toasts",
+      "details": ""
+    }
+  ]
+}

@@ -1,0 +1,32 @@
+{
+  "timestamp": "2025-09-22T13:13:42.505Z",
+  "category": "Navigation & UI",
+  "summary": {
+    "totalTests": 69,
+    "passed": 64,
+    "failed": 5,
+    "successRate": 92.8
+  },
+  "issues": [
+    {
+      "test": "Products: Product creation",
+      "details": ""
+    },
+    {
+      "test": "Auth includes AppHeader",
+      "details": ""
+    },
+    {
+      "test": "auth-page: Error handling",
+      "details": ""
+    },
+    {
+      "test": "auth-page: Toast notifications",
+      "details": ""
+    },
+    {
+      "test": "Routing: Wouter router imported",
+      "details": ""
+    }
+  ]
+}
