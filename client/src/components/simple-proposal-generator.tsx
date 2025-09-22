@@ -93,15 +93,15 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/quotes', quote.id, 'cover-photos'] });
       toast({
-        title: "Cover photo uploaded",
-        description: "Your cover photo has been saved successfully",
+        title: "Cover photo saved",
+        description: "Your cover photo has been added to the quote",
       });
       setTempCoverPhoto(null); // Clear temp after successful upload
     },
     onError: (error: any) => {
       toast({
         title: "Upload failed",
-        description: error.message || "Failed to upload cover photo",
+        description: error.message || "Failed to save cover photo",
         variant: "destructive"
       });
     }
@@ -116,8 +116,8 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
     onSuccess: (_, file) => {
       queryClient.invalidateQueries({ queryKey: ['/api/quotes', quote.id, 'product-renderings'] });
       toast({
-        title: "Product rendering uploaded",
-        description: "Your product rendering has been saved successfully",
+        title: "Product rendering saved",
+        description: "Your product rendering has been added to the quote",
       });
       // Clear the temp rendering that was just uploaded
       setTempProductRenderings(prev => prev.filter(temp => temp.file !== file));
@@ -125,7 +125,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
     onError: (error: any) => {
       toast({
         title: "Upload failed",
-        description: error.message || "Failed to upload product rendering",
+        description: error.message || "Failed to save product rendering",
         variant: "destructive"
       });
     }
@@ -246,6 +246,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
       return true;
     });
 
+    // Auto-save images immediately when uploaded
     if (type === 'cover' && validFiles.length > 0) {
       const file = validFiles[0];
       const uploadedFile: UploadedFile = {
@@ -255,6 +256,9 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         name: file.name
       };
       setTempCoverPhoto(uploadedFile);
+      
+      // Auto-save the cover photo immediately
+      uploadCoverPhotoMutation.mutate(file);
     } else if (type === 'renderings') {
       const newRenderings = validFiles.map(file => ({
         id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
@@ -263,6 +267,11 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         name: file.name
       }));
       setTempProductRenderings(prev => [...prev, ...newRenderings].slice(0, 5)); // Max 5 images
+      
+      // Auto-save each product rendering immediately
+      validFiles.forEach(file => {
+        uploadProductRenderingMutation.mutate(file);
+      });
     }
   };
 
@@ -1192,46 +1201,6 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
                     <Badge variant="secondary" className="absolute bottom-2 left-2">
                       {coverPhoto.name}
                     </Badge>
-                    {coverPhoto.isPersistent ? (
-                      <Badge variant="default" className="absolute bottom-2 right-2">
-                        ✓ Saved
-                      </Badge>
-                    ) : (
-                      <Badge variant="destructive" className="absolute bottom-2 right-2">
-                        Temporary
-                      </Badge>
-                    )}
-                  </div>
-                )}
-                
-                {/* Prominent save button for cover photo */}
-                {coverPhoto && !coverPhoto.isPersistent && (
-                  <div className="mt-4 p-3 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Badge variant="destructive" className="text-xs">Temporary</Badge>
-                        <span className="text-sm text-amber-800 dark:text-amber-200">
-                          Image will be lost when you close this dialog
-                        </span>
-                      </div>
-                      <Button
-                        onClick={() => tempCoverPhoto && uploadCoverPhotoMutation.mutate(tempCoverPhoto.file)}
-                        disabled={uploadCoverPhotoMutation.isPending}
-                        size="sm"
-                        data-testid="button-save-cover-photo"
-                      >
-                        {uploadCoverPhotoMutation.isPending ? (
-                          <>
-                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                            Saving...
-                          </>
-                        ) : (
-                          <>
-                            💾 Save Permanently
-                          </>
-                        )}
-                      </Button>
-                    </div>
                   </div>
                 )}
                 
@@ -1286,15 +1255,6 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
                         <Badge variant="secondary" className="absolute bottom-1 left-1 text-xs">
                           {rendering.name.substring(0, 10)}...
                         </Badge>
-                        {rendering.isPersistent ? (
-                          <Badge variant="default" className="absolute bottom-1 right-1 text-xs">
-                            ✓ Saved
-                          </Badge>
-                        ) : (
-                          <Badge variant="destructive" className="absolute bottom-1 right-1 text-xs">
-                            Temp
-                          </Badge>
-                        )}
                       </div>
                     ))}
                   </div>
@@ -1309,39 +1269,6 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
                       Add More Images
                     </Button>
                   )}
-                </div>
-              )}
-              
-              {/* Prominent save button for temporary product renderings */}
-              {tempProductRenderings.length > 0 && (
-                <div className="mt-4 p-3 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Badge variant="destructive" className="text-xs">
-                        {tempProductRenderings.length} Temporary
-                      </Badge>
-                      <span className="text-sm text-amber-800 dark:text-amber-200">
-                        Images will be lost when you close this dialog
-                      </span>
-                    </div>
-                    <div className="flex gap-2">
-                      {tempProductRenderings.map((tempRendering) => (
-                        <Button
-                          key={tempRendering.id}
-                          onClick={() => uploadProductRenderingMutation.mutate(tempRendering.file)}
-                          disabled={uploadProductRenderingMutation.isPending}
-                          size="sm"
-                          data-testid={`button-save-rendering-${tempRendering.id}`}
-                        >
-                          {uploadProductRenderingMutation.isPending ? (
-                            <Loader2 className="w-3 h-3 animate-spin" />
-                          ) : (
-                            `💾 Save ${tempRendering.name.substring(0, 8)}...`
-                          )}
-                        </Button>
-                      ))}
-                    </div>
-                  </div>
                 </div>
               )}
               
