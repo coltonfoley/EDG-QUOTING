@@ -575,3 +575,44 @@ export const insertProductAccessorySchema = baseProductAccessorySchema.extend({
   category: z.string().max(100, "Category name is too long").optional()
 });
 
+// Quote image validation schemas
+export const createQuoteCoverPhotoSchema = z.object({
+  quoteId: z.number().int().positive("Quote ID must be a positive integer"),
+  filename: z.string().min(1, "Filename is required").max(255, "Filename is too long"),
+  originalName: z.string().min(1, "Original name is required").max(255, "Original name is too long"),
+  storageUrl: z.string().min(1, "Storage URL is required").max(500, "Storage URL is too long"),
+  mimeType: z.string().min(1, "MIME type is required").max(100, "MIME type is too long"),
+  fileSize: z.number().int().positive("File size must be positive"),
+  description: z.string().max(500, "Description is too long").optional().nullable()
+});
+
+export const createQuoteProductRenderingSchema = z.object({
+  quoteId: z.number().int().positive("Quote ID must be a positive integer"),
+  filename: z.string().min(1, "Filename is required").max(255, "Filename is too long"),
+  originalName: z.string().min(1, "Original name is required").max(255, "Original name is too long"),
+  storageUrl: z.string().min(1, "Storage URL is required").max(500, "Storage URL is too long"),
+  mimeType: z.string().min(1, "MIME type is required").max(100, "MIME type is too long"),
+  fileSize: z.number().int().positive("File size must be positive"),
+  description: z.string().max(500, "Description is too long").optional().nullable(),
+  displayOrder: z.number().int().min(0).max(999).optional()
+});
+
+export const updateQuoteCoverPhotoSchema = z.object({
+  description: z.string().max(500, "Description is too long").optional().nullable(),
+  isActive: z.boolean().optional()
+});
+
+export const updateQuoteProductRenderingSchema = z.object({
+  description: z.string().max(500, "Description is too long").optional().nullable(),
+  displayOrder: z.number().int().min(0).max(999).optional(),
+  isActive: z.boolean().optional()
+});
+
+export const quoteIdParamSchema = z.object({
+  quoteId: z.string().regex(/^\d+$/, "Quote ID must be a valid positive integer").transform(val => parseInt(val))
+});
+
+export const imageIdParamSchema = z.object({
+  imageId: z.string().regex(/^\d+$/, "Image ID must be a valid positive integer").transform(val => parseInt(val))
+});
+

@@ -30,7 +30,13 @@ import {
   bulkDeleteSchema,
   bulkUpdateSchema,
   bulkUpdateProductsSchema,
-  bulkUploadPricingSchema
+  bulkUploadPricingSchema,
+  createQuoteCoverPhotoSchema,
+  createQuoteProductRenderingSchema,
+  updateQuoteCoverPhotoSchema,
+  updateQuoteProductRenderingSchema,
+  quoteIdParamSchema,
+  imageIdParamSchema
 } from "./validation-schemas";
 import multer from "multer";
 import * as XLSX from "xlsx";
@@ -1022,6 +1028,224 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Quote image routes (protected)
+  app.get("/api/quotes/:quoteId/cover-photo", isAuthenticated, async (req, res) => {
+    try {
+      const params = quoteIdParamSchema.safeParse(req.params);
+      if (!params.success) {
+        return res.status(400).json({ 
+          message: "Invalid request parameters", 
+          errors: params.error.errors 
+        });
+      }
+
+      // Validate quote ownership
+      const hasAccess = await storage.validateQuoteOwnership(params.data.quoteId, req.user?.id);
+      if (!hasAccess) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      const coverPhoto = await storage.getQuoteCoverPhoto(params.data.quoteId);
+      if (!coverPhoto) {
+        return res.status(404).json({ message: "Cover photo not found" });
+      }
+
+      res.json(coverPhoto);
+    } catch (error) {
+      console.error("Error getting quote cover photo:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.get("/api/quotes/:quoteId/product-renderings", isAuthenticated, async (req, res) => {
+    try {
+      const params = quoteIdParamSchema.safeParse(req.params);
+      if (!params.success) {
+        return res.status(400).json({ 
+          message: "Invalid request parameters", 
+          errors: params.error.errors 
+        });
+      }
+
+      // Validate quote ownership
+      const hasAccess = await storage.validateQuoteOwnership(params.data.quoteId, req.user?.id);
+      if (!hasAccess) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      const renderings = await storage.getQuoteProductRenderings(params.data.quoteId);
+      res.json(renderings);
+    } catch (error) {
+      console.error("Error getting quote product renderings:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.post("/api/quotes/:quoteId/cover-photo", isAuthenticated, async (req, res) => {
+    try {
+      const params = quoteIdParamSchema.safeParse(req.params);
+      if (!params.success) {
+        return res.status(400).json({ 
+          message: "Invalid request parameters", 
+          errors: params.error.errors 
+        });
+      }
+
+      // Validate quote ownership
+      const hasAccess = await storage.validateQuoteOwnership(params.data.quoteId, req.user?.id);
+      if (!hasAccess) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      const photoData = createQuoteCoverPhotoSchema.parse({ ...req.body, quoteId: params.data.quoteId });
+      const coverPhoto = await storage.createQuoteCoverPhoto(photoData);
+      res.status(201).json(coverPhoto);
+    } catch (error) {
+      console.error("Error creating quote cover photo:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          message: "Invalid request data", 
+          errors: error.errors 
+        });
+      }
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.post("/api/quotes/:quoteId/product-renderings", isAuthenticated, async (req, res) => {
+    try {
+      const params = quoteIdParamSchema.safeParse(req.params);
+      if (!params.success) {
+        return res.status(400).json({ 
+          message: "Invalid request parameters", 
+          errors: params.error.errors 
+        });
+      }
+
+      // Validate quote ownership
+      const hasAccess = await storage.validateQuoteOwnership(params.data.quoteId, req.user?.id);
+      if (!hasAccess) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      const renderingData = createQuoteProductRenderingSchema.parse({ ...req.body, quoteId: params.data.quoteId });
+      const rendering = await storage.createQuoteProductRendering(renderingData);
+      res.status(201).json(rendering);
+    } catch (error) {
+      console.error("Error creating quote product rendering:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          message: "Invalid request data", 
+          errors: error.errors 
+        });
+      }
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.put("/api/quote-images/cover-photo/:imageId", isAuthenticated, async (req, res) => {
+    try {
+      const params = imageIdParamSchema.safeParse(req.params);
+      if (!params.success) {
+        return res.status(400).json({ 
+          message: "Invalid request parameters", 
+          errors: params.error.errors 
+        });
+      }
+
+      const updateData = updateQuoteCoverPhotoSchema.parse(req.body);
+      const updatedPhoto = await storage.updateQuoteCoverPhoto(params.data.imageId, updateData);
+      
+      if (!updatedPhoto) {
+        return res.status(404).json({ message: "Cover photo not found" });
+      }
+
+      res.json(updatedPhoto);
+    } catch (error) {
+      console.error("Error updating quote cover photo:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          message: "Invalid request data", 
+          errors: error.errors 
+        });
+      }
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.put("/api/quote-images/product-rendering/:imageId", isAuthenticated, async (req, res) => {
+    try {
+      const params = imageIdParamSchema.safeParse(req.params);
+      if (!params.success) {
+        return res.status(400).json({ 
+          message: "Invalid request parameters", 
+          errors: params.error.errors 
+        });
+      }
+
+      const updateData = updateQuoteProductRenderingSchema.parse(req.body);
+      const updatedRendering = await storage.updateQuoteProductRendering(params.data.imageId, updateData);
+      
+      if (!updatedRendering) {
+        return res.status(404).json({ message: "Product rendering not found" });
+      }
+
+      res.json(updatedRendering);
+    } catch (error) {
+      console.error("Error updating quote product rendering:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          message: "Invalid request data", 
+          errors: error.errors 
+        });
+      }
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.delete("/api/quote-images/cover-photo/:imageId", isAuthenticated, async (req, res) => {
+    try {
+      const params = imageIdParamSchema.safeParse(req.params);
+      if (!params.success) {
+        return res.status(400).json({ 
+          message: "Invalid request parameters", 
+          errors: params.error.errors 
+        });
+      }
+
+      const deleted = await storage.deleteQuoteCoverPhoto(params.data.imageId);
+      if (!deleted) {
+        return res.status(404).json({ message: "Cover photo not found" });
+      }
+
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting quote cover photo:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.delete("/api/quote-images/product-rendering/:imageId", isAuthenticated, async (req, res) => {
+    try {
+      const params = imageIdParamSchema.safeParse(req.params);
+      if (!params.success) {
+        return res.status(400).json({ 
+          message: "Invalid request parameters", 
+          errors: params.error.errors 
+        });
+      }
+
+      const deleted = await storage.deleteQuoteProductRendering(params.data.imageId);
+      if (!deleted) {
+        return res.status(404).json({ message: "Product rendering not found" });
+      }
+
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting quote product rendering:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
 
   // Line item routes (protected)
   app.get("/api/quotes/:quoteId/line-items", isAuthenticated, async (req, res) => {
