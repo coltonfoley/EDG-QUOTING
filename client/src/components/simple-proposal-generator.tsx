@@ -626,13 +626,12 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         const rowHeight = 12;
         const headerHeight = 8;
         
-        // Column configuration - optimized to fit within page margins (contentWidth ≈ 177mm)
+        // Column configuration - optimized with better space distribution (contentWidth ≈ 177mm)
         const columns = [
-          { header: '#', width: 6, align: 'left' },
-          { header: 'Date', width: 12, align: 'left' },
-          { header: 'Product or service', width: 35, align: 'left' },
-          { header: 'SKU', width: 18, align: 'left' },
-          { header: 'Description', width: 55, align: 'left' },
+          { header: '#', width: 8, align: 'left' },
+          { header: 'Product/Service', width: 40, align: 'left' },
+          { header: 'SKU', width: 22, align: 'left' },
+          { header: 'Description', width: 52, align: 'left' },
           { header: 'Qty', width: 10, align: 'center' },
           { header: 'Rate', width: 18, align: 'right' },
           { header: 'Amount', width: 18, align: 'right' }
@@ -675,8 +674,12 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
             ? baseTotal + (baseTotal * (markup / 100))
             : baseTotal + markup;
           
+          // Set font before measuring text to ensure consistent sizing
+          setFont('small');
+          setColor('primary');
+          
           // Check if row needs multiple lines for description
-          const maxDescWidth = columns[4].width - 2;
+          const maxDescWidth = columns[3].width - 2;
           const descLines = pdf.splitTextToSize(item.description, maxDescWidth);
           const actualRowHeight = Math.max(rowHeight, descLines.length * 4 + 4);
           
@@ -685,19 +688,33 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
             drawTableHeader();
           }
           
-          setFont('small');
-          setColor('primary');
-          
           let currentX = tableX;
           const baseY = yPosition;
           
-          // Row data
+          // Helper function to truncate text to fit column width with proper ellipsis handling
+          const truncateText = (text: string, maxWidth: number): string => {
+            const availableWidth = maxWidth - 2; // Leave 2mm padding
+            
+            // Check if text fits without truncation
+            if (pdf.getTextWidth(text) <= availableWidth) {
+              return text;
+            }
+            
+            // Find the longest text that fits with ellipsis
+            let truncated = text;
+            while (truncated.length > 0 && pdf.getTextWidth(truncated + '...') > availableWidth) {
+              truncated = truncated.slice(0, -1);
+            }
+            
+            return truncated.length > 0 ? truncated + '...' : '...';
+          };
+          
+          // Row data with proper truncation
           const rowData = [
             (index + 1).toString(), // #
-            '', // Date (empty in example)
-            item.description.split(' ').slice(0, 3).join(' '), // Product name (abbreviated)
-            item.description.split(' ').slice(0, 2).join(' '), // SKU (abbreviated)
-            item.description, // Full description
+            truncateText(item.description.split(' ').slice(0, 3).join(' '), columns[1].width), // Product name
+            truncateText(item.description.split(' ').slice(0, 2).join(' '), columns[2].width), // SKU  
+            item.description, // Full description (handles multi-line separately)
             qty.toString(),
             formatCurrency(price),
             formatCurrency(total)
@@ -710,7 +727,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
             
             const align = col.align === 'center' ? 'center' : col.align === 'right' ? 'right' : 'left';
             
-            if (colIndex === 4) { // Description column - handle multi-line
+            if (colIndex === 3) { // Description column - handle multi-line
               for (let i = 0; i < descLines.length; i++) {
                 pdf.text(descLines[i], textX, baseY + (i * 4), { align: align as any });
               }
