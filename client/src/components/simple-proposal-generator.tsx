@@ -274,16 +274,16 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         yPosition = margin;
       }
 
-      // Project details
-      pdf.setFontSize(18);
+      // Project details section header - teal background
+      pdf.setFillColor(66, 255, 193); // EDG brand teal
+      pdf.rect(margin, yPosition - 5, contentWidth, 15, 'F');
+      pdf.setTextColor(255, 255, 255); // White text
+      pdf.setFontSize(16);
       pdf.setFont('helvetica', 'bold');
-      pdf.text('Project Details', margin, yPosition);
-      yPosition += 10;
+      pdf.text('PROJECT DETAILS', margin + 5, yPosition + 5);
+      pdf.setTextColor(0, 0, 0); // Reset to black
+      yPosition += 20;
       
-      // Draw underline
-      pdf.setLineWidth(0.5);
-      pdf.line(margin, yPosition, margin + contentWidth, yPosition);
-      yPosition += 15;
       
       checkPageBreak(40); // Reserve space for project details
       
@@ -354,10 +354,15 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
       if (productRenderings.length > 0) {
         checkPageBreak(60);
         
+        // Product Renderings section header - teal background
+        pdf.setFillColor(66, 255, 193); // EDG brand teal
+        pdf.rect(margin, yPosition - 5, contentWidth, 15, 'F');
+        pdf.setTextColor(255, 255, 255); // White text
         pdf.setFontSize(14);
         pdf.setFont('helvetica', 'bold');
-        pdf.text('Product Renderings', margin, yPosition);
-        yPosition += 15;
+        pdf.text('PRODUCT RENDERINGS', margin + 5, yPosition + 5);
+        pdf.setTextColor(0, 0, 0); // Reset to black
+        yPosition += 20;
         
         const imagesPerRow = 3;
         const imageWidth = (contentWidth - 20) / imagesPerRow;
@@ -402,10 +407,15 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
       if (quote.lineItems.length > 0) {
         checkPageBreak(40);
         
+        // Project Items section header - teal background
+        pdf.setFillColor(66, 255, 193); // EDG brand teal
+        pdf.rect(margin, yPosition - 5, contentWidth, 15, 'F');
+        pdf.setTextColor(255, 255, 255); // White text
         pdf.setFontSize(14);
         pdf.setFont('helvetica', 'bold');
-        pdf.text('Project Items', margin, yPosition);
-        yPosition += 15;
+        pdf.text('PROJECT ITEMS', margin + 5, yPosition + 5);
+        pdf.setTextColor(0, 0, 0); // Reset to black
+        yPosition += 20;
         
         // Table headers
         const tableStartY = yPosition;
@@ -418,15 +428,16 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         const priceWidth = showPricing ? contentWidth * 0.2 : 0;
         const totalWidth = showPricing ? contentWidth * 0.2 : 0;
         
-        // Draw header background
-        pdf.setFillColor(245, 245, 245);
+        // Draw header background - EDG brand teal
+        pdf.setFillColor(66, 255, 193); // EDG brand teal #42ffc1
         pdf.rect(margin, yPosition - 2, contentWidth, headerHeight, 'F');
         
         // Header borders
         pdf.setDrawColor(221, 221, 221);
         pdf.setLineWidth(0.1);
         
-        // Header text
+        // Header text - white text on teal background
+        pdf.setTextColor(255, 255, 255); // White text
         pdf.setFontSize(10);
         pdf.setFont('helvetica', 'bold');
         pdf.text('Description', margin + 2, yPosition + 6);
@@ -436,6 +447,9 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
           pdf.text('Unit Price', margin + descWidth + qtyWidth + 2, yPosition + 6);
           pdf.text('Total', margin + descWidth + qtyWidth + priceWidth + 2, yPosition + 6);
         }
+        
+        // Reset text color to black for content
+        pdf.setTextColor(0, 0, 0);
         
         yPosition += headerHeight;
         
@@ -459,9 +473,9 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
           
           checkPageBreak(neededHeight + 5);
           
-          // Draw row background (alternating)
+          // Draw row background (alternating) - light teal for even rows
           if (i % 2 === 0) {
-            pdf.setFillColor(249, 249, 249);
+            pdf.setFillColor(240, 255, 251); // Very light teal
             pdf.rect(margin, yPosition - 2, contentWidth, neededHeight, 'F');
           }
           
@@ -530,14 +544,19 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
             yPosition += 6;
           }
           
-          // Total line
-          pdf.setFont('helvetica', 'bold');
-          pdf.setFontSize(12);
+          // Total line - highlighted in teal
+          pdf.setDrawColor(66, 255, 193); // Teal line
+          pdf.setLineWidth(1.5);
           pdf.line(totalsLabelX, yPosition, totalsX + 50, yPosition);
+          pdf.setDrawColor(0, 0, 0); // Reset to black
           yPosition += 5;
           
+          pdf.setTextColor(66, 255, 193); // Teal text for total
+          pdf.setFont('helvetica', 'bold');
+          pdf.setFontSize(12);
           pdf.text('Total:', totalsLabelX, yPosition);
           pdf.text(formatCurrency(totals.total), totalsX, yPosition);
+          pdf.setTextColor(0, 0, 0); // Reset to black
           yPosition += 15;
         }
       }
@@ -546,10 +565,15 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
       if (quote.notes && quote.notes.trim()) {
         checkPageBreak(30);
         
+        // Project Notes section header - teal background
+        pdf.setFillColor(66, 255, 193); // EDG brand teal
+        pdf.rect(margin, yPosition - 5, contentWidth, 15, 'F');
+        pdf.setTextColor(255, 255, 255); // White text
         pdf.setFontSize(14);
         pdf.setFont('helvetica', 'bold');
-        pdf.text('Project Notes', margin, yPosition);
-        yPosition += 15;
+        pdf.text('PROJECT NOTES', margin + 5, yPosition + 5);
+        pdf.setTextColor(0, 0, 0); // Reset to black
+        yPosition += 20;
         
         pdf.setFontSize(10);
         pdf.setFont('helvetica', 'normal');
@@ -576,10 +600,15 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
       if (includeContract && hasContractData) {
         checkPageBreak(30);
         
+        // Contract Terms section header - teal background
+        pdf.setFillColor(66, 255, 193); // EDG brand teal
+        pdf.rect(margin, yPosition - 5, contentWidth, 15, 'F');
+        pdf.setTextColor(255, 255, 255); // White text
         pdf.setFontSize(14);
         pdf.setFont('helvetica', 'bold');
-        pdf.text('Contract Terms', margin, yPosition);
-        yPosition += 15;
+        pdf.text('CONTRACT TERMS', margin + 5, yPosition + 5);
+        pdf.setTextColor(0, 0, 0); // Reset to black
+        yPosition += 20;
         
         // Add contract title if using template
         if (quote.contractTemplate?.title) {
