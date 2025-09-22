@@ -31,6 +31,10 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
   const [coverPhoto, setCoverPhoto] = useState<UploadedFile | null>(null);
   const [productRenderings, setProductRenderings] = useState<UploadedFile[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
+  
+  // Contract state and logic
+  const hasContractData = !!(quote.contractTemplate || quote.customContractTerms);
+  const [includeContract, setIncludeContract] = useState(hasContractData);
   const { toast } = useToast();
   
   const coverPhotoRef = useRef<HTMLInputElement>(null);
@@ -568,6 +572,50 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         }
       }
 
+      // Contract Terms Section
+      if (includeContract && hasContractData) {
+        checkPageBreak(30);
+        
+        pdf.setFontSize(14);
+        pdf.setFont('helvetica', 'bold');
+        pdf.text('Contract Terms', margin, yPosition);
+        yPosition += 15;
+        
+        // Add contract title if using template
+        if (quote.contractTemplate?.title) {
+          pdf.setFontSize(12);
+          pdf.setFont('helvetica', 'bold');
+          pdf.text(quote.contractTemplate.title, margin, yPosition);
+          yPosition += 12;
+        }
+        
+        // Get contract content (template terms or custom terms)
+        const contractContent = quote.contractTemplate?.terms || quote.customContractTerms || '';
+        
+        if (contractContent.trim()) {
+          pdf.setFontSize(10);
+          pdf.setFont('helvetica', 'normal');
+          
+          // Split contract content into lines and add with proper wrapping
+          const contractLines = contractContent.split('\n');
+          for (const contractLine of contractLines) {
+            if (contractLine.trim()) {
+              const wrappedLines = pdf.splitTextToSize(contractLine, contentWidth - 10);
+              checkPageBreak(wrappedLines.length * 5 + 5);
+              
+              for (const wrappedLine of wrappedLines) {
+                pdf.text(wrappedLine, margin + 5, yPosition);
+                yPosition += 5;
+              }
+              yPosition += 3;
+            } else {
+              yPosition += 5; // Empty line spacing
+            }
+          }
+          yPosition += 10; // Extra spacing after contract section
+        }
+      }
+
       // Download the PDF
       pdf.save(`Proposal-${quote.quoteNumber}.pdf`);
       
@@ -635,6 +683,28 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
                   data-testid="switch-include-cover"
                 />
               </div>
+              
+              {/* Contract Terms Toggle */}
+              {hasContractData && (
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label htmlFor="include-contract" className="text-sm font-medium">
+                      Include Contract Terms
+                    </Label>
+                    <p className="text-sm text-gray-500">
+                      {quote.contractTemplate 
+                        ? `Template: ${quote.contractTemplate.name}` 
+                        : 'Custom contract terms'}
+                    </p>
+                  </div>
+                  <Switch
+                    id="include-contract"
+                    checked={includeContract}
+                    onCheckedChange={setIncludeContract}
+                    data-testid="switch-include-contract"
+                  />
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -770,6 +840,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
                 <p><strong>Cover Page:</strong> {includeCoverPage ? 'Yes' : 'No'}</p>
                 <p><strong>Cover Photo:</strong> {coverPhoto ? 'Included' : 'None'}</p>
                 <p><strong>Product Images:</strong> {productRenderings.length} images</p>
+                {hasContractData && <p><strong>Contract Terms:</strong> {includeContract ? 'Included' : 'Not included'}</p>}
               </div>
             </CardContent>
           </Card>
