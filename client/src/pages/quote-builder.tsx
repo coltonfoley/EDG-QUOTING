@@ -3,7 +3,6 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { AppHeader } from "@/components/app-header";
 import { QuoteHeader } from "@/components/quote-header";
-import { ImageAssetsPreview } from "@/components/image-assets-preview";
 import { LineItemsTable } from "@/components/line-items-table";
 import { QuoteSummary } from "@/components/quote-summary";
 import { Button } from "@/components/ui/button";
@@ -16,7 +15,6 @@ import { LoadingSpinner } from "@/components/loading-spinner";
 import { SimpleProposalGenerator } from "@/components/simple-proposal-generator";
 import { Save, Loader2, FileText } from "lucide-react";
 import type { QuoteWithDetails } from "@shared/schema";
-import type { UploadedImage } from "@/components/image-uploader";
 
 export default function QuoteBuilder() {
   const params = useParams();
@@ -28,16 +26,6 @@ export default function QuoteBuilder() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // State to track upload states from QuoteHeader
-  const [uploadStates, setUploadStates] = useState<{
-    portfolioImages: UploadedImage[];
-    technicalDiagrams: UploadedImage[];
-    companyImages: UploadedImage[];
-  }>({
-    portfolioImages: [],
-    technicalDiagrams: [],
-    companyImages: [],
-  });
 
   // State for proposal generator dialog
   const [proposalGeneratorOpen, setProposalGeneratorOpen] = useState(false);
@@ -168,17 +156,6 @@ export default function QuoteBuilder() {
               </CardContent>
             </Card>
             
-            {/* Image assets skeleton */}
-            <Card>
-              <CardContent className="p-6">
-                <Skeleton className="h-6 w-32 mb-4" />
-                <div className="grid grid-cols-3 gap-4">
-                  <Skeleton className="h-32 w-full" />
-                  <Skeleton className="h-32 w-full" />
-                  <Skeleton className="h-32 w-full" />
-                </div>
-              </CardContent>
-            </Card>
             
             {/* Line items skeleton */}
             <Card>
@@ -268,18 +245,8 @@ export default function QuoteBuilder() {
           quote={isNewQuote ? undefined : currentQuote}
           onSave={handleSaveQuote}
           isLoading={createQuoteMutation.isPending || updateQuoteMutation.isPending}
-          onUploadStatesChange={setUploadStates}
         />
 
-        {/* Image Assets Preview - Show for both new and existing quotes */}
-        <ImageAssetsPreview
-          portfolioImages={currentQuote.portfolioImages as any[]}
-          technicalDiagrams={currentQuote.technicalDiagrams as any[]}
-          companyImages={currentQuote.companyImages as any[]}
-          uploadedPortfolioImages={uploadStates.portfolioImages}
-          uploadedTechnicalDiagrams={uploadStates.technicalDiagrams}
-          uploadedCompanyImages={uploadStates.companyImages}
-        />
 
         {/* Line Items Table - Show for both new and existing quotes */}
         <LineItemsTable
