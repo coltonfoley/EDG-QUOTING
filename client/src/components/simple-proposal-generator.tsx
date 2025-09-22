@@ -74,12 +74,12 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
 
   // React Query hooks for loading existing images
   const { data: existingCoverPhotos, isLoading: loadingCoverPhotos } = useQuery<QuoteCoverPhoto[]>({
-    queryKey: ['/api/quotes', quote.id, 'cover-photos'],
+    queryKey: [`/api/quotes/${quote.id}/cover-photos`],
     enabled: open && !!quote.id,
   });
 
   const { data: existingProductRenderings, isLoading: loadingRenderings } = useQuery<QuoteProductRendering[]>({
-    queryKey: ['/api/quotes', quote.id, 'product-renderings'],
+    queryKey: [`/api/quotes/${quote.id}/product-renderings`],
     enabled: open && !!quote.id,
   });
 
@@ -91,7 +91,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
       return await apiRequest('POST', `/api/quotes/${quote.id}/cover-photos`, formData);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/quotes', quote.id, 'cover-photos'] });
+      queryClient.invalidateQueries({ queryKey: [`/api/quotes/${quote.id}/cover-photos`] });
       toast({
         title: "Cover photo saved",
         description: "Your cover photo has been added to the quote",
@@ -114,7 +114,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
       return await apiRequest('POST', `/api/quotes/${quote.id}/product-renderings`, formData);
     },
     onSuccess: (_, file) => {
-      queryClient.invalidateQueries({ queryKey: ['/api/quotes', quote.id, 'product-renderings'] });
+      queryClient.invalidateQueries({ queryKey: [`/api/quotes/${quote.id}/product-renderings`] });
       toast({
         title: "Product rendering saved",
         description: "Your product rendering has been added to the quote",
@@ -143,7 +143,9 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
           storageUrl: activeCoverPhoto.storageUrl,
           mimeType: activeCoverPhoto.mimeType,
           isActive: activeCoverPhoto.isActive ?? true,
-          uploadedAt: activeCoverPhoto.uploadedAt?.toISOString() ?? new Date().toISOString(),
+          uploadedAt: activeCoverPhoto.uploadedAt instanceof Date 
+            ? activeCoverPhoto.uploadedAt.toISOString() 
+            : (activeCoverPhoto.uploadedAt ?? new Date().toISOString()),
         });
       }
     }
@@ -162,7 +164,9 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         storageUrl: img.storageUrl,
         mimeType: img.mimeType,
         isActive: img.isActive ?? true,
-        uploadedAt: img.uploadedAt?.toISOString() ?? new Date().toISOString(),
+        uploadedAt: img.uploadedAt instanceof Date 
+          ? img.uploadedAt.toISOString() 
+          : (img.uploadedAt ?? new Date().toISOString()),
         displayOrder: img.displayOrder ?? 0,
       })));
     }
