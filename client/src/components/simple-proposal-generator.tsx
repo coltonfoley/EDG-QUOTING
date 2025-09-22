@@ -1106,6 +1106,10 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
               const wrappedLines = pdf.splitTextToSize(line.trim(), contentWidth - 5);
               checkPageBreak(wrappedLines.length * 4 + 5);
               
+              // Reset font after potential page break to ensure consistency
+              setFont('small');
+              setColor('primary');
+              
               for (let j = 0; j < wrappedLines.length; j++) {
                 const indentX = firstLine ? margin : margin + 5;
                 pdf.text(wrappedLines[j], indentX, yPosition);
