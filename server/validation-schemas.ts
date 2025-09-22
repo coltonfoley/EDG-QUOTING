@@ -103,8 +103,8 @@ export const insertQuoteSchema = baseQuoteSchema.extend({
   signatureStatus: z.enum(['unsigned', 'signed'], {
     errorMap: () => ({ message: "Signature status must be one of: unsigned, signed" })
   }).optional(),
-  contractTemplateId: z.number().int().positive().optional(),
-  customContractTerms: z.string().max(10000, "Custom contract terms are too long").optional()
+  contractTemplateId: z.number().int().positive().optional().nullable(),
+  customContractTerms: z.string().max(10000, "Custom contract terms are too long").optional().nullable()
 });
 
 // Update schema for quotes - more lenient validation for partial updates
@@ -146,8 +146,8 @@ export const updateQuoteSchema = z.object({
   signatureStatus: z.enum(['unsigned', 'signed'], {
     errorMap: () => ({ message: "Signature status must be one of: unsigned, signed" })
   }).optional(),
-  contractTemplateId: z.number().int().positive().optional(),
-  customContractTerms: z.string().max(10000, "Custom contract terms are too long").optional()
+  contractTemplateId: z.number().int().positive().optional().nullable(),
+  customContractTerms: z.string().max(10000, "Custom contract terms are too long").optional().nullable()
 });
 
 // Enhanced LineItem validation
