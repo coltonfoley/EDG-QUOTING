@@ -15,7 +15,6 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { z } from "zod";
 import { useEffect, useState, useCallback, useRef } from "react";
-import { ImageUploader, type UploadedImage } from "@/components/image-uploader";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
@@ -36,27 +35,14 @@ interface QuoteHeaderProps {
   quote?: QuoteWithDetails;
   onSave: (data: QuoteFormData) => void;
   isLoading?: boolean;
-  onUploadStatesChange?: (states: {
-    portfolioImages: UploadedImage[];
-    technicalDiagrams: UploadedImage[];
-    companyImages: UploadedImage[];
-  }) => void;
 }
 
-export function QuoteHeader({ quote, onSave, isLoading, onUploadStatesChange }: QuoteHeaderProps) {
+export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // State for managing image uploads
-  const [portfolioImages, setPortfolioImages] = useState<UploadedImage[]>([]);
-  const [technicalDiagrams, setTechnicalDiagrams] = useState<UploadedImage[]>([]);
-  const [companyImages, setCompanyImages] = useState<UploadedImage[]>([]);
   
-  // Track upload completion and auto-save
-  const [pendingSave, setPendingSave] = useState(false);
   
-  // State for collapsible image assets section
-  const [isImageAssetsOpen, setIsImageAssetsOpen] = useState(false);
   
   // Customer search state
   const [customerSearchTerm, setCustomerSearchTerm] = useState("");
@@ -65,11 +51,6 @@ export function QuoteHeader({ quote, onSave, isLoading, onUploadStatesChange }: 
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [showDuplicateWarning, setShowDuplicateWarning] = useState(false);
   
-  // Calculate if any uploads are still in progress
-  const isUploading = [...portfolioImages, ...technicalDiagrams, ...companyImages]
-    .some(img => !img.uploaded);
-  const uploadingCount = [...portfolioImages, ...technicalDiagrams, ...companyImages]
-    .filter(img => !img.uploaded).length;
   
   // Debounce search term
   const debouncedSearch = useCallback(
@@ -196,32 +177,6 @@ export function QuoteHeader({ quote, onSave, isLoading, onUploadStatesChange }: 
         setSelectedCustomer(quote.customer);
       }
       
-      // Convert database image arrays to UploadedImage format
-      const convertDbImagesToUploaded = (dbImages: any[] = []): UploadedImage[] => {
-        return dbImages.map((img, index) => ({
-          id: `db-${Date.now()}-${index}`,
-          file: new File([], img.filename || 'image'),
-          preview: img.url,
-          uploadProgress: 100,
-          uploaded: true,
-          url: img.url,
-          metadata: {
-            filename: img.filename || '',
-            caption: img.caption || '',
-            altText: img.altText || '',
-            uploadedAt: img.uploadedAt || new Date().toISOString(),
-            size: img.size,
-            thumbnailUrl: img.thumbnailUrl,
-            url: img.url,
-            ...img
-          }
-        }));
-      };
-      
-      // Project images removed with projects module
-      setPortfolioImages(convertDbImagesToUploaded((quote.portfolioImages as any[]) || []));
-      setTechnicalDiagrams(convertDbImagesToUploaded((quote.technicalDiagrams as any[]) || []));
-      setCompanyImages(convertDbImagesToUploaded((quote.companyImages as any[]) || []));
       
       form.reset({
         quoteNumber: quote.quoteNumber || "",
@@ -241,26 +196,6 @@ export function QuoteHeader({ quote, onSave, isLoading, onUploadStatesChange }: 
     }
   }, [quote, form]);
   
-  // Auto-save after all uploads complete
-  useEffect(() => {
-    if (pendingSave && !isUploading) {
-      console.log('🎯 Auto-saving after all uploads completed');
-      setPendingSave(false);
-      // Trigger form submission with current form data
-      form.handleSubmit(handleSubmit)();
-    }
-  }, [pendingSave, isUploading, form]);
-
-  // Notify parent component of upload state changes
-  useEffect(() => {
-    if (onUploadStatesChange) {
-      onUploadStatesChange({
-        portfolioImages,
-        technicalDiagrams,
-        companyImages,
-      });
-    }
-  }, [portfolioImages, technicalDiagrams, companyImages, onUploadStatesChange]);
 
   const updateDealStageMutation = useMutation({
     mutationFn: async ({ dealStage }: { dealStage: string }) => {
@@ -296,54 +231,7 @@ export function QuoteHeader({ quote, onSave, isLoading, onUploadStatesChange }: 
 
 
   const handleSubmit = (data: QuoteFormData) => {
-    // If images are still uploading, set pending save and return
-    if (isUploading) {
-      setPendingSave(true);
-      toast({
-        title: "Upload in progress",
-        description: `Waiting for ${uploadingCount} images to finish uploading...`,
-      });
-      return;
-    }
-    
-    // Convert uploaded images to the expected format for the database
-    const imageData = {
-      ...data,
-      // Project images removed with projects module
-      portfolioImages: portfolioImages.filter(img => img.uploaded).map(img => ({
-        url: img.url || '',
-        filename: img.metadata.filename || '',
-        caption: img.metadata.caption || '',
-        altText: img.metadata.altText || '',
-        uploadedAt: img.metadata.uploadedAt || new Date().toISOString(),
-        size: img.metadata.size,
-        thumbnailUrl: img.metadata.thumbnailUrl,
-        projectType: (img.metadata as any).projectType,
-        featured: (img.metadata as any).featured || false,
-      })),
-      technicalDiagrams: technicalDiagrams.filter(img => img.uploaded).map(img => ({
-        url: img.url || '',
-        filename: img.metadata.filename || '',
-        caption: img.metadata.caption || '',
-        altText: img.metadata.altText || '',
-        uploadedAt: img.metadata.uploadedAt || new Date().toISOString(),
-        size: img.metadata.size,
-        thumbnailUrl: img.metadata.thumbnailUrl,
-        diagramType: (img.metadata as any).diagramType || 'other',
-      })),
-      companyImages: companyImages.filter(img => img.uploaded).map(img => ({
-        url: img.url || '',
-        filename: img.metadata.filename || '',
-        caption: img.metadata.caption || '',
-        altText: img.metadata.altText || '',
-        uploadedAt: img.metadata.uploadedAt || new Date().toISOString(),
-        size: img.metadata.size,
-        thumbnailUrl: img.metadata.thumbnailUrl,
-        imageType: (img.metadata as any).imageType || 'other',
-      })),
-    };
-    
-    onSave(imageData);
+    onSave(data);
   };
 
   return (
@@ -388,7 +276,7 @@ export function QuoteHeader({ quote, onSave, isLoading, onUploadStatesChange }: 
               type="submit" 
               form="quote-form" 
               className="bg-edg-black hover:bg-edg-grey text-edg-white"
-              disabled={isLoading || isUploading}
+              disabled={isLoading}
               onClick={() => {
                 // Check for validation errors and show them
                 const errors = form.formState.errors;
@@ -405,7 +293,7 @@ export function QuoteHeader({ quote, onSave, isLoading, onUploadStatesChange }: 
               }}
             >
               <Save className="mr-2 h-4 w-4" />
-              {isLoading ? "Saving..." : isUploading ? `Uploading ${uploadingCount} images...` : "Save Quote"}
+              {isLoading ? "Saving..." : "Save Quote"}
             </Button>
           </div>
         </div>
@@ -683,122 +571,6 @@ export function QuoteHeader({ quote, onSave, isLoading, onUploadStatesChange }: 
               </div>
             </div>
             
-            {/* Image Assets Section - Collapsible */}
-            <Collapsible open={isImageAssetsOpen} onOpenChange={setIsImageAssetsOpen} className="mt-6 pt-6 border-t border-gray-200">
-              <CollapsibleTrigger asChild>
-                <Button 
-                  variant="ghost" 
-                  className="w-full justify-between p-0 h-auto hover:bg-transparent mb-4"
-                  data-testid="toggle-image-assets"
-                >
-                  <div className="flex items-center gap-2">
-                    <Camera className="h-5 w-5" />
-                    <h3 className="text-lg font-semibold text-charcoal">
-                      Image Assets
-                    </h3>
-                    <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
-                      <span>({portfolioImages.filter(img => img.uploaded).length + technicalDiagrams.filter(img => img.uploaded).length + companyImages.filter(img => img.uploaded).length} uploaded)</span>
-                    </div>
-                  </div>
-                  {isImageAssetsOpen ? (
-                    <ChevronUp className="h-5 w-5" />
-                  ) : (
-                    <ChevronDown className="h-5 w-5" />
-                  )}
-                </Button>
-              </CollapsibleTrigger>
-              
-              <div className="mb-4">
-                <p className="text-sm text-accent-grey">
-                  Upload and manage images to enhance your proposals. Images will be stored securely and included in generated documents.
-                </p>
-              </div>
-
-              <CollapsibleContent className="space-y-6">
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {/* Project Images */}
-                  <div className="space-y-4">
-                    {/* Project photos removed with projects module */}
-
-                    <ImageUploader
-                      imageType="technical"
-                      title="Technical Diagrams"
-                      description="Blueprints, plans, and technical specifications"
-                      maxFiles={10}
-                      allowedTypes={['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'application/pdf']}
-                      onImagesChange={setTechnicalDiagrams}
-                      initialImages={technicalDiagrams}
-                      categoryOptions={[
-                        { value: 'floorplan', label: 'Floor Plans' },
-                        { value: 'elevation', label: 'Elevations' },
-                        { value: 'detail', label: 'Detail Drawings' },
-                        { value: 'specification', label: 'Specifications' },
-                        { value: 'other', label: 'Other' }
-                      ]}
-                      data-testid="uploader-technical-diagrams"
-                    />
-                  </div>
-
-                  <div className="space-y-4">
-                    <ImageUploader
-                      imageType="portfolio"
-                      title="Portfolio Showcase"
-                      description="Similar projects and portfolio examples to showcase expertise"
-                      maxFiles={12}
-                      onImagesChange={setPortfolioImages}
-                      initialImages={portfolioImages}
-                      categoryOptions={[
-                        { value: 'residential', label: 'Residential Projects' },
-                        { value: 'commercial', label: 'Commercial Projects' },
-                        { value: 'industrial', label: 'Industrial Projects' },
-                        { value: 'other', label: 'Other Projects' }
-                      ]}
-                      data-testid="uploader-portfolio-images"
-                    />
-
-                    <ImageUploader
-                      imageType="company"
-                      title="Company Assets"
-                      description="Company logos, team photos, certifications, and facility images"
-                      maxFiles={8}
-                      onImagesChange={setCompanyImages}
-                      initialImages={companyImages}
-                      categoryOptions={[
-                        { value: 'logo', label: 'Company Logo' },
-                        { value: 'team', label: 'Team Photos' },
-                        { value: 'facility', label: 'Facility Images' },
-                        { value: 'certification', label: 'Certifications' },
-                        { value: 'other', label: 'Other Assets' }
-                      ]}
-                      data-testid="uploader-company-images"
-                    />
-                  </div>
-                </div>
-
-                {/* Image Summary */}
-                <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                  <h4 className="text-sm font-medium text-gray-800 dark:text-gray-200 mb-2">Image Summary</h4>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm text-gray-600 dark:text-gray-400">
-                    <div className="flex items-center gap-2">
-                      <Camera className="h-4 w-4" />
-                      <span>Project: N/A</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Image className="h-4 w-4" />
-                      <span>Portfolio: {portfolioImages.filter(img => img.uploaded).length}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Wrench className="h-4 w-4" />
-                      <span>Technical: {technicalDiagrams.filter(img => img.uploaded).length}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Building className="h-4 w-4" />
-                      <span>Company: {companyImages.filter(img => img.uploaded).length}</span>
-                    </div>
-                  </div>
-                </div>
-              </CollapsibleContent>
-            </Collapsible>
           </form>
         </Form>
       </CardContent>
