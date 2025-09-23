@@ -27,7 +27,6 @@ export const AuthContext = createContext<AuthContextType | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
-  const [hasTimedOut, setHasTimedOut] = useState(false);
   
   const {
     data: user,
@@ -38,23 +37,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     queryKey: ["/api/user"],
     queryFn: async ({ queryKey, signal }) => {
       try {
-        // Create a timeout promise that rejects after 5 seconds
-        const timeoutPromise = new Promise<never>((_, reject) => {
-          const timeoutId = setTimeout(() => {
-            reject(new Error(ERROR_MESSAGES.NETWORK_TIMEOUT));
-          }, 5000);
-          
-          // Clean up timeout if signal aborts
-          signal?.addEventListener('abort', () => clearTimeout(timeoutId));
-        });
-        
-        // Race between the actual fetch and timeout
-        const fetchPromise = fetch(queryKey[0] as string, {
+        const res = await fetch(queryKey[0] as string, {
           credentials: "include",
           signal,
         });
-        
-        const res = await Promise.race([fetchPromise, timeoutPromise]) as Response;
         
         // Handle 401 by returning null (user not authenticated)
         if (res.status === 401) {
@@ -83,10 +69,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           throw new Error(ERROR_MESSAGES.NETWORK_OFFLINE);
         }
         
-        // Check if timeout
-        if (error.message === ERROR_MESSAGES.NETWORK_TIMEOUT) {
-          console.error('Authentication check timed out after 5 seconds');
-          setHasTimedOut(true);
+        // Let React Query handle abort errors properly
+        if (error.name === 'AbortError') {
+          throw error;
         }
         
         throw error;
@@ -97,17 +82,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     gcTime: 0, // Don't cache auth status
   });
   
-  // Handle timeout and error states
+  // Handle error states
   useEffect(() => {
-    if (hasTimedOut || (isError && error?.message === ERROR_MESSAGES.NETWORK_TIMEOUT)) {
-      toast({
-        title: "Connection timeout",
-        description: "Unable to verify authentication. Please refresh the page or login again.",
-        variant: "destructive",
-      });
-    } else if (isError && !hasTimedOut) {
+    if (isError && error) {
       const errorMessage = error?.message || "Authentication check failed";
-      if (!errorMessage.includes('401')) { // Don't show error for normal 401s
+      // Don't show errors for 401s (normal unauthenticated state) or AbortErrors (normal cancellation)
+      if (!errorMessage.includes('401') && error.name !== 'AbortError') {
         toast({
           title: "Authentication error",
           description: errorMessage,
@@ -115,7 +95,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         });
       }
     }
-  }, [isError, error, hasTimedOut, toast]);
+  }, [isError, error, toast]);
 
   const loginMutation = useMutation({
     mutationFn: async (credentials: LoginData) => {
@@ -227,15 +207,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
   });
 
-  // Determine effective loading state - stop loading if timed out or errored
-  const effectiveIsLoading = isLoading && !hasTimedOut && !isError;
+  // Determine effective loading state - stop loading if errored
+  const effectiveIsLoading = isLoading && !isError;
   
   return (
     <AuthContext.Provider
       value={{
         user: user ?? null,
         isLoading: effectiveIsLoading,
-        error: (hasTimedOut || isError) ? error : null,
+        error: isError ? error : null,
         isAuthenticated: !!user,
         loginMutation,
         logoutMutation,
