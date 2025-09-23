@@ -270,11 +270,43 @@ export async function extractQuoteDataFromImages(images: Array<{index: number, i
       chunks.push(images.slice(i, i + chunkSize));
     }
 
+    // Process chunks concurrently with controlled concurrency to avoid rate limits
+    const maxConcurrency = 3; // Limit concurrent OpenAI API calls
     const chunkResults: ExtractedQuoteWithPageRefs[] = [];
-    for (const chunk of chunks) {
-      const result = await processImagesInSingleCall(chunk);
-      if (result) {
-        chunkResults.push(result);
+    
+    console.log(`🚀 Processing ${chunks.length} chunks concurrently (max ${maxConcurrency} at a time)`);
+    
+    // Process chunks in batches to control concurrency
+    for (let i = 0; i < chunks.length; i += maxConcurrency) {
+      const currentBatch = chunks.slice(i, i + maxConcurrency);
+      
+      // Process current batch concurrently
+      const batchPromises = currentBatch.map(async (chunk, batchIndex) => {
+        try {
+          const globalChunkIndex = i + batchIndex;
+          console.log(`📄 Processing chunk ${globalChunkIndex + 1}/${chunks.length} (${chunk.length} pages)`);
+          
+          const result = await processImagesInSingleCall(chunk);
+          return { result, chunkIndex: globalChunkIndex };
+        } catch (error) {
+          console.warn(`⚠️  Chunk ${i + batchIndex + 1} failed:`, error);
+          return { result: null, chunkIndex: i + batchIndex };
+        }
+      });
+      
+      // Wait for current batch to complete
+      const batchResults = await Promise.all(batchPromises);
+      
+      // Add successful results to final array
+      for (const { result } of batchResults) {
+        if (result) {
+          chunkResults.push(result);
+        }
+      }
+      
+      // Brief delay between batches to be respectful to API rate limits
+      if (i + maxConcurrency < chunks.length) {
+        await new Promise(resolve => setTimeout(resolve, 500));
       }
     }
 
