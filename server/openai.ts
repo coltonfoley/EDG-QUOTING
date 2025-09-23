@@ -53,13 +53,13 @@ const ExtractedQuoteSchema = z.object({
   total: z.number().nullable().optional(),
   notes: z.string().nullable().optional(),
   terms: z.string().nullable().optional(),
+  confidence: z.number().min(0).max(1).optional(), // Overall extraction confidence score
 });
 
 export type ExtractedQuote = z.infer<typeof ExtractedQuoteSchema>;
 
 // Schema for vision-based processing with page references
 const ExtractedQuoteWithPageRefsSchema = ExtractedQuoteSchema.extend({
-  confidence: z.number().min(0).max(1).optional(),
   pageRefs: z.array(z.number()).optional(), // Page indices where data was found
 });
 
@@ -383,6 +383,13 @@ async function processImagesInSingleCall(images: Array<{index: number, imageBase
 
     // Validate with extended schema
     const extracted = ExtractedQuoteWithPageRefsSchema.parse(parsedContent);
+    
+    // Calculate and add confidence score if not already present
+    if (!extracted.confidence) {
+      // Don't pass dummy sourceText to avoid inflating denominator with unmatchable patterns
+      extracted.confidence = calculateExtractionConfidence(extracted);
+    }
+    
     return extracted;
   } catch (error) {
     console.error('Error in processImagesInSingleCall:', error);
@@ -406,6 +413,7 @@ async function consolidateQuoteParts(parts: ExtractedQuoteWithPageRefs[]): Promi
       total: null,
       notes: null,
       terms: null,
+      confidence: 0 // Initialize with default confidence
     };
 
     // Consolidate customer information (take first non-null values)
@@ -456,12 +464,127 @@ async function consolidateQuoteParts(parts: ExtractedQuoteWithPageRefs[]): Promi
     consolidated.discountAmount = bestFinancialPart.discountAmount;
     consolidated.total = bestFinancialPart.total;
 
+    // Calculate consolidated confidence as weighted average of individual part confidences
+    const validParts = parts.filter(part => part.confidence !== undefined);
+    if (validParts.length > 0) {
+      const avgConfidence = validParts.reduce((sum, part) => sum + (part.confidence || 0), 0) / validParts.length;
+      // Re-calculate confidence based on consolidated data to ensure accuracy
+      const recalculatedConfidence = calculateExtractionConfidence(consolidated);
+      // Use the higher of the two as the final confidence
+      consolidated.confidence = Math.max(avgConfidence, recalculatedConfidence);
+    } else {
+      // No confidence data available, calculate fresh
+      consolidated.confidence = calculateExtractionConfidence(consolidated);
+    }
+
     return consolidated;
   } catch (error) {
     console.error('Error in consolidateQuoteParts:', error);
     // Return the first part as fallback
     return parts[0] as ExtractedQuote;
   }
+}
+
+/**
+ * Calculate confidence score based on data completeness and quality indicators
+ */
+function calculateExtractionConfidence(quote: ExtractedQuote, sourceText?: string): number {
+  let score = 0;
+  let maxScore = 0;
+
+  // Critical fields scoring (60% of total score)
+  maxScore += 20; // Customer info weight
+  if (quote.customer?.name || quote.customer?.company) score += 10;
+  if (quote.customer?.email) score += 5;
+  if (quote.customer?.phone) score += 5;
+
+  maxScore += 15; // Financial totals weight
+  if (quote.total !== null && quote.total > 0) score += 10;
+  if (quote.subtotal !== null && quote.subtotal > 0) score += 3;
+  if (quote.taxAmount !== null || quote.taxRate !== null) score += 2;
+
+  maxScore += 15; // Line items weight
+  if (quote.lineItems && quote.lineItems.length > 0) {
+    score += 10;
+    // Bonus for line items with complete data
+    const completeItems = quote.lineItems.filter(item => 
+      item.description && (item.price !== null || item.total !== null)
+    );
+    if (completeItems.length > 0) {
+      score += Math.min(5, completeItems.length * 1);
+    }
+  }
+
+  maxScore += 10; // Quote identification weight
+  if (quote.quoteNumber) score += 5;
+  if (quote.date) score += 5;
+
+  // Secondary fields scoring (30% of total score)
+  maxScore += 10; // Project details weight
+  if (quote.projectDescription) score += 5;
+  if (quote.customer?.address) score += 3;
+  if (quote.notes || quote.terms) score += 2;
+
+  // Data consistency checks (10% of total score)
+  maxScore += 12;
+  
+  // Financial consistency
+  if (quote.total !== null && quote.subtotal !== null) {
+    const expectedTotal = quote.subtotal + (quote.taxAmount || 0) - (quote.discountAmount || 0);
+    const totalDifference = Math.abs(quote.total - expectedTotal);
+    if (totalDifference < 0.01) score += 3; // Perfect match
+    else if (totalDifference < quote.total * 0.1) score += 2; // Within 10%
+    else if (totalDifference < quote.total * 0.2) score += 1; // Within 20%
+  }
+
+  // Tax rate consistency check
+  if (quote.taxRate !== null && quote.taxAmount !== null && quote.subtotal !== null && quote.subtotal > 0) {
+    const expectedTaxAmount = quote.subtotal * quote.taxRate;
+    const taxDifference = Math.abs(quote.taxAmount - expectedTaxAmount);
+    if (taxDifference < 0.01) score += 2; // Perfect match
+    else if (taxDifference < quote.taxAmount * 0.1) score += 1; // Within 10%
+  }
+
+  // Line items sum consistency
+  if (quote.lineItems && quote.lineItems.length > 0 && quote.subtotal !== null) {
+    const lineItemsTotal = quote.lineItems.reduce((sum, item) => {
+      const itemTotal = item.total || (item.price && item.quantity ? item.price * item.quantity : 0);
+      return sum + itemTotal;
+    }, 0);
+    
+    if (lineItemsTotal > 0) {
+      const difference = Math.abs(quote.subtotal - lineItemsTotal);
+      if (difference < 0.01) score += 3; // Perfect match
+      else if (difference < quote.subtotal * 0.1) score += 2; // Within 10%
+      else if (difference < quote.subtotal * 0.2) score += 1; // Within 20%
+    }
+  }
+
+  // Text quality indicators (bonus scoring)
+  if (sourceText) {
+    const lowerText = sourceText.toLowerCase();
+    
+    // Detect structured content patterns
+    const structurePatterns = [
+      /quote\s*#?\s*\w+/i,
+      /total\s*:?\s*\$[\d,]+/i,
+      /subtotal\s*:?\s*\$[\d,]+/i,
+      /tax\s*:?\s*\$[\d,]+/i,
+      /@[\w.-]+\.\w+/, // email pattern
+      /\(\d{3}\)\s*\d{3}-\d{4}/, // phone pattern
+    ];
+    
+    const patternMatches = structurePatterns.filter(pattern => pattern.test(lowerText)).length;
+    score += Math.min(5, patternMatches * 1); // Up to 5 bonus points
+    maxScore += 5;
+  }
+
+  // Calculate final confidence as percentage
+  const confidence = maxScore > 0 ? Math.min(1.0, Math.max(0.0, score / maxScore)) : 0;
+  
+  console.log(`📊 Confidence calculation: ${score}/${maxScore} = ${(confidence * 100).toFixed(1)}%`);
+  
+  return parseFloat(confidence.toFixed(3)); // Round to 3 decimal places
 }
 
 /**
@@ -590,6 +713,9 @@ function createPartialQuoteFromData(data: any): ExtractedQuote | null {
       }));
     }
 
+    // Calculate confidence for partial quote
+    result.confidence = calculateExtractionConfidence(result);
+    
     console.log("🔧 Created partial quote from corrupted data");
     return result;
   } catch (error) {
@@ -786,11 +912,19 @@ export async function extractQuoteDataFromText(text: string): Promise<ExtractedQ
     // Validate and parse with schema
     try {
       const extracted = ExtractedQuoteSchema.parse(parsedContent);
+      
+      // Calculate and add confidence score
+      extracted.confidence = calculateExtractionConfidence(extracted, processedText);
+      
       return extracted;
     } catch (validationError) {
       console.warn("⚠️  Schema validation failed, attempting partial extraction:", validationError);
       // Try to extract what we can from partially valid data
-      return createPartialQuoteFromData(parsedContent);
+      const partialQuote = createPartialQuoteFromData(parsedContent);
+      if (partialQuote) {
+        partialQuote.confidence = calculateExtractionConfidence(partialQuote, processedText);
+      }
+      return partialQuote;
     }
   } catch (error) {
     // Error extracting quote data from text
