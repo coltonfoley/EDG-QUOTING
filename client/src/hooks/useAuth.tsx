@@ -139,8 +139,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         title: "Welcome back!",
         description: "Successfully logged in.",
       });
-      // Redirect to homepage after successful login
-      window.location.href = "/";
+      // Router will handle redirect to dashboard automatically
     },
     onError: (error: Error) => {
       const appError = parseError(error);
@@ -180,8 +179,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         title: "Account created!",
         description: "Successfully registered and logged in.",
       });
-      // Redirect to homepage after successful registration
-      window.location.href = "/";
+      // Router will handle redirect to dashboard automatically
     },
     onError: (error: Error) => {
       const appError = parseError(error);
@@ -207,11 +205,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     onSuccess: () => {
       queryClient.setQueryData(["/api/user"], null);
       queryClient.clear(); // Clear all cached data on logout
-      window.location.href = "/";
       toast({
         title: "Logged out",
         description: "Successfully logged out.",
       });
+      // Router will handle redirect to auth page automatically
     },
     onError: (error: Error) => {
       // Clear local auth state even if server logout fails
@@ -221,10 +219,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         description: error.message,
         variant: "destructive",
       });
-      // Still redirect after a delay
-      setTimeout(() => {
-        window.location.href = "/";
-      }, 2000);
+      // Router will handle redirect to auth page automatically
     },
   });
 
