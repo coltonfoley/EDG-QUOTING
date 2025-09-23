@@ -465,6 +465,140 @@ async function consolidateQuoteParts(parts: ExtractedQuoteWithPageRefs[]): Promi
 }
 
 /**
+ * Advanced JSON parsing with multiple recovery strategies for malformed OpenAI responses
+ */
+function parseJsonWithRecovery(content: string): any {
+  // Strategy 1: Direct JSON parse
+  try {
+    return JSON.parse(content);
+  } catch (error) {
+    console.warn("📋 Strategy 1 failed (direct parse), trying recovery strategies");
+  }
+
+  // Strategy 2: Fix common JSON issues
+  try {
+    let fixedContent = content
+      .replace(/,\s*}/g, '}')  // Remove trailing commas
+      .replace(/,\s*]/g, ']')  // Remove trailing commas in arrays
+      .replace(/'/g, '"')      // Replace single quotes with double quotes
+      .replace(/(\w+):/g, '"$1":');  // Add quotes to unquoted keys
+
+    return JSON.parse(fixedContent);
+  } catch (error) {
+    console.warn("📋 Strategy 2 failed (fixing common issues)");
+  }
+
+  // Strategy 3: Extract JSON from markdown or text wrapping
+  try {
+    const jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/) || 
+                     content.match(/```\s*([\s\S]*?)\s*```/) ||
+                     content.match(/{[\s\S]*}/);
+    
+    if (jsonMatch) {
+      return JSON.parse(jsonMatch[1] || jsonMatch[0]);
+    }
+  } catch (error) {
+    console.warn("📋 Strategy 3 failed (extracting from markdown)");
+  }
+
+  // Strategy 4: Try to find and fix incomplete JSON
+  try {
+    let workingContent = content.trim();
+    
+    // If it looks like truncated JSON, try to close it
+    if (workingContent.startsWith('{') && !workingContent.endsWith('}')) {
+      // Count open braces vs closed braces
+      const openBraces = (workingContent.match(/{/g) || []).length;
+      const closeBraces = (workingContent.match(/}/g) || []).length;
+      const missingBraces = openBraces - closeBraces;
+      
+      if (missingBraces > 0) {
+        workingContent += '}'.repeat(missingBraces);
+      }
+      
+      return JSON.parse(workingContent);
+    }
+  } catch (error) {
+    console.warn("📋 Strategy 4 failed (fixing incomplete JSON)");
+  }
+
+  // Strategy 5: Extract individual field values using regex
+  try {
+    const result: any = {};
+    
+    // Extract string fields
+    const stringFields = ['name', 'email', 'phone', 'company', 'address', 'quoteNumber', 'date', 'projectDescription', 'notes', 'terms'];
+    stringFields.forEach(field => {
+      const match = content.match(new RegExp(`"${field}"\\s*:\\s*"([^"]*)"`, 'i'));
+      if (match) result[field] = match[1];
+    });
+
+    // Extract numeric fields
+    const numericFields = ['subtotal', 'taxRate', 'taxAmount', 'discountAmount', 'total'];
+    numericFields.forEach(field => {
+      const match = content.match(new RegExp(`"${field}"\\s*:\\s*(\\d+(?:\\.\\d+)?)`, 'i'));
+      if (match) result[field] = parseFloat(match[1]);
+    });
+
+    // If we found at least some data, return it
+    if (Object.keys(result).length > 0) {
+      console.warn("📋 Strategy 5 succeeded (regex field extraction)");
+      return { customer: {}, ...result };
+    }
+  } catch (error) {
+    console.warn("📋 Strategy 5 failed (regex extraction)");
+  }
+
+  console.error("❌ All JSON recovery strategies failed");
+  return null;
+}
+
+/**
+ * Create a partial quote from potentially invalid data
+ */
+function createPartialQuoteFromData(data: any): ExtractedQuote | null {
+  try {
+    const result: ExtractedQuote = {
+      customer: {
+        name: data.customer?.name || data.name || null,
+        email: data.customer?.email || data.email || null,
+        phone: data.customer?.phone || data.phone || null,
+        company: data.customer?.company || data.company || null,
+        address: data.customer?.address || data.address || null
+      },
+      quoteNumber: data.quoteNumber || null,
+      date: data.date || null,
+      projectDescription: data.projectDescription || null,
+      lineItems: [],
+      subtotal: typeof data.subtotal === 'number' ? data.subtotal : null,
+      taxRate: typeof data.taxRate === 'number' ? data.taxRate : null,
+      taxAmount: typeof data.taxAmount === 'number' ? data.taxAmount : null,
+      discountAmount: typeof data.discountAmount === 'number' ? data.discountAmount : null,
+      total: typeof data.total === 'number' ? data.total : null,
+      notes: data.notes || null,
+      terms: data.terms || null
+    };
+
+    // Try to extract line items if they exist
+    if (Array.isArray(data.lineItems)) {
+      result.lineItems = data.lineItems.map((item: any) => ({
+        description: item.description || null,
+        quantity: typeof item.quantity === 'number' ? item.quantity : null,
+        price: typeof item.price === 'number' ? item.price : null,
+        total: typeof item.total === 'number' ? item.total : null,
+        unit: item.unit || null
+      }));
+    }
+
+    console.log("🔧 Created partial quote from corrupted data");
+    return result;
+  } catch (error) {
+    console.error("❌ Failed to create partial quote:", error);
+    return null;
+  }
+}
+
+/**
  * Intelligent text preprocessing for PDF quote extraction
  * Identifies and prioritizes sections most likely to contain quote information
  */
@@ -642,18 +776,22 @@ export async function extractQuoteDataFromText(text: string): Promise<ExtractedQ
       return null;
     }
 
-    // Parse and validate JSON
-    let parsedContent;
-    try {
-      parsedContent = JSON.parse(content);
-    } catch (jsonError) {
-      // JSON parsing failed for quote extraction
+    // Parse JSON with multiple recovery strategies
+    const parsedContent = parseJsonWithRecovery(content);
+    if (!parsedContent) {
+      console.warn("❌ Failed to parse JSON response from OpenAI");
       return null;
     }
 
     // Validate and parse with schema
-    const extracted = ExtractedQuoteSchema.parse(parsedContent);
-    return extracted;
+    try {
+      const extracted = ExtractedQuoteSchema.parse(parsedContent);
+      return extracted;
+    } catch (validationError) {
+      console.warn("⚠️  Schema validation failed, attempting partial extraction:", validationError);
+      // Try to extract what we can from partially valid data
+      return createPartialQuoteFromData(parsedContent);
+    }
   } catch (error) {
     // Error extracting quote data from text
     return null;
