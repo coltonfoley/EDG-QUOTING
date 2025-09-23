@@ -535,8 +535,22 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
         ));
         
         try {
-          // Step 3: Fallback to text processing
-          const textResult = await processPDFMutation.mutateAsync(file);
+          // Step 3: Fallback to text processing (call the mutation function directly to avoid duplicate onMutate)
+          const formData = new FormData();
+          formData.append('pdf', file);
+          
+          const response = await fetch('/api/quotes/import-pdf', {
+            method: 'POST',
+            body: formData,
+            credentials: 'include'
+          });
+          
+          if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.message || 'Failed to process PDF');
+          }
+          
+          const textResult = await response.json();
           
           // Update progress: Success with fallback
           setProcessedPDFs(prev => prev.map(p => 
