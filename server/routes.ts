@@ -1204,6 +1204,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const importData = z.object({
         importOptions: z.object({
           createNewQuote: z.boolean(),
+          combineIntoSingleQuote: z.boolean(),
           existingQuoteId: z.number().optional(),
           customerHandling: z.enum(['create_new', 'use_existing']),
           existingCustomerId: z.number().optional(),
@@ -1270,7 +1271,119 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       };
 
-      // Process each extracted quote
+      // Special handling for combining multiple PDFs into single quote
+      if (importData.importOptions.createNewQuote && importData.importOptions.combineIntoSingleQuote && importData.extractedQuotes.length > 1) {
+        try {
+          // Create a single customer account (use first PDF's customer data)
+          const firstQuote = importData.extractedQuotes[0];
+          let accountId: number;
+          
+          if (importData.importOptions.customerHandling === 'create_new') {
+            const customerData = {
+              name: firstQuote.customer.name || 'Combined Import Customer',
+              email: firstQuote.customer.email || `combined_import_${Date.now()}@example.com`,
+              phone: firstQuote.customer.phone || '',
+              company: firstQuote.customer.company || null,
+              address: firstQuote.customer.address || null,
+              accountType: 'homeowner' as const
+            };
+
+            const newAccount = await storage.createAccount(customerData);
+            accountId = newAccount.id;
+            results.summary.customersCreated++;
+            console.log(`✅ Created combined import customer: ${customerData.name} (ID: ${accountId})`);
+          } else {
+            accountId = importData.importOptions.existingCustomerId || (await storage.getAllAccounts())[0]?.id;
+            if (!accountId) {
+              throw new Error('No customer account available for combined import');
+            }
+          }
+
+          // Create single quote with combined data
+          const combinedDescription = importData.extractedQuotes
+            .map(q => q.projectDescription)
+            .filter(desc => desc && desc.trim())
+            .join(' | ');
+
+          const combinedFilenames = importData.extractedQuotes.map(q => q.filename).join(', ');
+
+          const quoteData: InsertQuote = {
+            quoteNumber: firstQuote.quoteNumber || `COMBINED-${Date.now()}`,
+            accountId: accountId,
+            customerId: accountId,
+            assignedRepId: req.user?.id,
+            projectName: combinedDescription || `Combined Import: ${combinedFilenames}`,
+            projectAddress: firstQuote.customer.address || '',
+            estimatedStartDate: firstQuote.date || new Date().toISOString().split('T')[0],
+            notes: `Combined import from ${importData.extractedQuotes.length} PDFs: ${combinedFilenames}`,
+            taxRate: '0',
+            discount: '0',
+            shipping: '0',
+            dealStage: 'new_lead' as const
+          };
+
+          const newQuote = await storage.createQuote(quoteData);
+          results.summary.quotesCreated++;
+          console.log(`✅ Created combined quote: ${newQuote.quoteNumber} (ID: ${newQuote.id})`);
+
+          // Add all line items from all PDFs to the single quote
+          let totalLineItemsAdded = 0;
+          for (const extractedQuote of importData.extractedQuotes) {
+            if (extractedQuote.lineItems && extractedQuote.lineItems.length > 0) {
+              for (const lineItem of extractedQuote.lineItems) {
+                if (lineItem.description && lineItem.price && lineItem.quantity) {
+                  const lineItemData = {
+                    quoteId: newQuote.id,
+                    description: `[${extractedQuote.filename}] ${lineItem.description}`,
+                    quantity: lineItem.quantity.toString(),
+                    unitPrice: lineItem.price.toString(),
+                    markupType: 'percentage' as const,
+                    markupValue: '0',
+                    discountType: 'percentage' as const,
+                    discountValue: '0'
+                  };
+
+                  await storage.createLineItem(lineItemData);
+                  totalLineItemsAdded++;
+                }
+              }
+            }
+
+            // Add each PDF as successfully imported
+            results.imported.push({
+              pdfId: extractedQuote.pdfId,
+              quoteId: newQuote.id,
+              quoteNumber: newQuote.quoteNumber,
+              lineItemsAdded: extractedQuote.lineItems?.length || 0,
+              action: 'created'
+            });
+          }
+          
+          results.summary.lineItemsAdded += totalLineItemsAdded;
+          console.log(`✅ Added ${totalLineItemsAdded} combined line items to quote ${newQuote.quoteNumber}`);
+
+          // Skip individual processing since we've handled all PDFs
+        } catch (error: any) {
+          console.error('❌ Error in combined import:', error);
+          // Add all PDFs as failed
+          importData.extractedQuotes.forEach(quote => {
+            results.errors.push({
+              pdfId: quote.pdfId,
+              filename: quote.filename,
+              error: `Combined import failed: ${error.message}`
+            });
+          });
+          results.summary.failed += importData.extractedQuotes.length;
+        }
+
+        // Return combined results
+        const totalProcessed = results.imported.length + results.errors.length;
+        console.log(`📊 Combined import completed: ${results.summary.quotesCreated} quotes created, ${results.summary.lineItemsAdded} line items added, ${results.summary.customersCreated} customers created, ${results.summary.failed} failed`);
+        
+        return res.json(results);
+      }
+
+      // Process each extracted quote individually (original logic)
       for (const extractedQuote of importData.extractedQuotes) {
         try {
           let accountId: number;
