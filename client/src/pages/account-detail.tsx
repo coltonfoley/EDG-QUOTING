@@ -17,6 +17,7 @@ import { ContactForm } from "@/components/forms/contact-form";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Account, Contact, Quote } from "@shared/schema";
 import { format } from "date-fns";
+import { getDealStageColor, getDealStageLabel } from "@shared/dealStageConstants";
 
 interface AccountDetails extends Account {
   contacts: Contact[];
@@ -98,20 +99,6 @@ export default function AccountDetail() {
     return type.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "draft":
-        return "bg-yellow-100 text-yellow-800";
-      case "sent":
-        return "bg-blue-100 text-blue-800";
-      case "approved":
-        return "bg-green-100 text-green-800";
-      case "rejected":
-        return "bg-red-100 text-red-800";
-      default:
-        return "bg-gray-100 text-gray-800";
-    }
-  };
 
   if (!accountId) {
     navigate("/accounts");
@@ -407,8 +394,8 @@ export default function AccountDetail() {
                             Created {quote.createdAt ? format(new Date(quote.createdAt), 'MMM d, yyyy') : 'N/A'}
                           </p>
                         </div>
-                        <Badge className={getStatusColor(quote.status)}>
-                          {quote.status.charAt(0).toUpperCase() + quote.status.slice(1)}
+                        <Badge className={getDealStageColor(quote.dealStage || 'new_lead')}>
+                          {getDealStageLabel(quote.dealStage || 'new_lead')}
                         </Badge>
                       </div>
                     </div>
