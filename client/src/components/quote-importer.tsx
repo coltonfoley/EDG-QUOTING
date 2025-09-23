@@ -62,6 +62,7 @@ interface ExtractedQuote {
   total?: number | null;
   notes?: string | null;
   terms?: string | null;
+  confidence?: number; // Extraction confidence score (0-1)
 }
 
 interface PDFImportResponse {
@@ -113,6 +114,13 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+
+  // Helper function to format confidence score consistently
+  const formatConfidence = (confidence?: number): string => {
+    if (confidence === undefined) return '';
+    const clampedConfidence = Math.max(0, Math.min(1, confidence));
+    return ` (${Math.round(clampedConfidence * 100)}% confidence)`;
+  };
 
   // Fetch existing quotes and customers for selection
   const { data: existingQuotes } = useQuery<QuoteWithDetails[]>({
@@ -515,7 +523,7 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
         
         toast({
           title: "PDF processed successfully",
-          description: `${file.name} processed using vision analysis`,
+          description: `${file.name} processed using vision analysis${formatConfidence(visionResult.extractedData.confidence)}`,
         });
         
       } catch (visionError) {
@@ -543,7 +551,7 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
           
           toast({
             title: "PDF processed successfully",
-            description: `${file.name} processed using text extraction (vision fallback)`,
+            description: `${file.name} processed using text extraction (vision fallback)${formatConfidence(textResult.extractedData.confidence)}`,
           });
           
         } catch (textError) {
@@ -588,7 +596,7 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
         
         toast({
           title: "PDF processed successfully",
-          description: `${file.name} processed using text extraction (image conversion failed)`,
+          description: `${file.name} processed using text extraction (image conversion failed)${formatConfidence(textResult.extractedData.confidence)}`,
         });
         
       } catch (finalError) {
@@ -820,9 +828,24 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
                               onClick={() => setSelectedPDFId(pdf.id)}
                               data-testid={`pdf-item-${pdf.id}`}
                             >
-                              <div className="flex items-center space-x-2">
-                                <FileText className="h-4 w-4" />
-                                <span className="text-sm font-medium truncate">{pdf.filename}</span>
+                              <div className="flex items-center justify-between space-x-2">
+                                <div className="flex items-center space-x-2 flex-1">
+                                  <FileText className="h-4 w-4" />
+                                  <span className="text-sm font-medium truncate">{pdf.filename}</span>
+                                </div>
+                                {/* Confidence Score Badge */}
+                                {pdf.extractedData?.confidence !== undefined && (
+                                  <div 
+                                    className={`px-2 py-1 text-xs rounded-full font-medium ${
+                                      pdf.extractedData.confidence >= 0.8 ? 'bg-green-100 text-green-700' :
+                                      pdf.extractedData.confidence >= 0.6 ? 'bg-yellow-100 text-yellow-700' :
+                                      'bg-red-100 text-red-700'
+                                    }`}
+                                    data-testid={`text-confidence-${pdf.id}`}
+                                  >
+                                    {Math.round(Math.max(0, Math.min(1, pdf.extractedData.confidence)) * 100)}%
+                                  </div>
+                                )}
                               </div>
                             </div>
                           ))}
@@ -836,10 +859,30 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
                 <div className="lg:col-span-2">
                   <Card>
                     <CardHeader>
-                      <CardTitle>Extracted Data Preview</CardTitle>
-                      <p className="text-sm text-gray-600">
-                        Review and edit the extracted information before importing
-                      </p>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <CardTitle>Extracted Data Preview</CardTitle>
+                          <p className="text-sm text-gray-600">
+                            Review and edit the extracted information before importing
+                          </p>
+                        </div>
+                        {/* Confidence Score Display */}
+                        {selectedPDF?.extractedData?.confidence !== undefined && (
+                          <div className="text-right">
+                            <p className="text-sm text-gray-600">Extraction Confidence</p>
+                            <div 
+                              className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
+                                selectedPDF.extractedData.confidence >= 0.8 ? 'bg-green-100 text-green-700' :
+                                selectedPDF.extractedData.confidence >= 0.6 ? 'bg-yellow-100 text-yellow-700' :
+                                'bg-red-100 text-red-700'
+                              }`}
+                              data-testid="text-confidence-preview"
+                            >
+                              {Math.round(Math.max(0, Math.min(1, selectedPDF.extractedData.confidence)) * 100)}%
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </CardHeader>
                     <CardContent>
                       <ScrollArea className="h-80">

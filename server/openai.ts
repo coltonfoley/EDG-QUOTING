@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 import { z } from "zod";
+import crypto from "crypto";
 
 // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
 const openai = new OpenAI({ 
@@ -7,6 +8,85 @@ const openai = new OpenAI({
   timeout: 240000, // 4 minutes timeout for complex PDF processing
   maxRetries: 2 // Retry failed requests up to 2 times
 });
+
+// Simple in-memory cache for OpenAI API responses
+interface CacheEntry {
+  response: any;
+  timestamp: number;
+  expiryTime: number;
+}
+
+class SimpleCache {
+  private cache: Map<string, CacheEntry> = new Map();
+  private maxSize: number;
+  private defaultTTL: number;
+
+  constructor(maxSize = 1000, defaultTTL = 6 * 60 * 60 * 1000) { // 6 hours default TTL
+    this.maxSize = maxSize;
+    this.defaultTTL = defaultTTL;
+  }
+
+  // Generate cache key from input content
+  generateKey(content: string): string {
+    return crypto.createHash('sha256').update(content).digest('hex').slice(0, 16);
+  }
+
+  set(key: string, value: any, ttl?: number): void {
+    const now = Date.now();
+    const expiry = now + (ttl || this.defaultTTL);
+    
+    // Evict oldest entries if cache is full
+    if (this.cache.size >= this.maxSize) {
+      const oldestKey = Array.from(this.cache.entries())
+        .sort(([,a], [,b]) => a.timestamp - b.timestamp)[0][0];
+      this.cache.delete(oldestKey);
+    }
+
+    this.cache.set(key, {
+      response: value,
+      timestamp: now,
+      expiryTime: expiry
+    });
+  }
+
+  get(key: string): any | null {
+    const entry = this.cache.get(key);
+    if (!entry) return null;
+    
+    // Check if expired
+    if (Date.now() > entry.expiryTime) {
+      this.cache.delete(key);
+      return null;
+    }
+
+    return entry.response;
+  }
+
+  // Clean up expired entries
+  cleanup(): void {
+    const now = Date.now();
+    for (const [key, entry] of this.cache.entries()) {
+      if (now > entry.expiryTime) {
+        this.cache.delete(key);
+      }
+    }
+  }
+
+  // Get cache statistics
+  getStats(): { size: number; hitRate?: number } {
+    return { size: this.cache.size };
+  }
+}
+
+// Cache for OpenAI API responses - separate caches for different types
+const textExtractionCache = new SimpleCache(200, 24 * 60 * 60 * 1000); // 24 hours for text extraction
+const visionExtractionCache = new SimpleCache(300, 6 * 60 * 60 * 1000); // 6 hours for vision extraction
+
+// Clean up expired entries every hour
+setInterval(() => {
+  textExtractionCache.cleanup();
+  visionExtractionCache.cleanup();
+}, 60 * 60 * 1000);
 
 // Schema for extracted product data
 const ExtractedProductSchema = z.object({
@@ -324,6 +404,19 @@ export async function extractQuoteDataFromImages(images: Array<{index: number, i
 
 async function processImagesInSingleCall(images: Array<{index: number, imageBase64: string}>): Promise<ExtractedQuoteWithPageRefs | null> {
   try {
+    // Generate cache key based on image content (use first few characters of each image for efficiency)
+    const cacheKeyInput = images.map(img => `${img.index}:${img.imageBase64.slice(0, 100)}`).join('|');
+    const cacheKey = visionExtractionCache.generateKey(cacheKeyInput);
+    
+    // Check cache first
+    const cachedResult = visionExtractionCache.get(cacheKey);
+    if (cachedResult) {
+      console.log(`🎯 Cache hit for vision extraction (${cacheKey}) - ${images.length} pages`);
+      return cachedResult;
+    }
+    
+    console.log(`🔍 Cache miss, making OpenAI vision API call for ${images.length} pages`);
+    
     const imageContent = images.map((img, idx) => {
       return [
         {
@@ -421,6 +514,10 @@ async function processImagesInSingleCall(images: Array<{index: number, imageBase
       // Don't pass dummy sourceText to avoid inflating denominator with unmatchable patterns
       extracted.confidence = calculateExtractionConfidence(extracted);
     }
+    
+    // Cache successful vision extraction result
+    visionExtractionCache.set(cacheKey, extracted);
+    console.log(`💾 Cached vision extraction result (${cacheKey}) - ${images.length} pages`);
     
     return extracted;
   } catch (error) {
@@ -855,6 +952,17 @@ export async function extractQuoteDataFromText(text: string): Promise<ExtractedQ
     
     console.log(`📄 Text preprocessing: ${text.length} → ${processedText.length} characters`);
     
+    // Check cache first
+    const cacheKey = textExtractionCache.generateKey(processedText);
+    const cachedResult = textExtractionCache.get(cacheKey);
+    
+    if (cachedResult) {
+      console.log(`🎯 Cache hit for text extraction (${cacheKey})`);
+      return cachedResult;
+    }
+    
+    console.log(`🔍 Cache miss, making OpenAI API call for text extraction`);
+    
     const response = await openai.chat.completions.create({
       model: "gpt-4o", // Using proven working model for PDF extraction
       messages: [
@@ -948,6 +1056,10 @@ export async function extractQuoteDataFromText(text: string): Promise<ExtractedQ
       // Calculate and add confidence score
       extracted.confidence = calculateExtractionConfidence(extracted, processedText);
       
+      // Cache successful result
+      textExtractionCache.set(cacheKey, extracted);
+      console.log(`💾 Cached text extraction result (${cacheKey})`);
+      
       return extracted;
     } catch (validationError) {
       console.warn("⚠️  Schema validation failed, attempting partial extraction:", validationError);
@@ -955,6 +1067,8 @@ export async function extractQuoteDataFromText(text: string): Promise<ExtractedQ
       const partialQuote = createPartialQuoteFromData(parsedContent);
       if (partialQuote) {
         partialQuote.confidence = calculateExtractionConfidence(partialQuote, processedText);
+        // Cache partial result with shorter TTL
+        textExtractionCache.set(cacheKey, partialQuote, 2 * 60 * 60 * 1000); // 2 hours for partial results
       }
       return partialQuote;
     }
