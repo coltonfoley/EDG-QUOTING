@@ -90,6 +90,7 @@ interface ProcessedPDF {
 
 interface ImportOptions {
   createNewQuote: boolean;
+  combineIntoSingleQuote: boolean; // New option to combine multiple PDFs
   existingQuoteId?: number;
   customerHandling: 'create_new' | 'use_existing';
   existingCustomerId?: number;
@@ -107,8 +108,12 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
   const [selectedPDFId, setSelectedPDFId] = useState<string | null>(null);
   const [importOptions, setImportOptions] = useState<ImportOptions>({
     createNewQuote: true,
+    combineIntoSingleQuote: false,
     customerHandling: 'create_new'
   });
+  
+  // State for editable PDF data
+  const [editedPDFData, setEditedPDFData] = useState<Record<string, ExtractedQuote>>({});
   const [isImporting, setIsImporting] = useState(false);
   const [currentTab, setCurrentTab] = useState<string>('upload');
   
@@ -120,6 +125,34 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
     if (confidence === undefined) return '';
     const clampedConfidence = Math.max(0, Math.min(1, confidence));
     return ` (${Math.round(clampedConfidence * 100)}% confidence)`;
+  };
+
+  // Helper functions for editable PDF data
+  const getCurrentPDFData = (pdfId: string): ExtractedQuote | undefined => {
+    const pdf = processedPDFs.find(p => p.id === pdfId);
+    if (!pdf?.extractedData) return undefined;
+    
+    // Return edited data if available, otherwise original data
+    return editedPDFData[pdfId] || pdf.extractedData;
+  };
+
+  const updatePDFData = (pdfId: string, field: string, value: any) => {
+    setEditedPDFData(prev => {
+      const currentData = getCurrentPDFData(pdfId);
+      if (!currentData) return prev;
+
+      const updatedData = { ...currentData };
+      
+      // Handle nested customer fields
+      if (field.startsWith('customer.')) {
+        const customerField = field.replace('customer.', '');
+        updatedData.customer = { ...updatedData.customer, [customerField]: value };
+      } else {
+        (updatedData as any)[field] = value;
+      }
+      
+      return { ...prev, [pdfId]: updatedData };
+    });
   };
 
   // Fetch existing quotes and customers for selection
@@ -139,7 +172,7 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
       const extractedQuotes = successfulPDFs.map(pdf => ({
         pdfId: pdf.id,
         filename: pdf.filename,
-        ...pdf.extractedData!
+        ...(editedPDFData[pdf.id] || pdf.extractedData!)
       }));
 
       const response = await apiRequest('POST', '/api/quotes/import-batch', {
@@ -847,36 +880,38 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
                     <CardContent>
                       <ScrollArea className="h-60">
                         <div className="space-y-2">
-                          {successfulPDFs.map((pdf) => (
-                            <div
-                              key={pdf.id}
-                              className={`p-3 border rounded-lg cursor-pointer transition-colors ${
-                                selectedPDFId === pdf.id ? 'border-blue-500 bg-blue-50' : 'hover:bg-gray-50'
-                              }`}
-                              onClick={() => setSelectedPDFId(pdf.id)}
-                              data-testid={`pdf-item-${pdf.id}`}
-                            >
-                              <div className="flex items-center justify-between space-x-2">
-                                <div className="flex items-center space-x-2 flex-1">
-                                  <FileText className="h-4 w-4" />
-                                  <span className="text-sm font-medium truncate">{pdf.filename}</span>
-                                </div>
-                                {/* Confidence Score Badge */}
-                                {pdf.extractedData?.confidence !== undefined && (
-                                  <div 
-                                    className={`px-2 py-1 text-xs rounded-full font-medium ${
-                                      pdf.extractedData.confidence >= 0.8 ? 'bg-green-100 text-green-700' :
-                                      pdf.extractedData.confidence >= 0.6 ? 'bg-yellow-100 text-yellow-700' :
-                                      'bg-red-100 text-red-700'
-                                    }`}
-                                    data-testid={`text-confidence-${pdf.id}`}
-                                  >
-                                    {Math.round(Math.max(0, Math.min(1, pdf.extractedData.confidence)) * 100)}%
+                          {successfulPDFs.map((pdf) => {
+                            return (
+                              <div
+                                key={pdf.id}
+                                className={`p-3 border rounded-lg cursor-pointer transition-colors ${
+                                  selectedPDFId === pdf.id ? 'border-blue-500 bg-blue-50' : 'hover:bg-gray-50'
+                                }`}
+                                onClick={() => setSelectedPDFId(pdf.id)}
+                                data-testid={`pdf-item-${pdf.id}`}
+                              >
+                                <div className="flex items-center justify-between space-x-2">
+                                  <div className="flex items-center space-x-2 flex-1">
+                                    <FileText className="h-4 w-4" />
+                                    <span className="text-sm font-medium truncate">{pdf.filename}</span>
                                   </div>
-                                )}
+                                  {/* Confidence Score Badge */}
+                                  {pdf.extractedData?.confidence !== undefined && (
+                                    <div 
+                                      className={`px-2 py-1 text-xs rounded-full font-medium ${
+                                        pdf.extractedData.confidence >= 0.8 ? 'bg-green-100 text-green-700' :
+                                        pdf.extractedData.confidence >= 0.6 ? 'bg-yellow-100 text-yellow-700' :
+                                        'bg-red-100 text-red-700'
+                                      }`}
+                                      data-testid={`text-confidence-${pdf.id}`}
+                                    >
+                                      {Math.round(Math.max(0, Math.min(1, pdf.extractedData.confidence)) * 100)}%
+                                    </div>
+                                  )}
+                                </div>
                               </div>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       </ScrollArea>
                     </CardContent>
@@ -922,7 +957,8 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
                               <div>
                                 <Label>Name</Label>
                                 <Input 
-                                  value={selectedPDF.extractedData.customer?.name || ''} 
+                                  value={getCurrentPDFData(selectedPDFId)?.customer?.name || ''} 
+                                  onChange={(e) => selectedPDFId && updatePDFData(selectedPDFId, 'customer.name', e.target.value)}
                                   placeholder="Customer name"
                                   data-testid="input-customer-name"
                                 />
@@ -930,7 +966,8 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
                               <div>
                                 <Label>Company</Label>
                                 <Input 
-                                  value={selectedPDF.extractedData.customer?.company || ''} 
+                                  value={getCurrentPDFData(selectedPDFId)?.customer?.company || ''} 
+                                  onChange={(e) => selectedPDFId && updatePDFData(selectedPDFId, 'customer.company', e.target.value)}
                                   placeholder="Company name"
                                   data-testid="input-customer-company"
                                 />
@@ -938,7 +975,8 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
                               <div>
                                 <Label>Email</Label>
                                 <Input 
-                                  value={selectedPDF.extractedData.customer?.email || ''} 
+                                  value={getCurrentPDFData(selectedPDFId)?.customer?.email || ''} 
+                                  onChange={(e) => selectedPDFId && updatePDFData(selectedPDFId, 'customer.email', e.target.value)}
                                   placeholder="Email address"
                                   data-testid="input-customer-email"
                                 />
@@ -946,7 +984,8 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
                               <div>
                                 <Label>Phone</Label>
                                 <Input 
-                                  value={selectedPDF.extractedData.customer?.phone || ''} 
+                                  value={getCurrentPDFData(selectedPDFId)?.customer?.phone || ''} 
+                                  onChange={(e) => selectedPDFId && updatePDFData(selectedPDFId, 'customer.phone', e.target.value)}
                                   placeholder="Phone number"
                                   data-testid="input-customer-phone"
                                 />
@@ -963,7 +1002,8 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
                               <div>
                                 <Label>Quote Number</Label>
                                 <Input 
-                                  value={selectedPDF.extractedData.quoteNumber || ''} 
+                                  value={getCurrentPDFData(selectedPDFId)?.quoteNumber || ''} 
+                                  onChange={(e) => selectedPDFId && updatePDFData(selectedPDFId, 'quoteNumber', e.target.value)}
                                   placeholder="Quote number"
                                   data-testid="input-quote-number"
                                 />
@@ -971,7 +1011,8 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
                               <div>
                                 <Label>Date</Label>
                                 <Input 
-                                  value={selectedPDF.extractedData.date || ''} 
+                                  value={getCurrentPDFData(selectedPDFId)?.date || ''} 
+                                  onChange={(e) => selectedPDFId && updatePDFData(selectedPDFId, 'date', e.target.value)}
                                   placeholder="Quote date"
                                   data-testid="input-quote-date"
                                 />
@@ -979,7 +1020,8 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
                               <div className="col-span-2">
                                 <Label>Project Description</Label>
                                 <Textarea 
-                                  value={selectedPDF.extractedData.projectDescription || ''} 
+                                  value={getCurrentPDFData(selectedPDFId)?.projectDescription || ''} 
+                                  onChange={(e) => selectedPDFId && updatePDFData(selectedPDFId, 'projectDescription', e.target.value)}
                                   placeholder="Project description"
                                   data-testid="textarea-project-description"
                                 />
@@ -991,10 +1033,10 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
 
                           {/* Line Items */}
                           <div>
-                            <h4 className="font-medium mb-3">Line Items ({selectedPDF.extractedData.lineItems?.length || 0})</h4>
-                            {selectedPDF.extractedData.lineItems?.length > 0 ? (
+                            <h4 className="font-medium mb-3">Line Items ({getCurrentPDFData(selectedPDFId)?.lineItems?.length || 0})</h4>
+                            {getCurrentPDFData(selectedPDFId)?.lineItems?.length > 0 ? (
                               <div className="space-y-3">
-                                {selectedPDF.extractedData.lineItems.map((item, index) => (
+                                {getCurrentPDFData(selectedPDFId)?.lineItems?.map((item, index) => (
                                   <div key={index} className="p-3 border rounded-lg">
                                     <div className="grid grid-cols-4 gap-2 text-sm">
                                       <div>
@@ -1028,26 +1070,26 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
                           </div>
 
                           {/* Financial Summary */}
-                          {(selectedPDF.extractedData.subtotal || selectedPDF.extractedData.total) && (
+                          {(getCurrentPDFData(selectedPDFId)?.subtotal || getCurrentPDFData(selectedPDFId)?.total) && (
                             <>
                               <Separator />
                               <div>
                                 <h4 className="font-medium mb-3">Financial Summary</h4>
                                 <div className="grid grid-cols-2 gap-3">
-                                  {selectedPDF.extractedData.subtotal && (
+                                  {getCurrentPDFData(selectedPDFId)?.subtotal && (
                                     <div>
                                       <Label>Subtotal</Label>
                                       <Input 
-                                        value={formatCurrency(selectedPDF.extractedData.subtotal)} 
+                                        value={formatCurrency(getCurrentPDFData(selectedPDFId)!.subtotal!)} 
                                         readOnly
                                       />
                                     </div>
                                   )}
-                                  {selectedPDF.extractedData.total && (
+                                  {getCurrentPDFData(selectedPDFId)?.total && (
                                     <div>
                                       <Label>Total</Label>
                                       <Input 
-                                        value={formatCurrency(selectedPDF.extractedData.total)} 
+                                        value={formatCurrency(getCurrentPDFData(selectedPDFId)!.total!)} 
                                         readOnly
                                       />
                                     </div>
@@ -1084,7 +1126,7 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
                         type="radio"
                         id="create-new"
                         checked={importOptions.createNewQuote}
-                        onChange={() => setImportOptions(prev => ({ ...prev, createNewQuote: true }))}
+                        onChange={() => setImportOptions(prev => ({ ...prev, createNewQuote: true, combineIntoSingleQuote: false }))}
                         data-testid="radio-create-new-quote"
                       />
                       <Label htmlFor="create-new">Create new quotes</Label>
@@ -1094,11 +1136,35 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
                         type="radio"
                         id="add-existing"
                         checked={!importOptions.createNewQuote}
-                        onChange={() => setImportOptions(prev => ({ ...prev, createNewQuote: false }))}
+                        onChange={() => setImportOptions(prev => ({ ...prev, createNewQuote: false, combineIntoSingleQuote: false }))}
                         data-testid="radio-add-to-existing"
                       />
                       <Label htmlFor="add-existing">Add line items to existing quote</Label>
                     </div>
+                    
+                    {/* Combine Option */}
+                    {importOptions.createNewQuote && successfulPDFs.length > 1 && (
+                      <div className="ml-6 mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                        <div className="flex items-center space-x-2">
+                          <input
+                            type="checkbox"
+                            id="combine-pdfs"
+                            checked={importOptions.combineIntoSingleQuote}
+                            onChange={(e) => setImportOptions(prev => ({ 
+                              ...prev, 
+                              combineIntoSingleQuote: e.target.checked 
+                            }))}
+                            data-testid="checkbox-combine-pdfs"
+                          />
+                          <Label htmlFor="combine-pdfs" className="text-blue-700 font-medium">
+                            Combine all PDFs into single quote
+                          </Label>
+                        </div>
+                        <p className="text-sm text-blue-600 mt-1 ml-6">
+                          All line items from {successfulPDFs.length} PDFs will be merged into one quote
+                        </p>
+                      </div>
+                    )}
                     
                     {!importOptions.createNewQuote && (
                       <div className="ml-6 mt-2">
