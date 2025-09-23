@@ -47,6 +47,89 @@ import { ObjectPermission } from "./objectAcl";
 import type { InsertQuote } from "@shared/schema";
 import { parsePDF, validatePDFBuffer } from "./pdf-parser";
 
+// Simple in-memory rate limiter for OpenAI API calls
+interface RateLimitEntry {
+  count: number;
+  resetTime: number;
+}
+
+class SimpleRateLimiter {
+  private limits: Map<string, RateLimitEntry> = new Map();
+  
+  constructor(
+    private maxRequests: number,
+    private windowMs: number
+  ) {}
+
+  isAllowed(identifier: string): boolean {
+    const now = Date.now();
+    const entry = this.limits.get(identifier);
+    
+    if (!entry || now > entry.resetTime) {
+      // First request or window expired, create new entry
+      this.limits.set(identifier, {
+        count: 1,
+        resetTime: now + this.windowMs
+      });
+      return true;
+    }
+    
+    if (entry.count >= this.maxRequests) {
+      return false; // Rate limit exceeded
+    }
+    
+    // Increment counter
+    entry.count++;
+    return true;
+  }
+
+  getRemainingTime(identifier: string): number {
+    const entry = this.limits.get(identifier);
+    if (!entry) return 0;
+    
+    return Math.max(0, entry.resetTime - Date.now());
+  }
+
+  // Clean up expired entries periodically
+  cleanup(): void {
+    const now = Date.now();
+    for (const [key, entry] of this.limits.entries()) {
+      if (now > entry.resetTime) {
+        this.limits.delete(key);
+      }
+    }
+  }
+}
+
+// Rate limiter for OpenAI PDF processing endpoints
+// Allow 10 requests per user per 10 minutes
+const pdfProcessingRateLimit = new SimpleRateLimiter(10, 10 * 60 * 1000);
+
+// Clean up expired entries every 5 minutes
+setInterval(() => {
+  pdfProcessingRateLimit.cleanup();
+}, 5 * 60 * 1000);
+
+// Rate limiting middleware for PDF processing endpoints
+const rateLimitPDFProcessing = (req: any, res: any, next: any) => {
+  const userIdentifier = req.user?.id || req.ip || 'anonymous';
+  
+  if (!pdfProcessingRateLimit.isAllowed(userIdentifier)) {
+    const remainingTime = pdfProcessingRateLimit.getRemainingTime(userIdentifier);
+    const remainingMinutes = Math.ceil(remainingTime / (60 * 1000));
+    
+    console.warn(`🚫 Rate limit exceeded for user ${userIdentifier}`);
+    
+    return res.status(429).json({
+      message: `Too many PDF processing requests. Please try again in ${remainingMinutes} minute${remainingMinutes === 1 ? '' : 's'}.`,
+      success: false,
+      retryAfter: remainingTime
+    });
+  }
+  
+  next();
+};
+
 /**
  * Helper function to strip internal validation metadata from API responses
  * Removes any internal metadata fields that shouldn't be returned to clients
@@ -941,7 +1024,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // PDF Import endpoint for extracting quote data
-  app.post("/api/quotes/import-pdf", isAuthenticated, upload.single('pdf'), async (req: any, res) => {
+  app.post("/api/quotes/import-pdf", isAuthenticated, rateLimitPDFProcessing, upload.single('pdf'), async (req: any, res) => {
     try {
       if (!req.file) {
         return res.status(400).json({ 
@@ -1035,7 +1118,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Vision-based PDF import endpoint for processing page images
-  app.post("/api/quotes/import-vision", isAuthenticated, async (req: any, res) => {
+  app.post("/api/quotes/import-vision", isAuthenticated, rateLimitPDFProcessing, async (req: any, res) => {
     try {
       const visionData = z.object({
         filename: z.string().max(255, "Filename too long"),
