@@ -104,8 +104,8 @@ function Router() {
           <Route path="/admin" component={AdminPage} />
           <Route path="/admin/templates" component={AdminTemplatesPage} />
           <Route path="/admin/contracts" component={ContractsPage} />
-          {/* Catch-all for not found pages */}
-          <Route component={NotFound} />
+          {/* Catch-all for not found pages - must be last and specific */}
+          <Route path="*" component={NotFound} />
         </>
       )}
     </Switch>
