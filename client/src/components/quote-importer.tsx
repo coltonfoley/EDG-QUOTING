@@ -189,7 +189,7 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
   });
 
   // PDF processing mutation
-  // Convert PDF to images for vision processing
+  // Convert PDF to images for vision processing with optimized memory management
   const convertPDFToImages = async (file: File): Promise<PDFPageImage[]> => {
     try {
       // Dynamically import PDF.js to avoid SSR issues
@@ -207,44 +207,140 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
       
       const pages: PDFPageImage[] = [];
       const maxPages = Math.min(pdf.numPages, 20); // Limit to 20 pages
+      const batchSize = 3; // Process 3 pages at a time to manage memory
       
-      for (let pageNum = 1; pageNum <= maxPages; pageNum++) {
-        const page = await pdf.getPage(pageNum);
+      console.log(`📄 Converting PDF to images: ${maxPages} pages in batches of ${batchSize}`);
+      
+      // Process pages in batches to prevent memory overload
+      for (let batchStart = 1; batchStart <= maxPages; batchStart += batchSize) {
+        const batchEnd = Math.min(batchStart + batchSize - 1, maxPages);
+        const batchPromises: Promise<PDFPageImage>[] = [];
         
-        // Set up canvas for rendering
-        const canvas = document.createElement('canvas');
-        const context = canvas.getContext('2d');
-        if (!context) throw new Error('Could not get canvas context');
+        console.log(`🔄 Processing pages ${batchStart}-${batchEnd}`);
         
-        // Calculate viewport for optimal resolution
-        const viewport = page.getViewport({ scale: 2.0 }); // 2x scale for better quality
-        canvas.width = Math.min(viewport.width, 2048); // Max width 2048px
-        canvas.height = Math.min(viewport.height, 2048); // Max height 2048px
+        for (let pageNum = batchStart; pageNum <= batchEnd; pageNum++) {
+          batchPromises.push(processSinglePage(pdf, pageNum, file.size));
+        }
         
-        // Adjust scale if canvas was resized
-        const scale = Math.min(canvas.width / viewport.width, canvas.height / viewport.height);
-        const finalViewport = page.getViewport({ scale: scale * 2.0 });
+        // Wait for current batch to complete
+        const batchResults = await Promise.all(batchPromises);
+        pages.push(...batchResults);
         
-        // Render PDF page to canvas
-        await page.render({
-          canvasContext: context,
-          viewport: finalViewport,
-          canvas: canvas
-        }).promise;
+        // Force garbage collection between batches if available
+        if ('gc' in window && typeof window.gc === 'function') {
+          window.gc();
+        }
         
-        // Convert canvas to base64 JPEG (compressed)
-        const imageBase64 = canvas.toDataURL('image/jpeg', 0.6).split(',')[1]; // 60% quality for compression
-        
-        pages.push({
-          index: pageNum - 1, // 0-based index
-          imageBase64
-        });
+        // Small delay to allow memory cleanup
+        if (batchEnd < maxPages) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
       }
       
       return pages;
     } catch (error) {
       console.error('Error converting PDF to images:', error);
       throw new Error('Failed to convert PDF to images for vision processing');
+    }
+  };
+
+  // Process a single PDF page with memory-efficient canvas handling
+  const processSinglePage = async (pdf: any, pageNum: number, fileSize?: number): Promise<PDFPageImage> => {
+    const page = await pdf.getPage(pageNum);
+    
+    // Create offscreen canvas for better memory management
+    const canvas = (window.OffscreenCanvas) ? new OffscreenCanvas(1, 1) : document.createElement('canvas');
+    const context = canvas.getContext('2d');
+    if (!context) throw new Error('Could not get canvas context');
+    
+    try {
+      // Calculate optimal viewport with dynamic scaling based on content
+      const baseViewport = page.getViewport({ scale: 1.0 });
+      
+      // Determine optimal scale based on page size and target quality
+      let targetScale = 2.0;
+      if (baseViewport.width > 1200 || baseViewport.height > 1200) {
+        targetScale = 1.5; // Reduce scale for large pages
+      } else if (baseViewport.width < 600 || baseViewport.height < 600) {
+        targetScale = 2.5; // Increase scale for small pages
+      }
+      
+      const viewport = page.getViewport({ scale: targetScale });
+      
+      // Constrain canvas size to prevent memory issues
+      const maxDimension = 2048;
+      let canvasWidth = Math.min(viewport.width, maxDimension);
+      let canvasHeight = Math.min(viewport.height, maxDimension);
+      
+      // Maintain aspect ratio if we had to constrain
+      if (viewport.width > maxDimension || viewport.height > maxDimension) {
+        const aspectRatio = viewport.width / viewport.height;
+        if (viewport.width > viewport.height) {
+          canvasWidth = maxDimension;
+          canvasHeight = maxDimension / aspectRatio;
+        } else {
+          canvasHeight = maxDimension;
+          canvasWidth = maxDimension * aspectRatio;
+        }
+      }
+      
+      // Set canvas dimensions
+      canvas.width = canvasWidth;
+      canvas.height = canvasHeight;
+      
+      // Calculate final scale based on actual canvas size
+      const finalScale = Math.min(canvasWidth / baseViewport.width, canvasHeight / baseViewport.height);
+      const renderViewport = page.getViewport({ scale: finalScale });
+      
+      // Render PDF page to canvas with error handling
+      await page.render({
+        canvasContext: context,
+        viewport: renderViewport,
+        canvas: canvas
+      }).promise;
+      
+      // Convert to optimized JPEG with adaptive quality
+      let quality = 0.7; // Default quality
+      
+      // Adjust quality based on file size to balance quality vs payload
+      if (fileSize && fileSize > 10 * 1024 * 1024) { // > 10MB
+        quality = 0.5;
+      } else if (fileSize && fileSize > 5 * 1024 * 1024) { // > 5MB
+        quality = 0.6;
+      } else if (fileSize && fileSize < 1 * 1024 * 1024) { // < 1MB
+        quality = 0.8;
+      }
+      
+      // Convert canvas to base64 JPEG
+      let imageBase64: string;
+      if (canvas instanceof OffscreenCanvas) {
+        const blob = await canvas.convertToBlob({ type: 'image/jpeg', quality });
+        const arrayBuffer = await blob.arrayBuffer();
+        const bytes = new Uint8Array(arrayBuffer);
+        // Convert Uint8Array to string without spread operator to avoid TypeScript issues
+        let binary = '';
+        for (let i = 0; i < bytes.length; i++) {
+          binary += String.fromCharCode(bytes[i]);
+        }
+        imageBase64 = btoa(binary);
+      } else {
+        imageBase64 = canvas.toDataURL('image/jpeg', quality).split(',')[1];
+      }
+      
+      // Validate image size
+      const imageSizeKB = (imageBase64.length * 3) / 4 / 1024; // Approximate KB
+      if (imageSizeKB > 1500) { // > 1.5MB per image
+        console.warn(`⚠️  Large image generated for page ${pageNum}: ${imageSizeKB.toFixed(0)}KB`);
+      }
+      
+      return {
+        index: pageNum - 1, // 0-based index
+        imageBase64
+      };
+      
+    } finally {
+      // Cleanup page resources
+      page.cleanup?.();
     }
   };
 
