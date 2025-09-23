@@ -1127,7 +1127,19 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteUser(id: any): Promise<void> {
-    await db.delete(users).where(eq(users.id, id));
+    // Use a transaction to ensure all operations succeed or fail together
+    await db.transaction(async (tx) => {
+      // Set user_id to NULL in all related tables to preserve historical data
+      // but remove the foreign key reference
+      await tx.execute(sql`UPDATE lead_activities SET user_id = NULL WHERE user_id = ${id}`);
+      await tx.execute(sql`UPDATE activities SET assigned_to = NULL WHERE assigned_to = ${id}`);
+      await tx.execute(sql`UPDATE tasks SET assigned_to = NULL WHERE assigned_to = ${id}`);
+      await tx.execute(sql`UPDATE leads SET assigned_to = NULL WHERE assigned_to = ${id}`);
+      await tx.execute(sql`UPDATE opportunities SET assigned_to = NULL WHERE assigned_to = ${id}`);
+      
+      // Now safely delete the user
+      await tx.delete(users).where(eq(users.id, id));
+    });
   }
 
   // Contract template methods
