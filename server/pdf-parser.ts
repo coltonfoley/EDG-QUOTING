@@ -46,14 +46,14 @@ export async function parsePDF(buffer: Buffer): Promise<PDFParseResult> {
       await import('@ungap/with-resolvers');
     }
 
-    // Use PDF.js for reliable text extraction - correct server-side import
-    const pdfjs = await import('pdfjs-dist');
+    // Use PDF.js legacy build for Node.js environments (avoids DOM dependencies)
+    const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
     
     // Convert buffer to Uint8Array for PDF.js
     const uint8Array = new Uint8Array(buffer);
     
-    // Load the PDF document using the default export or named export
-    const getDocument = pdfjs.getDocument || pdfjs.default?.getDocument;
+    // Load the PDF document - legacy build exports getDocument directly
+    const getDocument = (pdfjs as any).getDocument || pdfjs.getDocument;
     if (!getDocument) {
       throw new Error('PDF.js getDocument function not found');
     }
@@ -208,11 +208,11 @@ export async function getPDFMetadata(buffer: Buffer): Promise<{
       await import('@ungap/with-resolvers');
     }
 
-    // Use PDF.js for metadata extraction - consistent with parsePDF
-    const pdfjs = await import('pdfjs-dist');
+    // Use PDF.js legacy build for Node.js environments (avoids DOM dependencies)
+    const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
     const uint8Array = new Uint8Array(buffer);
     
-    const getDocument = pdfjs.getDocument || pdfjs.default?.getDocument;
+    const getDocument = (pdfjs as any).getDocument || pdfjs.getDocument;
     if (!getDocument) {
       throw new Error('PDF.js getDocument function not found');
     }
