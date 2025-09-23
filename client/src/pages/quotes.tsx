@@ -17,6 +17,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { LoadingSpinner } from "@/components/loading-spinner";
 import { SimpleProposalGenerator } from "@/components/simple-proposal-generator";
+import { QuoteImporter } from "@/components/quote-importer";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { QuoteWithDetails } from "@shared/schema";
 
@@ -476,48 +477,17 @@ export default function Quotes() {
           />
         )}
 
-        {/* Import PDF Dialog */}
-        <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Upload className="h-5 w-5" />
-                Import PDF Quote
-              </DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              <p className="text-sm text-gray-600">
-                Upload a PDF quote to extract and import quote data automatically.
-              </p>
-              <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
-                <Upload className="h-8 w-8 text-gray-400 mx-auto mb-2" />
-                <p className="text-sm text-gray-500 mb-2">Click to select a PDF file</p>
-                <input
-                  type="file"
-                  accept=".pdf"
-                  className="hidden"
-                  id="pdf-upload"
-                  onChange={(e) => {
-                    if (e.target.files && e.target.files[0]) {
-                      toast({
-                        title: "PDF Upload",
-                        description: "PDF parsing functionality will be implemented in a future update.",
-                        variant: "default"
-                      });
-                      setImportDialogOpen(false);
-                    }
-                  }}
-                />
-                <label
-                  htmlFor="pdf-upload"
-                  className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2 cursor-pointer"
-                >
-                  Choose File
-                </label>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
+        {/* Quote Importer */}
+        <QuoteImporter
+          open={importDialogOpen}
+          onOpenChange={setImportDialogOpen}
+          onImportComplete={(importedCount) => {
+            toast({
+              title: "Import Completed",
+              description: `Successfully imported ${importedCount} quote${importedCount !== 1 ? 's' : ''}`,
+            });
+          }}
+        />
       </div>
     </div>
   );

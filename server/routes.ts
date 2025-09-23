@@ -939,6 +939,351 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // PDF Import endpoint for extracting quote data
+  app.post("/api/quotes/import-pdf", isAuthenticated, upload.single('pdf'), async (req: any, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ 
+          message: "No PDF file uploaded",
+          success: false 
+        });
+      }
+
+      const file = req.file;
+      
+      // Validate file type
+      if (file.mimetype !== 'application/pdf') {
+        return res.status(400).json({ 
+          message: "Invalid file type. Please upload a PDF file.",
+          success: false 
+        });
+      }
+
+      // Validate file size (10MB limit)
+      if (file.size > 10 * 1024 * 1024) {
+        return res.status(400).json({ 
+          message: "File too large. Please upload a PDF smaller than 10MB.",
+          success: false 
+        });
+      }
+
+      try {
+        // Parse PDF content
+        const parsePDF = (await import('pdf-parse')).default;
+        const pdfData = await parsePDF(file.buffer);
+        
+        if (!pdfData.text || pdfData.text.trim().length === 0) {
+          return res.status(400).json({ 
+            message: "No text content found in PDF. The file may be password-protected, corrupted, or contain only images.",
+            success: false 
+          });
+        }
+
+        console.log(`✅ PDF parsed successfully: ${file.originalname} (${pdfData.text.length} characters)`);
+
+        // Extract quote data using OpenAI
+        const extractedQuote = await extractQuoteDataFromText(pdfData.text);
+        
+        if (!extractedQuote) {
+          return res.status(400).json({ 
+            message: "Could not extract quote data from PDF content. The document may not contain recognizable quote information.",
+            success: false 
+          });
+        }
+
+        console.log(`✅ Quote data extracted from ${file.originalname}`);
+
+        // Return extracted data
+        res.status(200).json({
+          success: true,
+          filename: file.originalname,
+          extractedData: extractedQuote,
+          message: "Quote data extracted successfully"
+        });
+
+      } catch (pdfError: any) {
+        console.error("PDF parsing error:", pdfError);
+        
+        // Handle specific PDF parsing errors
+        if (pdfError.message?.includes("Invalid PDF") || pdfError.message?.includes("PDF parsing failed")) {
+          return res.status(400).json({ 
+            message: "Invalid or corrupted PDF file. Please check the file and try again.",
+            success: false 
+          });
+        }
+        
+        if (pdfError.message?.includes("password")) {
+          return res.status(400).json({ 
+            message: "Password-protected PDFs are not supported. Please remove the password and try again.",
+            success: false 
+          });
+        }
+
+        return res.status(500).json({ 
+          message: "Failed to process PDF file. Please try again or contact support.",
+          success: false 
+        });
+      }
+
+    } catch (error: any) {
+      console.error("PDF import error:", error);
+      res.status(500).json({ 
+        message: "Internal server error while processing PDF import.",
+        success: false 
+      });
+    }
+  });
+
+  // Batch import endpoint for creating quotes from extracted PDF data
+  app.post("/api/quotes/import-batch", isAuthenticated, async (req: any, res) => {
+    try {
+      const importData = z.object({
+        importOptions: z.object({
+          createNewQuote: z.boolean(),
+          existingQuoteId: z.number().optional(),
+          customerHandling: z.enum(['create_new', 'use_existing']),
+          existingCustomerId: z.number().optional(),
+        }),
+        extractedQuotes: z.array(z.object({
+          pdfId: z.string(),
+          filename: z.string(),
+          customer: z.object({
+            name: z.string().nullable().optional(),
+            email: z.string().nullable().optional(),
+            phone: z.string().nullable().optional(),
+            company: z.string().nullable().optional(),
+            address: z.string().nullable().optional(),
+          }),
+          quoteNumber: z.string().nullable().optional(),
+          date: z.string().nullable().optional(),
+          projectDescription: z.string().nullable().optional(),
+          lineItems: z.array(z.object({
+            description: z.string().nullable().optional(),
+            quantity: z.number().nullable().optional(),
+            price: z.number().nullable().optional(),
+            total: z.number().nullable().optional(),
+            unit: z.string().nullable().optional(),
+          })),
+          subtotal: z.number().nullable().optional(),
+          taxRate: z.number().nullable().optional(),
+          taxAmount: z.number().nullable().optional(),
+          discountAmount: z.number().nullable().optional(),
+          total: z.number().nullable().optional(),
+          notes: z.string().nullable().optional(),
+          terms: z.string().nullable().optional(),
+        }))
+      }).parse(req.body);
+
+      const results: {
+        success: boolean;
+        imported: Array<{
+          pdfId: string;
+          quoteId: number;
+          quoteNumber: string;
+          lineItemsAdded: number;
+          action: 'created' | 'added_to_existing';
+        }>;
+        errors: Array<{
+          pdfId: string;
+          filename: string;
+          error: string;
+        }>;
+        summary: {
+          quotesCreated: number;
+          lineItemsAdded: number;
+          customersCreated: number;
+          failed: number;
+        };
+      } = {
+        success: true,
+        imported: [],
+        errors: [],
+        summary: {
+          quotesCreated: 0,
+          lineItemsAdded: 0,
+          customersCreated: 0,
+          failed: 0
+        }
+      };
+
+      // Process each extracted quote
+      for (const extractedQuote of importData.extractedQuotes) {
+        try {
+          let accountId: number;
+
+          // Handle customer creation/matching
+          if (importData.importOptions.customerHandling === 'create_new') {
+            // Create new customer account
+            const customerData = {
+              name: extractedQuote.customer.name || 'Unknown Customer',
+              email: extractedQuote.customer.email || `unknown_${Date.now()}@example.com`,
+              phone: extractedQuote.customer.phone || '',
+              company: extractedQuote.customer.company || null,
+              address: extractedQuote.customer.address || null,
+              accountType: 'homeowner' as const
+            };
+
+            const newAccount = await storage.createAccount(customerData);
+            accountId = newAccount.id;
+            results.summary.customersCreated++;
+            console.log(`✅ Created new customer account: ${customerData.name} (ID: ${accountId})`);
+          } else {
+            // Use existing customer or try to match
+            if (importData.importOptions.existingCustomerId) {
+              accountId = importData.importOptions.existingCustomerId;
+            } else {
+              // Try to match by name/email, fallback to first customer
+              const accounts = await storage.getAllAccounts();
+              const matchedAccount = accounts.find(acc => 
+                (extractedQuote.customer.name && acc.name.toLowerCase().includes(extractedQuote.customer.name.toLowerCase())) ||
+                (extractedQuote.customer.email && acc.email === extractedQuote.customer.email)
+              );
+              accountId = matchedAccount?.id || accounts[0]?.id;
+              
+              if (!accountId) {
+                throw new Error('No customer account available for matching');
+              }
+            }
+          }
+
+          // Handle quote creation or line item addition
+          if (importData.importOptions.createNewQuote) {
+            // Create new quote
+            const quoteData: InsertQuote = {
+              quoteNumber: extractedQuote.quoteNumber || `IMP-${Date.now()}`,
+              accountId: accountId,
+              customerId: accountId, // Legacy field
+              assignedRepId: req.user?.id,
+              projectName: extractedQuote.projectDescription || `Imported from ${extractedQuote.filename}`,
+              projectAddress: extractedQuote.customer.address || '',
+              estimatedStartDate: extractedQuote.date || new Date().toISOString().split('T')[0],
+              notes: extractedQuote.notes ? `Imported from PDF: ${extractedQuote.filename}\n\n${extractedQuote.notes}` : `Imported from PDF: ${extractedQuote.filename}`,
+              taxRate: extractedQuote.taxRate?.toString() || '0',
+              discount: '0',
+              shipping: '0',
+              dealStage: 'new_lead' as const
+            };
+
+            const newQuote = await storage.createQuote(quoteData);
+            results.summary.quotesCreated++;
+            console.log(`✅ Created new quote: ${newQuote.quoteNumber} (ID: ${newQuote.id})`);
+
+            // Add line items to the new quote
+            let lineItemsAdded = 0;
+            if (extractedQuote.lineItems && extractedQuote.lineItems.length > 0) {
+              for (const lineItem of extractedQuote.lineItems) {
+                if (lineItem.description && lineItem.price && lineItem.quantity) {
+                  const lineItemData = {
+                    quoteId: newQuote.id,
+                    description: lineItem.description,
+                    quantity: lineItem.quantity.toString(),
+                    unitPrice: lineItem.price.toString(),
+                    markupType: 'percentage' as const,
+                    markupValue: '0', // Default markup
+                    discountType: 'percentage' as const,
+                    discountValue: '0'
+                  };
+
+                  await storage.createLineItem(lineItemData);
+                  lineItemsAdded++;
+                }
+              }
+            }
+            
+            results.summary.lineItemsAdded += lineItemsAdded;
+            results.imported.push({
+              pdfId: extractedQuote.pdfId,
+              quoteId: newQuote.id,
+              quoteNumber: newQuote.quoteNumber,
+              lineItemsAdded,
+              action: 'created'
+            });
+            
+            console.log(`✅ Added ${lineItemsAdded} line items to quote ${newQuote.quoteNumber}`);
+          } else {
+            // Add line items to existing quote
+            if (!importData.importOptions.existingQuoteId) {
+              throw new Error('Existing quote ID required when not creating new quotes');
+            }
+
+            const existingQuote = await storage.getQuote(importData.importOptions.existingQuoteId);
+            if (!existingQuote) {
+              throw new Error('Specified existing quote not found');
+            }
+
+            // Validate quote ownership
+            const hasAccess = await storage.validateQuoteOwnership(importData.importOptions.existingQuoteId, req.user?.id);
+            if (!hasAccess) {
+              throw new Error('Access denied to the specified quote');
+            }
+
+            let lineItemsAdded = 0;
+            if (extractedQuote.lineItems && extractedQuote.lineItems.length > 0) {
+              for (const lineItem of extractedQuote.lineItems) {
+                if (lineItem.description && lineItem.price && lineItem.quantity) {
+                  const lineItemData = {
+                    quoteId: importData.importOptions.existingQuoteId,
+                    description: lineItem.description,
+                    quantity: lineItem.quantity.toString(),
+                    unitPrice: lineItem.price.toString(),
+                    markupType: 'percentage' as const,
+                    markupValue: '0', // Default markup
+                    discountType: 'percentage' as const,
+                    discountValue: '0'
+                  };
+
+                  await storage.createLineItem(lineItemData);
+                  lineItemsAdded++;
+                }
+              }
+            }
+
+            results.summary.lineItemsAdded += lineItemsAdded;
+            results.imported.push({
+              pdfId: extractedQuote.pdfId,
+              quoteId: importData.importOptions.existingQuoteId,
+              quoteNumber: existingQuote.quoteNumber,
+              lineItemsAdded,
+              action: 'added_to_existing'
+            });
+
+            console.log(`✅ Added ${lineItemsAdded} line items to existing quote ${existingQuote.quoteNumber}`);
+          }
+
+        } catch (error: any) {
+          console.error(`❌ Failed to import PDF ${extractedQuote.filename}:`, error);
+          results.summary.failed++;
+          results.errors.push({
+            pdfId: extractedQuote.pdfId,
+            filename: extractedQuote.filename,
+            error: error.message || 'Unknown error occurred'
+          });
+        }
+      }
+
+      // Log final summary
+      console.log(`📊 Import completed: ${results.summary.quotesCreated} quotes created, ${results.summary.lineItemsAdded} line items added, ${results.summary.customersCreated} customers created, ${results.summary.failed} failed`);
+
+      res.status(200).json(results);
+
+    } catch (error: any) {
+      console.error("Batch import error:", error);
+      
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          success: false,
+          message: "Invalid import data", 
+          errors: error.errors 
+        });
+      }
+      
+      res.status(500).json({ 
+        success: false,
+        message: "Internal server error during import" 
+      });
+    }
+  });
+
   app.put("/api/quotes/:id", isAuthenticated, async (req, res) => {
     try {
       // Validate ID parameter
