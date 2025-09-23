@@ -21,8 +21,8 @@ export interface PDFParseResult {
 }
 
 /**
- * Parse PDF buffer and extract text content
- * Uses dynamic import to avoid issues with test files and SSR
+ * Parse PDF buffer and extract text content using PDF.js
+ * More reliable than pdf-parse and avoids dependency issues
  */
 export async function parsePDF(buffer: Buffer): Promise<PDFParseResult> {
   try {
@@ -41,47 +41,86 @@ export async function parsePDF(buffer: Buffer): Promise<PDFParseResult> {
       };
     }
 
-    // Dynamic import to avoid module loading issues in tests
-    const pdfParse = await import('pdf-parse');
-    const parseFunction = pdfParse.default || pdfParse;
+    // Add polyfill for Promise.withResolvers (required for Node.js < v22)
+    if (!Promise.withResolvers) {
+      await import('@ungap/with-resolvers');
+    }
 
-    // Parse the PDF with options for better text extraction
-    const options = {
-      // Normalize whitespace and line breaks
-      normalizeWhitespace: false,
-      // Don't use worker (can cause issues in server environment)
-      useWorkerFetch: false,
-      // Maximum pages to process (prevent memory issues)
-      max: 50
-    };
-
-    const result = await parseFunction(buffer, options);
-
+    // Use PDF.js for reliable text extraction - correct server-side import
+    const pdfjs = await import('pdfjs-dist');
+    
+    // Convert buffer to Uint8Array for PDF.js
+    const uint8Array = new Uint8Array(buffer);
+    
+    // Load the PDF document using the default export or named export
+    const getDocument = pdfjs.getDocument || pdfjs.default?.getDocument;
+    if (!getDocument) {
+      throw new Error('PDF.js getDocument function not found');
+    }
+    
+    const loadingTask = getDocument({
+      data: uint8Array,
+      verbosity: 0 // Suppress console output
+    });
+    
+    const pdf = await loadingTask.promise;
+    
+    const pageTexts: string[] = [];
+    const maxPages = Math.min(pdf.numPages, 50); // Limit to prevent memory issues
+    
+    // Extract text from each page
+    for (let pageNum = 1; pageNum <= maxPages; pageNum++) {
+      try {
+        const page = await pdf.getPage(pageNum);
+        const textContent = await page.getTextContent();
+        
+        // Combine all text items with proper spacing
+        const pageText = textContent.items
+          .map((item: any) => {
+            // Handle different text item types
+            if (typeof item === 'string') return item;
+            if (item.str) return item.str;
+            return '';
+          })
+          .join(' ');
+          
+        pageTexts.push(pageText);
+      } catch (pageError) {
+        console.warn(`Warning: Failed to extract text from page ${pageNum}:`, pageError);
+        // Continue with other pages
+      }
+    }
+    
+    // Combine all page texts
+    const fullText = pageTexts.join('\n\n');
+    
     // Validate that we extracted some text
-    if (!result.text || result.text.trim().length === 0) {
+    if (!fullText || fullText.trim().length === 0) {
       return {
         error: "No text content found in PDF - the file may contain only images, be password-protected, or be corrupted",
-        pageCount: result.numpages || 0
+        pageCount: pdf.numPages
       };
     }
 
     // Clean and validate extracted text
-    const cleanedText = result.text
+    const cleanedText = fullText
       .replace(/\r\n/g, '\n')  // Normalize line endings
       .replace(/\r/g, '\n')    // Handle old Mac line endings
       .replace(/\n{3,}/g, '\n\n') // Reduce excessive line breaks
+      .replace(/\s+/g, ' ')    // Normalize spaces
       .trim();
 
     return {
       text: cleanedText,
-      pageCount: result.numpages || 0,
+      pageCount: pdf.numPages,
       metadata: {
-        title: result.info?.Title,
-        author: result.info?.Author,
-        creator: result.info?.Creator,
-        producer: result.info?.Producer,
-        creationDate: result.info?.CreationDate ? new Date(result.info.CreationDate) : undefined,
-        modificationDate: result.info?.ModDate ? new Date(result.info.ModDate) : undefined,
+        // PDF.js metadata access is more complex, keeping it simple for now
+        title: undefined,
+        author: undefined,
+        creator: undefined,
+        producer: undefined,
+        creationDate: undefined,
+        modificationDate: undefined
       }
     };
 
@@ -164,21 +203,43 @@ export async function getPDFMetadata(buffer: Buffer): Promise<{
       return { error: validation.error };
     }
 
-    // Use a lightweight approach to just get metadata
-    const pdfParse = await import('pdf-parse');
-    const parseFunction = pdfParse.default || pdfParse;
+    // Add polyfill for Promise.withResolvers if needed
+    if (!Promise.withResolvers) {
+      await import('@ungap/with-resolvers');
+    }
 
-    // Parse with minimal options for metadata only
-    const result = await parseFunction(buffer, { 
-      pagerender: () => '', // Don't render pages for text
-      max: 1 // Only process first page for metadata
+    // Use PDF.js for metadata extraction - consistent with parsePDF
+    const pdfjs = await import('pdfjs-dist');
+    const uint8Array = new Uint8Array(buffer);
+    
+    const getDocument = pdfjs.getDocument || pdfjs.default?.getDocument;
+    if (!getDocument) {
+      throw new Error('PDF.js getDocument function not found');
+    }
+    
+    const loadingTask = getDocument({
+      data: uint8Array,
+      verbosity: 0
     });
+    
+    const pdf = await loadingTask.promise;
+    
+    // Try to get metadata if available
+    let title, author;
+    try {
+      const metadata = await pdf.getMetadata();
+      const info = metadata.info as any; // Type assertion for metadata info
+      title = info?.Title;
+      author = info?.Author;
+    } catch (metadataError) {
+      // Metadata extraction is optional
+    }
 
     return {
-      pageCount: result.numpages,
-      title: result.info?.Title,
-      author: result.info?.Author,
-      encrypted: result.info?.IsEncrypted === 'true' || result.info?.Encrypted === 'true'
+      pageCount: pdf.numPages,
+      title,
+      author,
+      encrypted: false // PDF.js handles decryption automatically for non-password protected files
     };
 
   } catch (error: any) {

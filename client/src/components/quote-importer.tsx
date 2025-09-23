@@ -590,13 +590,27 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
     } catch (imageError) {
       console.error('PDF to image conversion failed:', imageError);
       
-      // If image conversion fails, try text extraction directly
+      // If image conversion fails, try text extraction directly (avoid duplicate onMutate)
       try {
         setProcessedPDFs(prev => prev.map(p => 
           p.id === pdfId ? { ...p, progress: 50, status: 'processing' } : p
         ));
         
-        const textResult = await processPDFMutation.mutateAsync(file);
+        const formData = new FormData();
+        formData.append('pdf', file);
+        
+        const response = await fetch('/api/quotes/import-pdf', {
+          method: 'POST',
+          body: formData,
+          credentials: 'include'
+        });
+        
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.message || 'Failed to process PDF');
+        }
+        
+        const textResult = await response.json();
         
         setProcessedPDFs(prev => prev.map(p => 
           p.id === pdfId ? { 
