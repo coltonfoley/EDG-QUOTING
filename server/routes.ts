@@ -40,7 +40,7 @@ import {
 } from "./validation-schemas";
 import multer from "multer";
 import * as XLSX from "xlsx";
-import { extractProductsFromImage, extractProductsFromText, extractQuoteDataFromText } from "./openai";
+import { extractProductsFromImage, extractProductsFromText, extractQuoteDataFromText, extractQuoteDataFromImages } from "./openai";
 import type { ExtractedProduct } from "./openai";
 import { ObjectStorageService, ObjectNotFoundError, objectStorageClient } from "./objectStorage";
 import { ObjectPermission } from "./objectAcl";
@@ -1061,6 +1061,87 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("PDF import error:", error);
       res.status(500).json({ 
         message: "Internal server error while processing PDF import.",
+        success: false 
+      });
+    }
+  });
+
+  // Vision-based PDF import endpoint for processing page images
+  app.post("/api/quotes/import-vision", isAuthenticated, async (req: any, res) => {
+    try {
+      const visionData = z.object({
+        filename: z.string().max(255, "Filename too long"),
+        pages: z.array(z.object({
+          index: z.number().min(0).max(19, "Page index must be 0-19"),
+          imageBase64: z.string().max(2 * 1024 * 1024, "Individual image too large (max 2MB base64)") // ~1.5MB actual image
+        })).min(1, "At least one page image is required").max(20, "Maximum 20 pages allowed")
+      });
+
+      const { filename, pages } = visionData.parse(req.body);
+
+      // Validate total payload size (more strict)
+      const totalImageSize = pages.reduce((sum, page) => sum + page.imageBase64.length, 0);
+      const approximateFileSize = (totalImageSize * 3) / 4; // Base64 to binary conversion
+      
+      if (approximateFileSize > 30 * 1024 * 1024) { // 30MB limit for vision processing
+        return res.status(413).json({
+          message: "Total file size too large for vision processing (max 30MB). Try reducing image quality or page count.",
+          success: false
+        });
+      }
+      
+      // Validate individual image sizes
+      for (const page of pages) {
+        if (page.imageBase64.length < 100) {
+          return res.status(400).json({
+            message: `Page ${page.index + 1} image data is too small or invalid.`,
+            success: false
+          });
+        }
+      }
+
+      // Validate number of pages
+      if (pages.length > 20) {
+        return res.status(400).json({
+          message: "Too many pages. Maximum 20 pages supported.",
+          success: false
+        });
+      }
+
+      console.log(`🔍 Processing vision-based extraction for ${filename} (${pages.length} pages)`);
+
+      // Extract quote data using OpenAI vision
+      const extractedQuote = await extractQuoteDataFromImages(pages);
+      
+      if (!extractedQuote) {
+        return res.status(400).json({ 
+          message: "Could not extract quote data from PDF images. The document may not contain recognizable quote information or the images may be unclear.",
+          success: false 
+        });
+      }
+
+      console.log(`✅ Vision-based quote data extracted from ${filename}`);
+
+      // Return extracted data
+      res.status(200).json({
+        success: true,
+        filename,
+        extractedData: extractedQuote,
+        message: "Quote data extracted successfully using vision processing",
+        processingMethod: "vision"
+      });
+
+    } catch (error: any) {
+      if (error.name === 'ZodError') {
+        return res.status(400).json({
+          message: `Invalid request data: ${error.errors.map((e: any) => e.message).join(', ')}`,
+          success: false
+        });
+      }
+      
+      console.error("PDF vision import error:", error);
+      res.status(500).json({ 
+        message: "Internal server error while processing vision-based PDF import.",
         success: false 
       });
     }

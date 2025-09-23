@@ -69,6 +69,12 @@ interface PDFImportResponse {
   filename: string;
   extractedData: ExtractedQuote;
   message: string;
+  processingMethod?: 'vision' | 'text';
+}
+
+interface PDFPageImage {
+  index: number;
+  imageBase64: string;
 }
 
 interface ProcessedPDF {
@@ -183,6 +189,90 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
   });
 
   // PDF processing mutation
+  // Convert PDF to images for vision processing
+  const convertPDFToImages = async (file: File): Promise<PDFPageImage[]> => {
+    try {
+      // Dynamically import PDF.js to avoid SSR issues
+      const pdfjs = await import('pdfjs-dist');
+      
+      // Set up worker
+      pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+        'pdfjs-dist/build/pdf.worker.min.js',
+        import.meta.url
+      ).href;
+      
+      // Read file as array buffer
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjs.getDocument({ data: arrayBuffer }).promise;
+      
+      const pages: PDFPageImage[] = [];
+      const maxPages = Math.min(pdf.numPages, 20); // Limit to 20 pages
+      
+      for (let pageNum = 1; pageNum <= maxPages; pageNum++) {
+        const page = await pdf.getPage(pageNum);
+        
+        // Set up canvas for rendering
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        if (!context) throw new Error('Could not get canvas context');
+        
+        // Calculate viewport for optimal resolution
+        const viewport = page.getViewport({ scale: 2.0 }); // 2x scale for better quality
+        canvas.width = Math.min(viewport.width, 2048); // Max width 2048px
+        canvas.height = Math.min(viewport.height, 2048); // Max height 2048px
+        
+        // Adjust scale if canvas was resized
+        const scale = Math.min(canvas.width / viewport.width, canvas.height / viewport.height);
+        const finalViewport = page.getViewport({ scale: scale * 2.0 });
+        
+        // Render PDF page to canvas
+        await page.render({
+          canvasContext: context,
+          viewport: finalViewport,
+          canvas: canvas
+        }).promise;
+        
+        // Convert canvas to base64 JPEG (compressed)
+        const imageBase64 = canvas.toDataURL('image/jpeg', 0.6).split(',')[1]; // 60% quality for compression
+        
+        pages.push({
+          index: pageNum - 1, // 0-based index
+          imageBase64
+        });
+      }
+      
+      return pages;
+    } catch (error) {
+      console.error('Error converting PDF to images:', error);
+      throw new Error('Failed to convert PDF to images for vision processing');
+    }
+  };
+
+  // Vision-based PDF processing mutation
+  const processVisionMutation = useMutation({
+    mutationFn: async ({ file, pages }: { file: File; pages: PDFPageImage[] }): Promise<PDFImportResponse> => {
+      const response = await fetch('/api/quotes/import-vision', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          filename: file.name,
+          pages
+        }),
+        credentials: 'include'
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to process PDF with vision');
+      }
+      
+      return response.json();
+    }
+  });
+
+  // Text-based PDF processing mutation (fallback)
   const processPDFMutation = useMutation({
     mutationFn: async (file: File): Promise<PDFImportResponse> => {
       const formData = new FormData();
@@ -277,11 +367,152 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
       return;
     }
     
-    // Process each PDF
-    pdfFiles.forEach(file => {
-      processPDFMutation.mutate(file);
+    // Process each PDF with vision-first approach
+    pdfFiles.forEach(async (file) => {
+      await processFileWithVisionFirst(file);
     });
-  }, [processPDFMutation, toast]);
+  }, [toast]);
+
+  // Main processing function with vision-first approach
+  const processFileWithVisionFirst = async (file: File) => {
+    const pdfId = `pdf_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    
+    // Add PDF to processing list
+    const newPDF: ProcessedPDF = {
+      id: pdfId,
+      file,
+      filename: file.name,
+      status: 'processing',
+      progress: 0
+    };
+    
+    setProcessedPDFs(prev => [...prev, newPDF]);
+    
+    try {
+      // Update progress: Converting to images
+      setProcessedPDFs(prev => prev.map(p => 
+        p.id === pdfId ? { ...p, progress: 20, status: 'processing' } : p
+      ));
+      
+      // Step 1: Convert PDF to images
+      const pages = await convertPDFToImages(file);
+      
+      // Update progress: Processing with vision
+      setProcessedPDFs(prev => prev.map(p => 
+        p.id === pdfId ? { ...p, progress: 50, status: 'processing' } : p
+      ));
+      
+      try {
+        // Step 2: Try vision processing first
+        const visionResult = await processVisionMutation.mutateAsync({ file, pages });
+        
+        // Update progress: Success
+        setProcessedPDFs(prev => prev.map(p => 
+          p.id === pdfId ? { 
+            ...p, 
+            progress: 100, 
+            status: 'success', 
+            extractedData: visionResult.extractedData,
+            processingMethod: 'vision'
+          } : p
+        ));
+        
+        toast({
+          title: "PDF processed successfully",
+          description: `${file.name} processed using vision analysis`,
+        });
+        
+      } catch (visionError) {
+        console.warn('Vision processing failed, falling back to text extraction:', visionError);
+        
+        // Update progress: Falling back to text
+        setProcessedPDFs(prev => prev.map(p => 
+          p.id === pdfId ? { ...p, progress: 70, status: 'processing' } : p
+        ));
+        
+        try {
+          // Step 3: Fallback to text processing
+          const textResult = await processPDFMutation.mutateAsync(file);
+          
+          // Update progress: Success with fallback
+          setProcessedPDFs(prev => prev.map(p => 
+            p.id === pdfId ? { 
+              ...p, 
+              progress: 100, 
+              status: 'success', 
+              extractedData: textResult.extractedData,
+              processingMethod: 'text'
+            } : p
+          ));
+          
+          toast({
+            title: "PDF processed successfully",
+            description: `${file.name} processed using text extraction (vision fallback)`,
+          });
+          
+        } catch (textError) {
+          // Both methods failed
+          setProcessedPDFs(prev => prev.map(p => 
+            p.id === pdfId ? { 
+              ...p, 
+              progress: 0, 
+              status: 'error', 
+              error: `Both vision and text processing failed: ${textError instanceof Error ? textError.message : 'Unknown error'}`
+            } : p
+          ));
+          
+          toast({
+            title: "PDF processing failed",
+            description: `Failed to process ${file.name}. Please try again or check the file format.`,
+            variant: "destructive"
+          });
+        }
+      }
+      
+    } catch (imageError) {
+      console.error('PDF to image conversion failed:', imageError);
+      
+      // If image conversion fails, try text extraction directly
+      try {
+        setProcessedPDFs(prev => prev.map(p => 
+          p.id === pdfId ? { ...p, progress: 50, status: 'processing' } : p
+        ));
+        
+        const textResult = await processPDFMutation.mutateAsync(file);
+        
+        setProcessedPDFs(prev => prev.map(p => 
+          p.id === pdfId ? { 
+            ...p, 
+            progress: 100, 
+            status: 'success', 
+            extractedData: textResult.extractedData,
+            processingMethod: 'text'
+          } : p
+        ));
+        
+        toast({
+          title: "PDF processed successfully",
+          description: `${file.name} processed using text extraction (image conversion failed)`,
+        });
+        
+      } catch (finalError) {
+        setProcessedPDFs(prev => prev.map(p => 
+          p.id === pdfId ? { 
+            ...p, 
+            progress: 0, 
+            status: 'error', 
+            error: `Processing failed: ${finalError instanceof Error ? finalError.message : 'Unknown error'}`
+          } : p
+        ));
+        
+        toast({
+          title: "PDF processing failed",
+          description: `Failed to process ${file.name}. Please try again.`,
+          variant: "destructive"
+        });
+      }
+    }
+  };
 
   const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
@@ -291,10 +522,12 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
     }
   };
 
-  const retryPDF = (pdfId: string) => {
+  const retryPDF = async (pdfId: string) => {
     const pdf = processedPDFs.find(p => p.id === pdfId);
     if (pdf) {
-      processPDFMutation.mutate(pdf.file);
+      // Remove the failed PDF from the list and re-process with vision-first
+      setProcessedPDFs(prev => prev.filter(p => p.id !== pdfId));
+      await processFileWithVisionFirst(pdf.file);
     }
   };
 
