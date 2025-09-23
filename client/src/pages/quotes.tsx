@@ -210,6 +210,15 @@ export default function Quotes() {
             </div>
 
 
+            <Button 
+              variant="outline" 
+              onClick={() => setImportDialogOpen(true)}
+              className="w-full sm:w-auto"
+              data-testid="button-import-pdf"
+            >
+              <Upload className="mr-2 h-4 w-4" />
+              Import PDF
+            </Button>
             <Link href="/quotes/new">
               <Button className="bg-edg-black hover:bg-edg-grey text-edg-white w-full sm:w-auto">
                 <Plus className="mr-2 h-4 w-4" />
