@@ -968,21 +968,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       try {
-        // Parse PDF content
-        const parsePDF = (await import('pdf-parse')).default;
-        const pdfData = await parsePDF(file.buffer);
+        let extractedText = '';
         
-        if (!pdfData.text || pdfData.text.trim().length === 0) {
+        try {
+          // Use Mozilla PDF.js for reliable PDF text extraction
+          const { getDocument } = await import('pdfjs-dist/legacy/build/pdf.mjs');
+          
+          const loadingTask = getDocument({
+            data: file.buffer,
+            useWorkerFetch: false,
+            isEvalSupported: false,
+            disableFontFace: true
+          });
+          
+          const pdf = await loadingTask.promise;
+          
+          // Extract text from each page
+          for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+            const page = await pdf.getPage(pageNum);
+            const textContent = await page.getTextContent();
+            const pageText = textContent.items
+              .map((item: any) => ('str' in item ? item.str : ''))
+              .join(' ');
+            extractedText += pageText + '\n';
+          }
+          
+          // Clean up the PDF document
+          await pdf.destroy();
+          
+        } catch (pdfError: any) {
+          console.error("PDF parsing error:", pdfError);
           return res.status(400).json({ 
-            message: "No text content found in PDF. The file may be password-protected, corrupted, or contain only images.",
+            message: "Failed to extract text from PDF. The file may be password-protected, corrupted, or contain only images.",
+            success: false 
+          });
+        }
+        
+        if (!extractedText || extractedText.trim().length === 0) {
+          return res.status(400).json({ 
+            message: "No text content found in PDF. The file may contain only images or be password-protected.",
             success: false 
           });
         }
 
-        console.log(`✅ PDF parsed successfully: ${file.originalname} (${pdfData.text.length} characters)`);
+        console.log(`✅ PDF parsed successfully: ${file.originalname} (${extractedText.length} characters)`);
 
         // Extract quote data using OpenAI
-        const extractedQuote = await extractQuoteDataFromText(pdfData.text);
+        const extractedQuote = await extractQuoteDataFromText(extractedText);
         
         if (!extractedQuote) {
           return res.status(400).json({ 
