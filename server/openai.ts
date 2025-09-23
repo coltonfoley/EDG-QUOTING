@@ -57,6 +57,14 @@ const ExtractedQuoteSchema = z.object({
 
 export type ExtractedQuote = z.infer<typeof ExtractedQuoteSchema>;
 
+// Schema for vision-based processing with page references
+const ExtractedQuoteWithPageRefsSchema = ExtractedQuoteSchema.extend({
+  confidence: z.number().min(0).max(1).optional(),
+  pageRefs: z.array(z.number()).optional(), // Page indices where data was found
+});
+
+export type ExtractedQuoteWithPageRefs = z.infer<typeof ExtractedQuoteWithPageRefsSchema>;
+
 export async function extractProductsFromImage(base64Image: string): Promise<ExtractedProduct[]> {
   try {
     const response = await openai.chat.completions.create({
@@ -99,7 +107,7 @@ export async function extractProductsFromImage(base64Image: string): Promise<Ext
         },
       ],
       response_format: { type: "json_object" },
-      max_completion_tokens: 8000, // Increased token limit
+      max_tokens: 8000, // Increased token limit
       // GPT-5 only supports default temperature (1), so we remove this parameter
     });
 
@@ -178,7 +186,7 @@ export async function extractProductsFromText(text: string): Promise<ExtractedPr
         },
       ],
       response_format: { type: "json_object" },
-      max_completion_tokens: 8000, // Increased token limit
+      max_tokens: 8000, // Increased token limit
       // GPT-5 only supports default temperature (1), so we remove this parameter
     });
 
@@ -241,6 +249,218 @@ export async function extractProductsFromText(text: string): Promise<ExtractedPr
   } catch (error) {
     // Error extracting products from text
     return []; // Return empty array instead of throwing
+  }
+}
+
+export async function extractQuoteDataFromImages(images: Array<{index: number, imageBase64: string}>): Promise<ExtractedQuote | null> {
+  try {
+    if (!images || images.length === 0) {
+      return null;
+    }
+
+    // For small PDFs (≤5 pages), process all at once
+    if (images.length <= 5) {
+      return await processImagesInSingleCall(images);
+    }
+
+    // For larger PDFs, process in chunks and consolidate
+    const chunkSize = 3;
+    const chunks = [];
+    for (let i = 0; i < images.length; i += chunkSize) {
+      chunks.push(images.slice(i, i + chunkSize));
+    }
+
+    const chunkResults: ExtractedQuoteWithPageRefs[] = [];
+    for (const chunk of chunks) {
+      const result = await processImagesInSingleCall(chunk);
+      if (result) {
+        chunkResults.push(result);
+      }
+    }
+
+    // Consolidate results from all chunks
+    if (chunkResults.length === 0) {
+      return null;
+    }
+
+    return await consolidateQuoteParts(chunkResults);
+  } catch (error) {
+    console.error('Error in extractQuoteDataFromImages:', error);
+    return null;
+  }
+}
+
+async function processImagesInSingleCall(images: Array<{index: number, imageBase64: string}>): Promise<ExtractedQuoteWithPageRefs | null> {
+  try {
+    const imageContent = images.map((img, idx) => {
+      return [
+        {
+          type: "text" as const,
+          text: `Page ${img.index + 1}:`,
+        },
+        {
+          type: "image_url" as const,
+          image_url: {
+            url: `data:image/jpeg;base64,${img.imageBase64}`,
+          },
+        },
+      ];
+    }).flat();
+
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        {
+          role: "system",
+          content: `You are a specialized data extraction expert for construction and patio quotes. Analyze the provided PDF page images and extract comprehensive quote information with high accuracy.
+          
+          EXTRACTION GUIDELINES:
+          - Examine ALL pages carefully for complete information
+          - Look for customer details, line items, pricing, and totals across all pages
+          - Pay attention to headers, footers, and continuation markers
+          - Identify relationships between pages (e.g., continued line items)
+          - Extract information visually - don't rely solely on text positioning
+          
+          For multi-page documents:
+          - Customer info may be on first page only
+          - Line items may span multiple pages
+          - Totals typically appear on the last page
+          - Include page references in your extraction
+          
+          Return JSON with these fields (ALL OPTIONAL):
+          {
+            "customer": {"name": string|null, "email": string|null, "phone": string|null, "company": string|null, "address": string|null},
+            "quoteNumber": string|null,
+            "date": string|null,
+            "projectDescription": string|null,
+            "lineItems": [{"description": string|null, "quantity": number|null, "price": number|null, "total": number|null, "unit": string|null}],
+            "subtotal": number|null,
+            "taxRate": number|null,
+            "taxAmount": number|null,
+            "discountAmount": number|null,
+            "total": number|null,
+            "notes": string|null,
+            "terms": string|null,
+            "confidence": number (0-1),
+            "pageRefs": [page_numbers_where_data_found]
+          }
+          
+          CRITICAL RULES:
+          - Use NUMERIC values for all prices, quantities, totals (never strings)
+          - Only extract clearly visible information
+          - Be thorough but accurate - don't hallucinate missing data
+          - Include confidence score based on clarity of extracted data
+          - Reference page numbers where key information was found`,
+        },
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: `Analyze these PDF pages and extract all quote information. Focus on accuracy and completeness across all ${images.length} pages.`,
+            },
+            ...imageContent,
+          ],
+        },
+      ],
+      response_format: { type: "json_object" },
+      max_tokens: 6000,
+      temperature: 0,
+    });
+
+    const content = response.choices[0].message.content;
+    if (!content) {
+      return null;
+    }
+
+    let parsedContent;
+    try {
+      parsedContent = JSON.parse(content);
+    } catch (jsonError) {
+      console.error('JSON parsing failed for vision extraction:', jsonError);
+      return null;
+    }
+
+    // Validate with extended schema
+    const extracted = ExtractedQuoteWithPageRefsSchema.parse(parsedContent);
+    return extracted;
+  } catch (error) {
+    console.error('Error in processImagesInSingleCall:', error);
+    return null;
+  }
+}
+
+async function consolidateQuoteParts(parts: ExtractedQuoteWithPageRefs[]): Promise<ExtractedQuote> {
+  try {
+    // Consolidate multiple extraction results into a single quote
+    const consolidated: ExtractedQuote = {
+      customer: { name: null, email: null, phone: null, company: null, address: null },
+      quoteNumber: null,
+      date: null,
+      projectDescription: null,
+      lineItems: [],
+      subtotal: null,
+      taxRate: null,
+      taxAmount: null,
+      discountAmount: null,
+      total: null,
+      notes: null,
+      terms: null,
+    };
+
+    // Consolidate customer information (take first non-null values)
+    for (const part of parts) {
+      if (part.customer?.name && !consolidated.customer.name) consolidated.customer.name = part.customer.name;
+      if (part.customer?.email && !consolidated.customer.email) consolidated.customer.email = part.customer.email;
+      if (part.customer?.phone && !consolidated.customer.phone) consolidated.customer.phone = part.customer.phone;
+      if (part.customer?.company && !consolidated.customer.company) consolidated.customer.company = part.customer.company;
+      if (part.customer?.address && !consolidated.customer.address) consolidated.customer.address = part.customer.address;
+    }
+
+    // Consolidate quote metadata (take first non-null values)
+    for (const part of parts) {
+      if (part.quoteNumber && !consolidated.quoteNumber) consolidated.quoteNumber = part.quoteNumber;
+      if (part.date && !consolidated.date) consolidated.date = part.date;
+      if (part.projectDescription && !consolidated.projectDescription) consolidated.projectDescription = part.projectDescription;
+      if (part.notes && !consolidated.notes) consolidated.notes = part.notes;
+      if (part.terms && !consolidated.terms) consolidated.terms = part.terms;
+    }
+
+    // Consolidate line items (combine all, dedupe by description+price)
+    const seenItems = new Set<string>();
+    for (const part of parts) {
+      if (part.lineItems) {
+        for (const item of part.lineItems) {
+          if (item.description && item.price) {
+            const itemKey = `${item.description.toLowerCase()}-${item.price}-${item.quantity || 1}`;
+            if (!seenItems.has(itemKey)) {
+              consolidated.lineItems.push(item);
+              seenItems.add(itemKey);
+            }
+          }
+        }
+      }
+    }
+
+    // Consolidate financial totals (take the highest confidence or last page values)
+    let bestFinancialPart = parts[parts.length - 1]; // Default to last part
+    for (const part of parts) {
+      if (part.total && (!bestFinancialPart.total || (part.confidence || 0) > (bestFinancialPart.confidence || 0))) {
+        bestFinancialPart = part;
+      }
+    }
+
+    consolidated.subtotal = bestFinancialPart.subtotal;
+    consolidated.taxRate = bestFinancialPart.taxRate;
+    consolidated.taxAmount = bestFinancialPart.taxAmount;
+    consolidated.discountAmount = bestFinancialPart.discountAmount;
+    consolidated.total = bestFinancialPart.total;
+
+    return consolidated;
+  } catch (error) {
+    console.error('Error in consolidateQuoteParts:', error);
+    // Return the first part as fallback
+    return parts[0] as ExtractedQuote;
   }
 }
 
