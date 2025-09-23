@@ -1086,38 +1086,47 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
           setFont('small');
           setColor('primary');
           
-          // Split contract content into numbered clauses
-          const clauses = contractContent.split(/(?=\d+\.)/);
+          // Process contract content line by line to preserve proper numbering
+          const lines = contractContent.split('\n');
+          let inSection = false;
+          let firstLineOfSection = true;
           
-          for (let i = 0; i < clauses.length; i++) {
-            const clause = clauses[i].trim();
-            if (!clause) continue;
+          for (const line of lines) {
+            const trimmedLine = line.trim();
             
-            // Split clause into lines
-            const clauseLines = clause.split('\n');
-            let firstLine = true;
-            
-            for (const line of clauseLines) {
-              if (!line.trim()) {
-                yPosition += 3;
-                continue;
-              }
-              
-              const wrappedLines = pdf.splitTextToSize(line.trim(), contentWidth - 5);
-              checkPageBreak(wrappedLines.length * 4 + 5);
-              
-              // Reset font after potential page break to ensure consistency
-              setFont('small');
-              setColor('primary');
-              
-              for (let j = 0; j < wrappedLines.length; j++) {
-                const indentX = firstLine ? margin : margin + 5;
-                pdf.text(wrappedLines[j], indentX, yPosition);
-                yPosition += 4;
-                firstLine = false;
-              }
+            // Skip empty lines but add spacing
+            if (!trimmedLine) {
+              yPosition += 3;
+              continue;
             }
-            yPosition += 3;
+            
+            // Check if this line starts a new numbered section (e.g., "1.", "2.", etc.)
+            const isSectionStart = /^\d+\.(\s|$)/.test(trimmedLine);
+            
+            if (isSectionStart) {
+              // Add extra spacing before new sections (except the first one)
+              if (inSection) {
+                yPosition += 6;
+              }
+              inSection = true;
+              firstLineOfSection = true;
+            }
+            
+            // Word wrap the line to fit within margins
+            const wrappedLines = pdf.splitTextToSize(trimmedLine, contentWidth - 5);
+            checkPageBreak(wrappedLines.length * 4 + 5);
+            
+            // Reset font after potential page break to ensure consistency
+            setFont('small');
+            setColor('primary');
+            
+            // Render each wrapped line
+            for (let j = 0; j < wrappedLines.length; j++) {
+              const indentX = firstLineOfSection ? margin : margin + 5;
+              pdf.text(wrappedLines[j], indentX, yPosition);
+              yPosition += 4;
+              firstLineOfSection = false;
+            }
           }
         }
       }
