@@ -464,13 +464,104 @@ async function consolidateQuoteParts(parts: ExtractedQuoteWithPageRefs[]): Promi
   }
 }
 
+/**
+ * Intelligent text preprocessing for PDF quote extraction
+ * Identifies and prioritizes sections most likely to contain quote information
+ */
+function preprocessTextForExtraction(text: string): string {
+  const maxTextLength = 20000;
+  
+  if (text.length <= maxTextLength) {
+    return text;
+  }
+
+  // Define keywords that indicate important quote sections
+  const quoteKeywords = [
+    // Customer/Client info
+    'bill to', 'ship to', 'customer', 'client', 'account', 'contact',
+    // Quote identification
+    'quote', 'estimate', 'proposal', 'invoice', 'order',
+    // Financial terms
+    'total', 'subtotal', 'tax', 'amount', 'price', 'cost', 'payment',
+    // Line items
+    'description', 'item', 'product', 'service', 'quantity', 'unit',
+    // Project details
+    'project', 'job', 'site', 'address', 'location',
+    // Dates and terms
+    'date', 'terms', 'conditions', 'due', 'expiry'
+  ];
+
+  const pricePattern = /\$[\d,]+\.?\d*/g;
+  const emailPattern = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+  const phonePattern = /\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}/g;
+  const quoteNumberPattern = /(quote|estimate|invoice|order)\s*#?\s*\w+/gi;
+
+  // Split text into sections (by line breaks or other natural separators)
+  const sections = text.split(/\n\n+|\n(?=\S)/).filter(section => section.trim().length > 10);
+  
+  // Score each section based on relevance
+  const scoredSections = sections.map(section => {
+    let score = 0;
+    const lowerSection = section.toLowerCase();
+    
+    // Keyword scoring
+    quoteKeywords.forEach(keyword => {
+      const matches = lowerSection.split(keyword).length - 1;
+      score += matches * 2;
+    });
+
+    // Pattern scoring
+    const priceMatches = section.match(pricePattern) || [];
+    score += priceMatches.length * 3;
+    
+    const emailMatches = section.match(emailPattern) || [];
+    score += emailMatches.length * 4;
+    
+    const phoneMatches = section.match(phonePattern) || [];
+    score += phoneMatches.length * 3;
+    
+    const quoteNumberMatches = section.match(quoteNumberPattern) || [];
+    score += quoteNumberMatches.length * 5;
+
+    // Section position bonus (beginning and end sections often contain important info)
+    const sectionIndex = sections.indexOf(section);
+    if (sectionIndex < 3) score += 2; // Early sections bonus
+    if (sectionIndex >= sections.length - 3) score += 1; // Late sections bonus
+
+    return { section, score, length: section.length };
+  });
+
+  // Sort by score (descending)
+  scoredSections.sort((a, b) => b.score - a.score);
+
+  // Select sections that fit within token limit
+  let selectedText = '';
+  let currentLength = 0;
+  
+  for (const { section, score } of scoredSections) {
+    if (currentLength + section.length <= maxTextLength * 0.95) { // Leave some buffer
+      selectedText += section + '\n\n';
+      currentLength += section.length + 2;
+    } else {
+      break;
+    }
+  }
+
+  // If we still have significant text excluded, add a summary note
+  const excludedLength = text.length - currentLength;
+  if (excludedLength > 1000) {
+    selectedText += `\n... [${excludedLength} characters of additional content excluded] ...`;
+  }
+
+  return selectedText.trim();
+}
+
 export async function extractQuoteDataFromText(text: string): Promise<ExtractedQuote | null> {
   try {
-    // Truncate text if too long to prevent token limit issues
-    const maxTextLength = 20000; // Reasonable limit for GPT-5
-    const truncatedText = text.length > maxTextLength 
-      ? text.substring(0, maxTextLength) + "\n... (truncated)"
-      : text;
+    // Apply intelligent preprocessing to optimize token usage
+    const processedText = preprocessTextForExtraction(text);
+    
+    console.log(`📄 Text preprocessing: ${text.length} → ${processedText.length} characters`);
     
     const response = await openai.chat.completions.create({
       model: "gpt-4o", // Using proven working model for PDF extraction
@@ -537,7 +628,7 @@ export async function extractQuoteDataFromText(text: string): Promise<ExtractedQ
         },
         {
           role: "user",
-          content: `Extract quote information from this document:\n\n${truncatedText}`,
+          content: `Extract quote information from this document:\n\n${processedText}`,
         },
       ],
       response_format: { type: "json_object" },
