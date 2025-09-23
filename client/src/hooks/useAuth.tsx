@@ -4,6 +4,7 @@ import {
   useMutation,
   UseMutationResult,
 } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { insertUserSchema, User as SelectUser, InsertUser } from "@shared/schema";
 import { getQueryFn, apiRequest, queryClient, ApiError } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -25,6 +26,7 @@ export const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const [hasTimedOut, setHasTimedOut] = useState(false);
   
   const {
@@ -139,7 +141,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         title: "Welcome back!",
         description: "Successfully logged in.",
       });
-      // Router will handle redirect to dashboard automatically
+      // Navigate to homepage after successful login
+      setLocation("/");
     },
     onError: (error: Error) => {
       const appError = parseError(error);
@@ -179,7 +182,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         title: "Account created!",
         description: "Successfully registered and logged in.",
       });
-      // Router will handle redirect to dashboard automatically
+      // Navigate to homepage after successful registration
+      setLocation("/");
     },
     onError: (error: Error) => {
       const appError = parseError(error);
