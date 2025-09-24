@@ -837,9 +837,9 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
             currentX += col.width;
           });
           
-          // Add visible horizontal line after each row
-          pdf.setDrawColor(200, 200, 200); // More visible gray
-          pdf.setLineWidth(0.3);
+          // Add TEST horizontal line after each row
+          pdf.setDrawColor(0, 0, 0); // BLACK for testing
+          pdf.setLineWidth(1);
           pdf.line(tableX, yPosition + actualRowHeight, tableX + contentWidth, yPosition + actualRowHeight);
           
           yPosition += actualRowHeight;
@@ -853,9 +853,9 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
           drawTableRow(item, index);
         });
         
-        // Draw visible vertical column dividers
-        pdf.setDrawColor(200, 200, 200); // More visible gray
-        pdf.setLineWidth(0.3);
+        // Draw TEST vertical column dividers
+        pdf.setDrawColor(0, 0, 0); // BLACK for testing
+        pdf.setLineWidth(1);
         let currentX = tableX;
         
         columns.forEach((col, index) => {
