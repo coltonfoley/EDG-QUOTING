@@ -1296,17 +1296,16 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
           setFont('small');
           setColor('primary');
           
-          // Process contract content line by line to preserve proper numbering
+          // Process contract content line by line with proper formatting
           const lines = contractContent.split('\n');
           let inSection = false;
-          let firstLineOfSection = true;
           
           for (const line of lines) {
             const trimmedLine = line.trim();
             
             // Skip empty lines but add spacing
             if (!trimmedLine) {
-              yPosition += 3;
+              yPosition += 4;
               continue;
             }
             
@@ -1316,26 +1315,32 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
             if (isSectionStart) {
               // Add extra spacing before new sections (except the first one)
               if (inSection) {
-                yPosition += 6;
+                yPosition += 8;
               }
               inSection = true;
-              firstLineOfSection = true;
             }
             
-            // Word wrap the line to fit within margins
-            const wrappedLines = pdf.splitTextToSize(trimmedLine, contentWidth - 5);
-            checkPageBreak(wrappedLines.length * 4 + 5);
+            // Calculate proper text width for wrapping - ensure it fits within margins
+            const textStartX = margin;
+            const availableWidth = contentWidth - 10; // Leave extra margin for safety
+            const wrappedLines = pdf.splitTextToSize(trimmedLine, availableWidth);
+            
+            // Check for page break before rendering this section
+            checkPageBreak(wrappedLines.length * 4.5 + 8);
             
             // Reset font after potential page break to ensure consistency
             setFont('small');
             setColor('primary');
             
-            // Render each wrapped line
+            // Render each wrapped line with proper spacing
             for (let j = 0; j < wrappedLines.length; j++) {
-              const indentX = firstLineOfSection ? margin : margin + 5;
-              pdf.text(wrappedLines[j], indentX, yPosition);
-              yPosition += 4;
-              firstLineOfSection = false;
+              pdf.text(wrappedLines[j], textStartX, yPosition);
+              yPosition += 4.5; // Slightly more line spacing for readability
+            }
+            
+            // Add small spacing after each paragraph/section
+            if (!isSectionStart || wrappedLines.length > 1) {
+              yPosition += 2;
             }
           }
         }
