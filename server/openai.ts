@@ -332,6 +332,92 @@ export async function extractProductsFromText(text: string): Promise<ExtractedPr
   }
 }
 
+// Direct PDF processing with GPT-5's native PDF support
+export async function extractQuoteDataFromPDF(pdfBuffer: Buffer): Promise<ExtractedQuote | null> {
+  try {
+    // Convert PDF buffer to base64 for API transmission
+    const pdfBase64 = pdfBuffer.toString('base64');
+    
+    console.log(`🔍 Processing PDF directly with GPT-5 (${(pdfBuffer.length / 1024 / 1024).toFixed(2)}MB)`);
+    
+    const response = await openai.chat.completions.create({
+      model: "gpt-5", // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
+      messages: [
+        {
+          role: "system",
+          content: `You are a specialized data extraction expert for construction and patio quotes. Analyze the provided PDF and extract comprehensive quote information with high accuracy.
+          
+          EXTRACTION GUIDELINES:
+          - Process the entire PDF document natively
+          - Look for customer details, line items, pricing, and totals
+          - Pay attention to headers, footers, and continuation markers
+          - Extract information visually from both text and visual elements
+          
+          Return JSON with these fields (ALL OPTIONAL):
+          {
+            "customer": {"name": string|null, "email": string|null, "phone": string|null, "company": string|null, "address": string|null},
+            "quoteNumber": string|null,
+            "date": string|null,
+            "projectDescription": string|null,
+            "lineItems": [{"description": string|null, "quantity": number|null, "price": number|null, "total": number|null, "unit": string|null}],
+            "subtotal": number|null,
+            "taxRate": number|null,
+            "taxAmount": number|null,
+            "discountAmount": number|null,
+            "total": number|null,
+            "notes": string|null,
+            "terms": string|null,
+            "confidence": number (0-1)
+          }
+          
+          CRITICAL RULES:
+          - Use NUMERIC values for all prices, quantities, totals (never strings)
+          - Only extract clearly visible information
+          - Be thorough but accurate - don't hallucinate missing data
+          - Include confidence score based on clarity of extracted data`,
+        },
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: "Analyze this PDF document and extract all quote information.",
+            },
+            {
+              type: "image_url",
+              image_url: {
+                url: `data:application/pdf;base64,${pdfBase64}`,
+              },
+            },
+          ],
+        },
+      ],
+      response_format: { type: "json_object" },
+      max_tokens: 6000, // gpt-5 doesn't support temperature parameter, do not use it
+    });
+
+    const content = response.choices[0].message.content;
+    if (!content) {
+      return null;
+    }
+
+    const parsedContent = JSON.parse(content);
+    const extracted = ExtractedQuoteSchema.parse(parsedContent);
+    
+    // Calculate confidence if not present
+    if (!extracted.confidence) {
+      extracted.confidence = calculateExtractionConfidence(extracted);
+    }
+    
+    console.log(`✅ Successfully extracted quote data with confidence: ${extracted.confidence}`);
+    return extracted;
+    
+  } catch (error) {
+    console.error('Error in extractQuoteDataFromPDF:', error);
+    return null;
+  }
+}
+
 export async function extractQuoteDataFromImages(images: Array<{index: number, imageBase64: string}>): Promise<ExtractedQuote | null> {
   try {
     if (!images || images.length === 0) {

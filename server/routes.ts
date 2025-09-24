@@ -40,7 +40,7 @@ import {
 } from "./validation-schemas";
 import multer from "multer";
 import * as XLSX from "xlsx";
-import { extractProductsFromImage, extractProductsFromText, extractQuoteDataFromImages } from "./openai";
+import { extractProductsFromImage, extractProductsFromText, extractQuoteDataFromImages, extractQuoteDataFromPDF } from "./openai";
 import { convertPDFToImagesServer } from "./quoteImageUtils";
 import type { ExtractedProduct } from "./openai";
 import { ObjectStorageService, ObjectNotFoundError, objectStorageClient } from "./objectStorage";
@@ -1053,14 +1053,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      console.log(`📄 Processing PDF directly: ${file.originalname} (${(file.size / 1024 / 1024).toFixed(2)}MB)`);
+      console.log(`📄 Processing PDF directly with GPT-5: ${file.originalname} (${(file.size / 1024 / 1024).toFixed(2)}MB)`);
 
-      // Convert PDF to images server-side and extract quote data
-      const pdfPages = await convertPDFToImagesServer(file.buffer);
-      console.log(`✅ Converted ${pdfPages.length} pages to images`);
-      
-      // Extract quote data using vision processing
-      const extractedQuote = await extractQuoteDataFromImages(pdfPages);
+      // Extract quote data directly using GPT-5's native PDF support
+      const extractedQuote = await extractQuoteDataFromPDF(file.buffer);
       
       if (!extractedQuote) {
         return res.status(400).json({ 
