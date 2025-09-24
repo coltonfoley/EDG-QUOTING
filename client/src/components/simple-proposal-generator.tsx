@@ -1054,11 +1054,12 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
       drawEstimateHeader();
       drawAddresses();
       drawEstimateDetails();
-      drawProfessionalTable();
-      drawTotalsSection();
       
       // Step 3: Add product renderings (if uploaded)
       await drawProductRenderingsSection();
+      
+      drawProfessionalTable();
+      drawTotalsSection();
       
       // Step 4: Signature section
       drawSignatureSection();
