@@ -722,9 +722,9 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
                           {/* Line Items */}
                           <div>
                             <h4 className="font-medium mb-3">Line Items ({selectedPDFId ? getCurrentPDFData(selectedPDFId)?.lineItems?.length ?? 0 : 0})</h4>
-                            {selectedPDFId && getCurrentPDFData(selectedPDFId)?.lineItems?.length > 0 ? (
+                            {selectedPDFId && getCurrentPDFData(selectedPDFId)?.lineItems && getCurrentPDFData(selectedPDFId)!.lineItems.length > 0 ? (
                               <div className="space-y-3">
-                                {getCurrentPDFData(selectedPDFId)?.lineItems?.map((item, index) => (
+                                {getCurrentPDFData(selectedPDFId)!.lineItems.map((item, index) => (
                                   <div key={index} className="p-3 border rounded-lg">
                                     <div className="grid grid-cols-4 gap-2 text-sm">
                                       <div>
