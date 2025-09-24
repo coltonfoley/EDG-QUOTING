@@ -884,47 +884,72 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         
         checkPageBreak(60);
         
-        // Professional branded totals area - wider for large amounts
-        const totalsWidth = 85; // Increased width for large dollar amounts
+        // Professional totals area
+        const totalsWidth = 75;
         const totalsX = pageWidth - margin - totalsWidth;
         const labelsX = totalsX - 5;
-        
-        // Add subtle background for totals area
-        pdf.setFillColor(248, 248, 248);
-        pdf.roundedRect(labelsX - 5, yPosition - 5, totalsWidth + 15, 35, 2, 2, 'F');
         
         setFont('body');
         setColor('primary');
         
-        // Subtotal
-        pdf.text('Subtotal:', labelsX, yPosition, { align: 'right' });
-        pdf.text(formatCurrency(totals.subtotal), totalsX + totalsWidth, yPosition, { align: 'right' });
-        yPosition += 6;
+        // Check if we have tax or discounts that make total different from subtotal
+        const hasTaxOrDiscounts = totals.taxAmount > 0 || totals.discountAmount > 0;
         
-        // Sales tax
-        if (totals.taxAmount > 0) {
-          pdf.text('Sales tax:', labelsX, yPosition, { align: 'right' });
-          pdf.text(formatCurrency(totals.taxAmount), totalsX + totalsWidth, yPosition, { align: 'right' });
+        if (hasTaxOrDiscounts) {
+          // Add subtle background for itemized totals
+          const bgHeight = (totals.taxAmount > 0 ? 30 : 20) + (totals.discountAmount > 0 ? 6 : 0);
+          pdf.setFillColor(248, 248, 248);
+          pdf.roundedRect(labelsX - 5, yPosition - 5, totalsWidth + 10, bgHeight, 2, 2, 'F');
+          
+          // Subtotal
+          pdf.text('Subtotal:', labelsX, yPosition, { align: 'right' });
+          pdf.text(formatCurrency(totals.subtotal), totalsX + totalsWidth, yPosition, { align: 'right' });
           yPosition += 6;
+          
+          // Sales tax
+          if (totals.taxAmount > 0) {
+            pdf.text('Sales tax:', labelsX, yPosition, { align: 'right' });
+            pdf.text(formatCurrency(totals.taxAmount), totalsX + totalsWidth, yPosition, { align: 'right' });
+            yPosition += 6;
+          }
+          
+          // Discount
+          if (totals.discountAmount > 0) {
+            pdf.text('Discount:', labelsX, yPosition, { align: 'right' });
+            pdf.text(`-${formatCurrency(totals.discountAmount)}`, totalsX + totalsWidth, yPosition, { align: 'right' });
+            yPosition += 6;
+          }
+          
+          // Branded total line
+          const [r, g, b] = colors.accent;
+          pdf.setDrawColor(r, g, b);
+          pdf.setLineWidth(2);
+          pdf.line(labelsX, yPosition, totalsX + totalsWidth, yPosition);
+          yPosition += 8;
+          
+          // Branded total with teal background
+          pdf.setFillColor(r, g, b);
+          pdf.rect(labelsX - 2, yPosition - 4, totalsWidth + 7, 12, 'F');
+          
+          pdf.setTextColor(255, 255, 255);
+          setFont('subheading');
+          pdf.text('TOTAL:', labelsX, yPosition + 2, { align: 'right' });
+          pdf.text(formatCurrency(totals.total), totalsX + totalsWidth, yPosition + 2, { align: 'right' });
+        } else {
+          // Simple total when no tax/discounts - just a clean total line
+          const [r, g, b] = colors.accent;
+          
+          // Simple branded line above total
+          pdf.setDrawColor(r, g, b);
+          pdf.setLineWidth(1.5);
+          pdf.line(labelsX, yPosition, totalsX + totalsWidth, yPosition);
+          yPosition += 8;
+          
+          // Clean total display
+          setFont('subheading');
+          pdf.text('TOTAL:', labelsX, yPosition, { align: 'right' });
+          pdf.text(formatCurrency(totals.total), totalsX + totalsWidth, yPosition, { align: 'right' });
         }
-        
-        // Branded total line with teal accent
-        const [r, g, b] = colors.accent;
-        pdf.setDrawColor(r, g, b);
-        pdf.setLineWidth(2);
-        pdf.line(labelsX, yPosition, totalsX + totalsWidth, yPosition);
-        yPosition += 6;
-        
-        // Dramatic total with teal background - properly sized for large amounts
-        pdf.setFillColor(r, g, b);
-        const totalBoxWidth = totalsWidth + 12; // Wider box to fit large amounts
-        pdf.rect(labelsX - 3, yPosition - 4, totalBoxWidth, 12, 'F');
-        
-        pdf.setTextColor(255, 255, 255);
-        setFont('subheading');
-        // Center the text within the teal box
-        const boxCenterX = labelsX - 3 + (totalBoxWidth / 2);
-        pdf.text(formatCurrency(totals.total), boxCenterX, yPosition + 2, { align: 'center' });
         
         setColor('primary'); // Reset
         yPosition += 20;
