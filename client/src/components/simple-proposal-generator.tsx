@@ -576,10 +576,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         pdf.setLineWidth(1);
         pdf.line(margin, headerY + 10, pageWidth - margin, headerY + 10);
         
-        // Small decorative teal squares
-        pdf.setFillColor(r, g, b);
-        pdf.rect(margin, headerY + 11, 2, 2, 'F');
-        pdf.rect(pageWidth - margin - 2, headerY + 11, 2, 2, 'F');
+        // Clean professional design
       };
       
       const drawFooter = () => {
@@ -621,9 +618,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         setColor('darkGray');
         pdf.text('OUTDOOR LIVING SOLUTIONS', pageWidth - margin, footerY - 2, { align: 'right' });
         
-        // Small teal accent in footer
-        pdf.setFillColor(r, g, b);
-        pdf.rect(pageWidth / 2 - 15, footerY, 30, 1, 'F');
+        // Clean footer design
       };
       
       const drawEstimateHeader = () => {
@@ -634,18 +629,14 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         // Draw teal background rectangle with rounded corners effect
         pdf.rect(margin - 5, yPosition - 8, contentWidth + 10, 20, 'F');
         
-        // Add subtle shadow effect with darker teal
-        pdf.setFillColor(r * 0.8, g * 0.8, b * 0.8);
-        pdf.rect(margin - 3, yPosition - 6, contentWidth + 6, 2, 'F');
+        // Clean design without shadow effects
         
         // White text on teal background
         pdf.setTextColor(255, 255, 255);
         setFont('heading');
         pdf.text('PROFESSIONAL ESTIMATE', margin + 5, yPosition + 2);
         
-        // Add decorative elements - small teal accent lines
-        pdf.setFillColor(255, 255, 255);
-        pdf.rect(margin + 5, yPosition + 6, 50, 1, 'F');
+        // Clean design without decorative lines
         
         // Reset text color
         setColor('primary');
