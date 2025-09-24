@@ -505,9 +505,9 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         name: 'EDG Patio & Shade',
         address1: '1802 Holian Drive',
         address2: 'Spring Grove, IL 60081',
-        email: 'info@edgfurniture.com',
+        email: 'info@edgpatioshade.com',
         phone: '+1 (815) 581-0138',
-        website: 'www.edgfurniture.com'
+        website: 'www.edgpatioshade.com'
       };
       
       // Professional drawing utilities
@@ -1053,8 +1053,8 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         let metadataY;
         let rectTop;
         
-        // Always position metadata panel below the image to avoid overlap
-        metadataY = Math.max(imageEndY + 20, 180);
+        // Position metadata panel to overlay the bottom-right of the cover image
+        metadataY = imageStartY + 60; // Position in lower part of image area
         rectTop = metadataY - 5;
         const panelWidth = 85;
         const panelX = pageWidth - margin - panelWidth;
