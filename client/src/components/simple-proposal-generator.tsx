@@ -748,9 +748,10 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
           let currentX = tableX;
           
           columns.forEach(col => {
-            // Center all header text for professional appearance
+            // Center all header text both horizontally and vertically
             const textX = currentX + (col.width / 2);
-            pdf.text(col.header, textX, yPosition - 2, { align: 'center' });
+            const textY = yPosition + 1; // Center vertically in the teal background
+            pdf.text(col.header, textX, textY, { align: 'center' });
             currentX += col.width;
           });
           
@@ -769,8 +770,9 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
             ? baseTotal + (baseTotal * (markup / 100))
             : baseTotal + markup;
           
-          // Set font before measuring text to ensure consistent sizing
-          setFont('small');
+          // Ensure consistent font for ALL row content
+          pdf.setFontSize(9);
+          pdf.setFont('helvetica', 'normal');
           setColor('primary');
           
           // Check if row needs multiple lines for description
