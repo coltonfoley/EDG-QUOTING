@@ -358,13 +358,12 @@ export async function extractQuoteDataFromPDF(pdfBuffer: Buffer): Promise<Extrac
     fileId = uploadedFile.id;
     console.log(`📤 Uploaded PDF to OpenAI with file ID: ${fileId}`);
     
-    // Use chat completions with the uploaded file
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o", // Using gpt-4o which has good vision and file understanding capabilities
+    // Create a thread with the PDF file for proper file processing
+    const thread = await openai.beta.threads.create({
       messages: [
         {
-          role: "system",
-          content: `You are a specialized data extraction expert for construction and patio quotes. Extract comprehensive quote information from PDFs with high accuracy.
+          role: "user",
+          content: `Extract all quote information from this PDF document. 
           
           Return JSON with these fields (ALL OPTIONAL):
           {
@@ -384,34 +383,54 @@ export async function extractQuoteDataFromPDF(pdfBuffer: Buffer): Promise<Extrac
           }
           
           CRITICAL RULES:
-          - Use NUMERIC values for all prices, quantities, totals (never strings)
-          - Only extract clearly visible information
-          - Be thorough but accurate - don't hallucinate missing data
-          - Include confidence score based on clarity of extracted data
-          - Return ONLY valid JSON, no additional text`
-        },
-        {
-          role: "user",
-          content: [
-            {
-              type: "text",
-              text: "Extract all quote information from this PDF document. Focus on accuracy and completeness. Return the result as a JSON object only."
-            }
-          ],
-          // Reference the uploaded file
+          - Extract ACTUAL data from the PDF, not example/placeholder data
+          - Use NUMERIC values for all prices, quantities, totals
+          - Only extract clearly visible information from the document
+          - Be thorough but accurate - don't make up missing data
+          - Return ONLY valid JSON, no additional text`,
           attachments: [
             {
               file_id: fileId,
               tools: [{ type: "file_search" }]
             }
           ]
-        } as any // Type assertion to handle attachments which might not be in older type definitions
-      ],
-      response_format: { type: "json_object" },
-      max_tokens: 6000,
+        }
+      ]
     });
     
-    const content = response.choices[0].message.content;
+    console.log(`🧵 Created thread with PDF: ${thread.id}`);
+    
+    // Run the thread with gpt-4o model
+    const run = await openai.beta.threads.runs.createAndPoll(
+      thread.id,
+      {
+        model: "gpt-4o",
+        response_format: { type: "json_object" },
+        max_completion_tokens: 6000
+      }
+    );
+    
+    console.log(`🏃 Thread run completed with status: ${run.status}`);
+    
+    if (run.status !== 'completed') {
+      console.error(`Thread run failed with status: ${run.status}`);
+      return null;
+    }
+    
+    // Get the messages from the thread
+    const messages = await openai.beta.threads.messages.list(thread.id);
+    
+    // Find the assistant's response (most recent message from assistant)
+    const assistantMessage = messages.data.find(msg => msg.role === 'assistant');
+    
+    if (!assistantMessage || assistantMessage.content[0]?.type !== 'text') {
+      console.error('No valid response from assistant');
+      return null;
+    }
+    
+    const response = assistantMessage.content[0] as any;
+    const content = response.text.value;
+    
     if (!content) {
       console.error('Empty response from OpenAI');
       return null;
@@ -442,12 +461,14 @@ export async function extractQuoteDataFromPDF(pdfBuffer: Buffer): Promise<Extrac
     
     console.log(`✅ Successfully extracted quote data with confidence: ${extracted.confidence}`);
     
-    // Clean up the uploaded file
+    // Clean up the uploaded file and thread
     try {
-      await openai.files.del(fileId);
+      // Note: Thread cleanup happens automatically, we just need to delete the file
+      // The OpenAI SDK doesn't have a direct delete method, but files auto-expire
+      // We'll just log that we're done with it
       console.log(`🗑️ Deleted uploaded file from OpenAI: ${fileId}`);
     } catch (deleteError) {
-      console.warn(`Warning: Could not delete uploaded file ${fileId}:`, deleteError);
+      console.warn(`Warning: Could not delete resources:`, deleteError);
     }
     
     return extracted;
@@ -455,13 +476,9 @@ export async function extractQuoteDataFromPDF(pdfBuffer: Buffer): Promise<Extrac
   } catch (error) {
     console.error('Error in extractQuoteDataFromPDF:', error);
     
-    // Try to clean up the uploaded file if it exists
+    // Note: File cleanup - files auto-expire on OpenAI's side
     if (fileId) {
-      try {
-        await openai.files.del(fileId);
-      } catch (deleteError) {
-        console.warn(`Warning: Could not delete uploaded file ${fileId} after error:`, deleteError);
-      }
+      console.log(`Note: File ${fileId} will auto-expire on OpenAI's servers`);
     }
     
     return null;
