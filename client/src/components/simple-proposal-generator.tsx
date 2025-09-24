@@ -1006,11 +1006,6 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         setColor('darkGray');
         pdf.text((quote.projectName || 'Outdoor Living Project').toUpperCase(), margin, yPosition);
         
-        // Decorative teal dots
-        pdf.setFillColor(r, g, b);
-        for (let i = 0; i < 5; i++) {
-          pdf.circle(margin + (i * 8), yPosition + 8, 1, 'F');
-        }
         
         // 3. Hero Cover Image (if provided)
         yPosition += 25;
