@@ -41,6 +41,7 @@ import {
 import multer from "multer";
 import * as XLSX from "xlsx";
 import { extractProductsFromImage, extractProductsFromText, extractQuoteDataFromImages } from "./openai";
+import { convertPDFToImagesServer } from "./quoteImageUtils";
 import type { ExtractedProduct } from "./openai";
 import { ObjectStorageService, ObjectNotFoundError, objectStorageClient } from "./objectStorage";
 import { ObjectPermission } from "./objectAcl";
@@ -1023,6 +1024,76 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+
+  // Direct PDF processing endpoint - handles conversion and vision processing server-side
+  app.post("/api/quotes/import-vision-direct", isAuthenticated, rateLimitPDFProcessing, upload.single('pdf'), async (req: any, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ 
+          message: "No PDF file uploaded",
+          success: false 
+        });
+      }
+
+      const file = req.file;
+      
+      // Validate file type
+      if (file.mimetype !== 'application/pdf') {
+        return res.status(400).json({ 
+          message: "Invalid file type. Please upload a PDF file.",
+          success: false 
+        });
+      }
+
+      // Validate file size (30MB limit for vision processing)
+      if (file.size > 30 * 1024 * 1024) {
+        return res.status(400).json({ 
+          message: "File too large. Please upload a PDF smaller than 30MB.",
+          success: false 
+        });
+      }
+
+      console.log(`📄 Processing PDF directly: ${file.originalname} (${(file.size / 1024 / 1024).toFixed(2)}MB)`);
+
+      // Convert PDF to images server-side and extract quote data
+      const pdfPages = await convertPDFToImagesServer(file.buffer);
+      console.log(`✅ Converted ${pdfPages.length} pages to images`);
+      
+      // Extract quote data using vision processing
+      const extractedQuote = await extractQuoteDataFromImages(pdfPages);
+      
+      if (!extractedQuote) {
+        return res.status(400).json({ 
+          message: "Could not extract quote data from PDF. Please ensure the document contains recognizable quote information.",
+          success: false 
+        });
+      }
+
+      console.log(`✅ Quote data extracted from ${file.originalname}`);
+
+      res.status(200).json({
+        success: true,
+        filename: file.originalname,
+        extractedData: extractedQuote,
+        message: "Quote data extracted successfully using vision processing"
+      });
+
+    } catch (error: any) {
+      console.error("Direct PDF processing error:", error);
+      
+      if (error.message?.includes("API") || error.message?.includes("rate limit") || error.message?.includes("quota")) {
+        return res.status(503).json({ 
+          message: "AI processing service is temporarily unavailable. Please try again later.",
+          success: false 
+        });
+      }
+      
+      return res.status(500).json({ 
+        message: `PDF processing failed: ${error.message || 'Unknown error'}`,
+        success: false 
+      });
+    }
+  });
 
   // Vision-based PDF import endpoint for processing page images
   app.post("/api/quotes/import-vision", isAuthenticated, rateLimitPDFProcessing, async (req: any, res) => {

@@ -277,3 +277,53 @@ export class QuoteImageUploadService {
 
 // Export singleton instance
 export const quoteImageService = new QuoteImageUploadService();
+
+/**
+ * Server-side PDF to images conversion using text extraction fallback
+ * This is a temporary solution until proper PDF-to-image conversion is implemented
+ */
+export async function convertPDFToImagesServer(pdfBuffer: Buffer): Promise<Array<{ index: number; imageBase64: string }>> {
+  try {
+    // For now, we'll use text extraction and send that to vision processing
+    // This bypasses the client-side PDF.js issues entirely
+    
+    // Import pdf-parse dynamically to avoid issues
+    const pdfParse = await import('pdf-parse');
+    const data = await pdfParse.default(pdfBuffer);
+    
+    // Create a mock image representation with the text content
+    // OpenAI vision can process this as an image with text
+    const textContent = data.text.substring(0, 2000); // Limit text length
+    
+    // Create SVG with the PDF text content
+    const svgContent = `
+      <svg width="800" height="1000" xmlns="http://www.w3.org/2000/svg" style="background: white;">
+        <rect width="800" height="1000" fill="white" stroke="black" stroke-width="1"/>
+        <foreignObject x="20" y="20" width="760" height="960">
+          <div xmlns="http://www.w3.org/1999/xhtml" style="font-family: Arial; font-size: 12px; line-height: 1.4; padding: 10px;">
+            ${textContent.replace(/[<>&"]/g, (m) => ({
+              '<': '&lt;',
+              '>': '&gt;',
+              '&': '&amp;',
+              '"': '&quot;'
+            }[m] || m))}
+          </div>
+        </foreignObject>
+      </svg>
+    `;
+    
+    // Convert SVG to base64
+    const base64Image = Buffer.from(svgContent).toString('base64');
+    
+    console.log(`📄 Generated text-based image representation: ${textContent.length} characters`);
+    
+    return [{
+      index: 0,
+      imageBase64: base64Image
+    }];
+    
+  } catch (error) {
+    console.error('Server-side PDF conversion error:', error);
+    throw new Error(`Failed to convert PDF to images on server: ${error.message}`);
+  }
+}

@@ -229,167 +229,7 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
     }
   });
 
-  // PDF processing mutation
-  // Convert PDF to images for vision processing with optimized memory management
-  const convertPDFToImages = async (file: File): Promise<PDFPageImage[]> => {
-    try {
-      // Dynamically import PDF.js 
-      const pdfjs = await import('pdfjs-dist');
-      
-      // Disable worker to avoid CDN loading issues - run in main thread
-      pdfjs.GlobalWorkerOptions.workerSrc = false;
-      console.log('📦 PDF.js configured to run in main thread (no worker)');
-      
-      // Read file as array buffer
-      const arrayBuffer = await file.arrayBuffer();
-      const pdf = await pdfjs.getDocument({ data: arrayBuffer }).promise;
-      
-      const pages: PDFPageImage[] = [];
-      const maxPages = Math.min(pdf.numPages, 20); // Limit to 20 pages
-      const batchSize = 3; // Process 3 pages at a time to manage memory
-      
-      console.log(`📄 Converting PDF to images: ${maxPages} pages in batches of ${batchSize}`);
-      
-      // Process pages in batches to prevent memory overload
-      for (let batchStart = 1; batchStart <= maxPages; batchStart += batchSize) {
-        const batchEnd = Math.min(batchStart + batchSize - 1, maxPages);
-        const batchPromises: Promise<PDFPageImage>[] = [];
-        
-        console.log(`🔄 Processing pages ${batchStart}-${batchEnd}`);
-        
-        for (let pageNum = batchStart; pageNum <= batchEnd; pageNum++) {
-          batchPromises.push(processSinglePage(pdf, pageNum, file.size));
-        }
-        
-        // Wait for current batch to complete
-        const batchResults = await Promise.all(batchPromises);
-        pages.push(...batchResults);
-        
-        // Force garbage collection between batches if available
-        if ('gc' in window && typeof window.gc === 'function') {
-          window.gc();
-        }
-        
-        // Small delay to allow memory cleanup
-        if (batchEnd < maxPages) {
-          await new Promise(resolve => setTimeout(resolve, 100));
-        }
-      }
-      
-      console.log(`✅ Successfully converted ${pages.length} pages to images`);
-      return pages;
-    } catch (error) {
-      console.error('Error converting PDF to images:', error);
-      console.error('PDF conversion error details:', {
-        message: error.message,
-        name: error.name,
-        stack: error.stack
-      });
-      throw new Error(`Failed to convert PDF to images: ${error.message || 'Unknown error'}`);
-    }
-  };
-
-  // Process a single PDF page with memory-efficient canvas handling
-  const processSinglePage = async (pdf: any, pageNum: number, fileSize?: number): Promise<PDFPageImage> => {
-    const page = await pdf.getPage(pageNum);
-    
-    // Create offscreen canvas for better memory management
-    const canvas = (window.OffscreenCanvas) ? new OffscreenCanvas(1, 1) : document.createElement('canvas');
-    const context = canvas.getContext('2d');
-    if (!context) throw new Error('Could not get canvas context');
-    
-    try {
-      // Calculate optimal viewport with dynamic scaling based on content
-      const baseViewport = page.getViewport({ scale: 1.0 });
-      
-      // Determine optimal scale based on page size and target quality
-      let targetScale = 2.0;
-      if (baseViewport.width > 1200 || baseViewport.height > 1200) {
-        targetScale = 1.5; // Reduce scale for large pages
-      } else if (baseViewport.width < 600 || baseViewport.height < 600) {
-        targetScale = 2.5; // Increase scale for small pages
-      }
-      
-      const viewport = page.getViewport({ scale: targetScale });
-      
-      // Constrain canvas size to prevent memory issues
-      const maxDimension = 2048;
-      let canvasWidth = Math.min(viewport.width, maxDimension);
-      let canvasHeight = Math.min(viewport.height, maxDimension);
-      
-      // Maintain aspect ratio if we had to constrain
-      if (viewport.width > maxDimension || viewport.height > maxDimension) {
-        const aspectRatio = viewport.width / viewport.height;
-        if (viewport.width > viewport.height) {
-          canvasWidth = maxDimension;
-          canvasHeight = maxDimension / aspectRatio;
-        } else {
-          canvasHeight = maxDimension;
-          canvasWidth = maxDimension * aspectRatio;
-        }
-      }
-      
-      // Set canvas dimensions
-      canvas.width = canvasWidth;
-      canvas.height = canvasHeight;
-      
-      // Calculate final scale based on actual canvas size
-      const finalScale = Math.min(canvasWidth / baseViewport.width, canvasHeight / baseViewport.height);
-      const renderViewport = page.getViewport({ scale: finalScale });
-      
-      // Render PDF page to canvas with error handling
-      await page.render({
-        canvasContext: context,
-        viewport: renderViewport,
-        canvas: canvas
-      }).promise;
-      
-      // Convert to optimized JPEG with adaptive quality
-      let quality = 0.7; // Default quality
-      
-      // Adjust quality based on file size to balance quality vs payload
-      if (fileSize && fileSize > 10 * 1024 * 1024) { // > 10MB
-        quality = 0.5;
-      } else if (fileSize && fileSize > 5 * 1024 * 1024) { // > 5MB
-        quality = 0.6;
-      } else if (fileSize && fileSize < 1 * 1024 * 1024) { // < 1MB
-        quality = 0.8;
-      }
-      
-      // Convert canvas to base64 JPEG
-      let imageBase64: string;
-      if (canvas instanceof OffscreenCanvas) {
-        const blob = await canvas.convertToBlob({ type: 'image/jpeg', quality });
-        const arrayBuffer = await blob.arrayBuffer();
-        const bytes = new Uint8Array(arrayBuffer);
-        // Convert Uint8Array to string without spread operator to avoid TypeScript issues
-        let binary = '';
-        for (let i = 0; i < bytes.length; i++) {
-          binary += String.fromCharCode(bytes[i]);
-        }
-        imageBase64 = btoa(binary);
-      } else {
-        imageBase64 = canvas.toDataURL('image/jpeg', quality).split(',')[1];
-      }
-      
-      // Validate image size
-      const imageSizeKB = (imageBase64.length * 3) / 4 / 1024; // Approximate KB
-      if (imageSizeKB > 1500) { // > 1.5MB per image
-        console.warn(`⚠️  Large image generated for page ${pageNum}: ${imageSizeKB.toFixed(0)}KB`);
-      }
-      
-      return {
-        index: pageNum - 1, // 0-based index
-        imageBase64
-      };
-      
-    } finally {
-      // Cleanup page resources
-      page.cleanup?.();
-    }
-  };
-
-  // Vision-based PDF processing mutation
+  // Vision processing mutation - now only used for client-side page processing (kept for backward compatibility)
   const processVisionMutation = useMutation({
     mutationFn: async ({ file, pages }: { file: File; pages: PDFPageImage[] }): Promise<PDFImportResponse> => {
       const response = await fetch('/api/quotes/import-vision', {
@@ -412,6 +252,7 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
       return response.json();
     }
   });
+
 
 
   // File drag and drop handlers
@@ -446,7 +287,7 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
     });
   }, [toast]);
 
-  // Main processing function with vision-first approach
+  // Main processing function - send PDF directly to backend  
   const processFileWithVisionFirst = async (file: File) => {
     const pdfId = `pdf_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     
@@ -462,75 +303,64 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
     setProcessedPDFs(prev => [...prev, newPDF]);
     
     try {
-      // Update progress: Converting to images
+      // Update progress: Sending to server
       setProcessedPDFs(prev => prev.map(p => 
-        p.id === pdfId ? { ...p, progress: 20, status: 'processing' } : p
+        p.id === pdfId ? { ...p, progress: 30, status: 'processing' } : p
       ));
       
-      // Step 1: Convert PDF to images
-      const pages = await convertPDFToImages(file);
+      // Send PDF directly to backend for processing
+      const formData = new FormData();
+      formData.append('pdf', file);
       
-      // Update progress: Processing with vision
-      setProcessedPDFs(prev => prev.map(p => 
-        p.id === pdfId ? { ...p, progress: 50, status: 'processing' } : p
-      ));
+      const response = await fetch('/api/quotes/import-vision-direct', {
+        method: 'POST',
+        body: formData,
+        credentials: 'include'
+      });
       
-      try {
-        // Step 2: Try vision processing first
-        const visionResult = await processVisionMutation.mutateAsync({ file, pages });
-        
-        // Update progress: Success
-        setProcessedPDFs(prev => prev.map(p => 
-          p.id === pdfId ? { 
-            ...p, 
-            progress: 100, 
-            status: 'success', 
-            extractedData: visionResult.extractedData,
-            processingMethod: 'vision'
-          } : p
-        ));
-        
-        toast({
-          title: "PDF processed successfully",
-          description: `${file.name} processed using vision analysis${formatConfidence(visionResult.extractedData.confidence)}`,
-        });
-        
-      } catch (visionError) {
-        console.error('Vision processing failed:', visionError);
-        
-        // Vision processing failed - no fallback, just fail
-        setProcessedPDFs(prev => prev.map(p => 
-          p.id === pdfId ? { 
-            ...p, 
-            progress: 0, 
-            status: 'error', 
-            error: `Vision processing failed: ${visionError instanceof Error ? visionError.message : 'Unknown error'}`
-          } : p
-        ));
-        
-        toast({
-          title: "PDF processing failed",
-          description: `Failed to process ${file.name} using vision analysis. Please try again or check the file format.`,
-          variant: "destructive"
-        });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to process PDF');
       }
       
-    } catch (imageError) {
-      console.error('PDF to image conversion failed:', imageError);
+      const result = await response.json();
       
-      // Image conversion failed - no fallback, just fail
+      setProcessedPDFs(prev => prev.map(p => 
+        p.id === pdfId ? { 
+          ...p, 
+          progress: 100, 
+          status: 'success', 
+          extractedData: result.extractedData,
+          processingMethod: 'vision'
+        } : p
+      ));
+      
+      toast({
+        title: "PDF processed successfully",
+        description: `${file.name} processed using server-side vision analysis${formatConfidence(result.extractedData.confidence)}`,
+      });
+      
+      // Auto-advance to preview tab if this is the first successful PDF
+      if (processedPDFs.filter(p => p.status === 'success').length === 0) {
+        setCurrentTab('preview');
+        setSelectedPDFId(pdfId);
+      }
+      
+    } catch (error) {
+      console.error('PDF processing failed:', error);
+      
       setProcessedPDFs(prev => prev.map(p => 
         p.id === pdfId ? { 
           ...p, 
           progress: 0, 
           status: 'error', 
-          error: `PDF to image conversion failed: ${imageError instanceof Error ? imageError.message : 'Unknown error'}`
+          error: `PDF processing failed: ${error instanceof Error ? error.message : 'Unknown error'}`
         } : p
       ));
       
       toast({
         title: "PDF processing failed",
-        description: `Failed to convert ${file.name} to images for vision processing. Please try again or check the file format.`,
+        description: `Failed to process ${file.name}. Please try again or check the file format.`,
         variant: "destructive"
       });
     }
