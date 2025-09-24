@@ -752,11 +752,11 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
             else if (col.align === 'right') textX = currentX + col.width - 2;
             
             const align = col.align === 'center' ? 'center' : col.align === 'right' ? 'right' : 'left';
-            pdf.text(col.header, textX, yPosition, { align: align as any });
+            pdf.text(col.header, textX, yPosition - 2, { align: align as any });
             currentX += col.width;
           });
           
-          yPosition += headerHeight + 3;
+          yPosition += headerHeight + 8; // More space to prevent bleeding
           
           // Reset text color for table content
           setColor('primary');
