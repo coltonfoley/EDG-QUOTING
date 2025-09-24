@@ -1338,6 +1338,13 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         }
       }
       
+      // Add footers to all pages after content is generated
+      const totalPages = pdf.getNumberOfPages();
+      for (let i = 1; i <= totalPages; i++) {
+        currentPage = i;
+        pdf.setPage(i);
+        drawFooter();
+      }
 
       // Save the PDF
       const pdfBlob = pdf.output('blob');
