@@ -180,7 +180,7 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
         extractedQuotes
       });
 
-      return response;
+      return await response.json();
     },
     onMutate: () => {
       setIsImporting(true);
