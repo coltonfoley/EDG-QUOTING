@@ -409,74 +409,6 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
     }
   });
 
-  // Text-based PDF processing mutation (fallback)
-  const processPDFMutation = useMutation({
-    mutationFn: async (file: File): Promise<PDFImportResponse> => {
-      const formData = new FormData();
-      formData.append('pdf', file);
-      
-      const response = await fetch('/api/quotes/import-pdf', {
-        method: 'POST',
-        body: formData,
-        credentials: 'include'
-      });
-      
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Failed to process PDF');
-      }
-      
-      return response.json();
-    },
-    onMutate: (file: File) => {
-      const pdfId = `pdf_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      const newPDF: ProcessedPDF = {
-        id: pdfId,
-        file,
-        filename: file.name,
-        status: 'processing',
-        progress: 0
-      };
-      
-      setProcessedPDFs(prev => [...prev, newPDF]);
-      return { pdfId };
-    },
-    onSuccess: (data, file, context) => {
-      if (!context) return;
-      
-      setProcessedPDFs(prev => prev.map(pdf => 
-        pdf.id === context.pdfId 
-          ? { ...pdf, status: 'success', extractedData: data.extractedData, progress: 100 }
-          : pdf
-      ));
-      
-      toast({
-        title: "PDF Processed Successfully",
-        description: `Extracted quote data from ${data.filename}`,
-      });
-
-      // Auto-advance to preview tab if this is the first successful PDF
-      if (processedPDFs.filter(p => p.status === 'success').length === 0) {
-        setCurrentTab('preview');
-        setSelectedPDFId(context.pdfId);
-      }
-    },
-    onError: (error: any, file, context) => {
-      if (!context) return;
-      
-      setProcessedPDFs(prev => prev.map(pdf => 
-        pdf.id === context.pdfId 
-          ? { ...pdf, status: 'error', error: error.message, progress: 0 }
-          : pdf
-      ));
-      
-      toast({
-        title: "PDF Processing Failed",
-        description: error.message,
-        variant: "destructive"
-      });
-    }
-  });
 
   // File drag and drop handlers
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -560,122 +492,43 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
         });
         
       } catch (visionError) {
-        console.warn('Vision processing failed, falling back to text extraction:', visionError);
+        console.error('Vision processing failed:', visionError);
         
-        // Update progress: Falling back to text
-        setProcessedPDFs(prev => prev.map(p => 
-          p.id === pdfId ? { ...p, progress: 70, status: 'processing' } : p
-        ));
-        
-        try {
-          // Step 3: Fallback to text processing (call the mutation function directly to avoid duplicate onMutate)
-          const formData = new FormData();
-          formData.append('pdf', file);
-          
-          const response = await fetch('/api/quotes/import-pdf', {
-            method: 'POST',
-            body: formData,
-            credentials: 'include'
-          });
-          
-          if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.message || 'Failed to process PDF');
-          }
-          
-          const textResult = await response.json();
-          
-          // Update progress: Success with fallback
-          setProcessedPDFs(prev => prev.map(p => 
-            p.id === pdfId ? { 
-              ...p, 
-              progress: 100, 
-              status: 'success', 
-              extractedData: textResult.extractedData,
-              processingMethod: 'text'
-            } : p
-          ));
-          
-          toast({
-            title: "PDF processed successfully",
-            description: `${file.name} processed using text extraction (vision fallback)${formatConfidence(textResult.extractedData.confidence)}`,
-          });
-          
-        } catch (textError) {
-          // Both methods failed
-          setProcessedPDFs(prev => prev.map(p => 
-            p.id === pdfId ? { 
-              ...p, 
-              progress: 0, 
-              status: 'error', 
-              error: `Both vision and text processing failed: ${textError instanceof Error ? textError.message : 'Unknown error'}`
-            } : p
-          ));
-          
-          toast({
-            title: "PDF processing failed",
-            description: `Failed to process ${file.name}. Please try again or check the file format.`,
-            variant: "destructive"
-          });
-        }
-      }
-      
-    } catch (imageError) {
-      console.error('PDF to image conversion failed:', imageError);
-      
-      // If image conversion fails, try text extraction directly (avoid duplicate onMutate)
-      try {
-        setProcessedPDFs(prev => prev.map(p => 
-          p.id === pdfId ? { ...p, progress: 50, status: 'processing' } : p
-        ));
-        
-        const formData = new FormData();
-        formData.append('pdf', file);
-        
-        const response = await fetch('/api/quotes/import-pdf', {
-          method: 'POST',
-          body: formData,
-          credentials: 'include'
-        });
-        
-        if (!response.ok) {
-          const error = await response.json();
-          throw new Error(error.message || 'Failed to process PDF');
-        }
-        
-        const textResult = await response.json();
-        
-        setProcessedPDFs(prev => prev.map(p => 
-          p.id === pdfId ? { 
-            ...p, 
-            progress: 100, 
-            status: 'success', 
-            extractedData: textResult.extractedData,
-            processingMethod: 'text'
-          } : p
-        ));
-        
-        toast({
-          title: "PDF processed successfully",
-          description: `${file.name} processed using text extraction (image conversion failed)${formatConfidence(textResult.extractedData.confidence)}`,
-        });
-        
-      } catch (finalError) {
+        // Vision processing failed - no fallback, just fail
         setProcessedPDFs(prev => prev.map(p => 
           p.id === pdfId ? { 
             ...p, 
             progress: 0, 
             status: 'error', 
-            error: `Processing failed: ${finalError instanceof Error ? finalError.message : 'Unknown error'}`
+            error: `Vision processing failed: ${visionError instanceof Error ? visionError.message : 'Unknown error'}`
           } : p
         ));
         
         toast({
           title: "PDF processing failed",
-          description: `Failed to process ${file.name}. Please try again.`,
+          description: `Failed to process ${file.name} using vision analysis. Please try again or check the file format.`,
           variant: "destructive"
         });
       }
+      
+    } catch (imageError) {
+      console.error('PDF to image conversion failed:', imageError);
+      
+      // Image conversion failed - no fallback, just fail
+      setProcessedPDFs(prev => prev.map(p => 
+        p.id === pdfId ? { 
+          ...p, 
+          progress: 0, 
+          status: 'error', 
+          error: `PDF to image conversion failed: ${imageError instanceof Error ? imageError.message : 'Unknown error'}`
+        } : p
+      ));
+      
+      toast({
+        title: "PDF processing failed",
+        description: `Failed to convert ${file.name} to images for vision processing. Please try again or check the file format.`,
+        variant: "destructive"
+      });
     }
   };
 

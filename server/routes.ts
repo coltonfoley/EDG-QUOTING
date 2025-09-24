@@ -40,7 +40,7 @@ import {
 } from "./validation-schemas";
 import multer from "multer";
 import * as XLSX from "xlsx";
-import { extractProductsFromImage, extractProductsFromText, extractQuoteDataFromText, extractQuoteDataFromImages } from "./openai";
+import { extractProductsFromImage, extractProductsFromText, extractQuoteDataFromImages } from "./openai";
 import type { ExtractedProduct } from "./openai";
 import { ObjectStorageService, ObjectNotFoundError, objectStorageClient } from "./objectStorage";
 import { ObjectPermission } from "./objectAcl";
@@ -1023,99 +1023,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // PDF Import endpoint for extracting quote data
-  app.post("/api/quotes/import-pdf", isAuthenticated, rateLimitPDFProcessing, upload.single('pdf'), async (req: any, res) => {
-    try {
-      if (!req.file) {
-        return res.status(400).json({ 
-          message: "No PDF file uploaded",
-          success: false 
-        });
-      }
-
-      const file = req.file;
-      
-      // Validate file type
-      if (file.mimetype !== 'application/pdf') {
-        return res.status(400).json({ 
-          message: "Invalid file type. Please upload a PDF file.",
-          success: false 
-        });
-      }
-
-      // Validate file size (10MB limit)
-      if (file.size > 10 * 1024 * 1024) {
-        return res.status(400).json({ 
-          message: "File too large. Please upload a PDF smaller than 10MB.",
-          success: false 
-        });
-      }
-
-      // Validate PDF buffer first
-      const validation = validatePDFBuffer(file.buffer);
-      if (!validation.isValid) {
-        return res.status(400).json({ 
-          message: validation.error || "Invalid PDF file",
-          success: false 
-        });
-      }
-
-      // Use the dedicated PDF parser
-      const parseResult = await parsePDF(file.buffer);
-      
-      if (parseResult.error) {
-        return res.status(400).json({ 
-          message: parseResult.error,
-          success: false 
-        });
-      }
-
-      if (!parseResult.text || parseResult.text.trim().length === 0) {
-        return res.status(400).json({ 
-          message: "No text content found in PDF. The file may contain only images or be password-protected.",
-          success: false 
-        });
-      }
-
-      console.log(`✅ PDF parsed successfully: ${file.originalname} (${parseResult.text.length} characters, ${parseResult.pageCount} pages)`);
-
-      // Extract quote data using OpenAI
-      const extractedQuote = await extractQuoteDataFromText(parseResult.text);
-      
-      if (!extractedQuote) {
-        return res.status(400).json({ 
-          message: "Could not extract quote data from PDF content. The document may not contain recognizable quote information.",
-          success: false 
-        });
-      }
-
-      console.log(`✅ Quote data extracted from ${file.originalname}`);
-
-      // Return extracted data
-      res.status(200).json({
-        success: true,
-        filename: file.originalname,
-        extractedData: extractedQuote,
-        message: "Quote data extracted successfully"
-      });
-
-    } catch (error: any) {
-      console.error("PDF import processing error:", error);
-      
-      // Handle OpenAI API errors
-      if (error.message?.includes("API") || error.message?.includes("rate limit") || error.message?.includes("quota")) {
-        return res.status(503).json({ 
-          message: "AI processing service is temporarily unavailable. Please try again later.",
-          success: false 
-        });
-      }
-      
-      return res.status(500).json({ 
-        message: "Internal server error while processing PDF import.",
-        success: false 
-      });
-    }
-  });
 
   // Vision-based PDF import endpoint for processing page images
   app.post("/api/quotes/import-vision", isAuthenticated, rateLimitPDFProcessing, async (req: any, res) => {
