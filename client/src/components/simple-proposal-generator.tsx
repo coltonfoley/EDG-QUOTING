@@ -717,8 +717,8 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         
         // Table configuration
         const tableStartY = yPosition;
-        const rowHeight = 12;
-        const headerHeight = 8;
+        const rowHeight = 14; // Increased for better spacing
+        const headerHeight = 10; // Increased for better header spacing
         
         // Column configuration - scaled to match contentWidth for consistency
         const tableWidth = contentWidth; // Match other sections
@@ -750,7 +750,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
           columns.forEach(col => {
             // Center all header text both horizontally and vertically
             const textX = currentX + (col.width / 2);
-            const textY = yPosition + 1; // Center vertically in the teal background
+            const textY = yPosition + 2; // Center vertically in larger teal background
             pdf.text(col.header, textX, textY, { align: 'center' });
             currentX += col.width;
           });
@@ -818,12 +818,12 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
           ];
           
           columns.forEach((col, colIndex) => {
-            // Professional alignment: text left, numbers right
-            let textX = currentX + 2; // Default left padding
+            // Professional alignment with proper padding
+            let textX = currentX + 4; // Increased left padding for better spacing
             let align = col.dataAlign;
             
             if (col.dataAlign === 'right') {
-              textX = currentX + col.width - 2; // Right align with padding
+              textX = currentX + col.width - 4; // Right align with more padding
             }
             
             if (colIndex === 3) { // Description column - handle multi-line
@@ -837,9 +837,9 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
             currentX += col.width;
           });
           
-          // Add faint horizontal line after each row
-          pdf.setDrawColor(220, 220, 220); // Light gray
-          pdf.setLineWidth(0.1);
+          // Add visible horizontal line after each row
+          pdf.setDrawColor(200, 200, 200); // More visible gray
+          pdf.setLineWidth(0.3);
           pdf.line(tableX, yPosition + actualRowHeight, tableX + contentWidth, yPosition + actualRowHeight);
           
           yPosition += actualRowHeight;
@@ -853,16 +853,16 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
           drawTableRow(item, index);
         });
         
-        // Draw faint vertical column dividers
-        pdf.setDrawColor(220, 220, 220); // Light gray
-        pdf.setLineWidth(0.1);
+        // Draw visible vertical column dividers
+        pdf.setDrawColor(200, 200, 200); // More visible gray
+        pdf.setLineWidth(0.3);
         let currentX = tableX;
         
         columns.forEach((col, index) => {
-          if (index > 0) { // Skip the first column (no line before #)
-            pdf.line(currentX, tableStartY - 5, currentX, yPosition);
-          }
           currentX += col.width;
+          if (index < columns.length - 1) { // Draw line after each column except the last
+            pdf.line(currentX, tableStartY - 5, currentX, yPosition - 10);
+          }
         });
         
         yPosition += 10;
