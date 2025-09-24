@@ -720,25 +720,26 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         const rowHeight = 12;
         const headerHeight = 8;
         
-        // Column configuration - optimized with better space distribution (contentWidth ≈ 177mm)
+        // Column configuration - scaled to match contentWidth for consistency
+        const tableWidth = contentWidth; // Match other sections
         const columns = [
-          { header: '#', width: 8, align: 'left' },
-          { header: 'Product/Service', width: 40, align: 'left' },
-          { header: 'SKU', width: 22, align: 'left' },
-          { header: 'Description', width: 52, align: 'left' },
-          { header: 'Qty', width: 10, align: 'center' },
-          { header: 'Rate', width: 18, align: 'right' },
-          { header: 'Amount', width: 18, align: 'right' }
+          { header: '#', width: tableWidth * 0.05, align: 'left' },
+          { header: 'Product/Service', width: tableWidth * 0.23, align: 'left' },
+          { header: 'SKU', width: tableWidth * 0.13, align: 'left' },
+          { header: 'Description', width: tableWidth * 0.29, align: 'left' },
+          { header: 'Qty', width: tableWidth * 0.06, align: 'center' },
+          { header: 'Rate', width: tableWidth * 0.12, align: 'right' },
+          { header: 'Amount', width: tableWidth * 0.12, align: 'right' }
         ];
         
-        const totalTableWidth = columns.reduce((sum, col) => sum + col.width, 0);
+        const totalTableWidth = tableWidth;
         const tableX = margin;
         
         const drawTableHeader = () => {
           // Professional branded table header with teal background
           const [r, g, b] = colors.accent;
           pdf.setFillColor(r, g, b);
-          pdf.rect(tableX, yPosition - 5, totalTableWidth, headerHeight + 6, 'F');
+          pdf.rect(tableX, yPosition - 5, contentWidth, headerHeight + 6, 'F');
           
           // White text on teal background
           pdf.setTextColor(255, 255, 255);
@@ -835,6 +836,11 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
             currentX += col.width;
           });
           
+          // Add faint horizontal line after each row
+          pdf.setDrawColor(220, 220, 220); // Light gray
+          pdf.setLineWidth(0.1);
+          pdf.line(tableX, yPosition + actualRowHeight, tableX + contentWidth, yPosition + actualRowHeight);
+          
           yPosition += actualRowHeight;
         };
         
@@ -844,6 +850,18 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         // Draw table rows
         quote.lineItems.forEach((item, index) => {
           drawTableRow(item, index);
+        });
+        
+        // Draw faint vertical column dividers
+        pdf.setDrawColor(220, 220, 220); // Light gray
+        pdf.setLineWidth(0.1);
+        let currentX = tableX;
+        
+        columns.forEach((col, index) => {
+          if (index > 0) { // Skip the first column (no line before #)
+            pdf.line(currentX, tableStartY - 5, currentX, yPosition);
+          }
+          currentX += col.width;
         });
         
         yPosition += 10;
