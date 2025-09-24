@@ -379,7 +379,7 @@ export default function AccountDetail() {
                     <div 
                       key={quote.id}
                       className="p-4 border rounded-lg hover:bg-gray-50 transition-colors cursor-pointer"
-                      onClick={() => navigate(`/quotes/${quote.id}`)}
+                      onClick={() => navigate(`/quotes/${quote.id}/edit`)}
                       data-testid={`card-quote-${quote.id}`}
                     >
                       <div className="flex justify-between items-start">
