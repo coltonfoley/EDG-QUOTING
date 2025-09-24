@@ -965,14 +965,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         pdf.setFillColor(r, g, b);
         pdf.rect(0, 0, pageWidth, brandBarHeight, 'F');
         
-        // Darker accent strip for depth
-        pdf.setFillColor(r * 0.7, g * 0.7, b * 0.7);
-        pdf.rect(0, brandBarHeight - 8, pageWidth, 8, 'F');
-        
-        // White accent lines for sophistication
-        pdf.setFillColor(255, 255, 255);
-        pdf.rect(0, brandBarHeight - 12, pageWidth, 1, 'F');
-        pdf.rect(0, brandBarHeight - 4, pageWidth, 1, 'F');
+        // Simple clean design - single teal bar
         
         // Add logo to cover page header
         if (logoData) {
@@ -985,16 +978,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
           }
         }
         
-        // Company name with impact (positioned after logo)
-        pdf.setTextColor(255, 255, 255);
-        pdf.setFontSize(18);
-        pdf.setFont('helvetica', 'bold');
-        const logoOffset = logoData ? 50 : 0;
-        pdf.text('EDG PATIO & SHADE', margin + logoOffset, 20);
-        
-        // Professional tagline
-        setFont('small');
-        pdf.text('PREMIUM OUTDOOR LIVING SOLUTIONS', margin, 26);
+        // Clean header - logo only (no redundant text)
         
         // Contact info with style
         const rightX = pageWidth - margin;
