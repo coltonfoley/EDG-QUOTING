@@ -331,137 +331,26 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
     });
   };
 
-  // Helper function to correct image orientation based on EXIF data
-  const correctImageOrientation = (img: HTMLImageElement, orientation: number): HTMLCanvasElement => {
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d')!;
-    
-    let { width, height } = img;
-    
-    // Set canvas dimensions based on orientation
-    if (orientation >= 5 && orientation <= 8) {
-      canvas.width = height;
-      canvas.height = width;
-    } else {
-      canvas.width = width;
-      canvas.height = height;
-    }
-    
-    // Apply transformation based on orientation
-    switch (orientation) {
-      case 2:
-        // Horizontal flip
-        ctx.transform(-1, 0, 0, 1, width, 0);
-        break;
-      case 3:
-        // 180 rotate
-        ctx.transform(-1, 0, 0, -1, width, height);
-        break;
-      case 4:
-        // Vertical flip
-        ctx.transform(1, 0, 0, -1, 0, height);
-        break;
-      case 5:
-        // Vertical flip + 90 rotate
-        ctx.transform(0, 1, 1, 0, 0, 0);
-        break;
-      case 6:
-        // 90 rotate clockwise
-        ctx.transform(0, 1, -1, 0, height, 0);
-        break;
-      case 7:
-        // Horizontal flip + 90 rotate
-        ctx.transform(0, -1, -1, 0, height, width);
-        break;
-      case 8:
-        // 90 rotate counter-clockwise
-        ctx.transform(0, -1, 1, 0, 0, width);
-        break;
-      default:
-        // No transformation needed
-        break;
-    }
-    
-    ctx.drawImage(img, 0, 0);
-    return canvas;
-  };
-
-  // Helper function to read EXIF orientation from image file
-  const getImageOrientation = (file: File): Promise<number> => {
-    return new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const arrayBuffer = e.target?.result as ArrayBuffer;
-        const dataView = new DataView(arrayBuffer);
-        
-        // Check if it's a JPEG file
-        if (dataView.getUint16(0, false) !== 0xFFD8) {
-          resolve(1); // Default orientation
-          return;
-        }
-        
-        let offset = 2;
-        let marker = dataView.getUint16(offset, false);
-        
-        while (marker !== 0xFFE1 && offset < dataView.byteLength - 2) {
-          offset += 2 + dataView.getUint16(offset + 2, false);
-          marker = dataView.getUint16(offset, false);
-        }
-        
-        if (marker !== 0xFFE1) {
-          resolve(1); // Default orientation
-          return;
-        }
-        
-        // Check for Exif header
-        if (dataView.getUint32(offset + 4, false) !== 0x45786966) {
-          resolve(1); // Default orientation
-          return;
-        }
-        
-        const little = dataView.getUint16(offset + 10, false) === 0x4949;
-        const ifdOffset = dataView.getUint32(offset + 14, little) + offset + 10;
-        const tags = dataView.getUint16(ifdOffset, little);
-        
-        for (let i = 0; i < tags; i++) {
-          const tagOffset = ifdOffset + 2 + i * 12;
-          if (dataView.getUint16(tagOffset, little) === 0x0112) {
-            resolve(dataView.getUint16(tagOffset + 8, little));
-            return;
-          }
-        }
-        
-        resolve(1); // Default orientation
-      };
-      reader.readAsArrayBuffer(file);
-    });
-  };
-
   // Helper function to get the appropriate image data and format for PDF
   const getImageDataForPDF = async (image: DisplayImage): Promise<{ dataUrl: string; format: string }> => {
     // For temporary images (with original file)
     if (image.originalFile) {
       try {
-        // Get EXIF orientation and correct the image
-        const orientation = await getImageOrientation(image.originalFile);
-        
-        return new Promise((resolve, reject) => {
-          const img = new Image();
-          img.onload = () => {
-            // Apply orientation correction
-            const canvas = correctImageOrientation(img, orientation);
-            const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+        // Always convert to data URL using FileReader for reliability
+        return new Promise<{ dataUrl: string; format: string }>((resolve, reject) => {
+          const reader = new FileReader();
+          
+          reader.onload = () => {
+            const dataUrl = reader.result as string;
             const format = getImageFormat(image.originalFile!);
             resolve({ dataUrl, format });
           };
           
-          img.onerror = () => {
-            reject(new Error('Failed to load image for orientation correction'));
+          reader.onerror = () => {
+            reject(new Error('Failed to read file as data URL'));
           };
           
-          // Create object URL for the image
-          const objectUrl = URL.createObjectURL(image.originalFile!);
-          img.src = objectUrl;
+          reader.readAsDataURL(image.originalFile!);
         });
       } catch (error) {
         throw new Error(`Failed to process temporary image: ${error}`);
@@ -471,7 +360,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
     // For persistent images (stored in object storage)
     // Fetch image data and convert to data URL for reliable PDF generation
     try {
-      return new Promise(async (resolve, reject) => {
+      return new Promise<{ dataUrl: string; format: string }>(async (resolve, reject) => {
         try {
           // Fetch the image data directly through a secure endpoint
           const response = await fetch(image.preview, {
@@ -488,24 +377,19 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
           // Convert response to blob
           const blob = await response.blob();
           
-          // Create a File object from blob to check orientation
-          const file = new File([blob], 'image.jpg', { type: blob.type });
-          const orientation = await getImageOrientation(file);
+          // Convert blob to data URL using FileReader
+          const reader = new FileReader();
           
-          // Load image and apply orientation correction
-          const img = new Image();
-          img.onload = () => {
-            const canvas = correctImageOrientation(img, orientation);
-            const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+          reader.onload = () => {
+            const dataUrl = reader.result as string;
             resolve({ dataUrl, format: 'JPEG' });
           };
           
-          img.onerror = () => {
-            reject(new Error('Failed to load persistent image for orientation correction'));
+          reader.onerror = () => {
+            reject(new Error('Failed to convert blob to data URL'));
           };
           
-          const objectUrl = URL.createObjectURL(blob);
-          img.src = objectUrl;
+          reader.readAsDataURL(blob);
           
         } catch (error) {
           reject(error);
