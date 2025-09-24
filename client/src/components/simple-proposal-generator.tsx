@@ -626,8 +626,8 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         const [r, g, b] = colors.accent;
         pdf.setFillColor(r, g, b);
         
-        // Draw teal background rectangle with rounded corners effect
-        pdf.rect(margin - 5, yPosition - 8, contentWidth + 10, 20, 'F');
+        // Draw teal background rectangle with consistent width
+        pdf.rect(margin, yPosition - 8, contentWidth, 20, 'F');
         
         // Clean design without shadow effects
         
@@ -1227,9 +1227,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         setFont('subheading');
         pdf.text('CONTRACT TERMS & CONDITIONS', margin + 5, yPosition + 2);
         
-        // Decorative elements
-        pdf.setFillColor(255, 255, 255);
-        pdf.rect(margin + 5, yPosition + 5, 80, 1, 'F');
+        // Clean design without decorative lines
         
         setColor('primary');
         yPosition += 25;
