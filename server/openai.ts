@@ -2,7 +2,7 @@ import OpenAI from "openai";
 import { z } from "zod";
 import crypto from "crypto";
 
-// the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
+// the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
 const openai = new OpenAI({ 
   apiKey: process.env.OPENAI_API_KEY,
   timeout: 240000, // 4 minutes timeout for complex PDF processing
@@ -148,7 +148,7 @@ export type ExtractedQuoteWithPageRefs = z.infer<typeof ExtractedQuoteWithPageRe
 export async function extractProductsFromImage(base64Image: string): Promise<ExtractedProduct[]> {
   try {
     const response = await openai.chat.completions.create({
-      model: "gpt-4o", // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
+      model: "gpt-5", // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
       messages: [
         {
           role: "system",
@@ -238,7 +238,7 @@ export async function extractProductsFromText(text: string): Promise<ExtractedPr
       : text;
 
     const response = await openai.chat.completions.create({
-      model: "gpt-4o", // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
+      model: "gpt-5", // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
       messages: [
         {
           role: "system",
@@ -433,7 +433,7 @@ async function processImagesInSingleCall(images: Array<{index: number, imageBase
     }).flat();
 
     const response = await openai.chat.completions.create({
-      model: "gpt-4o",
+      model: "gpt-5", // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
       messages: [
         {
           role: "system",
@@ -489,8 +489,7 @@ async function processImagesInSingleCall(images: Array<{index: number, imageBase
         },
       ],
       response_format: { type: "json_object" },
-      max_tokens: 6000,
-      temperature: 0,
+      max_tokens: 6000, // gpt-5 doesn't support temperature parameter, do not use it
     });
 
     const content = response.choices[0].message.content;
@@ -964,7 +963,7 @@ export async function extractQuoteDataFromText(text: string): Promise<ExtractedQ
     console.log(`🔍 Cache miss, making OpenAI API call for text extraction`);
     
     const response = await openai.chat.completions.create({
-      model: "gpt-4o", // Using proven working model for PDF extraction
+      model: "gpt-5", // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user // Using proven working model for PDF extraction
       messages: [
         {
           role: "system",
