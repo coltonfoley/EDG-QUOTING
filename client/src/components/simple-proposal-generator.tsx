@@ -550,9 +550,6 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         pdf.setFillColor(r, g, b);
         pdf.rect(0, 0, pageWidth, 4, 'F'); // Teal strip at very top
         
-        // Light background for header area
-        pdf.setFillColor(250, 250, 250);
-        pdf.rect(0, 4, pageWidth, 18, 'F');
         
         // Company name with stronger branding
         setFont('subheading');
