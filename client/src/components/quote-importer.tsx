@@ -233,12 +233,12 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
   // Convert PDF to images for vision processing with optimized memory management
   const convertPDFToImages = async (file: File): Promise<PDFPageImage[]> => {
     try {
-      // Dynamically import PDF.js to avoid SSR issues
+      // Dynamically import PDF.js 
       const pdfjs = await import('pdfjs-dist');
       
-      // Ensure worker is properly configured for Vite 
-      pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@5.4.149/build/pdf.worker.min.js`;
-      console.log('📦 PDF.js worker configured for version 5.4.149');
+      // Simple worker setup that should work in most environments
+      pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js`;
+      console.log('📦 Setting up PDF.js worker...');
       
       // Read file as array buffer
       const arrayBuffer = await file.arrayBuffer();
