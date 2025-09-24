@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 import { z } from "zod";
+import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
@@ -335,26 +336,166 @@ export async function extractProductsFromText(text: string): Promise<ExtractedPr
   }
 }
 
+// Simple PDF text extraction using PDF.js
+async function extractTextFromPDF(pdfBuffer: Buffer): Promise<string | null> {
+  try {
+    // Add polyfill for Promise.withResolvers if needed
+    if (!Promise.withResolvers) {
+      await import('@ungap/with-resolvers' as any);
+    }
+
+    const uint8Array = new Uint8Array(pdfBuffer);
+    const loadingTask = getDocument({
+      data: uint8Array,
+      verbosity: 0 // Suppress console output
+    });
+    
+    const pdf = await loadingTask.promise;
+    const pageTexts: string[] = [];
+    const maxPages = Math.min(pdf.numPages, 20); // Limit pages for efficiency
+    
+    for (let pageNum = 1; pageNum <= maxPages; pageNum++) {
+      try {
+        const page = await pdf.getPage(pageNum);
+        const textContent = await page.getTextContent();
+        
+        const pageText = textContent.items
+          .map((item: any) => {
+            if (typeof item === 'string') return item;
+            if (item.str) return item.str;
+            return '';
+          })
+          .join(' ');
+          
+        pageTexts.push(pageText);
+      } catch (pageError) {
+        console.warn(`Warning: Failed to extract text from page ${pageNum}`);
+      }
+    }
+    
+    return pageTexts.join('\n\n').trim();
+    
+  } catch (error) {
+    console.error('PDF text extraction failed:', error);
+    return null;
+  }
+}
+
+// Extract quote data from text using OpenAI
+async function extractQuoteDataFromText(textContent: string): Promise<ExtractedQuote | null> {
+  try {
+    console.log('🤖 Processing text with OpenAI for quote extraction');
+    
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        {
+          role: "system",
+          content: `You are an expert at extracting quote information from text documents. Extract all relevant quote details and return them as valid JSON.`
+        },
+        {
+          role: "user",
+          content: `Extract all quote information from this document text:
+
+${textContent}
+
+Return JSON with these fields (ALL OPTIONAL):
+{
+  "customer": {"name": string|null, "email": string|null, "phone": string|null, "company": string|null, "address": string|null},
+  "quoteNumber": string|null,
+  "date": string|null,
+  "projectDescription": string|null,
+  "lineItems": [{"description": string|null, "quantity": number|null, "price": number|null, "total": number|null, "unit": string|null}],
+  "subtotal": number|null,
+  "taxRate": number|null,
+  "taxAmount": number|null,
+  "discountAmount": number|null,
+  "total": number|null,
+  "notes": string|null,
+  "terms": string|null,
+  "confidence": number (0-1)
+}
+
+CRITICAL RULES:
+- Extract ACTUAL data from the text, not example/placeholder data
+- Use NUMERIC values for all prices, quantities, totals
+- Only extract clearly visible information from the document
+- Be thorough but accurate - don't make up missing data
+- Return ONLY valid JSON, no additional text`
+        }
+      ],
+      response_format: { type: "json_object" },
+      max_tokens: 6000,
+      temperature: 0.1
+    });
+
+    const content = response.choices[0]?.message?.content;
+    if (!content) {
+      console.error('Empty response from OpenAI');
+      return null;
+    }
+
+    let parsedContent;
+    try {
+      parsedContent = JSON.parse(content);
+    } catch (jsonError) {
+      console.error('JSON parsing failed:', jsonError);
+      return null;
+    }
+
+    const extracted = ExtractedQuoteSchema.parse(parsedContent);
+
+    // Calculate confidence if not present
+    if (!extracted.confidence) {
+      extracted.confidence = calculateExtractionConfidence(extracted);
+    }
+
+    return extracted;
+
+  } catch (error) {
+    console.error('Error extracting quote data from text:', error);
+    return null;
+  }
+}
+
 // Direct PDF processing using chat completions with file upload
 export async function extractQuoteDataFromPDF(pdfBuffer: Buffer): Promise<ExtractedQuote | null> {
   try {
-    console.log(`📄 Converting PDF to images for vision processing (${(pdfBuffer.length / 1024 / 1024).toFixed(2)}MB)`);
+    console.log(`📄 Processing PDF with direct text extraction (${(pdfBuffer.length / 1024 / 1024).toFixed(2)}MB)`);
     
-    // Import the conversion function here to avoid circular imports
-    const { convertPDFToImagesServer } = await import('./quoteImageUtils');
+    // Try direct PDF text extraction first (faster and more reliable)
+    const textContent = await extractTextFromPDF(pdfBuffer);
     
-    // Convert PDF to images for vision processing
-    const images = await convertPDFToImagesServer(pdfBuffer);
-    
-    if (!images || images.length === 0) {
-      console.error('Failed to convert PDF to images');
-      return null;
+    if (textContent && textContent.trim().length > 0) {
+      console.log(`📝 Extracted ${textContent.length} characters of text from PDF`);
+      
+      // Process text content with OpenAI for quote extraction
+      const extractedQuote = await extractQuoteDataFromText(textContent);
+      
+      if (extractedQuote) {
+        console.log('✅ Successfully extracted quote data from PDF text');
+        return extractedQuote;
+      }
     }
     
-    console.log(`📸 Converted PDF to ${images.length} images, processing with vision API`);
+    console.log('⚠️ Text extraction insufficient, falling back to vision processing');
     
-    // Process images with vision API
-    return await extractQuoteDataFromImages(images);
+    // Fallback to vision processing if text extraction fails
+    try {
+      const { convertPDFToImagesServer } = await import('./quoteImageUtils');
+      const images = await convertPDFToImagesServer(pdfBuffer);
+      
+      if (!images || images.length === 0) {
+        throw new Error('Failed to convert PDF to images');
+      }
+      
+      console.log(`📸 Converted PDF to ${images.length} images, processing with vision API`);
+      return await extractQuoteDataFromImages(images);
+      
+    } catch (imageError) {
+      console.error('Vision processing also failed:', imageError);
+      throw new Error('Both text and vision processing failed for this PDF');
+    }
     
   } catch (error) {
     console.error('Error in extractQuoteDataFromPDF:', error);
