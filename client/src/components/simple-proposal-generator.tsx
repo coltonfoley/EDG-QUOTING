@@ -884,14 +884,14 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         
         checkPageBreak(60);
         
-        // Professional branded totals area
-        const totalsWidth = 70;
+        // Professional branded totals area - wider for large amounts
+        const totalsWidth = 85; // Increased width for large dollar amounts
         const totalsX = pageWidth - margin - totalsWidth;
         const labelsX = totalsX - 5;
         
         // Add subtle background for totals area
         pdf.setFillColor(248, 248, 248);
-        pdf.roundedRect(labelsX - 5, yPosition - 5, totalsWidth + 10, 35, 2, 2, 'F');
+        pdf.roundedRect(labelsX - 5, yPosition - 5, totalsWidth + 15, 35, 2, 2, 'F');
         
         setFont('body');
         setColor('primary');
@@ -915,14 +915,16 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         pdf.line(labelsX, yPosition, totalsX + totalsWidth, yPosition);
         yPosition += 6;
         
-        // Dramatic total with teal background
+        // Dramatic total with teal background - properly sized for large amounts
         pdf.setFillColor(r, g, b);
-        pdf.rect(labelsX - 2, yPosition - 4, totalsWidth + 7, 12, 'F');
+        const totalBoxWidth = totalsWidth + 12; // Wider box to fit large amounts
+        pdf.rect(labelsX - 3, yPosition - 4, totalBoxWidth, 12, 'F');
         
         pdf.setTextColor(255, 255, 255);
         setFont('subheading');
-        pdf.text('TOTAL:', labelsX, yPosition + 2, { align: 'right' });
-        pdf.text(formatCurrency(totals.total), totalsX + totalsWidth, yPosition + 2, { align: 'right' });
+        // Center the text within the teal box
+        const boxCenterX = labelsX - 3 + (totalBoxWidth / 2);
+        pdf.text(formatCurrency(totals.total), boxCenterX, yPosition + 2, { align: 'center' });
         
         setColor('primary'); // Reset
         yPosition += 20;
