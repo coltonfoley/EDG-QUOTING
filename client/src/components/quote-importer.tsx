@@ -214,6 +214,11 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
         onImportComplete(summary.quotesCreated + (summary.lineItemsAdded > 0 ? 1 : 0));
       }
 
+      // Clear processed PDFs to prevent duplicate imports
+      setProcessedPDFs([]);
+      setSelectedPDFId(null);
+      setEditedPDFData({});
+      
       // Auto-close dialog after successful import
       setTimeout(() => {
         onOpenChange(false);
