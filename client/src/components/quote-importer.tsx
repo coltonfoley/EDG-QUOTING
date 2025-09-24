@@ -645,7 +645,7 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
                               <div>
                                 <Label>Name</Label>
                                 <Input 
-                                  value={getCurrentPDFData(selectedPDFId)?.customer?.name ?? ''} 
+                                  value={selectedPDFId ? getCurrentPDFData(selectedPDFId)?.customer?.name ?? '' : ''} 
                                   onChange={(e) => selectedPDFId && updatePDFData(selectedPDFId, 'customer.name', e.target.value)}
                                   placeholder="Customer name"
                                   data-testid="input-customer-name"
@@ -654,7 +654,7 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
                               <div>
                                 <Label>Company</Label>
                                 <Input 
-                                  value={getCurrentPDFData(selectedPDFId)?.customer?.company ?? ''} 
+                                  value={selectedPDFId ? getCurrentPDFData(selectedPDFId)?.customer?.company ?? '' : ''} 
                                   onChange={(e) => selectedPDFId && updatePDFData(selectedPDFId, 'customer.company', e.target.value)}
                                   placeholder="Company name"
                                   data-testid="input-customer-company"
@@ -663,7 +663,7 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
                               <div>
                                 <Label>Email</Label>
                                 <Input 
-                                  value={getCurrentPDFData(selectedPDFId)?.customer?.email ?? ''} 
+                                  value={selectedPDFId ? getCurrentPDFData(selectedPDFId)?.customer?.email ?? '' : ''} 
                                   onChange={(e) => selectedPDFId && updatePDFData(selectedPDFId, 'customer.email', e.target.value)}
                                   placeholder="Email address"
                                   data-testid="input-customer-email"
@@ -672,7 +672,7 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
                               <div>
                                 <Label>Phone</Label>
                                 <Input 
-                                  value={getCurrentPDFData(selectedPDFId)?.customer?.phone ?? ''} 
+                                  value={selectedPDFId ? getCurrentPDFData(selectedPDFId)?.customer?.phone ?? '' : ''} 
                                   onChange={(e) => selectedPDFId && updatePDFData(selectedPDFId, 'customer.phone', e.target.value)}
                                   placeholder="Phone number"
                                   data-testid="input-customer-phone"
@@ -690,7 +690,7 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
                               <div>
                                 <Label>Quote Number</Label>
                                 <Input 
-                                  value={getCurrentPDFData(selectedPDFId)?.quoteNumber ?? ''} 
+                                  value={selectedPDFId ? getCurrentPDFData(selectedPDFId)?.quoteNumber ?? '' : ''} 
                                   onChange={(e) => selectedPDFId && updatePDFData(selectedPDFId, 'quoteNumber', e.target.value)}
                                   placeholder="Quote number"
                                   data-testid="input-quote-number"
@@ -699,7 +699,7 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
                               <div>
                                 <Label>Date</Label>
                                 <Input 
-                                  value={getCurrentPDFData(selectedPDFId)?.date ?? ''} 
+                                  value={selectedPDFId ? getCurrentPDFData(selectedPDFId)?.date ?? '' : ''} 
                                   onChange={(e) => selectedPDFId && updatePDFData(selectedPDFId, 'date', e.target.value)}
                                   placeholder="Quote date"
                                   data-testid="input-quote-date"
@@ -708,7 +708,7 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
                               <div className="col-span-2">
                                 <Label>Project Description</Label>
                                 <Textarea 
-                                  value={getCurrentPDFData(selectedPDFId)?.projectDescription ?? ''} 
+                                  value={selectedPDFId ? getCurrentPDFData(selectedPDFId)?.projectDescription ?? '' : ''} 
                                   onChange={(e) => selectedPDFId && updatePDFData(selectedPDFId, 'projectDescription', e.target.value)}
                                   placeholder="Project description"
                                   data-testid="textarea-project-description"
@@ -721,8 +721,8 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
 
                           {/* Line Items */}
                           <div>
-                            <h4 className="font-medium mb-3">Line Items ({getCurrentPDFData(selectedPDFId)?.lineItems?.length ?? 0})</h4>
-                            {getCurrentPDFData(selectedPDFId)?.lineItems?.length > 0 ? (
+                            <h4 className="font-medium mb-3">Line Items ({selectedPDFId ? getCurrentPDFData(selectedPDFId)?.lineItems?.length ?? 0 : 0})</h4>
+                            {selectedPDFId && getCurrentPDFData(selectedPDFId)?.lineItems?.length > 0 ? (
                               <div className="space-y-3">
                                 {getCurrentPDFData(selectedPDFId)?.lineItems?.map((item, index) => (
                                   <div key={index} className="p-3 border rounded-lg">
@@ -758,26 +758,26 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
                           </div>
 
                           {/* Financial Summary */}
-                          {(getCurrentPDFData(selectedPDFId)?.subtotal || getCurrentPDFData(selectedPDFId)?.total) && (
+                          {selectedPDFId && (getCurrentPDFData(selectedPDFId)?.subtotal || getCurrentPDFData(selectedPDFId)?.total) && (
                             <>
                               <Separator />
                               <div>
                                 <h4 className="font-medium mb-3">Financial Summary</h4>
                                 <div className="grid grid-cols-2 gap-3">
-                                  {getCurrentPDFData(selectedPDFId)?.subtotal && (
+                                  {selectedPDFId && getCurrentPDFData(selectedPDFId)?.subtotal && (
                                     <div>
                                       <Label>Subtotal</Label>
                                       <Input 
-                                        value={formatCurrency(getCurrentPDFData(selectedPDFId)!.subtotal!)} 
+                                        value={selectedPDFId ? formatCurrency(getCurrentPDFData(selectedPDFId)!.subtotal!) : ''} 
                                         readOnly
                                       />
                                     </div>
                                   )}
-                                  {getCurrentPDFData(selectedPDFId)?.total && (
+                                  {selectedPDFId && getCurrentPDFData(selectedPDFId)?.total && (
                                     <div>
                                       <Label>Total</Label>
                                       <Input 
-                                        value={formatCurrency(getCurrentPDFData(selectedPDFId)!.total!)} 
+                                        value={selectedPDFId ? formatCurrency(getCurrentPDFData(selectedPDFId)!.total!) : ''} 
                                         readOnly
                                       />
                                     </div>
