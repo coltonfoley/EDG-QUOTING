@@ -68,7 +68,7 @@ class SimpleCache {
   // Clean up expired entries
   cleanup(): void {
     const now = Date.now();
-    for (const [key, entry] of this.cache.entries()) {
+    for (const [key, entry] of Array.from(this.cache.entries())) {
       if (now > entry.expiryTime) {
         this.cache.delete(key);
       }
@@ -335,9 +335,10 @@ export async function extractProductsFromText(text: string): Promise<ExtractedPr
   }
 }
 
-// Direct PDF processing with GPT-5 using file upload API
+// Direct PDF processing using chat completions with file upload
 export async function extractQuoteDataFromPDF(pdfBuffer: Buffer): Promise<ExtractedQuote | null> {
   let tempFilePath: string | null = null;
+  let fileId: string | null = null;
   
   try {
     // Save PDF buffer to temporary file
@@ -351,120 +352,118 @@ export async function extractQuoteDataFromPDF(pdfBuffer: Buffer): Promise<Extrac
     const fileStream = fs.createReadStream(tempFilePath);
     const uploadedFile = await openai.files.create({
       file: fileStream,
-      purpose: "assistants", // Using assistants purpose which supports PDFs
+      purpose: "assistants" // This purpose works for chat completions too
     });
     
-    console.log(`📤 Uploaded PDF to OpenAI with file ID: ${uploadedFile.id}`);
+    fileId = uploadedFile.id;
+    console.log(`📤 Uploaded PDF to OpenAI with file ID: ${fileId}`);
     
-    // Create an assistant to process the PDF
-    const assistant = await openai.beta.assistants.create({
-      name: "Quote Extraction Assistant",
-      instructions: `You are a specialized data extraction expert for construction and patio quotes. Analyze the provided PDF and extract comprehensive quote information with high accuracy.
-      
-      EXTRACTION GUIDELINES:
-      - Process the entire PDF document natively
-      - Look for customer details, line items, pricing, and totals
-      - Pay attention to headers, footers, and continuation markers
-      - Extract information from both text and visual elements
-      
-      Return JSON with these fields (ALL OPTIONAL):
-      {
-        "customer": {"name": string|null, "email": string|null, "phone": string|null, "company": string|null, "address": string|null},
-        "quoteNumber": string|null,
-        "date": string|null,
-        "projectDescription": string|null,
-        "lineItems": [{"description": string|null, "quantity": number|null, "price": number|null, "total": number|null, "unit": string|null}],
-        "subtotal": number|null,
-        "taxRate": number|null,
-        "taxAmount": number|null,
-        "discountAmount": number|null,
-        "total": number|null,
-        "notes": string|null,
-        "terms": string|null,
-        "confidence": number (0-1)
-      }
-      
-      CRITICAL RULES:
-      - Use NUMERIC values for all prices, quantities, totals (never strings)
-      - Only extract clearly visible information
-      - Be thorough but accurate - don't hallucinate missing data
-      - Include confidence score based on clarity of extracted data
-      - Return ONLY the JSON object, no additional text`,
-      model: "gpt-5", // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
-      tools: [{"type": "file_search"}],
-    });
-    
-    // Create a thread and add the PDF file
-    const thread = await openai.beta.threads.create({
+    // Use chat completions with the uploaded file
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o", // Using gpt-4o which has good vision and file understanding capabilities
       messages: [
         {
+          role: "system",
+          content: `You are a specialized data extraction expert for construction and patio quotes. Extract comprehensive quote information from PDFs with high accuracy.
+          
+          Return JSON with these fields (ALL OPTIONAL):
+          {
+            "customer": {"name": string|null, "email": string|null, "phone": string|null, "company": string|null, "address": string|null},
+            "quoteNumber": string|null,
+            "date": string|null,
+            "projectDescription": string|null,
+            "lineItems": [{"description": string|null, "quantity": number|null, "price": number|null, "total": number|null, "unit": string|null}],
+            "subtotal": number|null,
+            "taxRate": number|null,
+            "taxAmount": number|null,
+            "discountAmount": number|null,
+            "total": number|null,
+            "notes": string|null,
+            "terms": string|null,
+            "confidence": number (0-1)
+          }
+          
+          CRITICAL RULES:
+          - Use NUMERIC values for all prices, quantities, totals (never strings)
+          - Only extract clearly visible information
+          - Be thorough but accurate - don't hallucinate missing data
+          - Include confidence score based on clarity of extracted data
+          - Return ONLY valid JSON, no additional text`
+        },
+        {
           role: "user",
-          content: "Analyze this PDF document and extract all quote information. Return the result as a JSON object only.",
+          content: [
+            {
+              type: "text",
+              text: "Extract all quote information from this PDF document. Focus on accuracy and completeness. Return the result as a JSON object only."
+            }
+          ],
+          // Reference the uploaded file
           attachments: [
             {
-              file_id: uploadedFile.id,
+              file_id: fileId,
               tools: [{ type: "file_search" }]
             }
           ]
-        }
-      ]
+        } as any // Type assertion to handle attachments which might not be in older type definitions
+      ],
+      response_format: { type: "json_object" },
+      max_tokens: 6000,
     });
     
-    console.log(`🧵 Created thread with PDF: ${thread.id}`);
+    const content = response.choices[0].message.content;
+    if (!content) {
+      console.error('Empty response from OpenAI');
+      return null;
+    }
     
-    // Run the assistant
-    const run = await openai.beta.threads.runs.createAndPoll(
-      thread.id,
-      {
-        assistant_id: assistant.id,
-      }
-    );
+    console.log(`📝 Received response from OpenAI`);
     
-    console.log(`🏃 Assistant run completed with status: ${run.status}`);
-    
-    if (run.status === 'completed') {
-      // Get the messages
-      const messages = await openai.beta.threads.messages.list(thread.id);
-      
-      // Find the assistant's response
-      const assistantMessage = messages.data.find(msg => msg.role === 'assistant');
-      
-      if (assistantMessage && assistantMessage.content[0]?.type === 'text') {
-        const content = assistantMessage.content[0].text.value;
-        
-        // Extract JSON from the response (it might be wrapped in markdown code blocks)
-        let jsonContent = content;
-        const jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/) || content.match(/```\s*([\s\S]*?)\s*```/);
-        if (jsonMatch) {
-          jsonContent = jsonMatch[1];
-        }
-        
-        const parsedContent = JSON.parse(jsonContent);
-        const extracted = ExtractedQuoteSchema.parse(parsedContent);
-        
-        // Calculate confidence if not present
-        if (!extracted.confidence) {
-          extracted.confidence = calculateExtractionConfidence(extracted);
-        }
-        
-        console.log(`✅ Successfully extracted quote data with confidence: ${extracted.confidence}`);
-        
-        // Clean up: Delete the assistant and file
-        await openai.beta.assistants.del(assistant.id);
-        await openai.files.del(uploadedFile.id);
-        
-        return extracted;
+    let parsedContent;
+    try {
+      parsedContent = JSON.parse(content);
+    } catch (jsonError) {
+      console.error('JSON parsing failed:', jsonError);
+      // Try to extract JSON from markdown code blocks if present
+      const jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/) || content.match(/```\s*([\s\S]*?)\s*```/);
+      if (jsonMatch) {
+        parsedContent = JSON.parse(jsonMatch[1]);
+      } else {
+        return null;
       }
     }
     
-    // Clean up on failure
-    await openai.beta.assistants.del(assistant.id);
-    await openai.files.del(uploadedFile.id);
+    const extracted = ExtractedQuoteSchema.parse(parsedContent);
     
-    return null;
+    // Calculate confidence if not present
+    if (!extracted.confidence) {
+      extracted.confidence = calculateExtractionConfidence(extracted);
+    }
+    
+    console.log(`✅ Successfully extracted quote data with confidence: ${extracted.confidence}`);
+    
+    // Clean up the uploaded file
+    try {
+      await openai.files.del(fileId);
+      console.log(`🗑️ Deleted uploaded file from OpenAI: ${fileId}`);
+    } catch (deleteError) {
+      console.warn(`Warning: Could not delete uploaded file ${fileId}:`, deleteError);
+    }
+    
+    return extracted;
     
   } catch (error) {
     console.error('Error in extractQuoteDataFromPDF:', error);
+    
+    // Try to clean up the uploaded file if it exists
+    if (fileId) {
+      try {
+        await openai.files.del(fileId);
+      } catch (deleteError) {
+        console.warn(`Warning: Could not delete uploaded file ${fileId} after error:`, deleteError);
+      }
+    }
+    
     return null;
   } finally {
     // Clean up temporary file

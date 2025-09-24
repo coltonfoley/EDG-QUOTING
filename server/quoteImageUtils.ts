@@ -44,7 +44,7 @@ export async function convertPDFToImagesServer(pdfBuffer: Buffer): Promise<PDFPa
       
       return pages;
       
-    } catch (sharpError) {
+    } catch (sharpError: any) {
       console.log('⚠️ Sharp PDF conversion failed, trying Puppeteer fallback:', sharpError.message);
       
       // Fallback to Puppeteer with PDF.js
@@ -68,7 +68,7 @@ export async function convertPDFToImagesServer(pdfBuffer: Buffer): Promise<PDFPa
             <script>
               pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
               
-              async function renderPDF(pdfData) {
+              async function renderPDF(pdfData: string) {
                 const pdf = await pdfjsLib.getDocument({ data: atob(pdfData) }).promise;
                 const maxPages = Math.min(pdf.numPages, 10);
                 const images = [];
@@ -119,8 +119,8 @@ export async function convertPDFToImagesServer(pdfBuffer: Buffer): Promise<PDFPa
       }
     }
     
-  } catch (error) {
+  } catch (error: any) {
     console.error('Server-side PDF conversion error:', error);
-    throw new Error(`Failed to convert PDF to images on server: ${error.message}`);
+    throw new Error(`Failed to convert PDF to images on server: ${error.message || error}`);
   }
 }

@@ -94,7 +94,7 @@ class SimpleRateLimiter {
   // Clean up expired entries periodically
   cleanup(): void {
     const now = Date.now();
-    for (const [key, entry] of this.limits.entries()) {
+    for (const [key, entry] of Array.from(this.limits.entries())) {
       if (now > entry.resetTime) {
         this.limits.delete(key);
       }
