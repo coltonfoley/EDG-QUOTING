@@ -236,11 +236,9 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
       // Dynamically import PDF.js to avoid SSR issues
       const pdfjs = await import('pdfjs-dist');
       
-      // Set up worker
-      pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-        'pdfjs-dist/build/pdf.worker.min.js',
-        import.meta.url
-      ).href;
+      // Ensure worker is properly configured for Vite 
+      pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@5.4.149/build/pdf.worker.min.js`;
+      console.log('📦 PDF.js worker configured for version 5.4.149');
       
       // Read file as array buffer
       const arrayBuffer = await file.arrayBuffer();
@@ -278,10 +276,16 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
         }
       }
       
+      console.log(`✅ Successfully converted ${pages.length} pages to images`);
       return pages;
     } catch (error) {
       console.error('Error converting PDF to images:', error);
-      throw new Error('Failed to convert PDF to images for vision processing');
+      console.error('PDF conversion error details:', {
+        message: error.message,
+        name: error.name,
+        stack: error.stack
+      });
+      throw new Error(`Failed to convert PDF to images: ${error.message || 'Unknown error'}`);
     }
   };
 
