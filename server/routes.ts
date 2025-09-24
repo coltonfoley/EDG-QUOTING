@@ -46,7 +46,6 @@ import type { ExtractedProduct } from "./openai";
 import { ObjectStorageService, ObjectNotFoundError, objectStorageClient } from "./objectStorage";
 import { ObjectPermission } from "./objectAcl";
 import type { InsertQuote } from "@shared/schema";
-import { parsePDF, validatePDFBuffer } from "./pdf-parser";
 
 // Simple in-memory rate limiter for OpenAI API calls
 interface RateLimitEntry {
