@@ -107,8 +107,8 @@ export async function convertPDFToImagesServer(pdfBuffer: Buffer): Promise<PDFPa
         
         // Convert PDF buffer to base64 and render
         const pdfBase64 = pdfBuffer.toString('base64');
-        const images = await page.evaluate(async (pdfData) => {
-          return await renderPDF(pdfData);
+        const images = await page.evaluate(async (pdfData: string) => {
+          return await (window as any).renderPDF(pdfData);
         }, pdfBase64);
         
         console.log(`✅ Successfully converted ${images.length} pages with Puppeteer`);

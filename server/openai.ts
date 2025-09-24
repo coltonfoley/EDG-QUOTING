@@ -337,157 +337,28 @@ export async function extractProductsFromText(text: string): Promise<ExtractedPr
 
 // Direct PDF processing using chat completions with file upload
 export async function extractQuoteDataFromPDF(pdfBuffer: Buffer): Promise<ExtractedQuote | null> {
-  let tempFilePath: string | null = null;
-  let fileId: string | null = null;
-  
   try {
-    // Save PDF buffer to temporary file
-    const tempDir = os.tmpdir();
-    tempFilePath = path.join(tempDir, `pdf_${Date.now()}.pdf`);
-    fs.writeFileSync(tempFilePath, pdfBuffer);
+    console.log(`📄 Converting PDF to images for vision processing (${(pdfBuffer.length / 1024 / 1024).toFixed(2)}MB)`);
     
-    console.log(`📁 Saved PDF to temporary file: ${tempFilePath}`);
+    // Import the conversion function here to avoid circular imports
+    const { convertPDFToImagesServer } = await import('./quoteImageUtils');
     
-    // Upload file to OpenAI
-    const fileStream = fs.createReadStream(tempFilePath);
-    const uploadedFile = await openai.files.create({
-      file: fileStream,
-      purpose: "assistants" // This purpose works for chat completions too
-    });
+    // Convert PDF to images for vision processing
+    const images = await convertPDFToImagesServer(pdfBuffer);
     
-    fileId = uploadedFile.id;
-    console.log(`📤 Uploaded PDF to OpenAI with file ID: ${fileId}`);
-    
-    // Create a thread with the PDF file for proper file processing
-    const thread = await openai.beta.threads.create({
-      messages: [
-        {
-          role: "user",
-          content: `Extract all quote information from this PDF document. 
-          
-          Return JSON with these fields (ALL OPTIONAL):
-          {
-            "customer": {"name": string|null, "email": string|null, "phone": string|null, "company": string|null, "address": string|null},
-            "quoteNumber": string|null,
-            "date": string|null,
-            "projectDescription": string|null,
-            "lineItems": [{"description": string|null, "quantity": number|null, "price": number|null, "total": number|null, "unit": string|null}],
-            "subtotal": number|null,
-            "taxRate": number|null,
-            "taxAmount": number|null,
-            "discountAmount": number|null,
-            "total": number|null,
-            "notes": string|null,
-            "terms": string|null,
-            "confidence": number (0-1)
-          }
-          
-          CRITICAL RULES:
-          - Extract ACTUAL data from the PDF, not example/placeholder data
-          - Use NUMERIC values for all prices, quantities, totals
-          - Only extract clearly visible information from the document
-          - Be thorough but accurate - don't make up missing data
-          - Return ONLY valid JSON, no additional text`,
-          attachments: [
-            {
-              file_id: fileId,
-              tools: [{ type: "file_search" }]
-            }
-          ]
-        }
-      ]
-    });
-    
-    console.log(`🧵 Created thread with PDF: ${thread.id}`);
-    
-    // Run the thread with gpt-4o model
-    const run = await openai.beta.threads.runs.createAndPoll(
-      thread.id,
-      {
-        model: "gpt-4o",
-        response_format: { type: "json_object" },
-        max_completion_tokens: 6000
-      }
-    );
-    
-    console.log(`🏃 Thread run completed with status: ${run.status}`);
-    
-    if (run.status !== 'completed') {
-      console.error(`Thread run failed with status: ${run.status}`);
+    if (!images || images.length === 0) {
+      console.error('Failed to convert PDF to images');
       return null;
     }
     
-    // Get the messages from the thread
-    const messages = await openai.beta.threads.messages.list(thread.id);
+    console.log(`📸 Converted PDF to ${images.length} images, processing with vision API`);
     
-    // Find the assistant's response (most recent message from assistant)
-    const assistantMessage = messages.data.find(msg => msg.role === 'assistant');
-    
-    if (!assistantMessage || assistantMessage.content[0]?.type !== 'text') {
-      console.error('No valid response from assistant');
-      return null;
-    }
-    
-    const response = assistantMessage.content[0] as any;
-    const content = response.text.value;
-    
-    if (!content) {
-      console.error('Empty response from OpenAI');
-      return null;
-    }
-    
-    console.log(`📝 Received response from OpenAI`);
-    
-    let parsedContent;
-    try {
-      parsedContent = JSON.parse(content);
-    } catch (jsonError) {
-      console.error('JSON parsing failed:', jsonError);
-      // Try to extract JSON from markdown code blocks if present
-      const jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/) || content.match(/```\s*([\s\S]*?)\s*```/);
-      if (jsonMatch) {
-        parsedContent = JSON.parse(jsonMatch[1]);
-      } else {
-        return null;
-      }
-    }
-    
-    const extracted = ExtractedQuoteSchema.parse(parsedContent);
-    
-    // Calculate confidence if not present
-    if (!extracted.confidence) {
-      extracted.confidence = calculateExtractionConfidence(extracted);
-    }
-    
-    console.log(`✅ Successfully extracted quote data with confidence: ${extracted.confidence}`);
-    
-    // Clean up the uploaded file and thread
-    try {
-      // Note: Thread cleanup happens automatically, we just need to delete the file
-      // The OpenAI SDK doesn't have a direct delete method, but files auto-expire
-      // We'll just log that we're done with it
-      console.log(`🗑️ Deleted uploaded file from OpenAI: ${fileId}`);
-    } catch (deleteError) {
-      console.warn(`Warning: Could not delete resources:`, deleteError);
-    }
-    
-    return extracted;
+    // Process images with vision API
+    return await extractQuoteDataFromImages(images);
     
   } catch (error) {
     console.error('Error in extractQuoteDataFromPDF:', error);
-    
-    // Note: File cleanup - files auto-expire on OpenAI's side
-    if (fileId) {
-      console.log(`Note: File ${fileId} will auto-expire on OpenAI's servers`);
-    }
-    
     return null;
-  } finally {
-    // Clean up temporary file
-    if (tempFilePath && fs.existsSync(tempFilePath)) {
-      fs.unlinkSync(tempFilePath);
-      console.log(`🗑️ Cleaned up temporary file: ${tempFilePath}`);
-    }
   }
 }
 
