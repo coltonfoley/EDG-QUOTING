@@ -236,9 +236,9 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
       // Dynamically import PDF.js 
       const pdfjs = await import('pdfjs-dist');
       
-      // Simple worker setup that should work in most environments
-      pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js`;
-      console.log('📦 Setting up PDF.js worker...');
+      // Use EXACT matching version with reliable CDN
+      pdfjs.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@5.4.149/build/pdf.worker.min.js`;
+      console.log('📦 PDF.js worker v5.4.149 configured via jsDelivr CDN');
       
       // Read file as array buffer
       const arrayBuffer = await file.arrayBuffer();
