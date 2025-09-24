@@ -1,0 +1,234 @@
+You don’t need to convert PDFs to images anymore—stop fighting Sharp/Puppeteer. Use the Responses API with file inputs + Structured Outputs and send the PDF directly. Here’s a drop-in way to fix your stack and retire the “Vision-only” flow.
+
+What to change (high level)
+
+Stop: “Vision API” path that only accepts images.
+
+Start: client.responses.create({ input: [{ type: "input_file", file_id }] , response_format: json_schema })
+
+Don’t create an Assistant per request. Use a single Responses call; it natively reads PDFs.
+
+Keep your image flow as a fallback only if you choose to do client-side PDF→PNG, but you won’t need it for digitally native PDFs.
+
+1) server/openai.ts — replace the failing PDF logic
+// server/openai.ts
+import OpenAI from "openai";
+import fs from "fs";
+import os from "os";
+import path from "path";
+
+const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+/** Shape this to your DB */
+export type ExtractedQuote = {
+  vendor_name?: string;
+  vendor_quote_number?: string;
+  quote_date?: string;
+  currency?: string;
+  line_items: Array<{
+    line_no?: string;
+    sku?: string;
+    description: string;
+    uom?: string;
+    qty: number;
+    unit_price?: number;
+    ext_price?: number;
+    manufacturer?: string;
+    page_refs?: number[];
+    source_snippet?: string;
+    notes?: string;
+  }>;
+  subtotal?: number;
+  tax?: number;
+  shipping?: number;
+  discounts?: Array<{ label?: string; amount: number }>;
+  grand_total?: number;
+  notes?: string;
+  schema_version?: string;
+};
+
+const QUOTE_SCHEMA = {
+  name: "QuoteExtraction",
+  strict: true,
+  schema: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      vendor_name: { type: "string" },
+      vendor_quote_number: { type: "string" },
+      quote_date: { type: "string" },
+      currency: { type: "string" },
+      line_items: {
+        type: "array",
+        items: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            line_no: { type: "string" },
+            sku: { type: "string" },
+            description: { type: "string" },
+            uom: { type: "string" },
+            qty: { type: "number" },
+            unit_price: { type: "number" },
+            ext_price: { type: "number" },
+            manufacturer: { type: "string" },
+            page_refs: { type: "array", items: { type: "integer" } },
+            source_snippet: { type: "string" },
+            notes: { type: "string" }
+          },
+          required: ["description", "qty"]
+        }
+      },
+      subtotal: { type: "number" },
+      tax: { type: "number" },
+      shipping: { type: "number" },
+      discounts: {
+        type: "array",
+        items: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            label: { type: "string" },
+            amount: { type: "number" }
+          },
+          required: ["amount"]
+        }
+      },
+      grand_total: { type: "number" },
+      notes: { type: "string" },
+      schema_version: { type: "string" }
+    },
+    required: ["line_items"]
+  }
+};
+
+export async function extractQuoteDataFromPDF(pdfBuffer: Buffer): Promise<ExtractedQuote | null> {
+  let tmpPath: string | null = null;
+  try {
+    // 1) Persist to a tmp file so we can stream it
+    tmpPath = path.join(os.tmpdir(), `quote_${Date.now()}.pdf`);
+    fs.writeFileSync(tmpPath, pdfBuffer);
+
+    // 2) Upload PDF to OpenAI Files
+    const uploaded = await client.files.create({
+      file: fs.createReadStream(tmpPath),
+      purpose: "assistants" // valid for Responses too
+    });
+
+    // 3) Ask the model to extract as strict JSON using Structured Outputs
+    const resp = await client.responses.create({
+      model: "gpt-4.1",
+      response_format: { type: "json_schema", json_schema: QUOTE_SCHEMA },
+      input: [
+        {
+          role: "system",
+          content: "You extract vendor quotes from PDFs into strict JSON our app can insert directly."
+        },
+        {
+          role: "user",
+          content: [
+            {
+              type: "input_text",
+              text: [
+                "Task: Extract all purchasable line items and key fields.",
+                "Rules:",
+                "- Return ONLY valid JSON—no prose.",
+                "- Include page_refs and a 50–120 char source_snippet for each line item.",
+                "- Carry down column headers when cells span multiple rows.",
+                "- Preserve original units, currency symbols, and SKU casing.",
+                "- If ext_price missing, compute qty*unit_price; if mismatch, still include and put a note.",
+                "- Put `schema_version`='v1'."
+              ].join("\n")
+            },
+            { type: "input_file", file_id: uploaded.id }
+          ]
+        }
+      ]
+    });
+
+    // 4) Parse the JSON
+    // SDK returns all content in resp.output; safest is to use .output_text if available,
+    // else read the content blocks.
+    const outputText =
+      // @ts-ignore - some SDK versions expose output_text
+      resp.output_text ??
+      (resp.output?.[0]?.content?.[0]?.type === "output_text"
+        ? resp.output[0].content[0].text
+        : JSON.stringify(resp.output));
+
+    const data: ExtractedQuote = JSON.parse(outputText);
+    return data;
+  } catch (err) {
+    console.error("PDF extraction error:", err);
+    return null;
+  } finally {
+    try { if (tmpPath && fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath); } catch {}
+  }
+}
+
+
+Notes
+
+No beta.assistants.create(); no assistants.del. That was the source of your TS error.
+
+You can still delete the uploaded file later with client.files.del(fileId) if you don’t want to keep it for re-queries.
+
+2) server/routes.ts — keep your “direct” endpoint, but call the new function
+// server/routes.ts (snippet)
+app.post(
+  "/api/quotes/import-vision-direct",
+  isAuthenticated,
+  rateLimitPDFProcessing,
+  upload.single("pdf"),
+  async (req: any, res) => {
+    try {
+      if (!req.file?.buffer) return res.status(400).json({ error: "No PDF provided" });
+      const result = await extractQuoteDataFromPDF(req.file.buffer);
+      if (!result) return res.status(502).json({ error: "Extraction failed" });
+
+      // Optional: Normalize UOM/currency here, verify totals, etc.
+      // Insert into your DB…
+      return res.json({ ok: true, data: result });
+    } catch (e) {
+      console.error(e);
+      return res.status(500).json({ error: "Server error" });
+    }
+  }
+);
+
+
+This endpoint now accepts PDFs and does not hit the Vision-only image path—so you won’t see “Invalid MIME type. Only image types are supported” anymore.
+
+Keep your /api/quotes/import-vision (images) endpoint if you want a fallback for client-side conversion, but it’s no longer required for native PDFs.
+
+3) client/src/components/quote-importer.tsx — no change needed, just point at the fixed endpoint
+
+Your existing code sending FormData with the PDF to /api/quotes/import-vision-direct is fine. The server fix above resolves the MIME error because we’re no longer using an image-only API.
+
+4) If you still want an image fallback (optional)
+
+If you choose to support “render PDF to PNG pages” (e.g., for visual review thumbnails), avoid system-level deps in Replit:
+
+Browser side: use pdfjs-dist to render each page to <canvas> and get toDataURL() PNGs; POST those to your existing /api/quotes/import-vision which you said already works.
+
+Server side (pure JS): pdfjs-dist + canvas (node-canvas) can work but usually needs Cairo/Fonts—painful on Replit. Prefer client-side rendering if you must.
+
+But again: for extraction, you don’t need image conversion.
+
+5) Reliability & throughput tips
+
+Add idempotency keys for retries.
+
+For nightly backfills, batch PDFs with the Batch API server-side and process webhooks when done.
+
+Store {file_id, model, prompt_version, schema_version} with the inserted quote for audit & reproducibility.
+
+6) Common gotchas you just hit (and how we avoided them)
+
+“Vision only accepts images” → Correct. We aren’t using Vision; we’re using Responses + file inputs, which support PDFs.
+
+Creating an Assistant per call → unnecessary and slow. Use a single Responses call.
+
+assistants.del TS error → API uses client.assistants.delete(id) in newer SDKs, but you don’t need it now.
+
+Sharp/Puppeteer system deps → gone; no PDF→PNG on server.
