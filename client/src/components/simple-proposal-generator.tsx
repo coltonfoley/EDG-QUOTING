@@ -336,20 +336,39 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
     // For temporary images (with original file)
     if (image.originalFile) {
       try {
-        // Always convert to data URL using FileReader for reliability
+        // Create corrected image by drawing to canvas (handles most rotation issues)
         return new Promise<{ dataUrl: string; format: string }>((resolve, reject) => {
-          const reader = new FileReader();
-          
-          reader.onload = () => {
-            const dataUrl = reader.result as string;
+          const img = new Image();
+          img.onload = () => {
+            // Create canvas and draw image (this applies browser's EXIF handling)
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            if (!ctx) {
+              reject(new Error('Could not get canvas context'));
+              return;
+            }
+            
+            canvas.width = img.naturalWidth;
+            canvas.height = img.naturalHeight;
+            ctx.drawImage(img, 0, 0);
+            
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
             const format = getImageFormat(image.originalFile!);
             resolve({ dataUrl, format });
           };
           
-          reader.onerror = () => {
-            reject(new Error('Failed to read file as data URL'));
+          img.onerror = () => {
+            reject(new Error('Failed to load image'));
           };
           
+          // Use FileReader to get data URL, then load into img element
+          const reader = new FileReader();
+          reader.onload = () => {
+            img.src = reader.result as string;
+          };
+          reader.onerror = () => {
+            reject(new Error('Failed to read file'));
+          };
           reader.readAsDataURL(image.originalFile!);
         });
       } catch (error) {
