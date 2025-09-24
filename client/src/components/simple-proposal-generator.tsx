@@ -1033,7 +1033,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         setFont('small');
         pdf.text('www.edgpatioshade.com', rightX, 16, { align: 'right' });
         pdf.text('+1 (815) 581-0138', rightX, 22, { align: 'right' });
-        pdf.text('info@edgfurniture.com', rightX, 28, { align: 'right' });
+        pdf.text('info@edgpatioshade.com', rightX, 28, { align: 'right' });
         
         // 2. Dramatic Title Section with branded styling
         yPosition = brandBarHeight + 45;
