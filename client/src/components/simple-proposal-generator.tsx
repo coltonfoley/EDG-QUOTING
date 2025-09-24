@@ -723,13 +723,13 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         // Column configuration - scaled to match contentWidth for consistency
         const tableWidth = contentWidth; // Match other sections
         const columns = [
-          { header: '#', width: tableWidth * 0.05, align: 'left' },
-          { header: 'Product/Service', width: tableWidth * 0.23, align: 'left' },
-          { header: 'SKU', width: tableWidth * 0.13, align: 'left' },
-          { header: 'Description', width: tableWidth * 0.29, align: 'left' },
-          { header: 'Qty', width: tableWidth * 0.06, align: 'center' },
-          { header: 'Rate', width: tableWidth * 0.12, align: 'right' },
-          { header: 'Amount', width: tableWidth * 0.12, align: 'right' }
+          { header: '#', width: tableWidth * 0.05, dataAlign: 'left' },
+          { header: 'Product/Service', width: tableWidth * 0.23, dataAlign: 'left' },
+          { header: 'SKU', width: tableWidth * 0.13, dataAlign: 'left' },
+          { header: 'Description', width: tableWidth * 0.29, dataAlign: 'left' },
+          { header: 'Qty', width: tableWidth * 0.06, dataAlign: 'right' },
+          { header: 'Rate', width: tableWidth * 0.12, dataAlign: 'right' },
+          { header: 'Amount', width: tableWidth * 0.12, dataAlign: 'right' }
         ];
         
         const totalTableWidth = tableWidth;
@@ -816,15 +816,20 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
           ];
           
           columns.forEach((col, colIndex) => {
-            // All data rows use left alignment for better readability
-            const textX = currentX + 2; // Small left padding
+            // Professional alignment: text left, numbers right
+            let textX = currentX + 2; // Default left padding
+            let align = col.dataAlign;
+            
+            if (col.dataAlign === 'right') {
+              textX = currentX + col.width - 2; // Right align with padding
+            }
             
             if (colIndex === 3) { // Description column - handle multi-line
               for (let i = 0; i < descLines.length; i++) {
-                pdf.text(descLines[i], textX, baseY + (i * 4), { align: 'left' });
+                pdf.text(descLines[i], textX, baseY + (i * 4), { align: align as any });
               }
             } else {
-              pdf.text(rowData[colIndex], textX, baseY, { align: 'left' });
+              pdf.text(rowData[colIndex], textX, baseY, { align: align as any });
             }
             
             currentX += col.width;
