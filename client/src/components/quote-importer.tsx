@@ -236,9 +236,9 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
       // Dynamically import PDF.js 
       const pdfjs = await import('pdfjs-dist');
       
-      // Use EXACT matching version with reliable CDN
-      pdfjs.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@5.4.149/build/pdf.worker.min.js`;
-      console.log('📦 PDF.js worker v5.4.149 configured via jsDelivr CDN');
+      // Disable worker to avoid CDN loading issues - run in main thread
+      pdfjs.GlobalWorkerOptions.workerSrc = false;
+      console.log('📦 PDF.js configured to run in main thread (no worker)');
       
       // Read file as array buffer
       const arrayBuffer = await file.arrayBuffer();
