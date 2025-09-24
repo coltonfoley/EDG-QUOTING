@@ -458,10 +458,13 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
       };
       
       const colors = {
-        primary: [0, 0, 0], // Black
-        accent: [66, 255, 193], // EDG Teal
+        primary: [0, 0, 0], // Black #000000
+        white: [255, 255, 255], // White #ffffff
+        accent: [66, 255, 193], // EDG Teal #42ffc1
+        accentRgb: '#42ffc1', // For hex operations
         gray: [128, 128, 128],
-        lightGray: [240, 240, 240]
+        lightGray: [240, 240, 240],
+        darkGray: [60, 60, 60]
       };
       
       // Company information
@@ -504,26 +507,43 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         // Skip header on cover page - cover has its own branding
         if (includeCoverPage && currentPage === 1) return;
         
-        // Company header on every page (except cover)
         const headerY = margin;
+        
+        // Branded header background with teal accent strip
+        const [r, g, b] = colors.accent;
+        pdf.setFillColor(r, g, b);
+        pdf.rect(0, 0, pageWidth, 4, 'F'); // Teal strip at very top
+        
+        // Light background for header area
+        pdf.setFillColor(250, 250, 250);
+        pdf.rect(0, 4, pageWidth, 18, 'F');
+        
+        // Company name with stronger branding
         setFont('subheading');
         setColor('primary');
-        pdf.text(company.name, margin, headerY);
+        pdf.text(company.name.toUpperCase(), margin, headerY + 2);
         
+        // Professional contact layout
         setFont('caption');
-        pdf.text(company.address1, margin, headerY + 4);
-        pdf.text(company.address2, margin, headerY + 8);
+        setColor('darkGray');
+        pdf.text(company.address1 + ' • ' + company.address2, margin, headerY + 6);
         
-        // Contact info on right
+        // Right-aligned contact with teal accents
         const rightX = pageWidth - margin;
-        pdf.text(company.email, rightX, headerY, { align: 'right' });
-        pdf.text(company.phone, rightX, headerY + 4, { align: 'right' });
-        pdf.text(company.website, rightX, headerY + 8, { align: 'right' });
+        setColor('primary');
+        pdf.text(company.phone, rightX, headerY + 2, { align: 'right' });
+        setColor('darkGray');
+        pdf.text(company.email + ' • ' + company.website, rightX, headerY + 6, { align: 'right' });
         
-        // Header line
-        pdf.setDrawColor(200, 200, 200);
-        pdf.setLineWidth(0.5);
-        pdf.line(margin, headerY + 12, pageWidth - margin, headerY + 12);
+        // Branded bottom border
+        pdf.setDrawColor(r, g, b);
+        pdf.setLineWidth(1);
+        pdf.line(margin, headerY + 10, pageWidth - margin, headerY + 10);
+        
+        // Small decorative teal squares
+        pdf.setFillColor(r, g, b);
+        pdf.rect(margin, headerY + 11, 2, 2, 'F');
+        pdf.rect(pageWidth - margin - 2, headerY + 11, 2, 2, 'F');
       };
       
       const drawFooter = () => {
@@ -532,21 +552,57 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
           return; // Cover page has its own custom footer band
         }
         
-        // Only draw page numbers on content pages (page 2+)
-        const footerY = pageHeight - margin - 2;
-        setFont('caption');
-        setColor('gray');
+        const footerY = pageHeight - margin + 2;
+        const [r, g, b] = colors.accent;
         
-        // Page numbers for content pages only
+        // Branded footer with teal accent line
+        pdf.setDrawColor(r, g, b);
+        pdf.setLineWidth(2);
+        pdf.line(margin, footerY - 8, pageWidth - margin, footerY - 8);
+        
+        // Light background for footer
+        pdf.setFillColor(250, 250, 250);
+        pdf.rect(0, footerY - 6, pageWidth, 10, 'F');
+        
+        // Page numbers with style
+        setFont('caption');
+        setColor('primary');
         const totalPages = pdf.getNumberOfPages();
-        pdf.text(`Page ${currentPage} of ${totalPages}`, pageWidth / 2, footerY, { align: 'center' });
+        pdf.text(`PAGE ${currentPage} OF ${totalPages}`, pageWidth / 2, footerY - 2, { align: 'center' });
+        
+        // Brand tagline in footer corner
+        setColor('darkGray');
+        pdf.text('OUTDOOR LIVING SOLUTIONS', pageWidth - margin, footerY - 2, { align: 'right' });
+        
+        // Small teal accent in footer
+        pdf.setFillColor(r, g, b);
+        pdf.rect(pageWidth / 2 - 15, footerY, 30, 1, 'F');
       };
       
       const drawEstimateHeader = () => {
+        // Create a stunning branded header with teal background
+        const [r, g, b] = colors.accent;
+        pdf.setFillColor(r, g, b);
+        
+        // Draw teal background rectangle with rounded corners effect
+        pdf.rect(margin - 5, yPosition - 8, contentWidth + 10, 20, 'F');
+        
+        // Add subtle shadow effect with darker teal
+        pdf.setFillColor(r * 0.8, g * 0.8, b * 0.8);
+        pdf.rect(margin - 3, yPosition - 6, contentWidth + 6, 2, 'F');
+        
+        // White text on teal background
+        pdf.setTextColor(255, 255, 255);
         setFont('heading');
+        pdf.text('PROFESSIONAL ESTIMATE', margin + 5, yPosition + 2);
+        
+        // Add decorative elements - small teal accent lines
+        pdf.setFillColor(255, 255, 255);
+        pdf.rect(margin + 5, yPosition + 6, 50, 1, 'F');
+        
+        // Reset text color
         setColor('primary');
-        pdf.text('ESTIMATE', margin, yPosition);
-        yPosition += 12;
+        yPosition += 25;
       };
       
       const drawAddresses = () => {
@@ -641,28 +697,31 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         const tableX = margin;
         
         const drawTableHeader = () => {
+          // Professional branded table header with teal background
+          const [r, g, b] = colors.accent;
+          pdf.setFillColor(r, g, b);
+          pdf.rect(tableX, yPosition - 5, totalTableWidth, headerHeight + 6, 'F');
+          
+          // White text on teal background
+          pdf.setTextColor(255, 255, 255);
           setFont('body');
-          setColor('primary');
           
           let currentX = tableX;
           
           columns.forEach(col => {
-            let textX = currentX;
+            let textX = currentX + 2; // Add padding
             if (col.align === 'center') textX = currentX + (col.width / 2);
-            else if (col.align === 'right') textX = currentX + col.width;
+            else if (col.align === 'right') textX = currentX + col.width - 2;
             
             const align = col.align === 'center' ? 'center' : col.align === 'right' ? 'right' : 'left';
             pdf.text(col.header, textX, yPosition, { align: align as any });
             currentX += col.width;
           });
           
-          yPosition += headerHeight;
+          yPosition += headerHeight + 3;
           
-          // Header underline
-          pdf.setDrawColor(0, 0, 0);
-          pdf.setLineWidth(0.5);
-          pdf.line(tableX, yPosition, tableX + totalTableWidth, yPosition);
-          yPosition += 3;
+          // Reset text color for table content
+          setColor('primary');
         };
         
         const drawTableRow = (item: any, index: number) => {
@@ -755,12 +814,16 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
       const drawTotalsSection = () => {
         if (!showPricing) return;
         
-        checkPageBreak(50);
+        checkPageBreak(60);
         
-        // Professional totals area - right aligned
-        const totalsWidth = 60;
+        // Professional branded totals area
+        const totalsWidth = 70;
         const totalsX = pageWidth - margin - totalsWidth;
         const labelsX = totalsX - 5;
+        
+        // Add subtle background for totals area
+        pdf.setFillColor(248, 248, 248);
+        pdf.roundedRect(labelsX - 5, yPosition - 5, totalsWidth + 10, 35, 2, 2, 'F');
         
         setFont('body');
         setColor('primary');
@@ -777,77 +840,134 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
           yPosition += 6;
         }
         
-        // Total line
-        pdf.setDrawColor(0, 0, 0);
-        pdf.setLineWidth(0.5);
+        // Branded total line with teal accent
+        const [r, g, b] = colors.accent;
+        pdf.setDrawColor(r, g, b);
+        pdf.setLineWidth(2);
         pdf.line(labelsX, yPosition, totalsX + totalsWidth, yPosition);
-        yPosition += 4;
+        yPosition += 6;
         
+        // Dramatic total with teal background
+        pdf.setFillColor(r, g, b);
+        pdf.rect(labelsX - 2, yPosition - 4, totalsWidth + 7, 12, 'F');
+        
+        pdf.setTextColor(255, 255, 255);
         setFont('subheading');
-        pdf.text('Total:', labelsX, yPosition, { align: 'right' });
-        pdf.text(formatCurrency(totals.total), totalsX + totalsWidth, yPosition, { align: 'right' });
-        yPosition += 15;
+        pdf.text('TOTAL:', labelsX, yPosition + 2, { align: 'right' });
+        pdf.text(formatCurrency(totals.total), totalsX + totalsWidth, yPosition + 2, { align: 'right' });
+        
+        setColor('primary'); // Reset
+        yPosition += 20;
       };
       
       const drawSignatureSection = () => {
-        checkPageBreak(40);
+        checkPageBreak(50);
         
-        yPosition += 10;
+        yPosition += 15;
         
-        // Signature lines
+        // Branded signature section header
+        const [r, g, b] = colors.accent;
+        pdf.setFillColor(r, g, b);
+        pdf.rect(margin, yPosition - 5, contentWidth, 12, 'F');
+        
+        pdf.setTextColor(255, 255, 255);
+        setFont('body');
+        pdf.text('CLIENT ACCEPTANCE', margin + 5, yPosition + 2);
+        
+        setColor('primary');
+        yPosition += 20;
+        
+        // Professional signature boxes
         const leftSigX = margin;
         const rightSigX = margin + (contentWidth / 2);
         
-        setFont('body');
+        // Left signature box
+        pdf.setDrawColor(r, g, b);
+        pdf.setLineWidth(1);
+        pdf.rect(leftSigX, yPosition, 70, 25, 'S');
+        
+        setFont('small');
+        setColor('gray');
+        pdf.text('ACCEPTED DATE', leftSigX + 2, yPosition + 5);
         setColor('primary');
+        pdf.text('Date:', leftSigX + 2, yPosition + 15);
         
-        // Acceptance signature
-        pdf.text('Accepted date', leftSigX, yPosition);
-        pdf.text('Accepted by', rightSigX, yPosition);
-        yPosition += 15;
+        // Right signature box
+        pdf.setDrawColor(r, g, b);
+        pdf.rect(rightSigX, yPosition, 90, 25, 'S');
         
-        // Signature lines
-        pdf.setDrawColor(0, 0, 0);
-        pdf.setLineWidth(0.5);
-        pdf.line(leftSigX, yPosition, leftSigX + 50, yPosition);
-        pdf.line(rightSigX, yPosition, rightSigX + 80, yPosition);
-        yPosition += 20;
+        setColor('gray');
+        pdf.text('CLIENT SIGNATURE', rightSigX + 2, yPosition + 5);
+        setColor('primary');
+        pdf.text('Signature:', rightSigX + 2, yPosition + 15);
+        pdf.text('Print Name:', rightSigX + 2, yPosition + 20);
+        
+        yPosition += 35;
       };
 
       const drawProfessionalCoverPage = async () => {
         if (!includeCoverPage) return;
         
-        // === PROFESSIONAL COVER PAGE WITH EDG BRANDING ===
+        // === STUNNING BRANDED COVER PAGE ===
         
-        // 1. EDG Teal Brand Header Bar (full width)
-        const brandBarHeight = 28;
+        // 1. Dramatic gradient-style header with multiple teal layers
+        const brandBarHeight = 35;
         const [r, g, b] = colors.accent;
+        
+        // Main teal background
         pdf.setFillColor(r, g, b);
         pdf.rect(0, 0, pageWidth, brandBarHeight, 'F');
         
-        // Company logo placeholder and name on brand bar
-        pdf.setTextColor(255, 255, 255); // White text on teal
-        setFont('subheading');
-        pdf.text('EDG PATIO & SHADE', margin, 18);
+        // Darker accent strip for depth
+        pdf.setFillColor(r * 0.7, g * 0.7, b * 0.7);
+        pdf.rect(0, brandBarHeight - 8, pageWidth, 8, 'F');
         
-        // Company contact on right side of brand bar
+        // White accent lines for sophistication
+        pdf.setFillColor(255, 255, 255);
+        pdf.rect(0, brandBarHeight - 12, pageWidth, 1, 'F');
+        pdf.rect(0, brandBarHeight - 4, pageWidth, 1, 'F');
+        
+        // Company name with impact
+        pdf.setTextColor(255, 255, 255);
+        pdf.setFontSize(18);
+        pdf.setFont('helvetica', 'bold');
+        pdf.text('EDG PATIO & SHADE', margin, 20);
+        
+        // Professional tagline
         setFont('small');
-        pdf.text('www.edgpatioshade.com', pageWidth - margin, 12, { align: 'right' });
-        pdf.text('+1 (815) 581-0138', pageWidth - margin, 20, { align: 'right' });
+        pdf.text('PREMIUM OUTDOOR LIVING SOLUTIONS', margin, 26);
         
-        // 2. Professional Title Section
-        yPosition = brandBarHeight + 35;
-        setColor('primary'); // Back to black text
+        // Contact info with style
+        const rightX = pageWidth - margin;
+        setFont('small');
+        pdf.text('www.edgpatioshade.com', rightX, 16, { align: 'right' });
+        pdf.text('+1 (815) 581-0138', rightX, 22, { align: 'right' });
+        pdf.text('info@edgfurniture.com', rightX, 28, { align: 'right' });
         
-        // Large title
-        pdf.setFontSize(28);
+        // 2. Dramatic Title Section with branded styling
+        yPosition = brandBarHeight + 45;
+        setColor('primary');
+        
+        // Massive impact title
+        pdf.setFontSize(32);
         pdf.setFont('helvetica', 'bold');
         pdf.text('PROJECT PROPOSAL', margin, yPosition);
         
-        // Project name subtitle
-        yPosition += 15;
+        // Teal accent line under title
+        pdf.setFillColor(r, g, b);
+        pdf.rect(margin, yPosition + 5, 120, 3, 'F');
+        
+        // Project name with style
+        yPosition += 20;
         setFont('heading');
-        pdf.text(quote.projectName || 'Outdoor Living Project', margin, yPosition);
+        setColor('darkGray');
+        pdf.text((quote.projectName || 'Outdoor Living Project').toUpperCase(), margin, yPosition);
+        
+        // Decorative teal dots
+        pdf.setFillColor(r, g, b);
+        for (let i = 0; i < 5; i++) {
+          pdf.circle(margin + (i * 8), yPosition + 8, 1, 'F');
+        }
         
         // 3. Hero Cover Image (if provided)
         yPosition += 25;
@@ -1075,10 +1195,21 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         
         checkPageBreak(30);
         
+        // Branded contract header
+        const [r, g, b] = colors.accent;
+        pdf.setFillColor(r, g, b);
+        pdf.rect(margin, yPosition - 8, contentWidth, 18, 'F');
+        
+        pdf.setTextColor(255, 255, 255);
         setFont('subheading');
+        pdf.text('CONTRACT TERMS & CONDITIONS', margin + 5, yPosition + 2);
+        
+        // Decorative elements
+        pdf.setFillColor(255, 255, 255);
+        pdf.rect(margin + 5, yPosition + 5, 80, 1, 'F');
+        
         setColor('primary');
-        pdf.text('CONTRACT', margin, yPosition);
-        yPosition += 15;
+        yPosition += 25;
         
         // Get contract content
         const contractContent = quote.contractTemplate?.terms || quote.customContractTerms || '';
