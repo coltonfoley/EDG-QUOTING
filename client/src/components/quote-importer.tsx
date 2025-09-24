@@ -734,14 +734,15 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
       setCurrentTab('upload');
       setImportOptions({
         createNewQuote: true,
-        customerHandling: 'create_new'
+        customerHandling: 'create_new',
+        combineIntoSingleQuote: false
       });
     }
   }, [open]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-6xl max-h-[90vh] overflow-hidden">
+      <DialogContent className="max-w-6xl max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Upload className="h-5 w-5" />
@@ -749,7 +750,7 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
           </DialogTitle>
         </DialogHeader>
 
-        <Tabs value={currentTab} onValueChange={setCurrentTab} className="flex-1">
+        <Tabs value={currentTab} onValueChange={setCurrentTab} className="flex-1 flex flex-col">
           <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="upload">Upload PDFs</TabsTrigger>
             <TabsTrigger value="preview" disabled={successfulPDFs.length === 0}>
@@ -957,7 +958,7 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
                               <div>
                                 <Label>Name</Label>
                                 <Input 
-                                  value={getCurrentPDFData(selectedPDFId)?.customer?.name || ''} 
+                                  value={getCurrentPDFData(selectedPDFId)?.customer?.name ?? ''} 
                                   onChange={(e) => selectedPDFId && updatePDFData(selectedPDFId, 'customer.name', e.target.value)}
                                   placeholder="Customer name"
                                   data-testid="input-customer-name"
@@ -966,7 +967,7 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
                               <div>
                                 <Label>Company</Label>
                                 <Input 
-                                  value={getCurrentPDFData(selectedPDFId)?.customer?.company || ''} 
+                                  value={getCurrentPDFData(selectedPDFId)?.customer?.company ?? ''} 
                                   onChange={(e) => selectedPDFId && updatePDFData(selectedPDFId, 'customer.company', e.target.value)}
                                   placeholder="Company name"
                                   data-testid="input-customer-company"
@@ -975,7 +976,7 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
                               <div>
                                 <Label>Email</Label>
                                 <Input 
-                                  value={getCurrentPDFData(selectedPDFId)?.customer?.email || ''} 
+                                  value={getCurrentPDFData(selectedPDFId)?.customer?.email ?? ''} 
                                   onChange={(e) => selectedPDFId && updatePDFData(selectedPDFId, 'customer.email', e.target.value)}
                                   placeholder="Email address"
                                   data-testid="input-customer-email"
@@ -984,7 +985,7 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
                               <div>
                                 <Label>Phone</Label>
                                 <Input 
-                                  value={getCurrentPDFData(selectedPDFId)?.customer?.phone || ''} 
+                                  value={getCurrentPDFData(selectedPDFId)?.customer?.phone ?? ''} 
                                   onChange={(e) => selectedPDFId && updatePDFData(selectedPDFId, 'customer.phone', e.target.value)}
                                   placeholder="Phone number"
                                   data-testid="input-customer-phone"
@@ -1002,7 +1003,7 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
                               <div>
                                 <Label>Quote Number</Label>
                                 <Input 
-                                  value={getCurrentPDFData(selectedPDFId)?.quoteNumber || ''} 
+                                  value={getCurrentPDFData(selectedPDFId)?.quoteNumber ?? ''} 
                                   onChange={(e) => selectedPDFId && updatePDFData(selectedPDFId, 'quoteNumber', e.target.value)}
                                   placeholder="Quote number"
                                   data-testid="input-quote-number"
@@ -1011,7 +1012,7 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
                               <div>
                                 <Label>Date</Label>
                                 <Input 
-                                  value={getCurrentPDFData(selectedPDFId)?.date || ''} 
+                                  value={getCurrentPDFData(selectedPDFId)?.date ?? ''} 
                                   onChange={(e) => selectedPDFId && updatePDFData(selectedPDFId, 'date', e.target.value)}
                                   placeholder="Quote date"
                                   data-testid="input-quote-date"
@@ -1020,7 +1021,7 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
                               <div className="col-span-2">
                                 <Label>Project Description</Label>
                                 <Textarea 
-                                  value={getCurrentPDFData(selectedPDFId)?.projectDescription || ''} 
+                                  value={getCurrentPDFData(selectedPDFId)?.projectDescription ?? ''} 
                                   onChange={(e) => selectedPDFId && updatePDFData(selectedPDFId, 'projectDescription', e.target.value)}
                                   placeholder="Project description"
                                   data-testid="textarea-project-description"
@@ -1033,7 +1034,7 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
 
                           {/* Line Items */}
                           <div>
-                            <h4 className="font-medium mb-3">Line Items ({getCurrentPDFData(selectedPDFId)?.lineItems?.length || 0})</h4>
+                            <h4 className="font-medium mb-3">Line Items ({getCurrentPDFData(selectedPDFId)?.lineItems?.length ?? 0})</h4>
                             {getCurrentPDFData(selectedPDFId)?.lineItems?.length > 0 ? (
                               <div className="space-y-3">
                                 {getCurrentPDFData(selectedPDFId)?.lineItems?.map((item, index) => (
@@ -1108,8 +1109,9 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
           </TabsContent>
 
           {/* Import Options Tab */}
-          <TabsContent value="import" className="space-y-4">
-            <Card>
+          <TabsContent value="import" className="flex flex-col flex-1 gap-4">
+            <div className="flex-1 overflow-y-auto">
+              <Card>
               <CardHeader>
                 <CardTitle>Import Options</CardTitle>
                 <p className="text-sm text-gray-600">
@@ -1245,10 +1247,11 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
                   </div>
                 </div>
               </CardContent>
-            </Card>
+              </Card>
+            </div>
 
-            {/* Import Summary */}
-            <Card>
+            {/* Import Summary - Fixed at bottom */}
+            <Card className="flex-shrink-0">
               <CardHeader>
                 <CardTitle>Import Summary</CardTitle>
               </CardHeader>
