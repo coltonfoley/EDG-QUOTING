@@ -748,12 +748,9 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
           let currentX = tableX;
           
           columns.forEach(col => {
-            let textX = currentX + 2; // Add padding
-            if (col.align === 'center') textX = currentX + (col.width / 2);
-            else if (col.align === 'right') textX = currentX + col.width - 2;
-            
-            const align = col.align === 'center' ? 'center' : col.align === 'right' ? 'right' : 'left';
-            pdf.text(col.header, textX, yPosition - 2, { align: align as any });
+            // Center all header text for professional appearance
+            const textX = currentX + (col.width / 2);
+            pdf.text(col.header, textX, yPosition - 2, { align: 'center' });
             currentX += col.width;
           });
           
@@ -819,18 +816,15 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
           ];
           
           columns.forEach((col, colIndex) => {
-            let textX = currentX;
-            if (col.align === 'center') textX = currentX + (col.width / 2);
-            else if (col.align === 'right') textX = currentX + col.width - 1;
-            
-            const align = col.align === 'center' ? 'center' : col.align === 'right' ? 'right' : 'left';
+            // All data rows use left alignment for better readability
+            const textX = currentX + 2; // Small left padding
             
             if (colIndex === 3) { // Description column - handle multi-line
               for (let i = 0; i < descLines.length; i++) {
-                pdf.text(descLines[i], textX, baseY + (i * 4), { align: align as any });
+                pdf.text(descLines[i], textX, baseY + (i * 4), { align: 'left' });
               }
             } else {
-              pdf.text(rowData[colIndex], textX, baseY, { align: align as any });
+              pdf.text(rowData[colIndex], textX, baseY, { align: 'left' });
             }
             
             currentX += col.width;
