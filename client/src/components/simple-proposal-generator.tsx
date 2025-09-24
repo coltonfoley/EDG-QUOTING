@@ -715,47 +715,65 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
       const drawProfessionalTable = () => {
         if (quote.lineItems.length === 0) return;
         
-        // Table configuration
-        const tableStartY = yPosition;
-        const rowHeight = 14; // Increased for better spacing
-        const headerHeight = 10; // Increased for better header spacing
+        // Padding constants and layout metrics
+        const lineHeight = 4;
+        const padX = 3;
+        const padY = 3;
+        const rowHeight = 14;
+        const headerHeight = 12;
         
         // Column configuration - scaled to match contentWidth for consistency
-        const tableWidth = contentWidth; // Match other sections
+        const tableWidth = contentWidth;
         const columns = [
-          { header: '#', width: tableWidth * 0.05, dataAlign: 'left' },
+          { header: '#', width: tableWidth * 0.05, dataAlign: 'center' },
           { header: 'Product/Service', width: tableWidth * 0.23, dataAlign: 'left' },
           { header: 'SKU', width: tableWidth * 0.13, dataAlign: 'left' },
           { header: 'Description', width: tableWidth * 0.29, dataAlign: 'left' },
-          { header: 'Qty', width: tableWidth * 0.06, dataAlign: 'right' },
+          { header: 'Qty', width: tableWidth * 0.06, dataAlign: 'center' },
           { header: 'Rate', width: tableWidth * 0.12, dataAlign: 'right' },
           { header: 'Amount', width: tableWidth * 0.12, dataAlign: 'right' }
         ];
         
-        const totalTableWidth = tableWidth;
         const tableX = margin;
         
         const drawTableHeader = () => {
+          const headerTop = yPosition;
+          
           // Professional branded table header with teal background
           const [r, g, b] = colors.accent;
           pdf.setFillColor(r, g, b);
-          pdf.rect(tableX, yPosition - 5, contentWidth, headerHeight + 6, 'F');
+          pdf.rect(tableX, headerTop, contentWidth, headerHeight, 'F');
+          
+          // Draw header borders
+          pdf.setDrawColor(200, 200, 200);
+          pdf.setLineWidth(0.35);
+          let currentX = tableX;
+          
+          // Draw vertical dividers for header
+          columns.forEach((col, index) => {
+            if (index > 0) {
+              pdf.line(currentX, headerTop, currentX, headerTop + headerHeight);
+            }
+            currentX += col.width;
+          });
+          
+          // Draw header border outline
+          pdf.rect(tableX, headerTop, contentWidth, headerHeight, 'S');
           
           // White text on teal background
           pdf.setTextColor(255, 255, 255);
           setFont('body');
           
-          let currentX = tableX;
-          
+          currentX = tableX;
           columns.forEach(col => {
-            // Center all header text both horizontally and vertically
+            // Center header text both horizontally and vertically
             const textX = currentX + (col.width / 2);
-            const textY = yPosition + 2; // Center vertically in larger teal background
+            const textY = headerTop + headerHeight/2 + 3; // Vertically centered
             pdf.text(col.header, textX, textY, { align: 'center' });
             currentX += col.width;
           });
           
-          yPosition += headerHeight + 8; // More space to prevent bleeding
+          yPosition += headerHeight;
           
           // Reset text color for table content
           setColor('primary');
@@ -770,79 +788,84 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
             ? baseTotal + (baseTotal * (markup / 100))
             : baseTotal + markup;
           
-          // Ensure consistent font for ALL row content
+          // Calculate proper row height based on description wrapping
+          const maxDescWidth = columns[3].width - 2*padX;
+          const descLines = pdf.splitTextToSize(item.description, maxDescWidth);
+          const actualRowHeight = Math.max(rowHeight, padY*2 + descLines.length*lineHeight);
+          
+          // Check for page break and redraw header if needed
+          if (checkPageBreak(actualRowHeight + 6)) {
+            drawTableHeader();
+          }
+          
+          const cellTop = yPosition;
+          const cellBottom = cellTop + actualRowHeight;
+          
+          // Set font for row content
           pdf.setFontSize(9);
           pdf.setFont('helvetica', 'normal');
           setColor('primary');
           
-          // Check if row needs multiple lines for description
-          const maxDescWidth = columns[3].width - 2;
-          const descLines = pdf.splitTextToSize(item.description, maxDescWidth);
-          const actualRowHeight = Math.max(rowHeight, descLines.length * 4 + 4);
-          
-          // Check for page break and redraw header if needed
-          if (checkPageBreak(actualRowHeight + 5)) {
-            drawTableHeader();
-          }
-          
-          let currentX = tableX;
-          const baseY = yPosition;
-          
-          // Helper function to truncate text to fit column width with proper ellipsis handling
-          const truncateText = (text: string, maxWidth: number): string => {
-            const availableWidth = maxWidth - 2; // Leave 2mm padding
-            
-            // Check if text fits without truncation
-            if (pdf.getTextWidth(text) <= availableWidth) {
-              return text;
-            }
-            
-            // Find the longest text that fits with ellipsis
-            let truncated = text;
-            while (truncated.length > 0 && pdf.getTextWidth(truncated + '...') > availableWidth) {
-              truncated = truncated.slice(0, -1);
-            }
-            
-            return truncated.length > 0 ? truncated + '...' : '...';
-          };
-          
-          // Row data with proper truncation
+          // Row data
           const rowData = [
-            (index + 1).toString(), // #
-            truncateText(item.description.split(' ').slice(0, 3).join(' '), columns[1].width), // Product name
-            truncateText(item.description.split(' ').slice(0, 2).join(' '), columns[2].width), // SKU  
-            item.description, // Full description (handles multi-line separately)
+            (index + 1).toString(),
+            item.description.split(' ').slice(0, 3).join(' '), // Product name shortened
+            item.description.split(' ').slice(0, 2).join(' '), // SKU shortened  
+            item.description, // Full description (multi-line)
             qty.toString(),
             formatCurrency(price),
             formatCurrency(total)
           ];
           
+          // Draw cell content with proper padding and alignment
+          let currentX = tableX;
           columns.forEach((col, colIndex) => {
-            // Professional alignment with proper padding
-            let textX = currentX + 4; // Increased left padding for better spacing
-            let align = col.dataAlign;
+            const cellLeft = currentX;
+            const cellRight = currentX + col.width;
             
+            // Calculate text position based on alignment
+            let textX = cellLeft + padX; // Default left align with padding
             if (col.dataAlign === 'right') {
-              textX = currentX + col.width - 4; // Right align with more padding
+              textX = cellRight - padX;
+            } else if (col.dataAlign === 'center') {
+              textX = cellLeft + (col.width / 2);
             }
             
-            if (colIndex === 3) { // Description column - handle multi-line
+            // Handle multi-line description column
+            if (colIndex === 3) {
               for (let i = 0; i < descLines.length; i++) {
-                pdf.text(descLines[i], textX, baseY + (i * 4), { align: align as any });
+                const textY = cellTop + padY + 3 + (i * lineHeight);
+                pdf.text(descLines[i], textX, textY, { align: col.dataAlign as any });
               }
             } else {
-              pdf.text(rowData[colIndex], textX, baseY, { align: align as any });
+              const textY = cellTop + padY + 3; // Single line with padding
+              pdf.text(rowData[colIndex], textX, textY, { align: col.dataAlign as any });
             }
             
             currentX += col.width;
           });
           
-          // Add professional horizontal grid lines
-          pdf.setDrawColor(220, 220, 220); // Light gray
-          pdf.setLineWidth(0.5);
-          pdf.line(tableX, yPosition + actualRowHeight, tableX + contentWidth, yPosition + actualRowHeight);
+          // Draw borders for this row
+          pdf.setDrawColor(200, 200, 200);
+          pdf.setLineWidth(0.35);
           
-          yPosition += actualRowHeight;
+          // Draw horizontal line at bottom of row
+          pdf.line(tableX, cellBottom, tableX + contentWidth, cellBottom);
+          
+          // Draw vertical column dividers for this row
+          currentX = tableX;
+          columns.forEach((col, index) => {
+            if (index > 0) {
+              pdf.line(currentX, cellTop, currentX, cellBottom);
+            }
+            currentX += col.width;
+          });
+          
+          // Draw left and right borders
+          pdf.line(tableX, cellTop, tableX, cellBottom); // Left border
+          pdf.line(tableX + contentWidth, cellTop, tableX + contentWidth, cellBottom); // Right border
+          
+          yPosition = cellBottom;
         };
         
         // Draw table header
@@ -851,18 +874,6 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         // Draw table rows
         quote.lineItems.forEach((item, index) => {
           drawTableRow(item, index);
-        });
-        
-        // Draw professional vertical column dividers
-        pdf.setDrawColor(220, 220, 220); // Light gray
-        pdf.setLineWidth(0.5);
-        let currentX = tableX;
-        
-        columns.forEach((col, index) => {
-          currentX += col.width;
-          if (index < columns.length - 1) { // Draw line after each column except the last
-            pdf.line(currentX, tableStartY - 5, currentX, yPosition - 10);
-          }
         });
         
         yPosition += 10;
