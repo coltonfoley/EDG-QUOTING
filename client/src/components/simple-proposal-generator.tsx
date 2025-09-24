@@ -597,26 +597,18 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         pdf.setFillColor(250, 250, 250);
         pdf.rect(0, footerY - 6, pageWidth, 10, 'F');
         
-        // Page numbers with style
+        // Company name on left
         setFont('caption');
         setColor('primary');
+        pdf.text(company.name, margin, footerY - 2, { align: 'left' });
+        
+        // Page numbers in center
         const totalPages = pdf.getNumberOfPages();
         pdf.text(`PAGE ${currentPage} OF ${totalPages}`, pageWidth / 2, footerY - 2, { align: 'center' });
         
-        // Add logo to footer
-        if (logoData) {
-          const footerLogoHeight = 8;
-          const footerLogoWidth = (logoData.width / logoData.height) * footerLogoHeight;
-          try {
-            pdf.addImage(logoData.dataUrl, 'PNG', margin, footerY - 6, footerLogoWidth, footerLogoHeight);
-          } catch (e) {
-            console.warn('Could not add logo to footer:', e);
-          }
-        }
-        
-        // Brand tagline in footer corner
+        // Contact info on right
         setColor('darkGray');
-        pdf.text('OUTDOOR LIVING SOLUTIONS', pageWidth - margin, footerY - 2, { align: 'right' });
+        pdf.text(`${company.phone}  •  ${company.email}`, pageWidth - margin, footerY - 2, { align: 'right' });
         
         // Clean footer design
       };
