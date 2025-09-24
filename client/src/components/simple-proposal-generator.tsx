@@ -590,9 +590,6 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         pdf.setLineWidth(2);
         pdf.line(margin, footerY - 8, pageWidth - margin, footerY - 8);
         
-        // Light background for footer
-        pdf.setFillColor(250, 250, 250);
-        pdf.rect(0, footerY - 6, pageWidth, 10, 'F');
         
         // Company name on left
         setFont('caption');
