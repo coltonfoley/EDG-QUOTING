@@ -1,6 +1,9 @@
 import OpenAI from "openai";
 import { z } from "zod";
 import crypto from "crypto";
+import fs from "fs";
+import path from "path";
+import os from "os";
 
 // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
 const openai = new OpenAI({ 
@@ -148,7 +151,7 @@ export type ExtractedQuoteWithPageRefs = z.infer<typeof ExtractedQuoteWithPageRe
 export async function extractProductsFromImage(base64Image: string): Promise<ExtractedProduct[]> {
   try {
     const response = await openai.chat.completions.create({
-      model: "gpt-5", // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
+      model: "gpt-5", // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
       messages: [
         {
           role: "system",
@@ -238,7 +241,7 @@ export async function extractProductsFromText(text: string): Promise<ExtractedPr
       : text;
 
     const response = await openai.chat.completions.create({
-      model: "gpt-5", // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
+      model: "gpt-5", // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
       messages: [
         {
           role: "system",
@@ -332,89 +335,143 @@ export async function extractProductsFromText(text: string): Promise<ExtractedPr
   }
 }
 
-// Direct PDF processing with GPT-5's native PDF support
+// Direct PDF processing with GPT-5 using file upload API
 export async function extractQuoteDataFromPDF(pdfBuffer: Buffer): Promise<ExtractedQuote | null> {
+  let tempFilePath: string | null = null;
+  
   try {
-    // Convert PDF buffer to base64 for API transmission
-    const pdfBase64 = pdfBuffer.toString('base64');
+    // Save PDF buffer to temporary file
+    const tempDir = os.tmpdir();
+    tempFilePath = path.join(tempDir, `pdf_${Date.now()}.pdf`);
+    fs.writeFileSync(tempFilePath, pdfBuffer);
     
-    console.log(`🔍 Processing PDF directly with GPT-5 (${(pdfBuffer.length / 1024 / 1024).toFixed(2)}MB)`);
+    console.log(`📁 Saved PDF to temporary file: ${tempFilePath}`);
     
-    const response = await openai.chat.completions.create({
+    // Upload file to OpenAI
+    const fileStream = fs.createReadStream(tempFilePath);
+    const uploadedFile = await openai.files.create({
+      file: fileStream,
+      purpose: "assistants", // Using assistants purpose which supports PDFs
+    });
+    
+    console.log(`📤 Uploaded PDF to OpenAI with file ID: ${uploadedFile.id}`);
+    
+    // Create an assistant to process the PDF
+    const assistant = await openai.beta.assistants.create({
+      name: "Quote Extraction Assistant",
+      instructions: `You are a specialized data extraction expert for construction and patio quotes. Analyze the provided PDF and extract comprehensive quote information with high accuracy.
+      
+      EXTRACTION GUIDELINES:
+      - Process the entire PDF document natively
+      - Look for customer details, line items, pricing, and totals
+      - Pay attention to headers, footers, and continuation markers
+      - Extract information from both text and visual elements
+      
+      Return JSON with these fields (ALL OPTIONAL):
+      {
+        "customer": {"name": string|null, "email": string|null, "phone": string|null, "company": string|null, "address": string|null},
+        "quoteNumber": string|null,
+        "date": string|null,
+        "projectDescription": string|null,
+        "lineItems": [{"description": string|null, "quantity": number|null, "price": number|null, "total": number|null, "unit": string|null}],
+        "subtotal": number|null,
+        "taxRate": number|null,
+        "taxAmount": number|null,
+        "discountAmount": number|null,
+        "total": number|null,
+        "notes": string|null,
+        "terms": string|null,
+        "confidence": number (0-1)
+      }
+      
+      CRITICAL RULES:
+      - Use NUMERIC values for all prices, quantities, totals (never strings)
+      - Only extract clearly visible information
+      - Be thorough but accurate - don't hallucinate missing data
+      - Include confidence score based on clarity of extracted data
+      - Return ONLY the JSON object, no additional text`,
       model: "gpt-5", // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
+      tools: [{"type": "file_search"}],
+    });
+    
+    // Create a thread and add the PDF file
+    const thread = await openai.beta.threads.create({
       messages: [
         {
-          role: "system",
-          content: `You are a specialized data extraction expert for construction and patio quotes. Analyze the provided PDF and extract comprehensive quote information with high accuracy.
-          
-          EXTRACTION GUIDELINES:
-          - Process the entire PDF document natively
-          - Look for customer details, line items, pricing, and totals
-          - Pay attention to headers, footers, and continuation markers
-          - Extract information visually from both text and visual elements
-          
-          Return JSON with these fields (ALL OPTIONAL):
-          {
-            "customer": {"name": string|null, "email": string|null, "phone": string|null, "company": string|null, "address": string|null},
-            "quoteNumber": string|null,
-            "date": string|null,
-            "projectDescription": string|null,
-            "lineItems": [{"description": string|null, "quantity": number|null, "price": number|null, "total": number|null, "unit": string|null}],
-            "subtotal": number|null,
-            "taxRate": number|null,
-            "taxAmount": number|null,
-            "discountAmount": number|null,
-            "total": number|null,
-            "notes": string|null,
-            "terms": string|null,
-            "confidence": number (0-1)
-          }
-          
-          CRITICAL RULES:
-          - Use NUMERIC values for all prices, quantities, totals (never strings)
-          - Only extract clearly visible information
-          - Be thorough but accurate - don't hallucinate missing data
-          - Include confidence score based on clarity of extracted data`,
-        },
-        {
           role: "user",
-          content: [
+          content: "Analyze this PDF document and extract all quote information. Return the result as a JSON object only.",
+          attachments: [
             {
-              type: "text",
-              text: "Analyze this PDF document and extract all quote information.",
-            },
-            {
-              type: "image_url",
-              image_url: {
-                url: `data:application/pdf;base64,${pdfBase64}`,
-              },
-            },
-          ],
-        },
-      ],
-      response_format: { type: "json_object" },
-      max_tokens: 6000, // gpt-5 doesn't support temperature parameter, do not use it
+              file_id: uploadedFile.id,
+              tools: [{ type: "file_search" }]
+            }
+          ]
+        }
+      ]
     });
-
-    const content = response.choices[0].message.content;
-    if (!content) {
-      return null;
-    }
-
-    const parsedContent = JSON.parse(content);
-    const extracted = ExtractedQuoteSchema.parse(parsedContent);
     
-    // Calculate confidence if not present
-    if (!extracted.confidence) {
-      extracted.confidence = calculateExtractionConfidence(extracted);
+    console.log(`🧵 Created thread with PDF: ${thread.id}`);
+    
+    // Run the assistant
+    const run = await openai.beta.threads.runs.createAndPoll(
+      thread.id,
+      {
+        assistant_id: assistant.id,
+      }
+    );
+    
+    console.log(`🏃 Assistant run completed with status: ${run.status}`);
+    
+    if (run.status === 'completed') {
+      // Get the messages
+      const messages = await openai.beta.threads.messages.list(thread.id);
+      
+      // Find the assistant's response
+      const assistantMessage = messages.data.find(msg => msg.role === 'assistant');
+      
+      if (assistantMessage && assistantMessage.content[0]?.type === 'text') {
+        const content = assistantMessage.content[0].text.value;
+        
+        // Extract JSON from the response (it might be wrapped in markdown code blocks)
+        let jsonContent = content;
+        const jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/) || content.match(/```\s*([\s\S]*?)\s*```/);
+        if (jsonMatch) {
+          jsonContent = jsonMatch[1];
+        }
+        
+        const parsedContent = JSON.parse(jsonContent);
+        const extracted = ExtractedQuoteSchema.parse(parsedContent);
+        
+        // Calculate confidence if not present
+        if (!extracted.confidence) {
+          extracted.confidence = calculateExtractionConfidence(extracted);
+        }
+        
+        console.log(`✅ Successfully extracted quote data with confidence: ${extracted.confidence}`);
+        
+        // Clean up: Delete the assistant and file
+        await openai.beta.assistants.del(assistant.id);
+        await openai.files.del(uploadedFile.id);
+        
+        return extracted;
+      }
     }
     
-    console.log(`✅ Successfully extracted quote data with confidence: ${extracted.confidence}`);
-    return extracted;
+    // Clean up on failure
+    await openai.beta.assistants.del(assistant.id);
+    await openai.files.del(uploadedFile.id);
+    
+    return null;
     
   } catch (error) {
     console.error('Error in extractQuoteDataFromPDF:', error);
     return null;
+  } finally {
+    // Clean up temporary file
+    if (tempFilePath && fs.existsSync(tempFilePath)) {
+      fs.unlinkSync(tempFilePath);
+      console.log(`🗑️ Cleaned up temporary file: ${tempFilePath}`);
+    }
   }
 }
 
@@ -691,474 +748,85 @@ async function consolidateQuoteParts(parts: ExtractedQuoteWithPageRefs[]): Promi
       consolidated.confidence = calculateExtractionConfidence(consolidated);
     }
 
+    console.log(`📊 Consolidated ${parts.length} parts into single quote with confidence: ${consolidated.confidence?.toFixed(2) || 'N/A'}`);
     return consolidated;
   } catch (error) {
-    console.error('Error in consolidateQuoteParts:', error);
-    // Return the first part as fallback
-    return parts[0] as ExtractedQuote;
-  }
-}
-
-/**
- * Calculate confidence score based on data completeness and quality indicators
- */
-function calculateExtractionConfidence(quote: ExtractedQuote, sourceText?: string): number {
-  let score = 0;
-  let maxScore = 0;
-
-  // Critical fields scoring (60% of total score)
-  maxScore += 20; // Customer info weight
-  if (quote.customer?.name || quote.customer?.company) score += 10;
-  if (quote.customer?.email) score += 5;
-  if (quote.customer?.phone) score += 5;
-
-  maxScore += 15; // Financial totals weight
-  if (quote.total !== null && quote.total > 0) score += 10;
-  if (quote.subtotal !== null && quote.subtotal > 0) score += 3;
-  if (quote.taxAmount !== null || quote.taxRate !== null) score += 2;
-
-  maxScore += 15; // Line items weight
-  if (quote.lineItems && quote.lineItems.length > 0) {
-    score += 10;
-    // Bonus for line items with complete data
-    const completeItems = quote.lineItems.filter(item => 
-      item.description && (item.price !== null || item.total !== null)
-    );
-    if (completeItems.length > 0) {
-      score += Math.min(5, completeItems.length * 1);
-    }
-  }
-
-  maxScore += 10; // Quote identification weight
-  if (quote.quoteNumber) score += 5;
-  if (quote.date) score += 5;
-
-  // Secondary fields scoring (30% of total score)
-  maxScore += 10; // Project details weight
-  if (quote.projectDescription) score += 5;
-  if (quote.customer?.address) score += 3;
-  if (quote.notes || quote.terms) score += 2;
-
-  // Data consistency checks (10% of total score)
-  maxScore += 12;
-  
-  // Financial consistency
-  if (quote.total !== null && quote.subtotal !== null) {
-    const expectedTotal = quote.subtotal + (quote.taxAmount || 0) - (quote.discountAmount || 0);
-    const totalDifference = Math.abs(quote.total - expectedTotal);
-    if (totalDifference < 0.01) score += 3; // Perfect match
-    else if (totalDifference < quote.total * 0.1) score += 2; // Within 10%
-    else if (totalDifference < quote.total * 0.2) score += 1; // Within 20%
-  }
-
-  // Tax rate consistency check
-  if (quote.taxRate !== null && quote.taxAmount !== null && quote.subtotal !== null && quote.subtotal > 0) {
-    const expectedTaxAmount = quote.subtotal * quote.taxRate;
-    const taxDifference = Math.abs(quote.taxAmount - expectedTaxAmount);
-    if (taxDifference < 0.01) score += 2; // Perfect match
-    else if (taxDifference < quote.taxAmount * 0.1) score += 1; // Within 10%
-  }
-
-  // Line items sum consistency
-  if (quote.lineItems && quote.lineItems.length > 0 && quote.subtotal !== null) {
-    const lineItemsTotal = quote.lineItems.reduce((sum, item) => {
-      const itemTotal = item.total || (item.price && item.quantity ? item.price * item.quantity : 0);
-      return sum + itemTotal;
-    }, 0);
-    
-    if (lineItemsTotal > 0) {
-      const difference = Math.abs(quote.subtotal - lineItemsTotal);
-      if (difference < 0.01) score += 3; // Perfect match
-      else if (difference < quote.subtotal * 0.1) score += 2; // Within 10%
-      else if (difference < quote.subtotal * 0.2) score += 1; // Within 20%
-    }
-  }
-
-  // Text quality indicators (bonus scoring)
-  if (sourceText) {
-    const lowerText = sourceText.toLowerCase();
-    
-    // Detect structured content patterns
-    const structurePatterns = [
-      /quote\s*#?\s*\w+/i,
-      /total\s*:?\s*\$[\d,]+/i,
-      /subtotal\s*:?\s*\$[\d,]+/i,
-      /tax\s*:?\s*\$[\d,]+/i,
-      /@[\w.-]+\.\w+/, // email pattern
-      /\(\d{3}\)\s*\d{3}-\d{4}/, // phone pattern
-    ];
-    
-    const patternMatches = structurePatterns.filter(pattern => pattern.test(lowerText)).length;
-    score += Math.min(5, patternMatches * 1); // Up to 5 bonus points
-    maxScore += 5;
-  }
-
-  // Calculate final confidence as percentage
-  const confidence = maxScore > 0 ? Math.min(1.0, Math.max(0.0, score / maxScore)) : 0;
-  
-  console.log(`📊 Confidence calculation: ${score}/${maxScore} = ${(confidence * 100).toFixed(1)}%`);
-  
-  return parseFloat(confidence.toFixed(3)); // Round to 3 decimal places
-}
-
-/**
- * Advanced JSON parsing with multiple recovery strategies for malformed OpenAI responses
- */
-function parseJsonWithRecovery(content: string): any {
-  // Strategy 1: Direct JSON parse
-  try {
-    return JSON.parse(content);
-  } catch (error) {
-    console.warn("📋 Strategy 1 failed (direct parse), trying recovery strategies");
-  }
-
-  // Strategy 2: Fix common JSON issues
-  try {
-    let fixedContent = content
-      .replace(/,\s*}/g, '}')  // Remove trailing commas
-      .replace(/,\s*]/g, ']')  // Remove trailing commas in arrays
-      .replace(/'/g, '"')      // Replace single quotes with double quotes
-      .replace(/(\w+):/g, '"$1":');  // Add quotes to unquoted keys
-
-    return JSON.parse(fixedContent);
-  } catch (error) {
-    console.warn("📋 Strategy 2 failed (fixing common issues)");
-  }
-
-  // Strategy 3: Extract JSON from markdown or text wrapping
-  try {
-    const jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/) || 
-                     content.match(/```\s*([\s\S]*?)\s*```/) ||
-                     content.match(/{[\s\S]*}/);
-    
-    if (jsonMatch) {
-      return JSON.parse(jsonMatch[1] || jsonMatch[0]);
-    }
-  } catch (error) {
-    console.warn("📋 Strategy 3 failed (extracting from markdown)");
-  }
-
-  // Strategy 4: Try to find and fix incomplete JSON
-  try {
-    let workingContent = content.trim();
-    
-    // If it looks like truncated JSON, try to close it
-    if (workingContent.startsWith('{') && !workingContent.endsWith('}')) {
-      // Count open braces vs closed braces
-      const openBraces = (workingContent.match(/{/g) || []).length;
-      const closeBraces = (workingContent.match(/}/g) || []).length;
-      const missingBraces = openBraces - closeBraces;
-      
-      if (missingBraces > 0) {
-        workingContent += '}'.repeat(missingBraces);
-      }
-      
-      return JSON.parse(workingContent);
-    }
-  } catch (error) {
-    console.warn("📋 Strategy 4 failed (fixing incomplete JSON)");
-  }
-
-  // Strategy 5: Extract individual field values using regex
-  try {
-    const result: any = {};
-    
-    // Extract string fields
-    const stringFields = ['name', 'email', 'phone', 'company', 'address', 'quoteNumber', 'date', 'projectDescription', 'notes', 'terms'];
-    stringFields.forEach(field => {
-      const match = content.match(new RegExp(`"${field}"\\s*:\\s*"([^"]*)"`, 'i'));
-      if (match) result[field] = match[1];
-    });
-
-    // Extract numeric fields
-    const numericFields = ['subtotal', 'taxRate', 'taxAmount', 'discountAmount', 'total'];
-    numericFields.forEach(field => {
-      const match = content.match(new RegExp(`"${field}"\\s*:\\s*(\\d+(?:\\.\\d+)?)`, 'i'));
-      if (match) result[field] = parseFloat(match[1]);
-    });
-
-    // If we found at least some data, return it
-    if (Object.keys(result).length > 0) {
-      console.warn("📋 Strategy 5 succeeded (regex field extraction)");
-      return { customer: {}, ...result };
-    }
-  } catch (error) {
-    console.warn("📋 Strategy 5 failed (regex extraction)");
-  }
-
-  console.error("❌ All JSON recovery strategies failed");
-  return null;
-}
-
-/**
- * Create a partial quote from potentially invalid data
- */
-function createPartialQuoteFromData(data: any): ExtractedQuote | null {
-  try {
-    const result: ExtractedQuote = {
-      customer: {
-        name: data.customer?.name || data.name || null,
-        email: data.customer?.email || data.email || null,
-        phone: data.customer?.phone || data.phone || null,
-        company: data.customer?.company || data.company || null,
-        address: data.customer?.address || data.address || null
-      },
-      quoteNumber: data.quoteNumber || null,
-      date: data.date || null,
-      projectDescription: data.projectDescription || null,
+    console.error('Error consolidating quote parts:', error);
+    // Return minimal valid quote on error
+    return {
+      customer: { name: null, email: null, phone: null, company: null, address: null },
+      quoteNumber: null,
+      date: null,
+      projectDescription: null,
       lineItems: [],
-      subtotal: typeof data.subtotal === 'number' ? data.subtotal : null,
-      taxRate: typeof data.taxRate === 'number' ? data.taxRate : null,
-      taxAmount: typeof data.taxAmount === 'number' ? data.taxAmount : null,
-      discountAmount: typeof data.discountAmount === 'number' ? data.discountAmount : null,
-      total: typeof data.total === 'number' ? data.total : null,
-      notes: data.notes || null,
-      terms: data.terms || null
+      subtotal: null,
+      taxRate: null,
+      taxAmount: null,
+      discountAmount: null,
+      total: null,
+      notes: null,
+      terms: null,
+      confidence: 0
     };
-
-    // Try to extract line items if they exist
-    if (Array.isArray(data.lineItems)) {
-      result.lineItems = data.lineItems.map((item: any) => ({
-        description: item.description || null,
-        quantity: typeof item.quantity === 'number' ? item.quantity : null,
-        price: typeof item.price === 'number' ? item.price : null,
-        total: typeof item.total === 'number' ? item.total : null,
-        unit: item.unit || null
-      }));
-    }
-
-    // Calculate confidence for partial quote
-    result.confidence = calculateExtractionConfidence(result);
-    
-    console.log("🔧 Created partial quote from corrupted data");
-    return result;
-  } catch (error) {
-    console.error("❌ Failed to create partial quote:", error);
-    return null;
   }
 }
 
-/**
- * Intelligent text preprocessing for PDF quote extraction
- * Identifies and prioritizes sections most likely to contain quote information
- */
-function preprocessTextForExtraction(text: string): string {
-  const maxTextLength = 20000;
+// Calculate confidence score based on extracted data completeness and patterns
+function calculateExtractionConfidence(extracted: ExtractedQuote | ExtractedQuoteWithPageRefs, sourceText?: string): number {
+  let confidence = 0;
+  let maxScore = 0;
   
-  if (text.length <= maxTextLength) {
-    return text;
+  // Customer information (20 points)
+  maxScore += 20;
+  if (extracted.customer) {
+    if (extracted.customer.name) confidence += 5;
+    if (extracted.customer.email) confidence += 4;
+    if (extracted.customer.phone) confidence += 4;
+    if (extracted.customer.company) confidence += 4;
+    if (extracted.customer.address) confidence += 3;
   }
-
-  // Define keywords that indicate important quote sections
-  const quoteKeywords = [
-    // Customer/Client info
-    'bill to', 'ship to', 'customer', 'client', 'account', 'contact',
-    // Quote identification
-    'quote', 'estimate', 'proposal', 'invoice', 'order',
-    // Financial terms
-    'total', 'subtotal', 'tax', 'amount', 'price', 'cost', 'payment',
-    // Line items
-    'description', 'item', 'product', 'service', 'quantity', 'unit',
-    // Project details
-    'project', 'job', 'site', 'address', 'location',
-    // Dates and terms
-    'date', 'terms', 'conditions', 'due', 'expiry'
-  ];
-
-  const pricePattern = /\$[\d,]+\.?\d*/g;
-  const emailPattern = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
-  const phonePattern = /\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}/g;
-  const quoteNumberPattern = /(quote|estimate|invoice|order)\s*#?\s*\w+/gi;
-
-  // Split text into sections (by line breaks or other natural separators)
-  const sections = text.split(/\n\n+|\n(?=\S)/).filter(section => section.trim().length > 10);
   
-  // Score each section based on relevance
-  const scoredSections = sections.map(section => {
-    let score = 0;
-    const lowerSection = section.toLowerCase();
-    
-    // Keyword scoring
-    quoteKeywords.forEach(keyword => {
-      const matches = lowerSection.split(keyword).length - 1;
-      score += matches * 2;
-    });
-
-    // Pattern scoring
-    const priceMatches = section.match(pricePattern) || [];
-    score += priceMatches.length * 3;
-    
-    const emailMatches = section.match(emailPattern) || [];
-    score += emailMatches.length * 4;
-    
-    const phoneMatches = section.match(phonePattern) || [];
-    score += phoneMatches.length * 3;
-    
-    const quoteNumberMatches = section.match(quoteNumberPattern) || [];
-    score += quoteNumberMatches.length * 5;
-
-    // Section position bonus (beginning and end sections often contain important info)
-    const sectionIndex = sections.indexOf(section);
-    if (sectionIndex < 3) score += 2; // Early sections bonus
-    if (sectionIndex >= sections.length - 3) score += 1; // Late sections bonus
-
-    return { section, score, length: section.length };
-  });
-
-  // Sort by score (descending)
-  scoredSections.sort((a, b) => b.score - a.score);
-
-  // Select sections that fit within token limit
-  let selectedText = '';
-  let currentLength = 0;
+  // Quote metadata (15 points)
+  maxScore += 15;
+  if (extracted.quoteNumber) confidence += 5;
+  if (extracted.date) confidence += 5;
+  if (extracted.projectDescription) confidence += 5;
   
-  for (const { section, score } of scoredSections) {
-    if (currentLength + section.length <= maxTextLength * 0.95) { // Leave some buffer
-      selectedText += section + '\n\n';
-      currentLength += section.length + 2;
-    } else {
-      break;
-    }
-  }
-
-  // If we still have significant text excluded, add a summary note
-  const excludedLength = text.length - currentLength;
-  if (excludedLength > 1000) {
-    selectedText += `\n... [${excludedLength} characters of additional content excluded] ...`;
-  }
-
-  return selectedText.trim();
-}
-
-export async function extractQuoteDataFromText(text: string): Promise<ExtractedQuote | null> {
-  try {
-    // Apply intelligent preprocessing to optimize token usage
-    const processedText = preprocessTextForExtraction(text);
+  // Line items (35 points)
+  maxScore += 35;
+  if (extracted.lineItems && extracted.lineItems.length > 0) {
+    confidence += 10; // Has line items
     
-    console.log(`📄 Text preprocessing: ${text.length} → ${processedText.length} characters`);
-    
-    // Check cache first
-    const cacheKey = textExtractionCache.generateKey(processedText);
-    const cachedResult = textExtractionCache.get(cacheKey);
-    
-    if (cachedResult) {
-      console.log(`🎯 Cache hit for text extraction (${cacheKey})`);
-      return cachedResult;
-    }
-    
-    console.log(`🔍 Cache miss, making OpenAI API call for text extraction`);
-    
-    const response = await openai.chat.completions.create({
-      model: "gpt-5", // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user // Using proven working model for PDF extraction
-      messages: [
-        {
-          role: "system",
-          content: `You are a data extraction expert specializing in construction quotes and estimates. Extract available quote information from text, accommodating different supplier formats.
-          
-          Extract the following information and return as JSON (ALL FIELDS ARE OPTIONAL):
-          
-          1. Customer Information:
-             - name (string or null) - individual name, company contact, or any identifiable customer reference
-             - email (string or null)
-             - phone (string or null)
-             - company (string or null) - company/business name
-             - address (string or null) - any address information
-          
-          2. Quote Details:
-             - quoteNumber (string or null) - quote/estimate number or reference
-             - date (string or null) - quote date, creation date, or any relevant date
-             - projectDescription (string or null) - project name, description, or work details
-             - notes (string or null) - any additional notes or special instructions
-             - terms (string or null) - payment terms, conditions, or contract details
-          
-          3. Line Items (array of objects, can be empty):
-             - description (string or null) - item name, product, or service description
-             - quantity (number or null) - quantity or amount
-             - price (number or null) - unit price
-             - total (number or null) - line total
-             - unit (string or null) - unit of measurement (e.g., "each", "sqft", "linear ft")
-          
-          4. Financial Summary:
-             - subtotal (number or null)
-             - taxRate (number or null, as decimal like 0.08 for 8%)
-             - taxAmount (number or null)
-             - discountAmount (number or null)
-             - total (number or null)
-          
-          Return valid JSON in this exact format:
-          {
-            "customer": {"name": null, "email": null, "phone": null, "company": "Supplier Company", "address": null},
-            "quoteNumber": null,
-            "date": null,
-            "projectDescription": null,
-            "lineItems": [],
-            "subtotal": null,
-            "taxRate": null,
-            "taxAmount": null,
-            "discountAmount": null,
-            "total": null,
-            "notes": null,
-            "terms": null
-          }
-          
-          IMPORTANT RULES:
-          - ALL fields are optional - if information is not clearly present, use null
-          - Extract only information that is explicitly available in the document
-          - For numbers, always use numeric values (not strings)
-          - Line items array can be empty if no clear items are found
-          - Be flexible with different quote formats from various suppliers and vendors
-          - Don't invent or assume missing information
-          - Focus on extracting what's clearly available rather than forcing missing data
-          - Handle catalogs, price lists, estimates, and formal quotes equally well`,
-        },
-        {
-          role: "user",
-          content: `Extract quote information from this document:\n\n${processedText}`,
-        },
-      ],
-      response_format: { type: "json_object" },
-      max_tokens: 4000,
-      temperature: 0
-    });
-
-    const content = response.choices[0].message.content;
-    if (!content) {
-      // Empty response from OpenAI for quote extraction
-      return null;
-    }
-
-    // Parse JSON with multiple recovery strategies
-    const parsedContent = parseJsonWithRecovery(content);
-    if (!parsedContent) {
-      console.warn("❌ Failed to parse JSON response from OpenAI");
-      return null;
-    }
-
-    // Validate and parse with schema
-    try {
-      const extracted = ExtractedQuoteSchema.parse(parsedContent);
-      
-      // Calculate and add confidence score
-      extracted.confidence = calculateExtractionConfidence(extracted, processedText);
-      
-      // Cache successful result
-      textExtractionCache.set(cacheKey, extracted);
-      console.log(`💾 Cached text extraction result (${cacheKey})`);
-      
-      return extracted;
-    } catch (validationError) {
-      console.warn("⚠️  Schema validation failed, attempting partial extraction:", validationError);
-      // Try to extract what we can from partially valid data
-      const partialQuote = createPartialQuoteFromData(parsedContent);
-      if (partialQuote) {
-        partialQuote.confidence = calculateExtractionConfidence(partialQuote, processedText);
-        // Cache partial result with shorter TTL
-        textExtractionCache.set(cacheKey, partialQuote, 2 * 60 * 60 * 1000); // 2 hours for partial results
+    // Check line item completeness
+    let completeItems = 0;
+    for (const item of extracted.lineItems) {
+      if (item.description && item.quantity && item.price) {
+        completeItems++;
       }
-      return partialQuote;
     }
-  } catch (error) {
-    // Error extracting quote data from text
-    return null;
+    
+    const itemCompleteness = extracted.lineItems.length > 0 
+      ? completeItems / extracted.lineItems.length 
+      : 0;
+    confidence += itemCompleteness * 15;
+    
+    // Check for reasonable number of line items
+    if (extracted.lineItems.length >= 3) confidence += 10;
   }
+  
+  // Financial totals (20 points)
+  maxScore += 20;
+  if (extracted.subtotal) confidence += 5;
+  if (extracted.taxRate !== null || extracted.taxAmount !== null) confidence += 5;
+  if (extracted.total) confidence += 10;
+  
+  // Additional information (10 points)
+  maxScore += 10;
+  if (extracted.notes) confidence += 5;
+  if (extracted.terms) confidence += 5;
+  
+  // Calculate final confidence score (0-1)
+  const finalConfidence = Math.min(1, confidence / maxScore);
+  
+  return Number(finalConfidence.toFixed(2));
 }
