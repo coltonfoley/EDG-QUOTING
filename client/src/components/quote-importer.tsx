@@ -635,7 +635,7 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
                     <Button
                       onClick={() => fileInputRef.current?.click()}
                       variant="outline"
-                      disabled={processPDFMutation.isPending}
+                      disabled={processedPDFs.some(pdf => pdf.status === 'processing')}
                       data-testid="button-select-files"
                     >
                       Select Files
@@ -697,7 +697,7 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
                                 variant="ghost"
                                 size="sm"
                                 onClick={() => retryPDF(pdf.id)}
-                                disabled={processPDFMutation.isPending}
+                                disabled={processedPDFs.some(pdf => pdf.status === 'processing')}
                                 data-testid={`button-retry-${pdf.id}`}
                               >
                                 <RotateCcw className="h-4 w-4" />
