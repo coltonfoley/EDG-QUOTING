@@ -336,39 +336,20 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
     // For temporary images (with original file)
     if (image.originalFile) {
       try {
-        // Create corrected image by drawing to canvas (handles most rotation issues)
-        return new Promise<{ dataUrl: string; format: string }>((resolve, reject) => {
-          const img = new Image();
-          img.onload = () => {
-            // Create canvas and draw image (this applies browser's EXIF handling)
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
-            if (!ctx) {
-              reject(new Error('Could not get canvas context'));
-              return;
-            }
-            
-            canvas.width = img.naturalWidth;
-            canvas.height = img.naturalHeight;
-            ctx.drawImage(img, 0, 0);
-            
-            const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+        // Always convert to data URL using FileReader for reliability
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          
+          reader.onload = () => {
+            const dataUrl = reader.result as string;
             const format = getImageFormat(image.originalFile!);
             resolve({ dataUrl, format });
           };
           
-          img.onerror = () => {
-            reject(new Error('Failed to load image'));
+          reader.onerror = () => {
+            reject(new Error('Failed to read file as data URL'));
           };
           
-          // Use FileReader to get data URL, then load into img element
-          const reader = new FileReader();
-          reader.onload = () => {
-            img.src = reader.result as string;
-          };
-          reader.onerror = () => {
-            reject(new Error('Failed to read file'));
-          };
           reader.readAsDataURL(image.originalFile!);
         });
       } catch (error) {
@@ -379,7 +360,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
     // For persistent images (stored in object storage)
     // Fetch image data and convert to data URL for reliable PDF generation
     try {
-      return new Promise<{ dataUrl: string; format: string }>(async (resolve, reject) => {
+      return new Promise(async (resolve, reject) => {
         try {
           // Fetch the image data directly through a secure endpoint
           const response = await fetch(image.preview, {
