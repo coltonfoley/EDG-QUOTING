@@ -14,6 +14,7 @@ import { getProxiedImageUrl } from '@/lib/image-utils';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import type { QuoteWithDetails, QuoteCoverPhoto, QuoteProductRendering } from '@shared/schema';
 import jsPDF from 'jspdf';
+import logoPath from '@assets/Logo_Full Color_Black_1758731429139.png';
 
 interface SimpleProposalGeneratorProps {
   quote: QuoteWithDetails;
@@ -436,9 +437,41 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
     }
   };
 
+  // Helper function to load the logo
+  const loadLogo = async (): Promise<{ dataUrl: string; width: number; height: number } | null> => {
+    try {
+      return new Promise((resolve, reject) => {
+        const img = document.createElement('img') as HTMLImageElement;
+        img.onload = () => {
+          // Create canvas to convert logo to data URL
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+          
+          canvas.width = img.width;
+          canvas.height = img.height;
+          
+          if (ctx) {
+            ctx.drawImage(img, 0, 0);
+            const dataUrl = canvas.toDataURL('image/png');
+            resolve({ dataUrl, width: img.width, height: img.height });
+          } else {
+            reject(new Error('Failed to get canvas context'));
+          }
+        };
+        img.onerror = () => reject(new Error('Failed to load logo'));
+        img.src = logoPath;
+      });
+    } catch (error) {
+      console.warn('Could not load logo:', error);
+      return null;
+    }
+  };
+
   const generatePDF = async () => {
     setIsGenerating(true);
     try {
+      // Load logo for use throughout PDF
+      const logoData = await loadLogo();
       // Professional document setup - US Letter size
       const pdf = new jsPDF('p', 'mm', 'letter');
       const pageWidth = 215.9; // Letter width in mm
@@ -484,8 +517,11 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
       };
       
       const setColor = (colorKey: keyof typeof colors) => {
-        const [r, g, b] = colors[colorKey];
-        pdf.setTextColor(r, g, b);
+        const color = colors[colorKey];
+        if (Array.isArray(color)) {
+          const [r, g, b] = color;
+          pdf.setTextColor(r, g, b);
+        }
       };
       
       const checkPageBreak = (heightNeeded: number) => {
@@ -569,6 +605,17 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         setColor('primary');
         const totalPages = pdf.getNumberOfPages();
         pdf.text(`PAGE ${currentPage} OF ${totalPages}`, pageWidth / 2, footerY - 2, { align: 'center' });
+        
+        // Add logo to footer
+        if (logoData) {
+          const footerLogoHeight = 8;
+          const footerLogoWidth = (logoData.width / logoData.height) * footerLogoHeight;
+          try {
+            pdf.addImage(logoData.dataUrl, 'PNG', margin, footerY - 6, footerLogoWidth, footerLogoHeight);
+          } catch (e) {
+            console.warn('Could not add logo to footer:', e);
+          }
+        }
         
         // Brand tagline in footer corner
         setColor('darkGray');
@@ -927,11 +974,23 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         pdf.rect(0, brandBarHeight - 12, pageWidth, 1, 'F');
         pdf.rect(0, brandBarHeight - 4, pageWidth, 1, 'F');
         
-        // Company name with impact
+        // Add logo to cover page header
+        if (logoData) {
+          const logoHeight = 15;
+          const logoWidth = (logoData.width / logoData.height) * logoHeight;
+          try {
+            pdf.addImage(logoData.dataUrl, 'PNG', margin, 8, logoWidth, logoHeight);
+          } catch (e) {
+            console.warn('Could not add logo to cover:', e);
+          }
+        }
+        
+        // Company name with impact (positioned after logo)
         pdf.setTextColor(255, 255, 255);
         pdf.setFontSize(18);
         pdf.setFont('helvetica', 'bold');
-        pdf.text('EDG PATIO & SHADE', margin, 20);
+        const logoOffset = logoData ? 50 : 0;
+        pdf.text('EDG PATIO & SHADE', margin + logoOffset, 20);
         
         // Professional tagline
         setFont('small');
@@ -1004,34 +1063,28 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
           }
         }
         
-        // 4. Professional Metadata Panel (overlaid on cover photo for beautiful effect)
-        // Use robust positioning logic that ensures panel stays within image bounds
+        // 4. Professional Metadata Panel (positioned to avoid overlap)
         const panelHeight = 85;
-        const overlayOffset = 40;
         
         let metadataY;
         let rectTop;
-        if (includeCoverPage && coverPhoto) {
-          // Overlay on cover photo: position within the image bounds with complete clamping
-          const desiredRectTop = imageStartY + overlayOffset - 5; // Account for the -5 offset in roundedRect
-          rectTop = Math.max(imageStartY + 5, Math.min(desiredRectTop, imageEndY - panelHeight - 5));
-          metadataY = rectTop + 5;
-        } else {
-          // No overlay: position below content with spacing
-          metadataY = Math.max(imageEndY + 30, 180);
-          rectTop = metadataY - 5;
-        }
+        
+        // Always position metadata panel below the image to avoid overlap
+        metadataY = Math.max(imageEndY + 20, 180);
+        rectTop = metadataY - 5;
         const panelWidth = 85;
         const panelX = pageWidth - margin - panelWidth;
         const customer = quote.account ?? quote.customer;
         
-        // Background panel styling: white for overlay, light gray otherwise
-        if (includeCoverPage && coverPhoto) {
-          pdf.setFillColor(255, 255, 255); // Pure white for better contrast on photos
-        } else {
-          pdf.setFillColor(248, 248, 248); // Light gray for non-photo background
-        }
+        // Professional background with teal accent
+        const [accentR, accentG, accentB] = colors.accent;
+        pdf.setFillColor(248, 248, 248); // Light gray background
         pdf.roundedRect(panelX - 5, rectTop, panelWidth + 10, panelHeight, 3, 3, 'F');
+        
+        // Add teal accent border
+        pdf.setDrawColor(accentR, accentG, accentB);
+        pdf.setLineWidth(2);
+        pdf.roundedRect(panelX - 5, rectTop, panelWidth + 10, panelHeight, 3, 3, 'S');
         
         // Metadata content
         let metaY = metadataY + 5;
