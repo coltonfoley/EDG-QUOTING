@@ -223,7 +223,8 @@ export class MemStorage {
     const quote = this.quotes.get(id);
     if (!quote) return undefined;
 
-    const accountIdToUse = quote.accountId || quote.customerId;
+    const accountIdToUse = quote.accountId;
+    if (!accountIdToUse) return undefined;
     const customer = this.customers.get(accountIdToUse);
     if (!customer) return undefined;
 
@@ -241,7 +242,8 @@ export class MemStorage {
     const result: QuoteWithDetails[] = [];
     
     for (const quote of Array.from(this.quotes.values())) {
-      const accountIdToUse = quote.accountId || quote.customerId;
+      const accountIdToUse = quote.accountId;
+      if (!accountIdToUse) continue;
       const customer = this.customers.get(accountIdToUse);
       if (customer) {
         const quoteLineItems = Array.from(this.lineItems.values()).filter(item => item.quoteId === quote.id);
@@ -262,11 +264,9 @@ export class MemStorage {
     const quote: Quote = { 
       ...insertQuote,
       id,
-      customerId: (insertQuote.accountId || insertQuote.customerId || 0) as number, // Use accountId for customerId
       accountId: insertQuote.accountId || null, // Keep accountId as is
       contactId: insertQuote.contactId || null, // Handle optional contactId
       dealStage: insertQuote.dealStage || "new_lead",
-      assignedRepId: insertQuote.assignedRepId || null,
       projectName: insertQuote.projectName || null,
       projectAddress: insertQuote.projectAddress || null,
       jobsiteAddress: insertQuote.jobsiteAddress || null,
@@ -682,7 +682,8 @@ export class DatabaseStorage implements IStorage {
     const [quote] = await db.select().from(quotes).where(eq(quotes.id, id));
     if (!quote) return undefined;
 
-    const accountIdToUse = quote.accountId || quote.customerId;
+    const accountIdToUse = quote.accountId;
+    if (!accountIdToUse) return undefined;
     const [account] = await db.select().from(accounts).where(eq(accounts.id, accountIdToUse));
     if (!account) return undefined;
 
@@ -751,7 +752,8 @@ export class DatabaseStorage implements IStorage {
     const result: QuoteWithDetails[] = [];
 
     for (const quote of allQuotes) {
-      const accountIdToUse = quote.accountId || quote.customerId;
+      const accountIdToUse = quote.accountId;
+      if (!accountIdToUse) continue;
       const [account] = await db.select().from(accounts).where(eq(accounts.id, accountIdToUse));
       if (account) {
         // Join line items with products to get manufacturer data

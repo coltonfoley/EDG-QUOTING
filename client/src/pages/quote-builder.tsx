@@ -46,11 +46,10 @@ export default function QuoteBuilder() {
       });
       const account = await accountResponse.json();
 
-      // Then create quote with accountId (and customerId for backward compatibility)
+      // Then create quote with accountId
       const quoteData = {
         ...data,
         accountId: account.id,
-        customerId: account.id, // Keep for backward compatibility
         quoteNumber: generateQuoteNumber(),
       };
       delete quoteData.customerName;
@@ -184,9 +183,8 @@ export default function QuoteBuilder() {
   const currentQuote: QuoteWithDetails = quote || {
     id: 0,
     quoteNumber: "",
-    customerId: 0,
     accountId: null,
-    assignedRepId: null,
+    contactId: null,
     projectName: "",
     projectAddress: "",
     jobsiteAddress: null,

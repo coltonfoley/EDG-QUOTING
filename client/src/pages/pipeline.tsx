@@ -272,13 +272,13 @@ export default function Pipeline() {
       );
     }
 
-    // Rep filter - convert assignedRepId to string for comparison
-    if (filterRep !== "all") {
-      filtered = filtered.filter(quote => {
-        const repId = quote.assignedRepId ? String(quote.assignedRepId) : null;
-        return repId === filterRep;
-      });
-    }
+    // Rep filter - disabled until new assignment system is implemented
+    // if (filterRep !== "all") {
+    //   filtered = filtered.filter(quote => {
+    //     // Rep assignment feature temporarily disabled
+    //     return true;
+    //   });
+    // }
 
     // Date range filter
     if (filterDateRange !== "all") {

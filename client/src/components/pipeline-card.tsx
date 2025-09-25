@@ -26,8 +26,8 @@ export function PipelineCard({ quote, isDragging }: PipelineCardProps) {
   }, 0);
 
 
-  // Check if quote is assigned to a rep
-  const isAssigned = !!quote.assignedRepId;
+  // Assignment feature disabled until new system is implemented
+  // const isAssigned = !!quote.assignedRepId;
 
   return (
     <Link href={`/quotes/${quote.id}/edit`}>
@@ -77,7 +77,7 @@ export function PipelineCard({ quote, isDragging }: PipelineCardProps) {
 
             <div className="flex items-center text-xs text-muted-foreground">
               <User className="h-3 w-3 mr-1" />
-              <span>{isAssigned ? 'Assigned' : 'Unassigned'}</span>
+              <span>Rep feature disabled</span>
             </div>
           </div>
 
