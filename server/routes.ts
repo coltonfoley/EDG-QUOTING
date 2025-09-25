@@ -36,7 +36,8 @@ import {
   updateQuoteCoverPhotoSchema,
   updateQuoteProductRenderingSchema,
   quoteIdParamSchema,
-  imageIdParamSchema
+  imageIdParamSchema,
+  insertIssueReportSchema
 } from "./validation-schemas";
 import multer from "multer";
 import * as XLSX from "xlsx";
@@ -3167,6 +3168,83 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error signing quote as customer:", error);
       res.status(500).json({ message: "Failed to sign quote" });
+    }
+  });
+
+  // Issue Report routes
+  app.post('/api/issue-reports', async (req, res) => {
+    try {
+      const validatedData = insertIssueReportSchema.parse(req.body);
+      
+      // Get user ID from session if authenticated
+      if (req.user?.id) {
+        validatedData.userId = req.user.id;
+      }
+      
+      const issueReport = await storage.createIssueReport(validatedData);
+      res.status(201).json(issueReport);
+    } catch (error) {
+      console.error("Error creating issue report:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Validation error", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to create issue report" });
+    }
+  });
+
+  app.get('/api/issue-reports', isAuthenticated, async (req, res) => {
+    try {
+      const issueReports = await storage.getAllIssueReports();
+      res.json(issueReports);
+    } catch (error) {
+      console.error("Error fetching issue reports:", error);
+      res.status(500).json({ message: "Failed to fetch issue reports" });
+    }
+  });
+
+  app.get('/api/issue-reports/:id', isAuthenticated, async (req, res) => {
+    try {
+      const { id } = idParamSchema.parse(req.params);
+      const issueReport = await storage.getIssueReport(id);
+      
+      if (!issueReport) {
+        return res.status(404).json({ message: "Issue report not found" });
+      }
+      
+      res.json(issueReport);
+    } catch (error) {
+      console.error("Error fetching issue report:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Validation error", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to fetch issue report" });
+    }
+  });
+
+  app.put('/api/issue-reports/:id', isAuthenticated, async (req, res) => {
+    try {
+      const { id } = idParamSchema.parse(req.params);
+      
+      // For updates, we use a partial schema
+      const updateData = z.object({
+        status: z.enum(["open", "in_progress", "resolved", "closed"]).optional(),
+        priority: z.enum(["low", "medium", "high", "critical"]).optional(),
+        assignedTo: z.number().int().positive().optional().nullable(),
+      }).parse(req.body);
+      
+      const issueReport = await storage.updateIssueReport(id, updateData);
+      
+      if (!issueReport) {
+        return res.status(404).json({ message: "Issue report not found" });
+      }
+      
+      res.json(issueReport);
+    } catch (error) {
+      console.error("Error updating issue report:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Validation error", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to update issue report" });
     }
   });
 

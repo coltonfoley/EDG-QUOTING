@@ -246,6 +246,34 @@ export const lineItems = pgTable("line_items", {
   index("idx_line_items_base_product_id").on(table.baseProductId),
 ]);
 
+// Issue reports table for user feedback and bug tracking
+export const issueReports = pgTable("issue_reports", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id"), // optional reference to users table
+  userEmail: text("user_email"), // email if user is not logged in
+  description: text("description").notNull(),
+  userAction: text("user_action").notNull(), // what the user was trying to do
+  location: text("location").notNull(), // page/route where issue occurred
+  // Browser and system information
+  userAgent: text("user_agent"),
+  browserName: text("browser_name"),
+  browserVersion: text("browser_version"),
+  screenResolution: text("screen_resolution"),
+  // Health metrics snapshot
+  healthMetrics: jsonb("health_metrics"), // console errors, performance data, etc.
+  status: text("status").notNull().default("open"), // open, in_progress, resolved, closed
+  priority: text("priority").notNull().default("medium"), // low, medium, high, critical
+  assignedTo: integer("assigned_to"), // user ID of person assigned to resolve
+  resolvedAt: timestamp("resolved_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_issue_reports_status").on(table.status),
+  index("idx_issue_reports_priority").on(table.priority),
+  index("idx_issue_reports_user_id").on(table.userId),
+  index("idx_issue_reports_created_at").on(table.createdAt),
+]);
+
 
 
 
@@ -388,6 +416,19 @@ export const insertQuoteProductRenderingSchema = createInsertSchema(quoteProduct
   uploadedAt: true,
 });
 
+export const insertIssueReportSchema = createInsertSchema(issueReports).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  resolvedAt: true,
+}).extend({
+  status: z.enum(["open", "in_progress", "resolved", "closed"]).default("open"),
+  priority: z.enum(["low", "medium", "high", "critical"]).default("medium"),
+  userEmail: z.string().email().optional().nullable(),
+  userId: z.number().optional().nullable(),
+  assignedTo: z.number().optional().nullable(),
+});
+
 
 
 
@@ -405,6 +446,7 @@ export type PricingTable = typeof pricingTables.$inferSelect;
 export type ProductAccessory = typeof productAccessories.$inferSelect;
 export type QuoteCoverPhoto = typeof quoteCoverPhotos.$inferSelect;
 export type QuoteProductRendering = typeof quoteProductRenderings.$inferSelect;
+export type IssueReport = typeof issueReports.$inferSelect;
 
 export type InsertAccount = z.infer<typeof insertAccountSchema>;
 export type InsertContact = z.infer<typeof insertContactSchema>;
@@ -418,6 +460,7 @@ export type InsertPricingTable = z.infer<typeof insertPricingTableSchema>;
 export type InsertProductAccessory = z.infer<typeof insertProductAccessorySchema>;
 export type InsertQuoteCoverPhoto = z.infer<typeof insertQuoteCoverPhotoSchema>;
 export type InsertQuoteProductRendering = z.infer<typeof insertQuoteProductRenderingSchema>;
+export type InsertIssueReport = z.infer<typeof insertIssueReportSchema>;
 
 export type QuoteWithDetails = Quote & {
   account: Account;
