@@ -903,9 +903,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const [newAccount] = await tx
             .insert(accounts)
             .values({
-              name: data.account.name,
-              email: data.account.email,
-              phone: data.account.phone || "",
+              name: data.account!.name,
+              email: data.account!.email,
+              phone: data.account!.phone || "",
               accountType: "general_contractor"
             })
             .returning();
@@ -1181,14 +1181,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Ensure required fields have defaults and optional fields are properly handled
       const quoteData: InsertQuote = {
         ...parsedData,
+        quoteNumber: parsedData.quoteNumber || `Q-${Date.now()}`,
         projectName: parsedData.projectName || "",
         projectAddress: parsedData.projectAddress || "",
         estimatedStartDate: parsedData.estimatedStartDate || "",
         notes: parsedData.notes || "",
         jobsiteAddress: parsedData.jobsiteAddress || undefined,
         lostReason: parsedData.lostReason || undefined,
-        assignedRepId: parsedData.assignedRepId || undefined,
-        // The storage layer will handle setting customerId from accountId/contactId mapping
       };
       const quote = await storage.createQuote(quoteData);
       res.status(201).json(quote);
@@ -1472,8 +1471,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const quoteData: InsertQuote = {
             quoteNumber: firstQuote.quoteNumber || `COMBINED-${Date.now()}`,
             accountId: accountId,
-            customerId: accountId,
-            assignedRepId: req.user?.id,
             projectName: combinedDescription || `Combined Import: ${combinedFilenames}`,
             projectAddress: firstQuote.customer.address || '',
             estimatedStartDate: firstQuote.date || new Date().toISOString().split('T')[0],
@@ -1591,8 +1588,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const quoteData: InsertQuote = {
               quoteNumber: extractedQuote.quoteNumber || `IMP-${Date.now()}`,
               accountId: accountId,
-              customerId: accountId, // Legacy field
-              assignedRepId: req.user?.id,
               projectName: extractedQuote.projectDescription || `Imported from ${extractedQuote.filename}`,
               projectAddress: extractedQuote.customer.address || '',
               estimatedStartDate: extractedQuote.date || new Date().toISOString().split('T')[0],
@@ -1742,7 +1737,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ...parsedData,
         jobsiteAddress: parsedData.jobsiteAddress === null ? undefined : parsedData.jobsiteAddress,
         lostReason: parsedData.lostReason === null ? undefined : parsedData.lostReason,
-        assignedRepId: parsedData.assignedRepId === null ? undefined : parsedData.assignedRepId,
       };
       
       // Get the original quote to check status change
