@@ -1098,18 +1098,40 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         setFont('caption');
         setColor('gray');
         
-        // Quote/Proposal Number
-        pdf.text('PROPOSAL NUMBER', panelX, metaY);
+        // Project Name
+        setFont('caption');
+        setColor('gray');
+        pdf.text('PROJECT', panelX, metaY);
         metaY += 6;
         setFont('small');
         setColor('primary');
-        pdf.text(quote.quoteNumber || 'PROP-001', panelX, metaY);
-        metaY += 12;
+        const projectLines = pdf.splitTextToSize(quote.projectName || 'Untitled Project', panelWidth - 5);
+        projectLines.forEach((line: string) => {
+          pdf.text(line, panelX, metaY);
+          metaY += 5;
+        });
+        metaY += 7;
+        
+        // Customer Name
+        if (customer.name) {
+          setFont('caption');
+          setColor('gray');
+          pdf.text('CUSTOMER', panelX, metaY);
+          metaY += 6;
+          setFont('small');
+          setColor('primary');
+          const nameLines = pdf.splitTextToSize(customer.name, panelWidth - 5);
+          nameLines.forEach((line: string) => {
+            pdf.text(line, panelX, metaY);
+            metaY += 5;
+          });
+          metaY += 7;
+        }
         
         // Date
         setFont('caption');
         setColor('gray');
-        pdf.text('DATE PREPARED', panelX, metaY);
+        pdf.text('DATE', panelX, metaY);
         metaY += 6;
         setFont('small');
         setColor('primary');
@@ -1117,40 +1139,6 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
           year: 'numeric', month: 'long', day: 'numeric' 
         });
         pdf.text(currentDate, panelX, metaY);
-        metaY += 12;
-        
-        // Prepared For
-        setFont('caption');
-        setColor('gray');
-        pdf.text('PREPARED FOR', panelX, metaY);
-        metaY += 6;
-        setFont('small');
-        setColor('primary');
-        
-        // Customer name with text wrapping
-        const nameLines = pdf.splitTextToSize(customer.name, panelWidth - 5);
-        nameLines.forEach((line: string) => {
-          pdf.text(line, panelX, metaY);
-          metaY += 5;
-        });
-        
-        // Project address with text wrapping
-        if (quote.projectAddress) {
-          const addressLines = pdf.splitTextToSize(quote.projectAddress, panelWidth - 5);
-          addressLines.forEach((line: string) => {
-            pdf.text(line, panelX, metaY);
-            metaY += 5;
-          });
-        }
-        
-        // Email with text wrapping
-        if (customer.email) {
-          const emailLines = pdf.splitTextToSize(customer.email, panelWidth - 5);
-          emailLines.forEach((line: string) => {
-            pdf.text(line, panelX, metaY);
-            metaY += 5;
-          });
-        }
         
         
         // Add new page for main content (this will be page 2)
