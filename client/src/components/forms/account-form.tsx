@@ -11,9 +11,14 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { z } from "zod";
 
-// Use the shared schema directly now that it properly handles optional email/phone
 const accountFormSchema = insertAccountSchema.extend({
-  name: z.string().min(1, "Company/Account name is required"),
+  name: z.string().min(1, "Name is required"),
+  email: z.string().email("Valid email is required"),
+  phone: z.string().min(10, "Valid phone number is required"),
+  company: z.string().optional(),
+  accountType: z.enum(["homeowner", "general_contractor", "commercial"]),
+  paymentTerms: z.string().optional(),
+  billingAddress: z.string().optional()
 });
 
 type AccountFormData = z.infer<typeof accountFormSchema>;
@@ -31,12 +36,12 @@ export function AccountForm({ account, onSuccess, onCancel }: AccountFormProps) 
     resolver: zodResolver(accountFormSchema),
     defaultValues: {
       name: account?.name || "",
-      email: account?.email || undefined,
-      phone: account?.phone || undefined,
-      company: account?.company || undefined,
-      accountType: (account?.accountType as "homeowner" | "general_contractor" | "commercial") || "homeowner",
-      paymentTerms: account?.paymentTerms || undefined,
-      billingAddress: account?.billingAddress || undefined
+      email: account?.email || "",
+      phone: account?.phone || "",
+      company: account?.company || "",
+      accountType: account?.accountType || "homeowner",
+      paymentTerms: account?.paymentTerms || "net_30",
+      billingAddress: account?.billingAddress || ""
     }
   });
 
@@ -72,10 +77,10 @@ export function AccountForm({ account, onSuccess, onCancel }: AccountFormProps) 
             name="name"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Company/Account Name *</FormLabel>
+                <FormLabel>Contact Name *</FormLabel>
                 <FormControl>
                   <Input 
-                    placeholder="ABC Construction LLC" 
+                    placeholder="John Doe" 
                     {...field} 
                     data-testid="input-account-name"
                   />
@@ -90,7 +95,7 @@ export function AccountForm({ account, onSuccess, onCancel }: AccountFormProps) 
             name="company"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Doing Business As (Optional)</FormLabel>
+                <FormLabel>Company Name</FormLabel>
                 <FormControl>
                   <Input 
                     placeholder="ABC Construction" 
@@ -108,11 +113,11 @@ export function AccountForm({ account, onSuccess, onCancel }: AccountFormProps) 
             name="email"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Business Email (Optional)</FormLabel>
+                <FormLabel>Email *</FormLabel>
                 <FormControl>
                   <Input 
                     type="email" 
-                    placeholder="info@abcconstruction.com" 
+                    placeholder="john@example.com" 
                     {...field} 
                     data-testid="input-account-email"
                   />
@@ -127,7 +132,7 @@ export function AccountForm({ account, onSuccess, onCancel }: AccountFormProps) 
             name="phone"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Business Phone (Optional)</FormLabel>
+                <FormLabel>Phone *</FormLabel>
                 <FormControl>
                   <Input 
                     placeholder="(555) 123-4567" 
