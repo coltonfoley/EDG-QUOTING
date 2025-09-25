@@ -4,7 +4,7 @@ hidden = [".config", ".git", "generated-icon.png", "node_modules", "dist"]
 
 [nix]
 channel = "stable-24_05"
-packages = ["jq", "glib", "nss", "atk", "libdrm"]
+packages = ["jq", "glib", "nss", "atk", "libdrm", "cups", "nspr", "gtk3", "pango", "cairo", "gdk-pixbuf"]
 
 [deployment]
 deploymentTarget = "autoscale"
@@ -24,6 +24,10 @@ localPort = 33267
 externalPort = 8080
 
 [[ports]]
+localPort = 33591
+externalPort = 9000
+
+[[ports]]
 localPort = 33973
 externalPort = 6800
 
@@ -38,10 +42,6 @@ externalPort = 3003
 [[ports]]
 localPort = 38625
 externalPort = 3000
-
-[[ports]]
-localPort = 39695
-externalPort = 9000
 
 [[ports]]
 localPort = 40881
