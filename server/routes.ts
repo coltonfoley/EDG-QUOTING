@@ -441,6 +441,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Look for a file that ends with our filename
           const matchingFile = files.find(file => file.name.endsWith(filename));
           if (matchingFile) {
+            // Get file metadata to set proper headers
+            const [metadata] = await matchingFile.getMetadata();
+            
+            // Set proper content type based on file extension or metadata
+            let contentType = metadata.contentType;
+            if (!contentType) {
+              // Fallback to determining content type from filename
+              const ext = filename.toLowerCase().split('.').pop();
+              switch (ext) {
+                case 'jpg':
+                case 'jpeg':
+                  contentType = 'image/jpeg';
+                  break;
+                case 'png':
+                  contentType = 'image/png';
+                  break;
+                case 'gif':
+                  contentType = 'image/gif';
+                  break;
+                case 'webp':
+                  contentType = 'image/webp';
+                  break;
+                default:
+                  contentType = 'application/octet-stream';
+              }
+            }
+            
+            // Set response headers
+            res.setHeader('Content-Type', contentType);
+            res.setHeader('Cache-Control', 'public, max-age=3600'); // Cache for 1 hour
+            res.setHeader('Access-Control-Allow-Origin', '*'); // Allow CORS for PDF generation
+            
+            console.log(`📷 Serving quote image: ${filename} (${contentType})`);
+            
             // Stream the file to the response
             const stream = matchingFile.createReadStream();
             stream.pipe(res);
