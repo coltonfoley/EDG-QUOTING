@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import type { QuoteWithDetails, QuoteCoverPhoto, QuoteProductRendering } from '@shared/schema';
 import { calculateQuoteTotals, formatCurrency } from '@/lib/utils';
 import { getProxiedImageUrl } from '@/lib/image-utils';
+import { COMPANY_INFO } from '@shared/companyConfig';
 import logoPath from '@assets/Logo_Full Color_Black_1758731429139.png';
 
 export default function ProposalPrint() {
@@ -141,141 +142,210 @@ export default function ProposalPrint() {
   const customer = quote.account;
 
   return (
-    <div className="clean-proposal">
-      {/* Main Proposal */}
-      <div className="proposal-header">
-        <h1 className="project-title">{quote.projectName || (customer.name ? customer.name.toUpperCase() + ' PROJECT' : 'BACK PATIO COVER')}</h1>
-        <h2 className="project-location">{quote.projectAddress || customer.billingAddress || 'PROJECT LOCATION'}</h2>
-        <h3 className="proposal-type">OUTDOOR LIVING PROPOSAL</h3>
-        <div className="proposal-date">{new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }).toUpperCase()}</div>
-      </div>
-
-      {/* Professional Disclaimer */}
-      <div className="disclaimer">
-        This quote is for estimation purposes and is not a guarantee of cost for services. Quote is based on current information 
-        from manufacturer about the project requirements. Actual cost may change once project elements are finalized. Client 
-        will be notified of any changes in cost prior to them being incurred.
-      </div>
-
-      {/* Layout Section */}
-      <div className="section-title">LAYOUT:</div>
-
-      {/* Cover Photo */}
-      {showCover && activeCoverPhoto && (
-        <div className="layout-image">
+    <div className="five-page-proposal">
+      {/* Page 1: Cover Page */}
+      <div className="page cover-page">
+        <div className="cover-image-container">
           <img 
-            src={getProxiedImageUrl(activeCoverPhoto.storageUrl)}
-            alt="Project Layout"
-            className="layout-photo"
+            src={COMPANY_INFO.proposalCoverImageUrl || logoPath}
+            alt="Company Cover"
+            className="cover-image"
           />
         </div>
-      )}
+      </div>
 
-      {/* Inspiration Gallery */}
-      {activeRenderings && activeRenderings.length > 0 && (
-        <>
-          <div className="section-title">INSPIRATION GALLERY:</div>
-          {activeRenderings.slice(0, 4).map((rendering, index) => (
-            <div key={rendering.id} className="gallery-image">
+      {/* Page 2: Information Page */}
+      <div className="page info-page">
+        <div className="page-content">
+          {/* Project Header */}
+          <div className="project-header">
+            <h1 className="project-title">
+              {quote.projectName || (customer.name ? customer.name.toUpperCase() + ' PROJECT' : 'OUTDOOR LIVING PROJECT')}
+            </h1>
+            <h2 className="project-location">
+              {quote.projectAddress || customer.billingAddress || 'PROJECT LOCATION'}
+            </h2>
+            <div className="project-date">
+              {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }).toUpperCase()}
+            </div>
+          </div>
+
+          {/* Additional Notes */}
+          {quote.notes && (
+            <div className="additional-notes">
+              <h3>Additional Notes:</h3>
+              <div className="notes-content">{quote.notes}</div>
+            </div>
+          )}
+
+          {/* Partner Logo */}
+          {quote.partnerLogoStorageUrl && (
+            <div className="partner-logo-section">
+              <h3>In Partnership With:</h3>
               <img 
-                src={getProxiedImageUrl(rendering.storageUrl)}
-                alt={`Gallery ${index + 1}`}
-                className="gallery-photo"
+                src={getProxiedImageUrl(quote.partnerLogoStorageUrl)}
+                alt="Partner Logo"
+                className="partner-logo"
               />
             </div>
-          ))}
-        </>
-      )}
+          )}
 
-      {/* Product Categories */}
-      <div className="section-title">MOTORIZED SCREENS:</div>
-      <div className="section-title">HEATERS:</div>
+          {/* Company Info */}
+          <div className="company-info">
+            <div className="company-name">{COMPANY_INFO.name}</div>
+            <div className="company-contact">
+              <div>{COMPANY_INFO.address}</div>
+              <div>{COMPANY_INFO.phone}</div>
+              <div>{COMPANY_INFO.email}</div>
+            </div>
+          </div>
 
-      {/* Pricing Table */}
-      {showPricing && totals && (
-        <div className="pricing-section">
-          <table className="pricing-table">
-            <thead>
-              <tr>
-                <th className="product-col">PRODUCT</th>
-                <th className="qty-col">QUANTITIES</th>
-                <th className="total-col">TOTAL</th>
-              </tr>
-            </thead>
-            <tbody>
-              {quote.lineItems.map((item) => {
-                const qty = parseFloat(item.quantity.toString());
-                const price = parseFloat(item.unitPrice.toString());
-                const markup = parseFloat(item.markupValue.toString());
-                const baseTotal = qty * price;
-                const total = item.markupType === 'percentage' 
-                  ? baseTotal + (baseTotal * (markup / 100))
-                  : baseTotal + markup;
-
-                return (
-                  <tr key={item.id}>
-                    <td className="product-name">{item.description.toUpperCase()}</td>
-                    <td className="quantity">{qty}</td>
-                    <td className="amount">{formatCurrency(total)}</td>
-                  </tr>
-                );
-              })}
-              
-              {/* Subtotal, Tax, Total rows */}
-              {totals.shippingAmount > 0 && (
-                <tr>
-                  <td className="product-name">SHIPPING:</td>
-                  <td className="quantity">1</td>
-                  <td className="amount">{formatCurrency(totals.shippingAmount)}</td>
-                </tr>
-              )}
-              
-              {totals.taxAmount > 0 && (
-                <tr>
-                  <td className="product-name">SALES TAX ({((totals.taxAmount / totals.subtotal) * 100).toFixed(2)}%):</td>
-                  <td className="quantity"></td>
-                  <td className="amount">{formatCurrency(totals.taxAmount)}</td>
-                </tr>
-              )}
-
-              <tr className="total-row">
-                <td className="product-name"><strong>TOTAL:</strong></td>
-                <td className="quantity"></td>
-                <td className="amount"><strong>{formatCurrency(totals.total)}</strong></td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {/* Company Footer */}
-      <div className="company-footer">
-        <div className="company-name">{company.name}</div>
-        <div className="company-address">{company.address1}, {company.address2}</div>
-        <div className="company-contact">
-          <div>Website: {company.website}</div>
-          <div>Email: {company.email}</div>
-        </div>
-        <div className="company-social">
-          <div>Instagram: @edgpatioandshade</div>
-          <div>LinkedIn: EDG Patio & Shade</div>
+          {/* Disclaimer at Bottom */}
+          <div className="disclaimer">
+            This quote is for estimation purposes and is not a guarantee of cost for services. Quote is based on current information 
+            from manufacturer about the project requirements. Actual cost may change once project elements are finalized. Client 
+            will be notified of any changes in cost prior to them being incurred.
+          </div>
         </div>
       </div>
 
-      {/* Contract Terms */}
+      {/* Page 3: Gallery Page */}
+      <div className="page gallery-page">
+        <div className="page-content">
+          <h2 className="page-title">Project Gallery</h2>
+          
+          {/* Layout Section */}
+          {showCover && activeCoverPhoto && (
+            <div className="gallery-section">
+              <h3 className="section-title">Layout Design:</h3>
+              <div className="gallery-image">
+                <img 
+                  src={getProxiedImageUrl(activeCoverPhoto.storageUrl)}
+                  alt="Project Layout"
+                  className="gallery-photo"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Product Renderings */}
+          {activeRenderings && activeRenderings.length > 0 && (
+            <div className="gallery-section">
+              <h3 className="section-title">Product Renderings:</h3>
+              <div className="gallery-grid">
+                {activeRenderings.slice(0, 6).map((rendering, index) => (
+                  <div key={rendering.id} className="gallery-image">
+                    <img 
+                      src={getProxiedImageUrl(rendering.storageUrl)}
+                      alt={`Rendering ${index + 1}`}
+                      className="gallery-photo"
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Page 4: Pricing Page */}
+      <div className="page pricing-page">
+        <div className="page-content">
+          <h2 className="page-title">Project Investment</h2>
+          
+          {showPricing && totals && (
+            <div className="pricing-section">
+              <table className="pricing-table">
+                <thead>
+                  <tr>
+                    <th className="product-col">PRODUCT</th>
+                    <th className="qty-col">QTY</th>
+                    <th className="total-col">TOTAL</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {quote.lineItems.map((item) => {
+                    const qty = parseFloat(item.quantity.toString());
+                    const price = parseFloat(item.unitPrice.toString());
+                    const markup = parseFloat(item.markupValue.toString());
+                    const baseTotal = qty * price;
+                    const total = item.markupType === 'percentage' 
+                      ? baseTotal + (baseTotal * (markup / 100))
+                      : baseTotal + markup;
+
+                    return (
+                      <tr key={item.id}>
+                        <td className="product-name">{item.description}</td>
+                        <td className="quantity">{qty}</td>
+                        <td className="amount">{formatCurrency(total)}</td>
+                      </tr>
+                    );
+                  })}
+                  
+                  {/* Additional costs */}
+                  {totals.shippingAmount > 0 && (
+                    <tr>
+                      <td className="product-name">Shipping & Handling</td>
+                      <td className="quantity">1</td>
+                      <td className="amount">{formatCurrency(totals.shippingAmount)}</td>
+                    </tr>
+                  )}
+                  
+                  {totals.taxAmount > 0 && (
+                    <tr>
+                      <td className="product-name">Sales Tax</td>
+                      <td className="quantity"></td>
+                      <td className="amount">{formatCurrency(totals.taxAmount)}</td>
+                    </tr>
+                  )}
+
+                  <tr className="total-row">
+                    <td className="product-name"><strong>TOTAL PROJECT INVESTMENT</strong></td>
+                    <td className="quantity"></td>
+                    <td className="amount"><strong>{formatCurrency(totals.total)}</strong></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Page 5: Final Page */}
+      <div className="page final-page">
+        <div className="final-image-container">
+          <img 
+            src={COMPANY_INFO.proposalFinalImageUrl || logoPath}
+            alt="Company Final"
+            className="final-image"
+          />
+        </div>
+        <div className="final-contact">
+          <div className="final-company-name">{COMPANY_INFO.name}</div>
+          <div className="final-contact-info">
+            <div>{COMPANY_INFO.phone}</div>
+            <div>{COMPANY_INFO.email}</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Contract Terms (if enabled) */}
       {showContract && (quote.contractTemplate?.terms || quote.customContractTerms) && (
-        <div className="contract-section page-break-before">
-          <div className="contract-content">
-            {(quote.contractTemplate?.terms || quote.customContractTerms || '').split('\n').map((line, index) => {
-              const trimmedLine = line.trim();
-              if (!trimmedLine) return <div key={index} className="contract-spacer"></div>;
-              
-              return (
-                <div key={index} className="contract-line">
-                  {trimmedLine}
-                </div>
-              );
-            })}
+        <div className="page contract-page">
+          <div className="page-content">
+            <h2 className="page-title">Terms & Conditions</h2>
+            <div className="contract-content">
+              {(quote.contractTemplate?.terms || quote.customContractTerms || '').split('\n').map((line, index) => {
+                const trimmedLine = line.trim();
+                if (!trimmedLine) return <div key={index} className="contract-spacer"></div>;
+                
+                return (
+                  <div key={index} className="contract-line">
+                    {trimmedLine}
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
       )}
