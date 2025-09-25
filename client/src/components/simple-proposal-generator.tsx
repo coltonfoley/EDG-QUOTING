@@ -50,11 +50,12 @@ interface DisplayImage {
 
 export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimpleProposalGeneratorProps) {
   const [showPricing, setShowPricing] = useState(true);
-  const [includeCoverPage, setIncludeCoverPage] = useState(false);
+  const [includeCoverPage, setIncludeCoverPage] = useState(true); // Always include in 5-page structure
   
   // Temporary uploads (local files before uploading to server)
-  const [tempCoverPhoto, setTempCoverPhoto] = useState<UploadedFile | null>(null);
+  const [tempCoverPhoto, setTempCoverPhoto] = useState<UploadedFile | null>(null); // Layout design photo
   const [tempProductRenderings, setTempProductRenderings] = useState<UploadedFile[]>([]);
+  const [tempPartnerLogo, setTempPartnerLogo] = useState<UploadedFile | null>(null); // New for 5-page structure
   
   // Persistent images (stored in database and object storage)
   const [persistentCoverPhoto, setPersistentCoverPhoto] = useState<PersistentImage | null>(null);
@@ -551,33 +552,50 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         </DialogHeader>
 
         <div className="space-y-6">
-          {/* PDF Options */}
+          {/* Professional 5-Page Proposal Structure */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">PDF Options</CardTitle>
+              <CardTitle className="text-lg">5-Page Professional Proposal</CardTitle>
+              <p className="text-sm text-gray-600">
+                Generates a professional 5-page proposal: Cover → Project Info → Gallery → Pricing → Final Page
+              </p>
             </CardHeader>
             <CardContent className="space-y-4">
+              <div className="grid grid-cols-5 gap-2 text-center text-xs">
+                <div className="p-2 bg-blue-50 rounded border">
+                  <div className="font-medium">Page 1</div>
+                  <div>Cover</div>
+                </div>
+                <div className="p-2 bg-green-50 rounded border">
+                  <div className="font-medium">Page 2</div>
+                  <div>Project Info</div>
+                </div>
+                <div className="p-2 bg-purple-50 rounded border">
+                  <div className="font-medium">Page 3</div>
+                  <div>Gallery</div>
+                </div>
+                <div className="p-2 bg-orange-50 rounded border">
+                  <div className="font-medium">Page 4</div>
+                  <div>Pricing</div>
+                </div>
+                <div className="p-2 bg-red-50 rounded border">
+                  <div className="font-medium">Page 5</div>
+                  <div>Final Page</div>
+                </div>
+              </div>
+              
               <div className="flex items-center justify-between">
-                <Label htmlFor="show-pricing">Include Pricing</Label>
+                <Label htmlFor="show-pricing">Include Pricing (Page 4)</Label>
                 <Switch 
                   id="show-pricing" 
                   checked={showPricing} 
                   onCheckedChange={setShowPricing} 
                 />
               </div>
-              
-              <div className="flex items-center justify-between">
-                <Label htmlFor="include-cover">Include Cover Page</Label>
-                <Switch 
-                  id="include-cover" 
-                  checked={includeCoverPage} 
-                  onCheckedChange={setIncludeCoverPage} 
-                />
-              </div>
 
               {hasContractData && (
                 <div className="flex items-center justify-between">
-                  <Label htmlFor="include-contract">Include Contract Terms</Label>
+                  <Label htmlFor="include-contract">Include Contract Terms (Additional Page)</Label>
                   <Switch 
                     id="include-contract" 
                     checked={includeContract} 
@@ -588,10 +606,34 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
             </CardContent>
           </Card>
 
-          {/* Cover Photo Upload */}
+          {/* Partner Logo Upload - Page 2 */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Cover Photo</CardTitle>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Upload className="w-4 h-4" />
+                Partner Logo (Page 2 - Project Info)
+              </CardTitle>
+              <p className="text-sm text-gray-600">Upload your partner or client company logo</p>
+            </CardHeader>
+            <CardContent>
+              <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+                <Button variant="outline">
+                  <Upload className="w-4 h-4 mr-2" />
+                  Upload Partner Logo
+                </Button>
+                <p className="text-sm text-gray-500 mt-2">PNG, JPG up to 5MB</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Layout Design Photo - Page 3 */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Image className="w-4 h-4" />
+                Layout Design (Page 3 - Gallery)
+              </CardTitle>
+              <p className="text-sm text-gray-600">Project layout or design photo</p>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
