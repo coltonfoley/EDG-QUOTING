@@ -1,6 +1,6 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { insertQuoteSchema, insertCustomerSchema, type QuoteWithDetails, type Customer } from "@shared/schema";
+import { insertQuoteSchema, type QuoteWithDetails } from "@shared/schema";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -22,10 +22,8 @@ import { debounce } from "lodash";
 import { DEAL_STAGES } from "@shared/dealStageConstants";
 
 const quoteFormSchema = insertQuoteSchema.extend({
-  customerName: z.string().min(1, "Customer name is required"),
-  customerEmail: z.string().email("Invalid email format").optional(),
-  customerPhone: z.string().min(1, "Phone number must be at least 1 digit").optional(),
-  customerCompany: z.string().optional(),
+  quoteNumber: z.string().optional(), // Auto-generated on server
+  contactId: z.number().optional(),
   dealStage: z.string().default("new_lead"),
 }).omit({ accountId: true, customerId: true });
 
@@ -44,62 +42,9 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
   
   
   
-  // Customer search state
-  const [customerSearchTerm, setCustomerSearchTerm] = useState("");
-  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
-  const [customerSearchOpen, setCustomerSearchOpen] = useState(false);
-  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
-  const [showDuplicateWarning, setShowDuplicateWarning] = useState(false);
   
   
-  // Debounce search term
-  const debouncedSearch = useCallback(
-    debounce((value: string) => {
-      setDebouncedSearchTerm(value);
-    }, 300),
-    []
-  );
   
-  useEffect(() => {
-    debouncedSearch(customerSearchTerm);
-  }, [customerSearchTerm, debouncedSearch]);
-  
-  // Query for customer search using the accounts endpoint
-  const { data: searchResults = [], isLoading: isSearching } = useQuery<Customer[]>({
-    queryKey: ["/api/accounts/search", debouncedSearchTerm],
-    queryFn: async ({ signal }): Promise<Customer[]> => {
-      if (!debouncedSearchTerm || debouncedSearchTerm.length < 2) return [];
-      
-      try {
-        const response = await fetch(`/api/accounts/search?q=${encodeURIComponent(debouncedSearchTerm)}`, {
-          credentials: 'include',
-          signal,
-        });
-        
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          console.error('Search failed:', response.status, errorData);
-          if (response.status === 401) {
-            throw new Error("Authentication required");
-          }
-          throw new Error(errorData.message || "Failed to search accounts");
-        }
-        
-        const data = await response.json();
-        console.log(`Search for "${debouncedSearchTerm}" returned ${data.length} results`);
-        return data;
-      } catch (error: any) {
-        // Don't throw error for cancelled requests
-        if (error.name === 'AbortError') {
-          return [];
-        }
-        console.error('Search error:', error);
-        throw error;
-      }
-    },
-    enabled: debouncedSearchTerm.length >= 2,
-    retry: false,
-  });
   
   const form = useForm<QuoteFormData>({
     resolver: zodResolver(quoteFormSchema),
@@ -113,70 +58,15 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
       taxRate: quote?.taxRate || "0",
       discount: quote?.discount || "0",
       shipping: quote?.shipping || "0",
-      customerName: quote?.customer?.name || "",
-      customerEmail: quote?.customer?.email || "",
-      customerPhone: quote?.customer?.phone || "",
-      customerCompany: quote?.customer?.company || "",
+      contactId: undefined,
     },
   });
 
-  // Handle customer selection from search
-  const handleCustomerSelect = (customer: Customer) => {
-    setSelectedCustomer(customer);
-    form.setValue("customerName", customer.name);
-    form.setValue("customerEmail", customer.email);
-    form.setValue("customerPhone", customer.phone);
-    form.setValue("customerCompany", customer.company || "");
-    setCustomerSearchOpen(false);
-    setShowDuplicateWarning(false);
-    toast({
-      title: "Customer Selected",
-      description: `Selected existing customer: ${customer.name}`,
-    });
-  };
   
-  // Check for duplicate when customer info changes
-  const checkForDuplicates = useCallback(
-    debounce(async (email: string, phone: string) => {
-      if ((!email && !phone) || selectedCustomer) return;
-      
-      try {
-        const searchTerm = email || phone;
-        const response = await fetch(`/api/accounts/search?q=${encodeURIComponent(searchTerm)}`, {
-          credentials: 'include',
-        });
-        const results = await response.json();
-        
-        if (results.length > 0) {
-          setShowDuplicateWarning(true);
-        } else {
-          setShowDuplicateWarning(false);
-        }
-      } catch (error) {
-        console.error('Error checking for duplicates:', error);
-      }
-    }, 500),
-    [selectedCustomer]
-  );
   
-  // Watch for changes in email and phone to detect duplicates
-  const watchedEmail = form.watch("customerEmail");
-  const watchedPhone = form.watch("customerPhone");
-  
-  useEffect(() => {
-    if (!selectedCustomer) {
-      checkForDuplicates(watchedEmail || "", watchedPhone || "");
-    }
-  }, [watchedEmail, watchedPhone, checkForDuplicates, selectedCustomer]);
   
   useEffect(() => {
     if (quote) {
-      // Set selected customer if editing existing quote
-      if (quote.customer) {
-        setSelectedCustomer(quote.customer);
-      }
-      
-      
       form.reset({
         quoteNumber: quote.quoteNumber || "",
         projectName: quote.projectName || "",
@@ -187,10 +77,7 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
         taxRate: quote.taxRate || "0",
         discount: quote.discount || "0",
         shipping: quote.shipping || "0",
-        customerName: quote.customer?.name || "",
-        customerEmail: quote.customer?.email || "",
-        customerPhone: quote.customer?.phone || "",
-        customerCompany: quote.customer?.company || "",
+        contactId: undefined,
       });
     }
   }, [quote, form]);
@@ -304,192 +191,43 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div>
                 <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-lg font-semibold text-charcoal">Customer Information</h3>
-                  {selectedCustomer && (
-                    <Badge variant="secondary" className="flex items-center gap-1">
-                      <Users className="h-3 w-3" />
-                      Existing Customer
-                    </Badge>
-                  )}
+                  <h3 className="text-lg font-semibold text-charcoal">Contact Information</h3>
+                  <span className="text-sm text-gray-500">(Optional)</span>
                 </div>
                 
-                {/* Customer Search */}
-                <div className="mb-4">
-                  <FormLabel>Customer Search</FormLabel>
-                  <Popover open={customerSearchOpen} onOpenChange={setCustomerSearchOpen}>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        role="combobox"
-                        aria-expanded={customerSearchOpen}
-                        className="w-full justify-between"
-                        data-testid="customer-search-trigger"
-                      >
-                        <div className="flex items-center gap-2">
-                          <Search className="h-4 w-4" />
-                          <span className="text-left">
-                            {selectedCustomer
-                              ? `${selectedCustomer.name} (${selectedCustomer.email})`
-                              : "Search for existing customer..."}
-                          </span>
-                        </div>
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-full p-0" align="start">
-                      <Command>
-                        <CommandInput 
-                          placeholder="Search by name, email, phone, or company..." 
-                          value={customerSearchTerm}
-                          onValueChange={setCustomerSearchTerm}
-                          data-testid="customer-search-input"
-                        />
-                        <CommandList>
-                          {isSearching ? (
-                            <CommandEmpty>Searching...</CommandEmpty>
-                          ) : searchResults.length === 0 && debouncedSearchTerm.length >= 2 ? (
-                            <CommandEmpty>No customers found.</CommandEmpty>
-                          ) : searchResults.length > 0 ? (
-                            <CommandGroup heading="Existing Customers">
-                              {searchResults.map((customer) => (
-                                <CommandItem
-                                  key={customer.id}
-                                  onSelect={() => handleCustomerSelect(customer)}
-                                  className="cursor-pointer"
-                                  data-testid={`customer-option-${customer.id}`}
-                                >
-                                  <div className="flex flex-col gap-1">
-                                    <div className="font-medium">{customer.name}</div>
-                                    <div className="text-sm text-muted-foreground">
-                                      {customer.email} • {customer.phone}
-                                      {customer.company && ` • ${customer.company}`}
-                                    </div>
-                                  </div>
-                                </CommandItem>
-                              ))}
-                            </CommandGroup>
-                          ) : (
-                            <CommandEmpty>Type at least 2 characters to search...</CommandEmpty>
-                          )}
-                        </CommandList>
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
-                  
-                  {selectedCustomer && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="mt-2"
-                      onClick={() => {
-                        setSelectedCustomer(null);
-                        setShowDuplicateWarning(false);
-                        form.setValue("customerName", "");
-                        form.setValue("customerEmail", "");
-                        form.setValue("customerPhone", "");
-                        form.setValue("customerCompany", "");
-                      }}
-                      data-testid="clear-customer-selection"
-                    >
-                      Clear selection and create new customer
-                    </Button>
-                  )}
+                <div className="text-sm text-gray-600 mb-4">
+                  Contact can be linked later if needed. Focus on getting the quote created quickly.
                 </div>
-                
-                {/* Duplicate Warning */}
-                {showDuplicateWarning && !selectedCustomer && (
-                  <div className="mb-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
-                    <p className="text-sm text-yellow-800 dark:text-yellow-200">
-                      <strong>Possible duplicate:</strong> A customer with similar details may already exist. 
-                      Use the search above to find and select them, or continue to create a new customer.
-                    </p>
-                  </div>
-                )}
                 
                 <div className="space-y-3">
                   <FormField
                     control={form.control}
-                    name="customerName"
+                    name="contactId"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Customer Name</FormLabel>
+                        <FormLabel>Contact (Optional)</FormLabel>
                         <FormControl>
-                          <Input 
-                            {...field} 
-                            disabled={!!selectedCustomer}
-                            onChange={(e) => {
-                              field.onChange(e);
-                              if (selectedCustomer) setSelectedCustomer(null);
-                            }}
-                          />
+                          <Select
+                            value={field.value?.toString() || ""}
+                            onValueChange={(value) => field.onChange(value ? parseInt(value) : undefined)}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select a contact or leave blank" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="">No contact selected</SelectItem>
+                              {/* Contact options will be populated here later */}
+                            </SelectContent>
+                          </Select>
                         </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
-                  <FormField
-                    control={form.control}
-                    name="customerEmail"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Email</FormLabel>
-                        <FormControl>
-                          <Input 
-                            type="email" 
-                            {...field} 
-                            disabled={!!selectedCustomer}
-                            onChange={(e) => {
-                              field.onChange(e);
-                              if (selectedCustomer) setSelectedCustomer(null);
-                            }}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="customerPhone"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Phone</FormLabel>
-                        <FormControl>
-                          <Input 
-                            type="tel" 
-                            {...field} 
-                            disabled={!!selectedCustomer}
-                            onChange={(e) => {
-                              field.onChange(e);
-                              if (selectedCustomer) setSelectedCustomer(null);
-                            }}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="customerCompany"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Company (Optional)</FormLabel>
-                        <FormControl>
-                          <Input 
-                            placeholder="Company name" 
-                            {...field} 
-                            disabled={!!selectedCustomer}
-                            onChange={(e) => {
-                              field.onChange(e);
-                              if (selectedCustomer) setSelectedCustomer(null);
-                            }}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                  <div className="text-xs text-gray-500 bg-gray-50 p-3 rounded-md">
+                    <strong>Tip:</strong> You can create quotes quickly without selecting a contact. 
+                    Contacts can be linked later when managing client relationships.
+                  </div>
                 </div>
               </div>
               
