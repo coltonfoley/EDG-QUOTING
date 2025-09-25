@@ -20,6 +20,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { cn } from "@/lib/utils";
 import { debounce } from "lodash";
 import { DEAL_STAGES } from "@shared/dealStageConstants";
+import { ContactComboboxWithCreate } from "@/components/contact-combobox-with-create";
 
 const quoteFormSchema = insertQuoteSchema.extend({
   quoteNumber: z.string().optional(), // Auto-generated on server
@@ -207,17 +208,11 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
                       <FormItem>
                         <FormLabel>Contact (Optional)</FormLabel>
                         <FormControl>
-                          <Select
-                            value={field.value?.toString() || ""}
-                            onValueChange={(value) => field.onChange(value ? parseInt(value) : undefined)}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select a contact or leave blank" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {/* Contact options will be populated here later */}
-                            </SelectContent>
-                          </Select>
+                          <ContactComboboxWithCreate
+                            value={field.value}
+                            onValueChange={field.onChange}
+                            placeholder="Search contacts or create new..."
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
