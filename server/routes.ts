@@ -1940,7 +1940,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Intercept and block HMR/websocket requests to reduce navigation churn in dev
       await page.setRequestInterception(true);
-      page.on('request', (interceptedRequest) => {
+      page.on('request', (interceptedRequest: any) => {
         const url = interceptedRequest.url();
         if (url.includes('@vite/client') || url.includes('__vite_ping') || 
             interceptedRequest.resourceType() === 'websocket' ||
