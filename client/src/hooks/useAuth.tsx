@@ -28,10 +28,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   
-  // Check if this is a PDF generation request
-  const isPDFGeneration = typeof window !== 'undefined' && 
-    (window.location.search.includes('pdf=1') || window.location.pathname.includes('/proposals/'));
-  
   const {
     data: user,
     error,
@@ -39,7 +35,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isError,
   } = useQuery<SelectUser | undefined, Error>({
     queryKey: ["/api/user"],
-    enabled: !isPDFGeneration, // Skip auth query for PDF generation
     queryFn: async ({ queryKey, signal }) => {
       try {
         const res = await fetch(queryKey[0] as string, {
@@ -214,32 +209,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Determine effective loading state - stop loading if errored
   const effectiveIsLoading = isLoading && !isError;
-  
-  // For PDF generation, provide mock authenticated state
-  if (isPDFGeneration) {
-    const mockUser: SelectUser = {
-      id: 999999, // Use a high number to avoid conflicts
-      username: 'pdf-generator',
-      createdAt: new Date(),
-      updatedAt: new Date()
-    };
-    
-    return (
-      <AuthContext.Provider
-        value={{
-          user: mockUser,
-          isLoading: false,
-          error: null,
-          isAuthenticated: true,
-          loginMutation,
-          logoutMutation,
-          registerMutation,
-        }}
-      >
-        {children}
-      </AuthContext.Provider>
-    );
-  }
   
   return (
     <AuthContext.Provider
