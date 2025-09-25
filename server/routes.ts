@@ -1060,7 +1060,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       if (!extractedQuote) {
         return res.status(400).json({ 
-          message: "Could not extract quote data from PDF. Please ensure the document contains recognizable quote information.",
+          message: "Could not extract quote data from PDF. This could be due to: (1) The document doesn't contain recognizable quote/invoice information, (2) The text is unclear or heavily formatted, (3) The document is password-protected or corrupted. Please try a different PDF or ensure it contains standard quote/invoice data.",
           success: false 
         });
       }
@@ -1085,7 +1085,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       return res.status(500).json({ 
-        message: `PDF processing failed: ${error.message || 'Unknown error'}`,
+        message: `PDF processing failed: ${error.message || 'Unexpected error occurred while processing the PDF. Please try again or contact support if the issue persists.'}`,
         success: false 
       });
     }
