@@ -23,6 +23,7 @@ import ContractsPage from "@/pages/contracts";
 import Accounts from "@/pages/accounts";
 import AccountDetail from "@/pages/account-detail";
 import Pipeline from "@/pages/pipeline";
+import { ReportIssueButton } from "@/components/report-issue-button";
 
 function GlobalLoadingIndicator() {
   const isFetching = useIsFetching();
@@ -119,6 +120,7 @@ function App() {
             <GlobalLoadingIndicator />
             <Toaster />
             <Router />
+            <ReportIssueButton />
           </TooltipProvider>
         </AuthProvider>
       </QueryClientProvider>

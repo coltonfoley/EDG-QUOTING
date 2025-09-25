@@ -1,4 +1,4 @@
-import { accounts, customers, contacts, quotes, lineItems, products, users, contractTemplates, proposalTemplates, pricingTables, productAccessories, quoteCoverPhotos, quoteProductRenderings, type Account, type Customer, type Contact, type Quote, type LineItem, type Product, type User, type ContractTemplate, type ProposalTemplate, type PricingTable, type ProductAccessory, type QuoteCoverPhoto, type QuoteProductRendering, type InsertAccount, type InsertCustomer, type InsertContact, type InsertQuote, type InsertLineItem, type InsertProduct, type InsertUser, type InsertContractTemplate, type InsertProposalTemplate, type InsertPricingTable, type InsertProductAccessory, type InsertQuoteCoverPhoto, type InsertQuoteProductRendering, type QuoteWithDetails, type ProductWithDetails } from "@shared/schema";
+import { accounts, customers, contacts, quotes, lineItems, products, users, contractTemplates, proposalTemplates, pricingTables, productAccessories, quoteCoverPhotos, quoteProductRenderings, issueReports, type Account, type Customer, type Contact, type Quote, type LineItem, type Product, type User, type ContractTemplate, type ProposalTemplate, type PricingTable, type ProductAccessory, type QuoteCoverPhoto, type QuoteProductRendering, type IssueReport, type InsertAccount, type InsertCustomer, type InsertContact, type InsertQuote, type InsertLineItem, type InsertProduct, type InsertUser, type InsertContractTemplate, type InsertProposalTemplate, type InsertPricingTable, type InsertProductAccessory, type InsertQuoteCoverPhoto, type InsertQuoteProductRendering, type InsertIssueReport, type QuoteWithDetails, type ProductWithDetails } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, inArray, sql, and, ne, or, ilike } from "drizzle-orm";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
@@ -148,6 +148,13 @@ export interface IStorage {
   deleteQuoteCoverPhoto(id: number): Promise<boolean>;
   deleteQuoteProductRendering(id: number): Promise<boolean>;
   deleteQuoteImagesByQuoteId(quoteId: number): Promise<boolean>;
+
+  // Issue report methods
+  createIssueReport(issueReport: InsertIssueReport): Promise<IssueReport>;
+  getIssueReport(id: number): Promise<IssueReport | undefined>;
+  getAllIssueReports(): Promise<IssueReport[]>;
+  updateIssueReport(id: number, issueReport: Partial<InsertIssueReport>): Promise<IssueReport | undefined>;
+  deleteIssueReport(id: number): Promise<boolean>;
 
   // Authorization methods for security
   validateLineItemsOwnership(lineItemIds: number[], userId: any): Promise<{ isValid: boolean; quoteId?: number }>;
@@ -1574,6 +1581,34 @@ export class DatabaseStorage implements IStorage {
     return ((coverResult.rowCount || 0) + (renderingsResult.rowCount || 0)) > 0;
   }
 
+  // Issue report methods
+  async createIssueReport(issueReport: InsertIssueReport): Promise<IssueReport> {
+    const [newIssueReport] = await db.insert(issueReports).values(issueReport).returning();
+    return newIssueReport;
+  }
+
+  async getIssueReport(id: number): Promise<IssueReport | undefined> {
+    const [issueReport] = await db.select().from(issueReports).where(eq(issueReports.id, id));
+    return issueReport || undefined;
+  }
+
+  async getAllIssueReports(): Promise<IssueReport[]> {
+    const reports = await db.select().from(issueReports).orderBy(desc(issueReports.createdAt));
+    return reports;
+  }
+
+  async updateIssueReport(id: number, issueReport: Partial<InsertIssueReport>): Promise<IssueReport | undefined> {
+    const [updated] = await db.update(issueReports)
+      .set({ ...issueReport, updatedAt: new Date() })
+      .where(eq(issueReports.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteIssueReport(id: number): Promise<boolean> {
+    const result = await db.delete(issueReports).where(eq(issueReports.id, id));
+    return (result.rowCount || 0) > 0;
+  }
 
 }
 
