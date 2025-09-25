@@ -139,17 +139,21 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
       formData.append('image', file);
       return await apiRequest('PATCH', `/api/quotes/${quote.id}/partner-logo`, formData);
     },
-    onSuccess: () => {
-      // Invalidate all relevant queries
+    onSuccess: (response) => {
+      console.log('Partner logo upload response:', response);
+      
+      // Invalidate all relevant queries to force refresh
       queryClient.invalidateQueries({ queryKey: [`/api/quotes/${quote.id}?include=account,lineItems,contractTemplate,contacts`] });
       queryClient.invalidateQueries({ queryKey: [`/api/quotes/${quote.id}`] });
-      queryClient.invalidateQueries({ queryKey: ['/api/quotes'] }); // Refresh quotes list
+      queryClient.invalidateQueries({ queryKey: ['/api/quotes'] });
+      
       toast({
         title: "Partner logo saved",
         description: "Your partner logo has been added to the quote",
       });
-      // Don't clear temp immediately - let it show until server data refreshes
-      setTimeout(() => setTempPartnerLogo(null), 1000);
+      
+      // Keep the temp image visible until we can confirm server data is updated
+      // Don't clear it automatically - let the useEffect handle the logic
     },
     onError: (error: any) => {
       toast({
@@ -159,6 +163,16 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
       });
     }
   });
+
+  // Clear temp partner logo when server data is updated
+  useEffect(() => {
+    console.log('Quote partner logo URL:', quote.partnerLogoStorageUrl);
+    if (quote.partnerLogoStorageUrl && tempPartnerLogo) {
+      console.log('Clearing temp partner logo since server has it');
+      // Server has the logo, we can clear the temp preview
+      setTimeout(() => setTempPartnerLogo(null), 500);
+    }
+  }, [quote.partnerLogoStorageUrl, tempPartnerLogo]);
 
   // Load existing images into state when data is available
   useEffect(() => {
