@@ -280,24 +280,21 @@ export const issueReports = pgTable("issue_reports", {
 
 
 
+// Helper to convert empty strings to undefined for optional validation
+const emptyToUndefined = (v: unknown) => typeof v === "string" && v.trim() === "" ? undefined : v;
+
 // Insert schemas for accounts and contacts
 export const insertAccountSchema = createInsertSchema(accounts).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
 }).extend({
-  // Business contact information (optional)
-  email: z.string().refine(
-    (val) => !val || z.string().email().safeParse(val).success,
-    "Invalid email format"
-  ).optional(),
-  phone: z.string().refine(
-    (val) => !val || val.length >= 10,
-    "Phone number must be at least 10 digits"
-  ).optional(),
+  // Business contact information (optional) - handle empty strings properly
+  email: z.preprocess(emptyToUndefined, z.string().email("Invalid email format").optional()),
+  phone: z.preprocess(emptyToUndefined, z.string().min(10, "Phone number must be at least 10 digits").optional()),
   accountType: z.enum(["general_contractor", "homeowner", "commercial"]).default("homeowner"),
-  paymentTerms: z.string().optional().nullable(),
-  billingAddress: z.string().optional().nullable(),
+  paymentTerms: z.preprocess(emptyToUndefined, z.string().optional()),
+  billingAddress: z.preprocess(emptyToUndefined, z.string().optional()),
 });
 
 export const insertContactSchema = createInsertSchema(contacts).omit({
