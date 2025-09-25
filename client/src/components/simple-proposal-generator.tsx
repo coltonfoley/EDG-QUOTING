@@ -140,12 +140,16 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
       return await apiRequest('PATCH', `/api/quotes/${quote.id}/partner-logo`, formData);
     },
     onSuccess: () => {
+      // Invalidate all relevant queries
       queryClient.invalidateQueries({ queryKey: [`/api/quotes/${quote.id}?include=account,lineItems,contractTemplate,contacts`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/quotes/${quote.id}`] });
+      queryClient.invalidateQueries({ queryKey: ['/api/quotes'] }); // Refresh quotes list
       toast({
         title: "Partner logo saved",
         description: "Your partner logo has been added to the quote",
       });
-      setTempPartnerLogo(null); // Clear temp after successful upload
+      // Don't clear temp immediately - let it show until server data refreshes
+      setTimeout(() => setTempPartnerLogo(null), 1000);
     },
     onError: (error: any) => {
       toast({
