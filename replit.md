@@ -95,6 +95,8 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+- September 25, 2025: Fixed PDF import validation failures - resolved "ZodError: customer field Required" by making Zod schema fields optional/nullable and improved OpenAI prompts to return null instead of omitting fields
+- September 25, 2025: Enhanced error handling for PDF processing with better Zod validation logging and user-friendly API error messages  
 - September 17, 2025: Updated terminology from "Projects" to "Quotes" throughout application - we now manage quotes for projects, not projects directly
 - September 17, 2025: Standardized dealStage values across application with centralized constants for consistency
 - September 17, 2025: Fixed all TypeScript and runtime errors related to quote creation and account management
