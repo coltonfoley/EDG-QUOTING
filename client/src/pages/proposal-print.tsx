@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useLocation } from 'wouter';
 import { useQuery } from '@tanstack/react-query';
-import type { QuoteWithDetails, QuoteCoverPhoto, QuoteProductRendering } from '@shared/schema';
+import type { QuoteWithDetails, QuoteCoverPhoto, QuoteProductRendering, QuotePartnerLogo } from '@shared/schema';
 import { calculateQuoteTotals, formatCurrency } from '@/lib/utils';
 import { getProxiedImageUrl } from '@/lib/image-utils';
 import { COMPANY_INFO } from '@shared/companyConfig';
@@ -35,6 +35,12 @@ export default function ProposalPrint() {
   // Fetch product renderings
   const { data: productRenderings } = useQuery<QuoteProductRendering[]>({
     queryKey: [`/api/quotes/${id}/product-renderings`],
+    enabled: !!id,
+  });
+
+  // Fetch partner logo
+  const { data: partnerLogo } = useQuery<QuotePartnerLogo>({
+    queryKey: [`/api/quotes/${id}/partner-logo`],
     enabled: !!id,
   });
 
@@ -82,8 +88,8 @@ export default function ProposalPrint() {
     images.push(logoPath);
     
     // Add partner logo if present
-    if (quote?.partnerLogoStorageUrl) {
-      images.push(getProxiedImageUrl(quote.partnerLogoStorageUrl));
+    if (partnerLogo && partnerLogo.isActive) {
+      images.push(getProxiedImageUrl(partnerLogo.storageUrl));
     }
     
     // Add cover photo if enabled
@@ -209,11 +215,11 @@ export default function ProposalPrint() {
           )}
 
           {/* Partner Logo */}
-          {quote.partnerLogoStorageUrl && (
+          {partnerLogo && partnerLogo.isActive && (
             <div className="partner-logo-section">
               <h3>In Partnership With:</h3>
               <img 
-                src={getProxiedImageUrl(quote.partnerLogoStorageUrl)}
+                src={getProxiedImageUrl(partnerLogo.storageUrl)}
                 alt="Partner Logo"
                 className="partner-logo"
               />
