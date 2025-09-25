@@ -1967,6 +1967,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Set user agent and viewport for consistent rendering
       await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
       await page.setViewport({ width: 1200, height: 800 });
+      
+      // Add a special header to indicate this is a PDF generation request
+      await page.setExtraHTTPHeaders({
+        'X-PDF-Generation': 'true'
+      });
 
       // Forward session cookie for authentication with improved parsing
       if (req.headers.cookie) {
@@ -1984,10 +1989,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log(`⚠️ PDF Generation - No cookies found in request headers`);
       }
 
-      // Construct the print page URL with options
+      // Construct the print page URL with options and PDF generation flag
       const port = process.env.PORT || 5000;
       const baseUrl = `http://localhost:${port}`;
-      const printUrl = `${baseUrl}/proposals/${quoteId}/print?cover=${showCover ? '1' : '0'}&pricing=${showPricing ? '1' : '0'}&contract=${showContract ? '1' : '0'}`;
+      const printUrl = `${baseUrl}/proposals/${quoteId}/print?cover=${showCover ? '1' : '0'}&pricing=${showPricing ? '1' : '0'}&contract=${showContract ? '1' : '0'}&pdf=1`;
       
       console.log(`🌐 PDF Generation - Navigating to: ${printUrl}`);
 
@@ -2014,13 +2019,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         // Debug what's actually on the page after React timeout
         const reactState = await page.evaluate(() => {
+          const rootEl = document.querySelector('#root');
           return {
-            hasRoot: document.querySelector('#root') !== null,
-            rootContent: document.querySelector('#root')?.innerHTML?.slice(0, 200) || 'No root element',
+            hasRoot: rootEl !== null,
+            rootContent: rootEl?.innerHTML?.slice(0, 200) || 'No root element found',
             bodyText: document.body.innerText.slice(0, 200),
             hasLoadingSpinner: document.body.innerText.includes('Loading application'),
             hasAuthError: document.body.innerText.includes('Connection Error'),
             currentURL: window.location.href,
+            documentReadyState: document.readyState,
+            hasReactScripts: document.querySelectorAll('script').length,
+            cookies: document.cookie
           };
         });
         
