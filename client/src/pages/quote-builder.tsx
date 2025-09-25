@@ -37,19 +37,36 @@ export default function QuoteBuilder() {
 
   const createQuoteMutation = useMutation({
     mutationFn: async (data: any) => {
-      // First create or get account (using accounts endpoint)
+      // Step 1: Create or get account (business entity)
+      // For now, we'll use the company name as the account name, or fallback to customer name
+      const accountName = data.customerCompany || data.customerName || "Unknown Account";
       const accountResponse = await apiRequest("POST", "/api/accounts", {
-        name: data.customerName,
-        email: data.customerEmail,
-        phone: data.customerPhone,
+        name: accountName,
         company: data.customerCompany || null,
+        // Don't include email/phone in account - these belong to contacts
       });
       const account = await accountResponse.json();
 
-      // Then create quote with accountId (and customerId for backward compatibility)
+      // Step 2: Create contact (individual person) associated with the account
+      const [firstName, ...lastNameParts] = (data.customerName || "Unknown Customer").split(" ");
+      const lastName = lastNameParts.join(" ") || "Customer";
+      
+      const contactResponse = await apiRequest("POST", "/api/contacts", {
+        accountId: account.id,
+        firstName,
+        lastName,
+        email: data.customerEmail,
+        phone: data.customerPhone || null,
+        role: "primary_contact",
+        isPrimary: true,
+      });
+      const contact = await contactResponse.json();
+
+      // Step 3: Create quote with both accountId and contactId
       const quoteData = {
         ...data,
         accountId: account.id,
+        contactId: contact.id,
         customerId: account.id, // Keep for backward compatibility
         quoteNumber: generateQuoteNumber(),
       };
@@ -76,18 +93,34 @@ export default function QuoteBuilder() {
     mutationFn: async (data: any) => {
       if (!quoteId) throw new Error("No quote ID");
       
-      // Update account first (check both quote.account and quote.customer for backward compatibility)
+      // Update account (business) and contact (individual person) separately
       const accountId = quote?.account?.id || quote?.customer?.id;
+      const contactId = quote?.contactId;
+      
       if (accountId) {
+        // Update account (business entity) - only company-related info
+        const accountName = data.customerCompany || data.customerName || "Unknown Account";
         await apiRequest("PUT", `/api/accounts/${accountId}`, {
-          name: data.customerName,
-          email: data.customerEmail,
-          phone: data.customerPhone,
+          name: accountName,
           company: data.customerCompany || null,
+          // Don't include email/phone in account - these belong to contacts
+        });
+      }
+      
+      if (contactId) {
+        // Update contact (individual person) - personal info
+        const [firstName, ...lastNameParts] = (data.customerName || "Unknown Customer").split(" ");
+        const lastName = lastNameParts.join(" ") || "Customer";
+        
+        await apiRequest("PUT", `/api/contacts/${contactId}`, {
+          firstName,
+          lastName,
+          email: data.customerEmail,
+          phone: data.customerPhone || null,
         });
       }
 
-      // Update quote
+      // Update quote (remove customer fields that are now in account/contact)
       const quoteData = { ...data };
       delete quoteData.customerName;
       delete quoteData.customerEmail;
@@ -180,6 +213,7 @@ export default function QuoteBuilder() {
     quoteNumber: "",
     customerId: 0,
     accountId: null,
+    contactId: null,
     assignedRepId: null,
     projectName: "",
     projectAddress: "",
