@@ -81,9 +81,9 @@ export default function ProposalPrint() {
     // Add logo as fallback
     images.push(logoPath);
     
-    // Add partner logo if present (already a served URL, no proxy needed)
+    // Add partner logo if present
     if (quote?.partnerLogoStorageUrl) {
-      images.push(quote.partnerLogoStorageUrl);
+      images.push(getProxiedImageUrl(quote.partnerLogoStorageUrl));
     }
     
     // Add cover photo if enabled
