@@ -1914,12 +1914,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log(`🔄 PDF Generation - Options: cover=${showCover}, pricing=${showPricing}, contract=${showContract}`);
 
-      // Launch Puppeteer with proper configuration
+      // Launch Puppeteer with system Chromium for NixOS compatibility
+      const chromiumPath = process.env.CHROMIUM_PATH || '/nix/store/zi4f80l169xlmivz8vja8wlphq74qqk0-chromium-125.0.6422.141/bin/chromium';
       browser = await puppeteer.launch({
+        executablePath: chromiumPath,
         args: [
           '--no-sandbox',
           '--disable-setuid-sandbox',
           '--disable-dev-shm-usage',
+          '--single-process',
+          '--no-zygote',
+          '--disable-gpu',
           '--disable-background-timer-throttling',
           '--disable-backgrounding-occluded-windows',
           '--disable-renderer-backgrounding'
