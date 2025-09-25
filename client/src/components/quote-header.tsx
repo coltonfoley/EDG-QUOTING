@@ -215,7 +215,6 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
                               <SelectValue placeholder="Select a contact or leave blank" />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="">No contact selected</SelectItem>
                               {/* Contact options will be populated here later */}
                             </SelectContent>
                           </Select>

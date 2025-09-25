@@ -898,15 +898,11 @@ export class DatabaseStorage implements IStorage {
           resolvedAccountId = insertQuote.accountId;
         }
         
-        // Ensure we have an accountId for the legacy customerId field
-        if (!resolvedAccountId) {
-          throw new Error("Unable to resolve accountId");
-        }
-        
+        // Handle unassigned quotes (no account or contact)
         const quoteToInsert: any = {
           ...insertQuote,
-          customerId: resolvedAccountId, // Always set customerId to resolved accountId for legacy compatibility
-          accountId: resolvedAccountId, // Set accountId
+          customerId: resolvedAccountId || 0, // Use resolved accountId or default to 0 for unassigned quotes
+          accountId: resolvedAccountId || null, // Set accountId if available
           contactId: insertQuote.contactId || null, // Include contactId if provided
         };
         

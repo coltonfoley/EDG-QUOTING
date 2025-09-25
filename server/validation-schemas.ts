@@ -115,12 +115,6 @@ export const insertQuoteSchema = baseQuoteSchema.omit({ customerId: true }).exte
 }, {
   message: "Cannot specify both a contract template and custom contract terms",
   path: ["contractTemplateId", "customContractTerms"]
-}).refine((data) => {
-  // Require at least one of accountId or contactId
-  return data.accountId || data.contactId;
-}, {
-  message: "Either accountId or contactId must be provided",
-  path: ["accountId", "contactId"]
 });
 
 // Update schema for quotes - more lenient validation for partial updates
