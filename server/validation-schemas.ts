@@ -57,6 +57,44 @@ export const insertContactSchema = baseContactSchema.extend({
   isPrimary: z.boolean().default(false)
 });
 
+// Quick-create contact with optional account creation
+export const quickCreateContactSchema = z.object({
+  contact: z.object({
+    firstName: z.string().min(1, "First name is required").max(255, "First name is too long"),
+    lastName: z.string().min(1, "Last name is required").max(255, "Last name is too long"),
+    email: z.string().email("Invalid email format").max(255, "Email is too long"),
+    phone: z.preprocess(
+      (v) => (v === "" ? undefined : v),
+      z.string()
+        .min(10, "Phone number must be at least 10 digits")
+        .max(20, "Phone number is too long")
+        .regex(/^[\d\s\-\+\(\)]+$/, "Phone number contains invalid characters")
+        .optional()
+        .nullable()
+    )
+  }),
+  account: z.object({
+    name: z.string().min(1, "Account name is required").max(255, "Account name is too long"),
+    email: z.string().email("Invalid email format").max(255, "Email is too long"),
+    phone: z.preprocess(
+      (v) => (v === "" ? undefined : v),
+      z.string()
+        .min(10, "Phone number must be at least 10 digits")
+        .max(20, "Phone number is too long")
+        .regex(/^[\d\s\-\+\(\)]+$/, "Phone number contains invalid characters")
+        .optional()
+        .nullable()
+    )
+  }).optional(),
+  accountId: z.number().int().positive("Account ID must be a positive integer").optional()
+}).refine(
+  (data) => !!data.accountId || !!data.account,
+  {
+    message: "Either accountId or account data must be provided",
+    path: ["accountId"]
+  }
+);
+
 // Legacy Customer validation for backward compatibility
 export const insertCustomerSchema = baseCustomerSchema.extend({
   name: z.string().min(1, "Name is required").max(255, "Name is too long"),

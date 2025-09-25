@@ -37,7 +37,8 @@ import {
   updateQuoteProductRenderingSchema,
   quoteIdParamSchema,
   imageIdParamSchema,
-  insertIssueReportSchema
+  insertIssueReportSchema,
+  quickCreateContactSchema
 } from "./validation-schemas";
 import multer from "multer";
 import * as XLSX from "xlsx";
@@ -859,7 +860,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Quick create contact endpoint (with optional account creation)
   app.post("/api/contacts/quick-create", isAuthenticated, async (req, res) => {
     try {
-      const data = req.body;
+      const data = quickCreateContactSchema.parse(req.body);
       
       // Validate the request structure
       if (!data.contact || !data.contact.firstName || !data.contact.lastName || !data.contact.email) {
@@ -922,7 +923,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
             })
             .returning();
 
-          return { account: newAccount, contact: newContact };
+          return { 
+            account: newAccount, 
+            contact: {
+              ...newContact,
+              accountName: newAccount.name
+            }
+          };
         });
 
         return res.status(201).json(result);
@@ -978,7 +985,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           .returning();
 
         res.status(201).json({
-          contact: newContact,
+          contact: {
+            ...newContact,
+            accountName: account.name
+          },
           account: account
         });
       } else {
