@@ -1915,163 +1915,217 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log(`🔄 PDF Generation - Options: cover=${showCover}, pricing=${showPricing}, contract=${showContract}`);
 
-      // Launch Puppeteer with system Chromium for NixOS compatibility
+      // Fetch all required data server-side
+      console.log(`📊 PDF Generation - Fetching quote data...`);
+      const [coverPhotos, productRenderings, partnerLogo] = await Promise.all([
+        storage.getQuoteCoverPhotos(quoteId),
+        storage.getQuoteProductRenderings(quoteId), 
+        storage.getQuotePartnerLogo(quoteId)
+      ]);
+
+      // Get active images
+      const activeCoverPhoto = coverPhotos?.find(photo => photo.isActive);
+      const activeRenderings = productRenderings?.filter(rendering => rendering.isActive)
+        .sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
+
+      // Calculate totals server-side
+      const lineItemTotals = quote.lineItems.map(item => {
+        const qty = parseFloat(item.quantity.toString());
+        const price = parseFloat(item.unitPrice.toString());
+        const markup = parseFloat(item.markupValue.toString());
+        const baseTotal = qty * price;
+        const total = item.markupType === 'percentage' 
+          ? baseTotal + (baseTotal * (markup / 100))
+          : baseTotal + markup;
+        return { ...item, qty, price, total };
+      });
+
+      const subtotal = lineItemTotals.reduce((sum, item) => sum + item.total, 0);
+      const shippingAmount = parseFloat(quote.shipping || '0');
+      const discountAmount = parseFloat(quote.discount || '0');
+      const taxAmount = (subtotal + shippingAmount - discountAmount) * (parseFloat(quote.taxRate || '0') / 100);
+      const finalTotal = subtotal + shippingAmount + taxAmount - discountAmount;
+
+      console.log(`📊 PDF Generation - Data loaded, generating HTML...`);
+
+      // Generate HTML directly server-side
+      const proposalHTML = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <title>Proposal - ${quote.quoteNumber}</title>
+          <style>
+            @page { 
+              size: Letter; 
+              margin: 0.5in; 
+            }
+            body { 
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+              margin: 0; 
+              padding: 0; 
+              font-size: 14px;
+              line-height: 1.4;
+            }
+            .page { 
+              page-break-after: always; 
+              min-height: 100vh;
+              display: flex;
+              flex-direction: column;
+              padding: 20px;
+            }
+            .page:last-child { page-break-after: auto; }
+            .cover-image { width: 100%; max-height: 400px; object-fit: cover; }
+            .project-header { text-align: center; margin-bottom: 40px; }
+            .project-title { font-size: 28px; font-weight: bold; margin-bottom: 10px; }
+            .project-location { font-size: 18px; color: #666; margin-bottom: 10px; }
+            .project-date { font-size: 14px; color: #888; }
+            .company-info { text-align: center; margin-top: auto; }
+            .company-name { font-size: 24px; font-weight: bold; margin-bottom: 10px; }
+            .gallery-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; margin: 20px 0; }
+            .gallery-image img { width: 100%; height: 250px; object-fit: cover; border-radius: 8px; }
+            .pricing-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+            .pricing-table th, .pricing-table td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+            .pricing-table th { background-color: #f5f5f5; font-weight: bold; }
+            .total-row { font-weight: bold; background-color: #f9f9f9; }
+            .disclaimer { font-size: 12px; color: #666; margin-top: 30px; padding: 15px; background-color: #f9f9f9; }
+            .contract-content { white-space: pre-line; line-height: 1.6; }
+          </style>
+        </head>
+        <body>
+          <!-- Cover Page -->
+          <div class="page">
+            <div style="text-align: center;">
+              <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==" alt="Cover" class="cover-image" />
+            </div>
+          </div>
+
+          <!-- Info Page -->
+          <div class="page">
+            <div class="project-header">
+              <h1 class="project-title">${quote.projectName || (quote.account.name ? quote.account.name.toUpperCase() + ' PROJECT' : 'OUTDOOR LIVING PROJECT')}</h1>
+              <h2 class="project-location">${quote.projectAddress || quote.account.billingAddress || 'PROJECT LOCATION'}</h2>
+              <div class="project-date">${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }).toUpperCase()}</div>
+            </div>
+            
+            ${quote.notes ? `<div style="margin: 30px 0;"><h3>Additional Notes:</h3><div>${quote.notes}</div></div>` : ''}
+            
+            <div class="company-info">
+              <div class="company-name">EDG Patio & Shade</div>
+              <div>1802 Holian Drive</div>
+              <div>Spring Grove, IL 60081</div>
+              <div>+1 (815) 581-0138</div>
+              <div>info@edgpatioshade.com</div>
+            </div>
+            
+            <div class="disclaimer">
+              This quote is for estimation purposes and is not a guarantee of cost for services. Quote is based on current information 
+              from manufacturer about the project requirements. Actual cost may change once project elements are finalized. Client 
+              will be notified of any changes in cost prior to them being incurred.
+            </div>
+          </div>
+
+          <!-- Gallery Page -->
+          ${showCover || (activeRenderings && activeRenderings.length > 0) ? `
+          <div class="page">
+            <h2 style="text-align: center; margin-bottom: 30px;">Project Gallery</h2>
+            ${showCover && activeCoverPhoto ? `
+              <div style="margin-bottom: 30px;">
+                <h3>Layout Design:</h3>
+                <img src="${activeCoverPhoto.storageUrl}" alt="Project Layout" style="width: 100%; max-height: 400px; object-fit: cover;" />
+              </div>
+            ` : ''}
+            
+            ${activeRenderings && activeRenderings.length > 0 ? `
+              <div>
+                <h3>Product Renderings:</h3>
+                <div class="gallery-grid">
+                  ${activeRenderings.slice(0, 6).map((rendering, index) => `
+                    <div class="gallery-image">
+                      <img src="${rendering.storageUrl}" alt="Rendering ${index + 1}" />
+                    </div>
+                  `).join('')}
+                </div>
+              </div>
+            ` : ''}
+          </div>
+          ` : ''}
+
+          <!-- Pricing Page -->
+          ${showPricing ? `
+          <div class="page">
+            <h2 style="text-align: center; margin-bottom: 30px;">Project Investment</h2>
+            
+            <table class="pricing-table">
+              <thead>
+                <tr>
+                  <th style="width: 60%;">PRODUCT</th>
+                  <th style="width: 15%;">QTY</th>
+                  <th style="width: 25%;">TOTAL</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${lineItemTotals.map(item => `
+                  <tr>
+                    <td>${item.description}</td>
+                    <td>${item.qty}</td>
+                    <td>$${item.total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                  </tr>
+                `).join('')}
+                
+                ${shippingAmount > 0 ? `
+                <tr>
+                  <td>Shipping & Handling</td>
+                  <td>1</td>
+                  <td>$${shippingAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                </tr>
+                ` : ''}
+                
+                ${taxAmount > 0 ? `
+                <tr>
+                  <td>Sales Tax</td>
+                  <td></td>
+                  <td>$${taxAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                </tr>
+                ` : ''}
+
+                <tr class="total-row">
+                  <td><strong>TOTAL PROJECT INVESTMENT</strong></td>
+                  <td></td>
+                  <td><strong>$${finalTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          ` : ''}
+
+          <!-- Contract Page -->
+          ${showContract && (quote.contractTemplate?.terms || quote.customContractTerms) ? `
+          <div class="page">
+            <h2 style="text-align: center; margin-bottom: 30px;">Terms & Conditions</h2>
+            <div class="contract-content">
+              ${quote.contractTemplate?.terms || quote.customContractTerms || ''}
+            </div>
+          </div>
+          ` : ''}
+        </body>
+        </html>
+      `;
+
+      console.log(`🚀 PDF Generation - HTML generated, launching Puppeteer...`);
+
+      // Launch Puppeteer with system Chromium for NixOS compatibility  
       const chromiumPath = process.env.CHROMIUM_PATH || '/nix/store/zi4f80l169xlmivz8vja8wlphq74qqk0-chromium-125.0.6422.141/bin/chromium';
       browser = await puppeteer.launch({
         executablePath: chromiumPath,
-        args: [
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
-          '--disable-dev-shm-usage',
-          '--single-process',
-          '--no-zygote',
-          '--disable-gpu',
-          '--disable-background-timer-throttling',
-          '--disable-backgrounding-occluded-windows',
-          '--disable-renderer-backgrounding'
-        ],
+        args: ['--no-sandbox', '--disable-setuid-sandbox'],
         headless: true
       });
 
       const page = await browser.newPage();
-      
-      // Set up console and error logging immediately
-      page.on('console', (msg: any) => {
-        console.log(`📱 Browser console [${msg.type()}]:`, msg.text());
-      });
-      
-      page.on('pageerror', (error: any) => {
-        console.error(`📱 Browser page error:`, error.message);
-      });
-      
-      page.on('requestfailed', (request: any) => {
-        console.error(`📱 Browser request failed: ${request.url()} - ${request.failure()?.errorText}`);
-      });
-      
-      // Set increased navigation timeout for dev environment with HMR
-      await page.setDefaultNavigationTimeout(120000);
-      
-      // Intercept and block HMR/websocket requests to reduce navigation churn in dev
-      await page.setRequestInterception(true);
-      page.on('request', (interceptedRequest: any) => {
-        const url = interceptedRequest.url();
-        if (url.includes('@vite/client') || url.includes('__vite_ping') || 
-            interceptedRequest.resourceType() === 'websocket' ||
-            interceptedRequest.resourceType() === 'eventsource') {
-          interceptedRequest.abort();
-        } else {
-          interceptedRequest.continue();
-        }
-      });
-      
-      // Set user agent and viewport for consistent rendering
-      await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
-      await page.setViewport({ width: 1200, height: 800 });
-      
-      // Add a special header to indicate this is a PDF generation request
-      await page.setExtraHTTPHeaders({
-        'X-PDF-Generation': 'true'
-      });
+      await page.setContent(proposalHTML, { waitUntil: 'networkidle0' });
 
-      // Forward session cookie for authentication with improved parsing
-      if (req.headers.cookie) {
-        console.log(`🍪 PDF Generation - Forwarding cookies: ${req.headers.cookie}`);
-        const cookies = req.headers.cookie.split(';').map(cookie => {
-          const [name, ...valueParts] = cookie.trim().split('=');
-          const value = valueParts.join('='); // Handle values with = in them
-          return { name, value, domain: 'localhost', path: '/' };
-        }).filter(cookie => cookie.name && cookie.value); // Remove invalid cookies
-        console.log(`🍪 PDF Generation - Parsed ${cookies.length} cookies`);
-        if (cookies.length > 0) {
-          await page.setCookie(...cookies);
-        }
-      } else {
-        console.log(`⚠️ PDF Generation - No cookies found in request headers`);
-      }
-
-      // Construct the print page URL with options and PDF generation flag
-      const port = process.env.PORT || 5000;
-      const baseUrl = `http://localhost:${port}`;
-      const printUrl = `${baseUrl}/proposals/${quoteId}/print?cover=${showCover ? '1' : '0'}&pricing=${showPricing ? '1' : '0'}&contract=${showContract ? '1' : '0'}&pdf=1`;
-      
-      console.log(`🌐 PDF Generation - Navigating to: ${printUrl}`);
-
-      // Navigate to print page - use domcontentloaded to avoid HMR websocket issues
-      await page.goto(printUrl, { 
-        waitUntil: 'domcontentloaded',
-        timeout: 60000 
-      });
-
-      // Wait for React to load and auth to complete
-      console.log(`⏳ PDF Generation - Waiting for React app to load and authenticate...`);
-      
-      try {
-        await page.waitForFunction(() => {
-          // Check if React has rendered something
-          const hasReactContent = document.querySelector('#root') !== null;
-          const hasAuthContent = document.body.innerText.length > 10;
-          return hasReactContent && hasAuthContent;
-        }, { timeout: 15000 });
-        
-        console.log(`✅ PDF Generation - React app loaded successfully`);
-      } catch (reactError) {
-        console.log(`⚠️ PDF Generation - React loading timeout, checking app state...`);
-        
-        // Debug what's actually on the page after React timeout
-        const reactState = await page.evaluate(() => {
-          const rootEl = document.querySelector('#root');
-          return {
-            hasRoot: rootEl !== null,
-            rootContent: rootEl?.innerHTML?.slice(0, 200) || 'No root element found',
-            bodyText: document.body.innerText.slice(0, 200),
-            hasLoadingSpinner: document.body.innerText.includes('Loading application'),
-            hasAuthError: document.body.innerText.includes('Connection Error'),
-            currentURL: window.location.href,
-            documentReadyState: document.readyState,
-            hasReactScripts: document.querySelectorAll('script').length,
-            cookies: document.cookie
-          };
-        });
-        
-        console.log(`🔍 PDF Generation - React state:`, JSON.stringify(reactState, null, 2));
-      }
-
-      // Debug: Check page content after React loads  
-      const pageTitle = await page.title();
-      const bodyContent = await page.evaluate(() => document.body.innerText.length);
-      console.log(`🔍 PDF Generation - Page title: "${pageTitle}", body text length: ${bodyContent}`);
-
-      // Wait for the page to signal it's ready for PDF generation
-      console.log(`⏳ PDF Generation - Waiting for page readiness signal...`);
-      try {
-        await page.waitForFunction(() => {
-          return document.body.getAttribute('data-pdf-ready') === 'true';
-        }, { timeout: 25000 });
-        console.log(`✅ PDF Generation - Page readiness signal received`);
-      } catch (readinessError) {
-        console.log(`⚠️ PDF Generation - Readiness signal timeout, checking page state...`);
-        
-        // Debug: Check what's actually on the page
-        const hasQuoteData = await page.evaluate(() => {
-          const loadingText = document.body.innerText;
-          return {
-            hasLoadingText: loadingText.includes('Loading'),
-            hasErrorText: loadingText.includes('error') || loadingText.includes('Error'),
-            bodyLength: loadingText.length,
-            hasReadyAttribute: document.body.getAttribute('data-pdf-ready'),
-            hasContent: document.querySelector('.five-page-proposal') !== null
-          };
-        });
-        
-        console.log(`🔍 PDF Generation - Page state:`, hasQuoteData);
-        
-        // If page has no content, this is likely an auth or data issue
-        if (hasQuoteData.bodyLength < 100) {
-          throw new Error('Page appears empty - likely authentication or data loading issue');
-        }
-      }
-
-      console.log(`✅ PDF Generation - Page ready, generating PDF...`);
+      console.log(`📄 PDF Generation - Converting HTML to PDF...`);
 
       // Generate PDF with professional settings
       const pdfBuffer = await page.pdf({
