@@ -66,12 +66,25 @@ export default function ProposalPrint() {
     website: 'www.edgpatioshade.com'
   };
 
-  // Image loading tracking
+  // Image loading tracking for 5-page proposal
   useEffect(() => {
     const images: string[] = [];
     
-    // Add logo
+    // Add static cover and final page images
+    if (COMPANY_INFO.proposalCoverImageUrl) {
+      images.push(COMPANY_INFO.proposalCoverImageUrl);
+    }
+    if (COMPANY_INFO.proposalFinalImageUrl) {
+      images.push(COMPANY_INFO.proposalFinalImageUrl);
+    }
+    
+    // Add logo as fallback
     images.push(logoPath);
+    
+    // Add partner logo if present
+    if (quote?.partnerLogoStorageUrl) {
+      images.push(getProxiedImageUrl(quote.partnerLogoStorageUrl));
+    }
     
     // Add cover photo if enabled
     if (showCover && activeCoverPhoto) {
