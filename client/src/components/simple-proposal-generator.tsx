@@ -675,9 +675,13 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
                 {(tempPartnerLogo || quote.partnerLogoStorageUrl) ? (
                   <div className="relative border rounded-lg p-4 bg-gray-50">
                     <img 
-                      src={tempPartnerLogo?.preview || quote.partnerLogoStorageUrl || ''} 
+                      src={tempPartnerLogo?.preview || (quote.partnerLogoStorageUrl ? `/api/proxy-image?url=${encodeURIComponent(quote.partnerLogoStorageUrl)}` : '')} 
                       alt={tempPartnerLogo?.name || "Partner Logo"}
                       className="w-full h-32 object-contain rounded"
+                      onError={(e) => {
+                        console.error('Failed to load partner logo image:', quote.partnerLogoStorageUrl);
+                        e.currentTarget.style.display = 'none';
+                      }}
                     />
                     <div className="flex justify-between items-center mt-2">
                       <span className="text-sm text-gray-600">{tempPartnerLogo?.name || "Partner Logo"}</span>
