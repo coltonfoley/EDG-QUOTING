@@ -274,6 +274,73 @@
     margin-top: 2pt;
   }
 
+  /* Project Overview Section */
+  .project-overview-section {
+    margin-bottom: 20pt;
+  }
+
+  .project-overview-content {
+    background: rgba(248, 250, 252, 0.8);
+    border: 1pt solid #e2e8f0;
+    border-radius: 4pt;
+    padding: 16pt;
+    margin-top: 8pt;
+  }
+
+  .overview-intro {
+    margin-bottom: 14pt;
+  }
+
+  .overview-intro p {
+    font-size: 10pt;
+    line-height: 1.6;
+    color: var(--edg-black);
+    margin: 0;
+  }
+
+  .benefit-columns {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16pt;
+    margin: 12pt 0;
+  }
+
+  .benefit-column h4 {
+    font-size: 9pt;
+    color: var(--edg-black);
+    margin: 0 0 6pt 0;
+    font-weight: bold;
+  }
+
+  .benefit-column ul {
+    margin: 0;
+    padding-left: 12pt;
+    list-style-type: disc;
+  }
+
+  .benefit-column li {
+    font-size: 8pt;
+    color: var(--edg-grey);
+    line-height: 1.4;
+    margin-bottom: 2pt;
+  }
+
+  .overview-commitment {
+    background: rgba(165, 243, 252, 0.1);
+    border-left: 3pt solid var(--edg-teal);
+    padding: 10pt 12pt;
+    margin-top: 12pt;
+    border-radius: 2pt;
+  }
+
+  .overview-commitment p {
+    font-size: 9pt;
+    line-height: 1.5;
+    color: var(--edg-black);
+    margin: 0;
+    font-style: italic;
+  }
+
   /* Estimate Details */
   .estimate-details {
     margin-bottom: 16pt;
@@ -388,31 +455,41 @@
 
   /* Totals Section */
   .totals-section {
-    margin: 16pt 0;
+    margin: 20pt 0;
     display: flex;
     justify-content: flex-end;
   }
 
   .totals-content {
-    width: 3in;
-    border-top: 2pt solid var(--edg-teal);
-    padding-top: 8pt;
+    width: 3.5in;
+    background: rgba(248, 250, 252, 0.6);
+    border: 1pt solid #e2e8f0;
+    border-radius: 4pt;
+    padding: 16pt;
+    box-shadow: 0 2pt 4px rgba(0,0,0,0.05);
   }
 
   .total-line {
     display: flex;
     justify-content: space-between;
-    padding: 2pt 0;
-    font-size: 9pt;
+    padding: 4pt 0;
+    font-size: 10pt;
+    border-bottom: 0.5pt solid rgba(226, 232, 240, 0.5);
   }
 
   .total-final {
-    border-top: 1pt solid var(--edg-teal);
-    padding-top: 6pt;
-    margin-top: 4pt;
+    background: linear-gradient(135deg, var(--edg-teal), var(--edg-dark-teal));
+    color: var(--edg-white);
+    margin: 8pt -16pt -16pt -16pt;
+    padding: 16pt;
+    border-radius: 0 0 4pt 4pt;
     font-weight: bold;
-    font-size: 12pt;
-    color: var(--edg-black);
+    font-size: 14pt;
+    border-bottom: none;
+  }
+
+  .total-final span {
+    color: var(--edg-white) !important;
   }
 
   .total-line span:last-child {
@@ -421,28 +498,35 @@
 
   /* Signature Section */
   .signature-section {
-    margin: 24pt 0;
+    margin: 32pt 0 24pt 0;
+    background: rgba(248, 250, 252, 0.4);
+    border: 1pt solid #e2e8f0;
+    border-radius: 6pt;
+    padding: 20pt;
   }
 
   .signature-boxes {
     display: flex;
-    gap: 0.5in;
-    margin-top: 12pt;
+    gap: 1in;
+    margin-top: 16pt;
   }
 
   .signature-box {
     flex: 1;
-    border: 1pt solid var(--edg-teal);
-    padding: 12pt;
-    border-radius: 2pt;
+    background: var(--edg-white);
+    border: 1.5pt solid var(--edg-teal);
+    padding: 16pt;
+    border-radius: 4pt;
+    box-shadow: 0 1pt 3pt rgba(0,0,0,0.1);
   }
 
   .signature-label {
-    font-size: 7pt;
-    color: var(--edg-grey);
+    font-size: 8pt;
+    color: var(--edg-black);
     font-weight: bold;
     text-transform: uppercase;
-    margin-bottom: 8pt;
+    margin-bottom: 12pt;
+    letter-spacing: 0.5pt;
   }
 
   .signature-line {
