@@ -130,10 +130,24 @@ export default function ProposalPrint() {
   const isReady = fontsReady && imagesLoaded >= totalImages && quote && !isLoading;
 
   useEffect(() => {
+    console.log(`📸 Image loading: ${imagesLoaded}/${totalImages}, fonts: ${fontsReady}, ready: ${isReady}`);
     if (isReady) {
+      console.log('✅ Setting PDF ready signal');
       // Add readiness signal for Puppeteer
       document.body.setAttribute('data-pdf-ready', 'true');
     }
+  }, [isReady, imagesLoaded, totalImages, fontsReady]);
+
+  // Fallback timeout to prevent infinite hanging
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (!isReady) {
+        console.log('⏰ Timeout fallback - forcing PDF ready signal');
+        document.body.setAttribute('data-pdf-ready', 'true');
+      }
+    }, 10000); // 10 second fallback
+
+    return () => clearTimeout(timer);
   }, [isReady]);
 
   if (isLoading || !quote) {
