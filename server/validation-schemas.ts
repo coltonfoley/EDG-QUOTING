@@ -41,6 +41,39 @@ export const insertAccountSchema = baseAccountSchema.extend({
   billingAddress: z.string().max(500, "Billing address is too long").optional().nullable()
 });
 
+// More lenient update schema for accounts that handles empty strings and partial updates
+export const updateAccountSchema = z.object({
+  name: z.preprocess(
+    (v) => (v === "" ? undefined : v),
+    z.string().min(1, "Name is required").max(255, "Name is too long").optional()
+  ),
+  email: z.preprocess(
+    (v) => (v === "" ? undefined : v),
+    z.string().email("Invalid email format").max(255, "Email is too long").optional()
+  ),
+  phone: z.preprocess(
+    (v) => (v === "" ? undefined : v),
+    z.string()
+      .min(10, "Phone number must be at least 10 digits")
+      .max(20, "Phone number is too long")
+      .regex(/^[\d\s\-\+\(\)]+$/, "Phone number contains invalid characters")
+      .optional()
+  ),
+  company: z.preprocess(
+    (v) => (v === "" ? null : v),
+    z.string().max(255, "Company name is too long").optional().nullable()
+  ),
+  accountType: z.enum(["general_contractor", "homeowner", "commercial"]).optional(),
+  paymentTerms: z.preprocess(
+    (v) => (v === "" ? null : v),
+    z.string().max(100, "Payment terms are too long").optional().nullable()
+  ),
+  billingAddress: z.preprocess(
+    (v) => (v === "" ? null : v),
+    z.string().max(500, "Billing address is too long").optional().nullable()
+  )
+});
+
 // Enhanced Contact validation
 export const insertContactSchema = baseContactSchema.extend({
   accountId: z.number().int().positive("Account ID must be a positive integer"),
@@ -168,6 +201,7 @@ export const updateQuoteSchema = z.object({
   projectAddress: z.string().max(1000, "Project address is too long").optional(),
   estimatedStartDate: z.string().optional(),
   notes: z.string().max(5000, "Notes are too long").optional(),
+  // Align with insertQuoteSchema coercion for tax/discount/shipping
   taxRate: z.union([z.string(), z.number(), z.null()])
     .transform(val => val === null ? "0" : (typeof val === 'string' ? val : val.toString()))
     .refine(val => {

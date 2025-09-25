@@ -12,6 +12,7 @@ import {
   insertCustomerSchema,
   insertQuoteSchema,
   updateQuoteSchema,
+  updateAccountSchema,
   insertLineItemSchema,
   insertProductSchema,
   insertContractTemplateSchema,
@@ -1100,7 +1101,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      const accountData = insertAccountSchema.partial().parse(req.body);
+      console.log("Account update request body:", JSON.stringify(req.body, null, 2));
+      const accountData = updateAccountSchema.parse(req.body);
       const account = await storage.updateAccount(params.data.id, accountData);
       if (!account) {
         return res.status(404).json({ message: "Account not found" });
