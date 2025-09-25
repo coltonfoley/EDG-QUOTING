@@ -1935,6 +1935,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const page = await browser.newPage();
       
+      // Set up console and error logging immediately
+      page.on('console', (msg: any) => {
+        console.log(`📱 Browser console [${msg.type()}]:`, msg.text());
+      });
+      
+      page.on('pageerror', (error: any) => {
+        console.error(`📱 Browser page error:`, error.message);
+      });
+      
+      page.on('requestfailed', (request: any) => {
+        console.error(`📱 Browser request failed: ${request.url()} - ${request.failure()?.errorText}`);
+      });
+      
       // Set increased navigation timeout for dev environment with HMR
       await page.setDefaultNavigationTimeout(120000);
       
@@ -1955,13 +1968,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
       await page.setViewport({ width: 1200, height: 800 });
 
-      // Forward session cookie for authentication
+      // Forward session cookie for authentication with improved parsing
       if (req.headers.cookie) {
+        console.log(`🍪 PDF Generation - Forwarding cookies: ${req.headers.cookie}`);
         const cookies = req.headers.cookie.split(';').map(cookie => {
-          const [name, value] = cookie.trim().split('=');
+          const [name, ...valueParts] = cookie.trim().split('=');
+          const value = valueParts.join('='); // Handle values with = in them
           return { name, value, domain: 'localhost', path: '/' };
-        });
-        await page.setCookie(...cookies);
+        }).filter(cookie => cookie.name && cookie.value); // Remove invalid cookies
+        console.log(`🍪 PDF Generation - Parsed ${cookies.length} cookies`);
+        if (cookies.length > 0) {
+          await page.setCookie(...cookies);
+        }
+      } else {
+        console.log(`⚠️ PDF Generation - No cookies found in request headers`);
       }
 
       // Construct the print page URL with options
@@ -1977,15 +1997,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
         timeout: 60000 
       });
 
+      // Debug: Check page content after navigation
+      const pageTitle = await page.title();
+      const bodyContent = await page.evaluate(() => document.body.innerText.length);
+      console.log(`🔍 PDF Generation - Page title: "${pageTitle}", body text length: ${bodyContent}`);
+
       // Wait for the page to signal it's ready for PDF generation
       console.log(`⏳ PDF Generation - Waiting for page readiness signal...`);
       try {
         await page.waitForFunction(() => {
           return document.body.getAttribute('data-pdf-ready') === 'true';
         }, { timeout: 25000 });
+        console.log(`✅ PDF Generation - Page readiness signal received`);
       } catch (readinessError) {
-        console.log(`⚠️ PDF Generation - Readiness signal timeout, proceeding with fallback (page may still be loading assets)`);
-        // Proceed anyway - the client has a 10s fallback that should have triggered
+        console.log(`⚠️ PDF Generation - Readiness signal timeout, checking page state...`);
+        
+        // Debug: Check what's actually on the page
+        const hasQuoteData = await page.evaluate(() => {
+          const loadingText = document.body.innerText;
+          return {
+            hasLoadingText: loadingText.includes('Loading'),
+            hasErrorText: loadingText.includes('error') || loadingText.includes('Error'),
+            bodyLength: loadingText.length,
+            hasReadyAttribute: document.body.getAttribute('data-pdf-ready'),
+            hasContent: document.querySelector('.five-page-proposal') !== null
+          };
+        });
+        
+        console.log(`🔍 PDF Generation - Page state:`, hasQuoteData);
+        
+        // If page has no content, this is likely an auth or data issue
+        if (hasQuoteData.bodyLength < 100) {
+          throw new Error('Page appears empty - likely authentication or data loading issue');
+        }
       }
 
       console.log(`✅ PDF Generation - Page ready, generating PDF...`);
