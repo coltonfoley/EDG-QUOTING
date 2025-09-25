@@ -2321,13 +2321,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const publicUrl = `${req.protocol}://${req.get('host')}/quote-images/${sanitizedFilename}`;
       
       // Update the quote with the partner logo URL
-      console.log(`Updating quote ${params.data.quoteId} with partner logo URL: ${publicUrl}`);
       const updatedQuote = await storage.updateQuote(params.data.quoteId, {
         partnerLogoStorageUrl: publicUrl
       });
       
-      console.log(`✅ Partner logo saved for quote ${params.data.quoteId}: ${sanitizedFilename}`);
-      console.log('Updated quote result:', updatedQuote ? 'Success' : 'Failed');
       res.status(201).json({
         message: "Partner logo uploaded successfully",
         logoUrl: publicUrl,

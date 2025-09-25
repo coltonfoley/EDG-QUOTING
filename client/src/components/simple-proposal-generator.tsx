@@ -140,7 +140,6 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
       return await apiRequest('POST', `/api/quotes/${quote.id}/partner-logo`, formData);
     },
     onSuccess: (response) => {
-      console.log('Partner logo upload response:', response);
       
       // Invalidate all relevant queries to force refresh  
       queryClient.invalidateQueries({ queryKey: [`/api/quotes/${quote.id}?include=account,lineItems,contractTemplate,contacts`] });
@@ -166,9 +165,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
 
   // Clear temp partner logo when server data is updated
   useEffect(() => {
-    console.log('Quote partner logo URL:', quote.partnerLogoStorageUrl);
     if (quote.partnerLogoStorageUrl && tempPartnerLogo) {
-      console.log('Clearing temp partner logo since server has it');
       // Server has the logo, we can clear the temp preview
       setTimeout(() => setTempPartnerLogo(null), 500);
     }
