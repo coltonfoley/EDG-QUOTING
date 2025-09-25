@@ -1219,9 +1219,6 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
       }
       // Note: If cover page was created, header/footer are already added in drawProfessionalCoverPage
       
-      drawEstimateHeader();
-      drawAddresses();
-      drawEstimateDetails();
       
       // Step 3: Add product renderings (if uploaded)
       await drawProductRenderingsSection();
