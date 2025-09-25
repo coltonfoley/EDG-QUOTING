@@ -112,7 +112,7 @@ export default function ProposalPrint() {
       };
       img.src = src;
     });
-  }, [showCover, activeCoverPhoto, activeRenderings]);
+  }, [showCover, activeCoverPhoto, activeRenderings, quote]);
 
   // Font loading tracking
   useEffect(() => {

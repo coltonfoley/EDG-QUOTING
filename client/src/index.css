@@ -821,7 +821,7 @@
 }
 
 /* Screen-only styles for development/preview */
-@media screen and not print {
+@media screen {
   .five-page-proposal {
     max-width: 8.5in;
     margin: 1in auto;
