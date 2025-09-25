@@ -692,7 +692,7 @@ function PriceListUploader() {
           </span>
           <span className="text-gray-600"> or drag and drop</span>
         </label>
-        <p className="text-xs text-gray-500 mt-2">PDF, Excel (.xls, .xlsx), or images (JPG, PNG) up to 10MB</p>
+        <p className="text-xs text-gray-500 mt-2">PDF, Excel (.xls, .xlsx), or images (JPG, PNG) up to 100MB</p>
         <input
           id="price-list-upload"
           type="file"

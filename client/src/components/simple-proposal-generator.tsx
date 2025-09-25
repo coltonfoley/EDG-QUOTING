@@ -240,10 +240,10 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         });
         return false;
       }
-      if (file.size > 10 * 1024 * 1024) { // 10MB limit
+      if (file.size > 100 * 1024 * 1024) { // 100MB limit
         toast({
           title: "File too large",
-          description: "Please upload files smaller than 10MB",
+          description: "Please upload files smaller than 100MB",
           variant: "destructive"
         });
         return false;
@@ -1443,7 +1443,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
                   >
                     <Upload className="w-8 h-8 mx-auto mb-2 text-gray-400" />
                     <p className="text-sm text-gray-600">Click to upload cover photo</p>
-                    <p className="text-xs text-gray-500">PNG, JPG up to 10MB</p>
+                    <p className="text-xs text-gray-500">PNG, JPG up to 100MB</p>
                   </div>
                 ) : (
                   <div className="relative">
@@ -1494,7 +1494,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
                 >
                   <Upload className="w-8 h-8 mx-auto mb-2 text-gray-400" />
                   <p className="text-sm text-gray-600">Click to upload product renderings</p>
-                  <p className="text-xs text-gray-500">PNG, JPG up to 10MB each (max 5 images)</p>
+                  <p className="text-xs text-gray-500">PNG, JPG up to 100MB each (max 5 images)</p>
                 </div>
               ) : (
                 <div className="space-y-4">
