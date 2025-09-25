@@ -157,7 +157,7 @@ export function ContactForm({ accountId, contact, onSuccess, onCancel }: Contact
                 >
                   <FormControl>
                     <SelectTrigger data-testid="select-contact-role">
-                      <SelectValue placeholder="Select role" />
+                      <SelectValue placeholder="Select their role" />
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
@@ -184,7 +184,7 @@ export function ContactForm({ accountId, contact, onSuccess, onCancel }: Contact
                 <div className="space-y-0.5">
                   <FormLabel className="text-base">Primary Contact</FormLabel>
                   <div className="text-sm text-gray-500">
-                    Set as the primary contact for this account
+                    Mark this person as the main contact for the account
                   </div>
                 </div>
                 <FormControl>
