@@ -1,6 +1,6 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { insertQuoteSchema, insertCustomerSchema, type QuoteWithDetails, type Customer, type Account, type Contact } from "@shared/schema";
+import { insertQuoteSchema, insertCustomerSchema, type QuoteWithDetails, type Customer } from "@shared/schema";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -21,13 +21,10 @@ import { cn } from "@/lib/utils";
 import { debounce } from "lodash";
 import { DEAL_STAGES } from "@shared/dealStageConstants";
 
-// Helper to convert empty strings to undefined for optional validation
-const emptyToUndefined = (v: unknown) => typeof v === "string" && v.trim() === "" ? undefined : v;
-
 const quoteFormSchema = insertQuoteSchema.extend({
   customerName: z.string().min(1, "Customer name is required"),
-  customerEmail: z.preprocess(emptyToUndefined, z.string().email("Invalid email format").optional()),
-  customerPhone: z.preprocess(emptyToUndefined, z.string().min(1, "Phone number must be at least 1 digit").optional()),
+  customerEmail: z.string().email("Invalid email format").optional(),
+  customerPhone: z.string().min(1, "Phone number must be at least 1 digit").optional(),
   customerCompany: z.string().optional(),
   dealStage: z.string().default("new_lead"),
 }).omit({ accountId: true, customerId: true });
@@ -53,12 +50,6 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
   const [customerSearchOpen, setCustomerSearchOpen] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [showDuplicateWarning, setShowDuplicateWarning] = useState(false);
-  
-  // Account and Contact separation state
-  const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
-  const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
-  const [contactsForAccount, setContactsForAccount] = useState<Contact[]>([]);
-  const [contactSearchOpen, setContactSearchOpen] = useState(false);
   
   
   // Debounce search term
@@ -129,68 +120,18 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
     },
   });
 
-  // Handle customer selection from search (legacy)
+  // Handle customer selection from search
   const handleCustomerSelect = (customer: Customer) => {
     setSelectedCustomer(customer);
     form.setValue("customerName", customer.name);
-    form.setValue("customerEmail", customer.email || "");
-    form.setValue("customerPhone", customer.phone || "");
+    form.setValue("customerEmail", customer.email);
+    form.setValue("customerPhone", customer.phone);
     form.setValue("customerCompany", customer.company || "");
     setCustomerSearchOpen(false);
     setShowDuplicateWarning(false);
     toast({
       title: "Customer Selected",
       description: `Selected existing customer: ${customer.name}`,
-    });
-  };
-
-  // Handle account selection (new separated flow)
-  const handleAccountSelect = async (account: Account) => {
-    setSelectedAccount(account);
-    setSelectedCustomer(null); // Clear legacy customer selection
-    
-    // Fetch contacts for this account
-    try {
-      const response = await fetch(`/api/contacts/account/${account.id}`, {
-        credentials: 'include',
-      });
-      if (response.ok) {
-        const contacts = await response.json();
-        setContactsForAccount(contacts);
-        setSelectedContact(null); // Clear current contact selection
-        
-        // Update form with account info
-        form.setValue("customerCompany", account.company || account.name);
-        
-        toast({
-          title: "Account Selected",
-          description: `Selected account: ${account.name}. Now choose a contact person.`,
-        });
-      }
-    } catch (error) {
-      console.error('Error fetching contacts:', error);
-      toast({
-        title: "Error", 
-        description: "Failed to load contacts for this account",
-        variant: "destructive"
-      });
-    }
-    setCustomerSearchOpen(false);
-  };
-
-  // Handle contact selection (new separated flow)  
-  const handleContactSelect = (contact: Contact) => {
-    setSelectedContact(contact);
-    
-    // Update form with contact info
-    form.setValue("customerName", `${contact.firstName} ${contact.lastName}`);
-    form.setValue("customerEmail", contact.email);
-    form.setValue("customerPhone", contact.phone || "");
-    
-    setContactSearchOpen(false);
-    toast({
-      title: "Contact Selected",
-      description: `Selected contact: ${contact.firstName} ${contact.lastName}`,
     });
   };
   

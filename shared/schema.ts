@@ -32,8 +32,8 @@ export const users = pgTable("users", {
 export const accounts = pgTable("accounts", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(), // Company or individual name
-  email: text("email"), // Optional business email
-  phone: text("phone"), // Optional business phone
+  email: text("email").notNull(),
+  phone: text("phone").notNull(),
   company: text("company"), // Company name for business clients
   accountType: text("account_type").notNull().default("homeowner"), // general_contractor, homeowner, commercial
   paymentTerms: text("payment_terms").default("net_30"), // net_30, net_60, due_on_receipt, etc.
@@ -71,7 +71,6 @@ export const quotes = pgTable("quotes", {
   quoteNumber: text("quote_number").notNull().unique(),
   customerId: integer("customer_id").notNull(), // Legacy column for backward compatibility
   accountId: integer("account_id"), // New column name, nullable for now
-  contactId: integer("contact_id"), // Reference to specific individual contact
   assignedRepId: text("assigned_rep_id"), // foreign key to users table (for sales rep assignment)
   projectName: text("project_name"),
   projectAddress: text("project_address"),
@@ -95,7 +94,6 @@ export const quotes = pgTable("quotes", {
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => [
   index("idx_quotes_account_id").on(table.accountId),
-  index("idx_quotes_contact_id").on(table.contactId),
   index("idx_quotes_deal_stage").on(table.dealStage),
   index("idx_quotes_assigned_rep").on(table.assignedRepId),
   index("idx_quotes_account_created").on(table.accountId, table.createdAt),
@@ -280,22 +278,15 @@ export const issueReports = pgTable("issue_reports", {
 
 
 
-// Helper to convert empty strings to undefined for optional validation
-const emptyToUndefined = (v: unknown) => typeof v === "string" && v.trim() === "" ? undefined : v;
-
 // Insert schemas for accounts and contacts
 export const insertAccountSchema = createInsertSchema(accounts).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
 }).extend({
-  // Business contact information (optional) - very permissive for testing
-  email: z.preprocess(emptyToUndefined, z.string().optional()),
-  phone: z.preprocess(emptyToUndefined, z.string().optional()),
-  company: z.preprocess(emptyToUndefined, z.string().optional()),
   accountType: z.enum(["general_contractor", "homeowner", "commercial"]).default("homeowner"),
-  paymentTerms: z.preprocess(emptyToUndefined, z.string().optional()),
-  billingAddress: z.preprocess(emptyToUndefined, z.string().optional()),
+  paymentTerms: z.string().optional().nullable(),
+  billingAddress: z.string().optional().nullable(),
 });
 
 export const insertContactSchema = createInsertSchema(contacts).omit({
@@ -304,7 +295,7 @@ export const insertContactSchema = createInsertSchema(contacts).omit({
   updatedAt: true,
 }).extend({
   role: z.string().default("primary_contact"),
-  phone: z.preprocess(emptyToUndefined, z.string().optional()),
+  phone: z.string().optional().nullable(),
   isPrimary: z.boolean().default(false),
 });
 
