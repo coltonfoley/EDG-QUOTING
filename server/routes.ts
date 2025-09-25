@@ -429,7 +429,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Get the bucket and list files to find the one ending with our filename
       const privateDir = objectStorageService.getPrivateObjectDir();
-      const directories = ['cover-photos', 'product-renderings'];
+      const directories = ['cover-photos', 'product-renderings', 'partner-logos'];
       
       for (const dir of directories) {
         try {
