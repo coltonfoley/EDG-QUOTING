@@ -275,6 +275,7 @@ export class MemStorage {
       taxRate: insertQuote.taxRate || "0",
       discount: insertQuote.discount || "0",
       shipping: insertQuote.shipping || "0",
+      partnerLogoStorageUrl: insertQuote.partnerLogoStorageUrl || null, // Fix TypeScript error
       lostReason: insertQuote.lostReason || null,
       contractTemplateId: insertQuote.contractTemplateId || null,
       customContractTerms: insertQuote.customContractTerms || null,
