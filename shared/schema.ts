@@ -32,8 +32,8 @@ export const users = pgTable("users", {
 export const accounts = pgTable("accounts", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(), // Company or individual name
-  email: text("email").notNull(),
-  phone: text("phone").notNull(),
+  email: text("email"), // Optional business email
+  phone: text("phone"), // Optional business phone
   company: text("company"), // Company name for business clients
   accountType: text("account_type").notNull().default("homeowner"), // general_contractor, homeowner, commercial
   paymentTerms: text("payment_terms").default("net_30"), // net_30, net_60, due_on_receipt, etc.
@@ -284,6 +284,15 @@ export const insertAccountSchema = createInsertSchema(accounts).omit({
   createdAt: true,
   updatedAt: true,
 }).extend({
+  // Business contact information (optional)
+  email: z.string().refine(
+    (val) => !val || z.string().email().safeParse(val).success,
+    "Invalid email format"
+  ).optional(),
+  phone: z.string().refine(
+    (val) => !val || val.length >= 10,
+    "Phone number must be at least 10 digits"
+  ).optional(),
   accountType: z.enum(["general_contractor", "homeowner", "commercial"]).default("homeowner"),
   paymentTerms: z.string().optional().nullable(),
   billingAddress: z.string().optional().nullable(),

@@ -11,20 +11,9 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { z } from "zod";
 
+// Use the shared schema directly now that it properly handles optional email/phone
 const accountFormSchema = insertAccountSchema.extend({
-  name: z.string().min(1, "Name is required"),
-  email: z.string().refine(
-    (val) => val === "" || z.string().email().safeParse(val).success,
-    "Invalid email format"
-  ),
-  phone: z.string().refine(
-    (val) => val === "" || val.length >= 10,
-    "Phone number must be at least 10 digits"
-  ),
-  company: z.string().optional(),
-  accountType: z.enum(["homeowner", "general_contractor", "commercial"]),
-  paymentTerms: z.string().optional(),
-  billingAddress: z.string().optional()
+  name: z.string().min(1, "Company/Account name is required"),
 });
 
 type AccountFormData = z.infer<typeof accountFormSchema>;
@@ -42,12 +31,12 @@ export function AccountForm({ account, onSuccess, onCancel }: AccountFormProps) 
     resolver: zodResolver(accountFormSchema),
     defaultValues: {
       name: account?.name || "",
-      email: account?.email || "",
-      phone: account?.phone || "",
-      company: account?.company || "",
+      email: account?.email || undefined,
+      phone: account?.phone || undefined,
+      company: account?.company || undefined,
       accountType: (account?.accountType as "homeowner" | "general_contractor" | "commercial") || "homeowner",
-      paymentTerms: account?.paymentTerms || "net_30",
-      billingAddress: account?.billingAddress || ""
+      paymentTerms: account?.paymentTerms || undefined,
+      billingAddress: account?.billingAddress || undefined
     }
   });
 

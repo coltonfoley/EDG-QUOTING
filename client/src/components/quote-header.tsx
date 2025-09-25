@@ -127,8 +127,8 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
   const handleCustomerSelect = (customer: Customer) => {
     setSelectedCustomer(customer);
     form.setValue("customerName", customer.name);
-    form.setValue("customerEmail", customer.email);
-    form.setValue("customerPhone", customer.phone);
+    form.setValue("customerEmail", customer.email || "");
+    form.setValue("customerPhone", customer.phone || "");
     form.setValue("customerCompany", customer.company || "");
     setCustomerSearchOpen(false);
     setShowDuplicateWarning(false);
