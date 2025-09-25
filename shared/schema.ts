@@ -133,6 +133,22 @@ export const quoteProductRenderings = pgTable("quote_product_renderings", {
   index("idx_quote_product_renderings_order").on(table.quoteId, table.displayOrder),
 ]);
 
+// Quote partner logos - stores metadata for partner logo images
+export const quotePartnerLogos = pgTable("quote_partner_logos", {
+  id: serial("id").primaryKey(),
+  quoteId: integer("quote_id").notNull(),
+  filename: text("filename").notNull(),
+  originalName: text("original_name").notNull(),
+  storageUrl: text("storage_url").notNull(), // Object storage URL
+  fileSize: integer("file_size"),
+  mimeType: text("mime_type").notNull(),
+  isActive: boolean("is_active").default(true), // For soft deletion
+  uploadedAt: timestamp("uploaded_at").defaultNow(),
+}, (table) => [
+  index("idx_quote_partner_logos_quote_id").on(table.quoteId),
+  index("idx_quote_partner_logos_active").on(table.isActive),
+]);
+
 // Contract templates for reusable contract terms
 export const contractTemplates = pgTable("contract_templates", {
   id: serial("id").primaryKey(),
@@ -416,6 +432,11 @@ export const insertQuoteProductRenderingSchema = createInsertSchema(quoteProduct
   uploadedAt: true,
 });
 
+export const insertQuotePartnerLogoSchema = createInsertSchema(quotePartnerLogos).omit({
+  id: true,
+  uploadedAt: true,
+});
+
 export const insertIssueReportSchema = createInsertSchema(issueReports).omit({
   id: true,
   createdAt: true,
@@ -446,6 +467,7 @@ export type PricingTable = typeof pricingTables.$inferSelect;
 export type ProductAccessory = typeof productAccessories.$inferSelect;
 export type QuoteCoverPhoto = typeof quoteCoverPhotos.$inferSelect;
 export type QuoteProductRendering = typeof quoteProductRenderings.$inferSelect;
+export type QuotePartnerLogo = typeof quotePartnerLogos.$inferSelect;
 export type IssueReport = typeof issueReports.$inferSelect;
 
 export type InsertAccount = z.infer<typeof insertAccountSchema>;
@@ -460,6 +482,7 @@ export type InsertPricingTable = z.infer<typeof insertPricingTableSchema>;
 export type InsertProductAccessory = z.infer<typeof insertProductAccessorySchema>;
 export type InsertQuoteCoverPhoto = z.infer<typeof insertQuoteCoverPhotoSchema>;
 export type InsertQuoteProductRendering = z.infer<typeof insertQuoteProductRenderingSchema>;
+export type InsertQuotePartnerLogo = z.infer<typeof insertQuotePartnerLogoSchema>;
 export type InsertIssueReport = z.infer<typeof insertIssueReportSchema>;
 
 export type QuoteWithDetails = Quote & {
