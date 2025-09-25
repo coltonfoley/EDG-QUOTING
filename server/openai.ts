@@ -125,11 +125,11 @@ const ExtractedCustomerSchema = z.object({
 });
 
 const ExtractedQuoteSchema = z.object({
-  customer: ExtractedCustomerSchema,
+  customer: ExtractedCustomerSchema.nullable().optional(),
   quoteNumber: z.string().nullable().optional(),
   date: z.string().nullable().optional(),
   projectDescription: z.string().nullable().optional(),
-  lineItems: z.array(ExtractedLineItemSchema),
+  lineItems: z.array(ExtractedLineItemSchema).nullable().optional(),
   subtotal: z.number().nullable().optional(),
   taxRate: z.number().nullable().optional(),
   taxAmount: z.number().nullable().optional(),
@@ -445,6 +445,10 @@ CRITICAL RULES:
 
     const extracted = ExtractedQuoteSchema.parse(parsedContent);
 
+    // Normalize customer and lineItems to ensure consistent defaults
+    extracted.customer = extracted.customer ?? { name: null, email: null, phone: null, company: null, address: null };
+    extracted.lineItems = extracted.lineItems ?? [];
+
     // Calculate confidence if not present
     if (!extracted.confidence) {
       extracted.confidence = calculateExtractionConfidence(extracted);
@@ -678,6 +682,10 @@ async function processImagesInSingleCall(images: Array<{index: number, imageBase
 
     // Validate with extended schema
     const extracted = ExtractedQuoteWithPageRefsSchema.parse(parsedContent);
+    
+    // Normalize customer and lineItems to ensure consistent defaults
+    extracted.customer = extracted.customer ?? { name: null, email: null, phone: null, company: null, address: null };
+    extracted.lineItems = extracted.lineItems ?? [];
     
     // Calculate and add confidence score if not already present
     if (!extracted.confidence) {
