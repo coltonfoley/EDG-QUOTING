@@ -23,8 +23,8 @@ import { DEAL_STAGES } from "@shared/dealStageConstants";
 
 const quoteFormSchema = insertQuoteSchema.extend({
   customerName: z.string().min(1, "Customer name is required"),
-  customerEmail: z.string().email("Valid email is required"),
-  customerPhone: z.string().min(1, "Phone number is required"),
+  customerEmail: z.string().email("Invalid email format").optional(),
+  customerPhone: z.string().min(1, "Phone number must be at least 1 digit").optional(),
   customerCompany: z.string().optional(),
   dealStage: z.string().default("new_lead"),
 }).omit({ accountId: true, customerId: true });
@@ -165,7 +165,7 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
   
   useEffect(() => {
     if (!selectedCustomer) {
-      checkForDuplicates(watchedEmail, watchedPhone);
+      checkForDuplicates(watchedEmail || "", watchedPhone || "");
     }
   }, [watchedEmail, watchedPhone, checkForDuplicates, selectedCustomer]);
   
