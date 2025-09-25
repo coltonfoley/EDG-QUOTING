@@ -8,29 +8,14 @@
  * @returns The proxied URL or original URL if not object storage
  */
 export function getProxiedImageUrl(imageUrl: string): string {
-  // If already an absolute URL, return as-is
-  if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
-    return imageUrl;
-  }
-  
-  // Handle quote-images URLs - ensure they're absolute for Puppeteer
+  // Handle new quote-images URLs - these are already accessible without proxy
   if (imageUrl.includes('/quote-images/')) {
-    // If running in browser, use window.location.origin
-    if (typeof window !== 'undefined') {
-      return `${window.location.origin}${imageUrl.startsWith('/') ? imageUrl : '/' + imageUrl}`;
-    }
-    // Fallback for server-side rendering (shouldn't happen in this context)
     return imageUrl;
   }
   
   // Only proxy Replit object storage URLs that have CORS issues
   if (imageUrl.includes('storage.replit.com')) {
-    const proxyUrl = `/api/image-proxy?url=${encodeURIComponent(imageUrl)}`;
-    // Make proxy URL absolute for Puppeteer
-    if (typeof window !== 'undefined') {
-      return `${window.location.origin}${proxyUrl}`;
-    }
-    return proxyUrl;
+    return `/api/image-proxy?url=${encodeURIComponent(imageUrl)}`;
   }
   
   // Return original URL for other sources (assets, data URLs, etc.)
