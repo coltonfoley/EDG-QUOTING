@@ -137,12 +137,12 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
     mutationFn: async (file: File) => {
       const formData = new FormData();
       formData.append('image', file);
-      return await apiRequest('PATCH', `/api/quotes/${quote.id}/partner-logo`, formData);
+      return await apiRequest('POST', `/api/quotes/${quote.id}/partner-logo`, formData);
     },
     onSuccess: (response) => {
       console.log('Partner logo upload response:', response);
       
-      // Invalidate all relevant queries to force refresh
+      // Invalidate all relevant queries to force refresh  
       queryClient.invalidateQueries({ queryKey: [`/api/quotes/${quote.id}?include=account,lineItems,contractTemplate,contacts`] });
       queryClient.invalidateQueries({ queryKey: [`/api/quotes/${quote.id}`] });
       queryClient.invalidateQueries({ queryKey: ['/api/quotes'] });
