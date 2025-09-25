@@ -1991,9 +1991,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
       res.setHeader('Content-Length', pdfBuffer.length.toString());
       res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Content-Encoding', 'identity');
 
-      // Send PDF
-      res.send(pdfBuffer);
+      // Send PDF buffer directly to prevent encoding issues
+      res.end(pdfBuffer, 'binary');
 
     } catch (error: any) {
       const endTime = Date.now();
