@@ -141,202 +141,69 @@ export default function ProposalPrint() {
   const customer = quote.account;
 
   return (
-    <div className="print-proposal bg-white">
-      {/* Cover Page */}
-      {showCover && (
-        <div className="cover-page page-break-after">
-          {/* Header Brand Bar */}
-          <div className="brand-header">
-            <div className="brand-content">
-              <img src={logoPath} alt={company.name} className="company-logo" />
-              <div className="contact-info">
-                <div>{company.website}</div>
-                <div>{company.phone}</div>
-                <div>{company.email}</div>
-              </div>
-            </div>
-          </div>
+    <div className="clean-proposal">
+      {/* Main Proposal */}
+      <div className="proposal-header">
+        <h1 className="project-title">{quote.projectName || (customer.name ? customer.name.toUpperCase() + ' PROJECT' : 'BACK PATIO COVER')}</h1>
+        <h2 className="project-location">{quote.projectAddress || customer.billingAddress || 'PROJECT LOCATION'}</h2>
+        <h3 className="proposal-type">OUTDOOR LIVING PROPOSAL</h3>
+        <div className="proposal-date">{new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }).toUpperCase()}</div>
+      </div>
 
-          {/* Title Section */}
-          <div className="title-section">
-            <h1 className="main-title">PROJECT PROPOSAL</h1>
-            <div className="title-accent"></div>
-            <h2 className="project-name">{quote.projectName || 'OUTDOOR LIVING PROJECT'}</h2>
-          </div>
+      {/* Professional Disclaimer */}
+      <div className="disclaimer">
+        This quote is for estimation purposes and is not a guarantee of cost for services. Quote is based on current information 
+        from manufacturer about the project requirements. Actual cost may change once project elements are finalized. Client 
+        will be notified of any changes in cost prior to them being incurred.
+      </div>
 
-          {/* Hero Image */}
-          {activeCoverPhoto && (
-            <div className="hero-image-container">
-              <img 
-                src={getProxiedImageUrl(activeCoverPhoto.storageUrl)}
-                alt="Project Cover"
-                className="hero-image"
-              />
-            </div>
-          )}
+      {/* Layout Section */}
+      <div className="section-title">LAYOUT:</div>
 
-          {/* Metadata Panel */}
-          <div className="metadata-panel">
-            <div className="metadata-item">
-              <div className="metadata-label">PROPOSAL NUMBER</div>
-              <div className="metadata-value">{quote.quoteNumber || 'PROP-001'}</div>
-            </div>
-            <div className="metadata-item">
-              <div className="metadata-label">DATE PREPARED</div>
-              <div className="metadata-value">
-                {new Date().toLocaleDateString('en-US', { 
-                  year: 'numeric', 
-                  month: 'long', 
-                  day: 'numeric' 
-                })}
-              </div>
-            </div>
-            <div className="metadata-item">
-              <div className="metadata-label">PREPARED FOR</div>
-              <div className="metadata-value">
-                <div>{customer.name}</div>
-                {quote.projectAddress && <div className="address">{quote.projectAddress}</div>}
-                {customer.email && <div className="email">{customer.email}</div>}
-              </div>
-            </div>
-          </div>
+      {/* Cover Photo */}
+      {showCover && activeCoverPhoto && (
+        <div className="layout-image">
+          <img 
+            src={getProxiedImageUrl(activeCoverPhoto.storageUrl)}
+            alt="Project Layout"
+            className="layout-photo"
+          />
         </div>
       )}
 
-      {/* Main Content Page */}
-      <div className="content-page">
-        {/* Header */}
-        <div className="page-header">
-          <div className="header-brand">
-            <div className="company-name">{company.name}</div>
-            <div className="company-address">{company.address1} • {company.address2}</div>
-          </div>
-          <div className="header-contact">
-            <div className="phone">{company.phone}</div>
-            <div className="email-website">{company.email} • {company.website}</div>
-          </div>
-        </div>
-
-        {/* Proposal Header */}
-        <div className="section-header">
-          <h2>PROFESSIONAL ESTIMATE</h2>
-        </div>
-
-        {/* Addresses Section */}
-        <div className="addresses-section">
-          <div className="address-column">
-            <h3>Bill To</h3>
-            <div className="address-content">
-              <div>{customer.name}</div>
-              {customer.company && <div>{customer.company}</div>}
-              {customer.billingAddress && <div className="address">{customer.billingAddress}</div>}
+      {/* Inspiration Gallery */}
+      {activeRenderings && activeRenderings.length > 0 && (
+        <>
+          <div className="section-title">INSPIRATION GALLERY:</div>
+          {activeRenderings.slice(0, 4).map((rendering, index) => (
+            <div key={rendering.id} className="gallery-image">
+              <img 
+                src={getProxiedImageUrl(rendering.storageUrl)}
+                alt={`Gallery ${index + 1}`}
+                className="gallery-photo"
+              />
             </div>
-          </div>
-          <div className="address-column">
-            <h3>Ship To</h3>
-            <div className="address-content">
-              <div>{customer.name}</div>
-              {quote.projectAddress && <div className="address">{quote.projectAddress}</div>}
-            </div>
-          </div>
-        </div>
+          ))}
+        </>
+      )}
 
-        {/* Estimate Details */}
-        <div className="estimate-details">
-          <h3>Estimate Details</h3>
-          <div className="details-grid">
-            <div><strong>Estimate no.:</strong> {quote.id}</div>
-            <div><strong>Estimate date:</strong> {new Date().toLocaleDateString('en-US')}</div>
-          </div>
-        </div>
+      {/* Product Categories */}
+      <div className="section-title">MOTORIZED SCREENS:</div>
+      <div className="section-title">HEATERS:</div>
 
-        {/* Project Overview */}
-        <div className="project-overview-section avoid-break">
-          <div className="section-header">
-            <h2>PROJECT OVERVIEW</h2>
-          </div>
-          <div className="project-overview-content">
-            <div className="overview-intro">
-              <p>
-                <strong>Transform your outdoor living experience</strong> with our premium patio and shade solutions. 
-                This comprehensive proposal outlines a complete outdoor comfort system designed specifically for your space, 
-                featuring state-of-the-art motorized screens and professional-grade shade structures.
-              </p>
-            </div>
-            
-            <div className="overview-benefits">
-              <div className="benefit-columns">
-                <div className="benefit-column">
-                  <h4>🏡 Enhanced Living Space</h4>
-                  <ul>
-                    <li>Extended outdoor seasons</li>
-                    <li>Protection from sun, wind & insects</li>
-                    <li>Increased property value</li>
-                  </ul>
-                </div>
-                <div className="benefit-column">
-                  <h4>⚙️ Premium Technology</h4>
-                  <ul>
-                    <li>Motorized operation with remote control</li>
-                    <li>Weather-resistant construction</li>
-                    <li>Professional installation & warranty</li>
-                  </ul>
-                </div>
-                <div className="benefit-column">
-                  <h4>🎯 Custom Solution</h4>
-                  <ul>
-                    <li>Tailored to your specific needs</li>
-                    <li>Quality materials & craftsmanship</li>
-                    <li>Full-service project management</li>
-                  </ul>
-                </div>
-              </div>
-            </div>
-
-            <div className="overview-commitment">
-              <p>
-                <em>Our commitment: Delivering exceptional outdoor solutions with professional installation, 
-                comprehensive warranty coverage, and ongoing support to ensure your complete satisfaction.</em>
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Product Renderings */}
-        {activeRenderings && activeRenderings.length > 0 && (
-          <div className="renderings-section avoid-break">
-            <div className="section-header">
-              <h2>PRODUCT RENDERINGS</h2>
-            </div>
-            <div className="renderings-grid">
-              {activeRenderings.slice(0, 6).map((rendering) => (
-                <div key={rendering.id} className="rendering-item">
-                  <img 
-                    src={getProxiedImageUrl(rendering.storageUrl)}
-                    alt={rendering.originalName}
-                    className="rendering-image"
-                  />
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Line Items Table */}
-        <div className="line-items-section avoid-break">
-          <table className="line-items-table">
+      {/* Pricing Table */}
+      {showPricing && totals && (
+        <div className="pricing-section">
+          <table className="pricing-table">
             <thead>
-              <tr className="table-header">
-                <th>#</th>
-                <th>Product/Service</th>
-                <th>Description</th>
-                <th>Qty</th>
-                {showPricing && <th>Rate</th>}
-                {showPricing && <th>Amount</th>}
+              <tr>
+                <th className="product-col">PRODUCT</th>
+                <th className="qty-col">QUANTITIES</th>
+                <th className="total-col">TOTAL</th>
               </tr>
             </thead>
             <tbody>
-              {quote.lineItems.map((item, index) => {
+              {quote.lineItems.map((item) => {
                 const qty = parseFloat(item.quantity.toString());
                 const price = parseFloat(item.unitPrice.toString());
                 const markup = parseFloat(item.markupValue.toString());
@@ -346,106 +213,72 @@ export default function ProposalPrint() {
                   : baseTotal + markup;
 
                 return (
-                  <tr key={item.id} className="table-row">
-                    <td className="item-number">{index + 1}</td>
-                    <td className="product-name">{item.description.split(' ').slice(0, 3).join(' ')}</td>
-                    <td className="description">{item.description}</td>
+                  <tr key={item.id}>
+                    <td className="product-name">{item.description.toUpperCase()}</td>
                     <td className="quantity">{qty}</td>
-                    {showPricing && <td className="rate">{formatCurrency(price)}</td>}
-                    {showPricing && <td className="amount">{formatCurrency(total)}</td>}
+                    <td className="amount">{formatCurrency(total)}</td>
                   </tr>
                 );
               })}
+              
+              {/* Subtotal, Tax, Total rows */}
+              {totals.shippingAmount > 0 && (
+                <tr>
+                  <td className="product-name">SHIPPING:</td>
+                  <td className="quantity">1</td>
+                  <td className="amount">{formatCurrency(totals.shippingAmount)}</td>
+                </tr>
+              )}
+              
+              {totals.taxAmount > 0 && (
+                <tr>
+                  <td className="product-name">SALES TAX ({((totals.taxAmount / totals.subtotal) * 100).toFixed(2)}%):</td>
+                  <td className="quantity"></td>
+                  <td className="amount">{formatCurrency(totals.taxAmount)}</td>
+                </tr>
+              )}
+
+              <tr className="total-row">
+                <td className="product-name"><strong>TOTAL:</strong></td>
+                <td className="quantity"></td>
+                <td className="amount"><strong>{formatCurrency(totals.total)}</strong></td>
+              </tr>
             </tbody>
           </table>
         </div>
+      )}
 
-        {/* Totals Section */}
-        {showPricing && totals && (
-          <div className="totals-section">
-            <div className="totals-content">
-              {totals.subtotal !== totals.total && (
-                <>
-                  <div className="total-line">
-                    <span>Subtotal:</span>
-                    <span>{formatCurrency(totals.subtotal)}</span>
-                  </div>
-                  {totals.discountAmount > 0 && (
-                    <div className="total-line">
-                      <span>Discount:</span>
-                      <span>-{formatCurrency(totals.discountAmount)}</span>
-                    </div>
-                  )}
-                  {totals.shippingAmount > 0 && (
-                    <div className="total-line">
-                      <span>Shipping:</span>
-                      <span>{formatCurrency(totals.shippingAmount)}</span>
-                    </div>
-                  )}
-                  {totals.taxAmount > 0 && (
-                    <div className="total-line">
-                      <span>Tax:</span>
-                      <span>{formatCurrency(totals.taxAmount)}</span>
-                    </div>
-                  )}
-                </>
-              )}
-              <div className="total-line total-final">
-                <span>TOTAL:</span>
-                <span>{formatCurrency(totals.total)}</span>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Signature Section */}
-        <div className="signature-section avoid-break">
-          <div className="section-header">
-            <h2>CLIENT ACCEPTANCE</h2>
-          </div>
-          <div className="signature-boxes">
-            <div className="signature-box">
-              <div className="signature-label">ACCEPTED DATE</div>
-              <div className="signature-line">Date: _______________</div>
-            </div>
-            <div className="signature-box">
-              <div className="signature-label">CLIENT SIGNATURE</div>
-              <div className="signature-line">Signature: _______________</div>
-              <div className="signature-line">Print Name: _______________</div>
-            </div>
-          </div>
+      {/* Company Footer */}
+      <div className="company-footer">
+        <div className="company-name">{company.name}</div>
+        <div className="company-address">{company.address1}, {company.address2}</div>
+        <div className="company-contact">
+          <div>Website: {company.website}</div>
+          <div>Email: {company.email}</div>
         </div>
-
-        {/* Contract Terms */}
-        {showContract && (quote.contractTemplate?.terms || quote.customContractTerms) && (
-          <div className="contract-section page-break-before">
-            <div className="section-header">
-              <h2>CONTRACT TERMS & CONDITIONS</h2>
-            </div>
-            <div className="contract-content">
-              {(quote.contractTemplate?.terms || quote.customContractTerms || '').split('\n').map((line, index) => {
-                const trimmedLine = line.trim();
-                if (!trimmedLine) return <div key={index} className="contract-spacer"></div>;
-                
-                const isSectionStart = /^\d+\.(\s|$)/.test(trimmedLine);
-                return (
-                  <div key={index} className={`contract-line ${isSectionStart ? 'section-start' : ''}`}>
-                    {trimmedLine}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* Footer */}
-        <div className="page-footer no-print">
-          <div className="footer-content">
-            <div className="footer-company">{company.name}</div>
-            <div className="footer-contact">{company.phone} • {company.email}</div>
-          </div>
+        <div className="company-social">
+          <div>Instagram: @edgpatioandshade</div>
+          <div>LinkedIn: EDG Patio & Shade</div>
         </div>
       </div>
+
+      {/* Contract Terms */}
+      {showContract && (quote.contractTemplate?.terms || quote.customContractTerms) && (
+        <div className="contract-section page-break-before">
+          <div className="contract-content">
+            {(quote.contractTemplate?.terms || quote.customContractTerms || '').split('\n').map((line, index) => {
+              const trimmedLine = line.trim();
+              if (!trimmedLine) return <div key={index} className="contract-spacer"></div>;
+              
+              return (
+                <div key={index} className="contract-line">
+                  {trimmedLine}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
