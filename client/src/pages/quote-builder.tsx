@@ -118,16 +118,10 @@ export default function QuoteBuilder() {
   const handleUpdateQuote = (field: string, value: any) => {
     if (!quote || !quoteId) return;
     
-    // Use account data if available, fall back to customer for backward compatibility
-    const customerData = quote.account || quote.customer;
-    
     // Only send the specific field being updated, not the entire quote object
+    // Don't force customer data from database - let form data control it
     updateQuoteMutation.mutate({
       [field]: value,
-      customerName: customerData.name,
-      customerEmail: customerData.email,
-      customerPhone: customerData.phone,
-      customerCompany: customerData.company || "",
     });
   };
 
