@@ -13,8 +13,14 @@ import { z } from "zod";
 
 const accountFormSchema = insertAccountSchema.extend({
   name: z.string().min(1, "Name is required"),
-  email: z.string().email("Valid email is required"),
-  phone: z.string().min(10, "Valid phone number is required"),
+  email: z.string().refine(
+    (val) => val === "" || z.string().email().safeParse(val).success,
+    "Invalid email format"
+  ),
+  phone: z.string().refine(
+    (val) => val === "" || val.length >= 10,
+    "Phone number must be at least 10 digits"
+  ),
   company: z.string().optional(),
   accountType: z.enum(["homeowner", "general_contractor", "commercial"]),
   paymentTerms: z.string().optional(),
@@ -39,7 +45,7 @@ export function AccountForm({ account, onSuccess, onCancel }: AccountFormProps) 
       email: account?.email || "",
       phone: account?.phone || "",
       company: account?.company || "",
-      accountType: account?.accountType || "homeowner",
+      accountType: (account?.accountType as "homeowner" | "general_contractor" | "commercial") || "homeowner",
       paymentTerms: account?.paymentTerms || "net_30",
       billingAddress: account?.billingAddress || ""
     }
