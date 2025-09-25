@@ -26,7 +26,7 @@ const quoteFormSchema = insertQuoteSchema.extend({
   quoteNumber: z.string().optional(), // Auto-generated on server
   contactId: z.number().optional(),
   dealStage: z.string().default("new_lead"),
-}).omit({ accountId: true, customerId: true });
+}).omit({ accountId: true });
 
 type QuoteFormData = z.infer<typeof quoteFormSchema>;
 
