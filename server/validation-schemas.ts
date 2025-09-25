@@ -69,9 +69,10 @@ export const insertCustomerSchema = baseCustomerSchema.extend({
 });
 
 // Enhanced Quote validation
-export const insertQuoteSchema = baseQuoteSchema.extend({
-  quoteNumber: z.string().min(1, "Quote number is required").max(50, "Quote number is too long"),
-  accountId: z.number().int().positive("Account ID must be a positive integer"),
+export const insertQuoteSchema = baseQuoteSchema.omit({ customerId: true }).extend({
+  quoteNumber: z.string().min(1, "Quote number is required").max(50, "Quote number is too long").optional(), // Auto-generated on server
+  accountId: z.number().int().positive("Account ID must be a positive integer").optional(),
+  contactId: z.number().int().positive("Contact ID must be a positive integer").optional(),
   assignedRepId: z.string().max(255, "Assigned rep ID is too long").optional().nullable(),
   dealStage: z.enum(["new_lead", "qualifying", "consultation_scheduled", "building_estimate", "quote_sent", "closed_won", "closed_lost", "on_hold"]).default("new_lead"),
   lostReason: z.string().max(500, "Lost reason is too long").optional().nullable(),
@@ -114,12 +115,19 @@ export const insertQuoteSchema = baseQuoteSchema.extend({
 }, {
   message: "Cannot specify both a contract template and custom contract terms",
   path: ["contractTemplateId", "customContractTerms"]
+}).refine((data) => {
+  // Require at least one of accountId or contactId
+  return data.accountId || data.contactId;
+}, {
+  message: "Either accountId or contactId must be provided",
+  path: ["accountId", "contactId"]
 });
 
 // Update schema for quotes - more lenient validation for partial updates
 export const updateQuoteSchema = z.object({
   quoteNumber: z.string().min(1, "Quote number is required").max(50, "Quote number is too long").optional(),
   accountId: z.number().int().positive("Account ID must be a positive integer").optional(),
+  contactId: z.number().int().positive("Contact ID must be a positive integer").optional(),
   assignedRepId: z.string().max(255, "Assigned rep ID is too long").optional().nullable(),
   dealStage: z.enum(["new_lead", "qualifying", "consultation_scheduled", "building_estimate", "quote_sent", "closed_won", "closed_lost", "on_hold"]).optional(),
   lostReason: z.string().max(500, "Lost reason is too long").optional().nullable(),

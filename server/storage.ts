@@ -264,6 +264,7 @@ export class MemStorage {
       id,
       customerId: (insertQuote.accountId || insertQuote.customerId || 0) as number, // Use accountId for customerId
       accountId: insertQuote.accountId || null, // Keep accountId as is
+      contactId: insertQuote.contactId || null, // Handle optional contactId
       dealStage: insertQuote.dealStage || "new_lead",
       assignedRepId: insertQuote.assignedRepId || null,
       projectName: insertQuote.projectName || null,
@@ -818,6 +819,15 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createQuote(insertQuote: InsertQuote): Promise<Quote> {
+    // Generate quote number if not provided
+    if (!insertQuote.quoteNumber) {
+      const year = new Date().getFullYear();
+      const timestamp = Date.now();
+      const random = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+      insertQuote.quoteNumber = `QT-${year}-${timestamp.toString().slice(-8)}${random}`;
+      console.log(`Generated new quote number: ${insertQuote.quoteNumber}`);
+    }
+    
     // Retry logic for handling duplicate quote numbers
     const maxRetries = 5;
     let retryCount = 0;
@@ -847,11 +857,57 @@ export class DatabaseStorage implements IStorage {
         }
         
         // Try to insert the quote
-        // Map accountId to customerId for backward compatibility
+        // Handle contactId to accountId mapping and set legacy customerId
+        let resolvedAccountId = insertQuote.accountId;
+        
+        // If both accountId and contactId are provided, validate consistency
+        if (insertQuote.accountId && insertQuote.contactId) {
+          const [contact] = await db
+            .select({ accountId: contacts.accountId })
+            .from(contacts)
+            .where(eq(contacts.id, insertQuote.contactId))
+            .limit(1);
+          
+          if (!contact) {
+            throw new Error(`Contact with ID ${insertQuote.contactId} not found`);
+          }
+          
+          if (contact.accountId !== insertQuote.accountId) {
+            throw new Error(`Contact ${insertQuote.contactId} belongs to account ${contact.accountId}, but accountId ${insertQuote.accountId} was provided. These must match.`);
+          }
+          
+          resolvedAccountId = insertQuote.accountId;
+        }
+        // If contactId provided but no accountId, fetch contact to derive accountId
+        else if (insertQuote.contactId && !resolvedAccountId) {
+          const [contact] = await db
+            .select({ accountId: contacts.accountId })
+            .from(contacts)
+            .where(eq(contacts.id, insertQuote.contactId))
+            .limit(1);
+          
+          if (!contact) {
+            throw new Error(`Contact with ID ${insertQuote.contactId} not found`);
+          }
+          
+          resolvedAccountId = contact.accountId;
+          console.log(`Resolved accountId ${resolvedAccountId} from contactId ${insertQuote.contactId}`);
+        }
+        // If only accountId provided, use it directly
+        else if (insertQuote.accountId) {
+          resolvedAccountId = insertQuote.accountId;
+        }
+        
+        // Ensure we have an accountId for the legacy customerId field
+        if (!resolvedAccountId) {
+          throw new Error("Unable to resolve accountId");
+        }
+        
         const quoteToInsert: any = {
           ...insertQuote,
-          customerId: insertQuote.accountId || insertQuote.customerId || 0, // Use accountId value for customerId
-          accountId: insertQuote.accountId || null, // Keep accountId as well
+          customerId: resolvedAccountId, // Always set customerId to resolved accountId for legacy compatibility
+          accountId: resolvedAccountId, // Set accountId
+          contactId: insertQuote.contactId || null, // Include contactId if provided
         };
         
         const [quote] = await db
