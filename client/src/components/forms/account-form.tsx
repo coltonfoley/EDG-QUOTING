@@ -83,10 +83,10 @@ export function AccountForm({ account, onSuccess, onCancel }: AccountFormProps) 
             name="name"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Contact Name *</FormLabel>
+                <FormLabel>Company/Account Name *</FormLabel>
                 <FormControl>
                   <Input 
-                    placeholder="John Doe" 
+                    placeholder="ABC Construction LLC" 
                     {...field} 
                     data-testid="input-account-name"
                   />
@@ -101,7 +101,7 @@ export function AccountForm({ account, onSuccess, onCancel }: AccountFormProps) 
             name="company"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Company Name</FormLabel>
+                <FormLabel>Doing Business As (Optional)</FormLabel>
                 <FormControl>
                   <Input 
                     placeholder="ABC Construction" 
@@ -119,11 +119,11 @@ export function AccountForm({ account, onSuccess, onCancel }: AccountFormProps) 
             name="email"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Email *</FormLabel>
+                <FormLabel>Business Email (Optional)</FormLabel>
                 <FormControl>
                   <Input 
                     type="email" 
-                    placeholder="john@example.com" 
+                    placeholder="info@abcconstruction.com" 
                     {...field} 
                     data-testid="input-account-email"
                   />
@@ -138,7 +138,7 @@ export function AccountForm({ account, onSuccess, onCancel }: AccountFormProps) 
             name="phone"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Phone *</FormLabel>
+                <FormLabel>Business Phone (Optional)</FormLabel>
                 <FormControl>
                   <Input 
                     placeholder="(555) 123-4567" 
