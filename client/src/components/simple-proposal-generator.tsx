@@ -12,7 +12,7 @@ import { FileText, Upload, X, Download, Loader2, Eye, Image, Camera } from 'luci
 import { formatCurrency, calculateQuoteTotals } from '@/lib/utils';
 import { getProxiedImageUrl } from '@/lib/image-utils';
 import { apiRequest, queryClient } from '@/lib/queryClient';
-import type { QuoteWithDetails, QuoteCoverPhoto, QuoteProductRendering } from '@shared/schema';
+import type { QuoteWithDetails, QuoteCoverPhoto, QuoteProductRendering, QuotePartnerLogo } from '@shared/schema';
 import logoPath from '@assets/Logo_Full Color_Black_1758731429139.png';
 
 interface SimpleProposalGeneratorProps {
@@ -85,6 +85,11 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
     enabled: open && !!quote.id,
   });
 
+  const { data: existingPartnerLogo } = useQuery<QuotePartnerLogo>({
+    queryKey: [`/api/quotes/${quote.id}/partner-logo`],
+    enabled: open && !!quote.id,
+  });
+
   // Mutations for uploading images
   const uploadCoverPhotoMutation = useMutation({
     mutationFn: async (file: File) => {
@@ -144,6 +149,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
       // Invalidate all relevant queries to force refresh  
       queryClient.invalidateQueries({ queryKey: [`/api/quotes/${quote.id}?include=account,lineItems,contractTemplate,contacts`] });
       queryClient.invalidateQueries({ queryKey: [`/api/quotes/${quote.id}`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/quotes/${quote.id}/partner-logo`] });
       queryClient.invalidateQueries({ queryKey: ['/api/quotes'] });
       
       toast({
@@ -165,11 +171,11 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
 
   // Clear temp partner logo when server data is updated
   useEffect(() => {
-    if (quote.partnerLogoStorageUrl && tempPartnerLogo) {
+    if (existingPartnerLogo && existingPartnerLogo.isActive && tempPartnerLogo) {
       // Server has the logo, we can clear the temp preview
       setTimeout(() => setTempPartnerLogo(null), 500);
     }
-  }, [quote.partnerLogoStorageUrl, tempPartnerLogo]);
+  }, [existingPartnerLogo, tempPartnerLogo]);
 
   // Load existing images into state when data is available
   useEffect(() => {
@@ -669,19 +675,19 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
             <CardContent>
               <div className="space-y-4">
                 {/* Partner Logo Display and Upload */}
-                {(tempPartnerLogo || quote.partnerLogoStorageUrl) ? (
+                {(tempPartnerLogo || (existingPartnerLogo && existingPartnerLogo.isActive)) ? (
                   <div className="relative border rounded-lg p-4 bg-gray-50">
                     <img 
-                      src={tempPartnerLogo?.preview || (quote.partnerLogoStorageUrl ? `/api/proxy-image?url=${encodeURIComponent(quote.partnerLogoStorageUrl)}` : '')} 
+                      src={tempPartnerLogo?.preview || (existingPartnerLogo ? getProxiedImageUrl(existingPartnerLogo.storageUrl) : '')} 
                       alt={tempPartnerLogo?.name || "Partner Logo"}
                       className="w-full h-32 object-contain rounded"
                       onError={(e) => {
-                        console.error('Failed to load partner logo image:', quote.partnerLogoStorageUrl);
+                        console.error('Failed to load partner logo image:', existingPartnerLogo?.storageUrl);
                         e.currentTarget.style.display = 'none';
                       }}
                     />
                     <div className="flex justify-between items-center mt-2">
-                      <span className="text-sm text-gray-600">{tempPartnerLogo?.name || "Partner Logo"}</span>
+                      <span className="text-sm text-gray-600">{tempPartnerLogo?.name || existingPartnerLogo?.originalName || "Partner Logo"}</span>
                       <Button
                         variant="outline"
                         size="sm"
