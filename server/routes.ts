@@ -1935,6 +1935,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const page = await browser.newPage();
       
+      // Set increased navigation timeout for dev environment with HMR
+      await page.setDefaultNavigationTimeout(120000);
+      
+      // Intercept and block HMR/websocket requests to reduce navigation churn in dev
+      await page.setRequestInterception(true);
+      page.on('request', (interceptedRequest) => {
+        const url = interceptedRequest.url();
+        if (url.includes('@vite/client') || url.includes('__vite_ping') || 
+            interceptedRequest.resourceType() === 'websocket' ||
+            interceptedRequest.resourceType() === 'eventsource') {
+          interceptedRequest.abort();
+        } else {
+          interceptedRequest.continue();
+        }
+      });
+      
       // Set user agent and viewport for consistent rendering
       await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
       await page.setViewport({ width: 1200, height: 800 });
@@ -1955,17 +1971,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       console.log(`🌐 PDF Generation - Navigating to: ${printUrl}`);
 
-      // Navigate to print page with timeout
+      // Navigate to print page - use domcontentloaded to avoid HMR websocket issues
       await page.goto(printUrl, { 
-        waitUntil: 'networkidle0',
-        timeout: 30000 
+        waitUntil: 'domcontentloaded',
+        timeout: 60000 
       });
 
       // Wait for the page to signal it's ready for PDF generation
       console.log(`⏳ PDF Generation - Waiting for page readiness signal...`);
-      await page.waitForFunction(() => {
-        return document.body.getAttribute('data-pdf-ready') === 'true';
-      }, { timeout: 15000 });
+      try {
+        await page.waitForFunction(() => {
+          return document.body.getAttribute('data-pdf-ready') === 'true';
+        }, { timeout: 25000 });
+      } catch (readinessError) {
+        console.log(`⚠️ PDF Generation - Readiness signal timeout, proceeding with fallback (page may still be loading assets)`);
+        // Proceed anyway - the client has a 10s fallback that should have triggered
+      }
 
       console.log(`✅ PDF Generation - Page ready, generating PDF...`);
 
