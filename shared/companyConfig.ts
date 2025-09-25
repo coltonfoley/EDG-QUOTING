@@ -24,7 +24,7 @@ export const COMPANY_INFO: CompanyInfo = {
   email: "info@edgpatioshade.com",
   license: "License #IL-PATIO-12345",
   // Static proposal images - these will be consistent across all proposals  
-  proposalCoverImageUrl: '/assets/Logo_Full Color_Black_1758731429139.png',
+  proposalCoverImageUrl: '/assets/IMG_2138_1758832766916.jpeg',
   proposalFinalImageUrl: '/assets/Logo_Full Color_Black_1758731429139.png',
   instagram: '@edgpatioandshade',
   linkedin: 'EDG Patio & Shade'
