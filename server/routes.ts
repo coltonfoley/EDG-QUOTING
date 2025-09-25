@@ -815,6 +815,183 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Contact routes
+  // Contact search endpoint - MUST be before :id routes
+  app.get("/api/contacts", isAuthenticated, async (req, res) => {
+    try {
+      const searchTerm = req.query.search as string;
+      
+      if (!searchTerm || searchTerm.length < 1) {
+        return res.json([]);
+      }
+      
+      const term = searchTerm.toLowerCase();
+      
+      // Search contacts with account information
+      const contactResults = await db
+        .select({
+          id: contacts.id,
+          firstName: contacts.firstName,
+          lastName: contacts.lastName,
+          email: contacts.email,
+          phone: contacts.phone,
+          accountId: contacts.accountId,
+          accountName: accounts.name,
+        })
+        .from(contacts)
+        .innerJoin(accounts, eq(contacts.accountId, accounts.id))
+        .where(
+          or(
+            ilike(contacts.firstName, `%${term}%`),
+            ilike(contacts.lastName, `%${term}%`),
+            ilike(contacts.email, `%${term}%`),
+            ilike(accounts.name, `%${term}%`)
+          )
+        )
+        .limit(10);
+      
+      res.json(contactResults);
+    } catch (error) {
+      console.error("Contact search error:", error);
+      res.status(500).json({ message: "Failed to search contacts" });
+    }
+  });
+
+  // Quick create contact endpoint (with optional account creation)
+  app.post("/api/contacts/quick-create", isAuthenticated, async (req, res) => {
+    try {
+      const data = req.body;
+      
+      // Validate the request structure
+      if (!data.contact || !data.contact.firstName || !data.contact.lastName || !data.contact.email) {
+        return res.status(400).json({ 
+          message: "Contact information is required (firstName, lastName, email)" 
+        });
+      }
+
+      let accountId = data.accountId;
+      let account;
+
+      // If account needs to be created
+      if (data.account && !accountId) {
+        if (!data.account.name || !data.account.email) {
+          return res.status(400).json({ 
+            message: "Account name and email are required when creating new account" 
+          });
+        }
+
+        // Check for duplicate account by email
+        const existingAccounts = await db
+          .select()
+          .from(accounts)
+          .where(eq(accounts.email, data.account.email))
+          .limit(1);
+
+        if (existingAccounts.length > 0) {
+          return res.status(409).json({
+            message: "Account with this email already exists",
+            existingAccount: {
+              id: existingAccounts[0].id,
+              name: existingAccounts[0].name,
+              email: existingAccounts[0].email
+            }
+          });
+        }
+
+        // Create the account and contact in a transaction
+        const result = await db.transaction(async (tx) => {
+          const [newAccount] = await tx
+            .insert(accounts)
+            .values({
+              name: data.account.name,
+              email: data.account.email,
+              phone: data.account.phone || "",
+              accountType: "general_contractor"
+            })
+            .returning();
+
+          const [newContact] = await tx
+            .insert(contacts)
+            .values({
+              accountId: newAccount.id,
+              firstName: data.contact.firstName,
+              lastName: data.contact.lastName,
+              email: data.contact.email,
+              phone: data.contact.phone || null,
+              role: "primary_contact",
+              isPrimary: false
+            })
+            .returning();
+
+          return { account: newAccount, contact: newContact };
+        });
+
+        return res.status(201).json(result);
+      } else if (accountId) {
+        // Verify the account exists
+        const [existingAccount] = await db
+          .select()
+          .from(accounts)
+          .where(eq(accounts.id, accountId))
+          .limit(1);
+
+        if (!existingAccount) {
+          return res.status(404).json({ message: "Account not found" });
+        }
+        account = existingAccount;
+        
+        // Check for duplicate contact by email within the account
+        const existingContacts = await db
+          .select()
+          .from(contacts)
+          .where(
+            and(
+              eq(contacts.accountId, accountId),
+              eq(contacts.email, data.contact.email)
+            )
+          )
+          .limit(1);
+
+        if (existingContacts.length > 0) {
+          return res.status(409).json({
+            message: "Contact with this email already exists for this account",
+            existingContact: {
+              id: existingContacts[0].id,
+              firstName: existingContacts[0].firstName,
+              lastName: existingContacts[0].lastName,
+              email: existingContacts[0].email
+            }
+          });
+        }
+
+        // Create the contact for existing account
+        const [newContact] = await db
+          .insert(contacts)
+          .values({
+            accountId: accountId,
+            firstName: data.contact.firstName,
+            lastName: data.contact.lastName,
+            email: data.contact.email,
+            phone: data.contact.phone || null,
+            role: "primary_contact",
+            isPrimary: false
+          })
+          .returning();
+
+        res.status(201).json({
+          contact: newContact,
+          account: account
+        });
+      } else {
+        return res.status(400).json({ 
+          message: "Either accountId or account data must be provided" 
+        });
+      }
+    } catch (error) {
+      console.error("Quick create contact error:", error);
+      res.status(500).json({ message: "Failed to create contact" });
+    }
+  });
+
   app.get("/api/contacts/account/:accountId", isAuthenticated, async (req, res) => {
     try {
       const accountId = parseInt(req.params.accountId);
@@ -1001,6 +1178,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         jobsiteAddress: parsedData.jobsiteAddress || undefined,
         lostReason: parsedData.lostReason || undefined,
         assignedRepId: parsedData.assignedRepId || undefined,
+        // The storage layer will handle setting customerId from accountId/contactId mapping
       };
       const quote = await storage.createQuote(quoteData);
       res.status(201).json(quote);
