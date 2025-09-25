@@ -417,6 +417,10 @@ Return JSON with these fields (ALL OPTIONAL):
 }
 
 CRITICAL RULES:
+- ALWAYS include ALL top-level fields in your response - NEVER omit any field
+- Use null for any missing or unavailable data - do NOT omit fields entirely
+- For customer: if no customer info found, return {"name": null, "email": null, "phone": null, "company": null, "address": null}
+- For lineItems: if no line items found, return empty array []
 - Extract ACTUAL data from the text, not example/placeholder data
 - Use NUMERIC values for all prices, quantities, totals
 - Only extract clearly visible information from the document
@@ -646,6 +650,10 @@ async function processImagesInSingleCall(images: Array<{index: number, imageBase
           }
           
           CRITICAL RULES:
+          - ALWAYS include ALL top-level fields in your response - NEVER omit any field
+          - Use null for any missing or unavailable data - do NOT omit fields entirely
+          - For customer: if no customer info found, return {"name": null, "email": null, "phone": null, "company": null, "address": null}
+          - For lineItems: if no line items found, return empty array []
           - Use NUMERIC values for all prices, quantities, totals (never strings)
           - Only extract clearly visible information
           - Be thorough but accurate - don't hallucinate missing data
