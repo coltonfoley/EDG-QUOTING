@@ -708,16 +708,13 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         const rowHeight = 14;
         const headerHeight = 12;
         
-        // Column configuration - scaled to match contentWidth for consistency
+        // Column configuration - simplified to essential fields only
         const tableWidth = contentWidth;
         const columns = [
-          { header: '#', width: tableWidth * 0.05, dataAlign: 'center' },
-          { header: 'Product/Service', width: tableWidth * 0.23, dataAlign: 'left' },
-          { header: 'SKU', width: tableWidth * 0.13, dataAlign: 'left' },
-          { header: 'Description', width: tableWidth * 0.29, dataAlign: 'left' },
-          { header: 'Qty', width: tableWidth * 0.06, dataAlign: 'center' },
-          { header: 'Rate', width: tableWidth * 0.12, dataAlign: 'right' },
-          { header: 'Amount', width: tableWidth * 0.12, dataAlign: 'right' }
+          { header: 'Description', width: tableWidth * 0.50, dataAlign: 'left' },
+          { header: 'Qty', width: tableWidth * 0.15, dataAlign: 'center' },
+          { header: 'Price', width: tableWidth * 0.175, dataAlign: 'right' },
+          { header: 'Total', width: tableWidth * 0.175, dataAlign: 'right' }
         ];
         
         const tableX = margin;
@@ -775,7 +772,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
             : baseTotal + markup;
           
           // Calculate proper row height based on description wrapping
-          const maxDescWidth = columns[3].width - 2*padX;
+          const maxDescWidth = columns[0].width - 2*padX;
           const descLines = pdf.splitTextToSize(item.description, maxDescWidth);
           const actualRowHeight = Math.max(rowHeight, padY*2 + descLines.length*lineHeight);
           
@@ -792,11 +789,8 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
           pdf.setFont('helvetica', 'normal');
           setColor('primary');
           
-          // Row data
+          // Row data - simplified to essential fields only
           const rowData = [
-            (index + 1).toString(),
-            item.description.split(' ').slice(0, 3).join(' '), // Product name shortened
-            item.description.split(' ').slice(0, 2).join(' '), // SKU shortened  
             item.description, // Full description (multi-line)
             qty.toString(),
             formatCurrency(price),
@@ -818,7 +812,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
             }
             
             // Handle multi-line description column
-            if (colIndex === 3) {
+            if (colIndex === 0) {
               for (let i = 0; i < descLines.length; i++) {
                 const textY = cellTop + padY + 3 + (i * lineHeight);
                 pdf.text(descLines[i], textX, textY, { align: col.dataAlign as any });
