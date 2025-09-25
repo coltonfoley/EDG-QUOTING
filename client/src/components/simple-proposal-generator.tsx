@@ -72,6 +72,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
   
   const coverPhotoRef = useRef<HTMLInputElement>(null);
   const renderingsRef = useRef<HTMLInputElement>(null);
+  const partnerLogoRef = useRef<HTMLInputElement>(null);
 
   // React Query hooks for loading existing images
   const { data: existingCoverPhotos, isLoading: loadingCoverPhotos } = useQuery<QuoteCoverPhoto[]>({
@@ -127,6 +128,29 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
       toast({
         title: "Upload failed",
         description: error.message || "Failed to save product rendering",
+        variant: "destructive"
+      });
+    }
+  });
+
+  const uploadPartnerLogoMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const formData = new FormData();
+      formData.append('image', file);
+      return await apiRequest('PATCH', `/api/quotes/${quote.id}/partner-logo`, formData);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/quotes/${quote.id}?include=account,lineItems,contractTemplate,contacts`] });
+      toast({
+        title: "Partner logo saved",
+        description: "Your partner logo has been added to the quote",
+      });
+      setTempPartnerLogo(null); // Clear temp after successful upload
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Upload failed",
+        description: error.message || "Failed to save partner logo",
         variant: "destructive"
       });
     }
@@ -226,7 +250,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
 
   const handleFileUpload = (
     files: FileList | null, 
-    type: 'cover' | 'renderings'
+    type: 'cover' | 'renderings' | 'partner-logo'
   ) => {
     if (!files) return;
 
@@ -264,6 +288,18 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
       
       // Auto-save the cover photo immediately
       uploadCoverPhotoMutation.mutate(file);
+    } else if (type === 'partner-logo' && validFiles.length > 0) {
+      const file = validFiles[0];
+      const uploadedFile: UploadedFile = {
+        id: Date.now().toString(),
+        file,
+        preview: URL.createObjectURL(file),
+        name: file.name
+      };
+      setTempPartnerLogo(uploadedFile);
+      
+      // Auto-save the partner logo immediately
+      uploadPartnerLogoMutation.mutate(file);
     } else if (type === 'renderings') {
       const newRenderings = validFiles.map(file => ({
         id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
@@ -616,12 +652,58 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
               <p className="text-sm text-gray-600">Upload your partner or client company logo</p>
             </CardHeader>
             <CardContent>
-              <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
-                <Button variant="outline">
-                  <Upload className="w-4 h-4 mr-2" />
-                  Upload Partner Logo
-                </Button>
-                <p className="text-sm text-gray-500 mt-2">PNG, JPG up to 5MB</p>
+              <div className="space-y-4">
+                {/* Partner Logo Display and Upload */}
+                {(tempPartnerLogo || quote.partnerLogoStorageUrl) ? (
+                  <div className="relative border rounded-lg p-4 bg-gray-50">
+                    <img 
+                      src={tempPartnerLogo?.preview || (quote.partnerLogoStorageUrl ? `/api/proxy-image?url=${encodeURIComponent(quote.partnerLogoStorageUrl)}` : '')} 
+                      alt={tempPartnerLogo?.name || "Partner Logo"}
+                      className="w-full h-32 object-contain rounded"
+                    />
+                    <div className="flex justify-between items-center mt-2">
+                      <span className="text-sm text-gray-600">{tempPartnerLogo?.name || "Partner Logo"}</span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setTempPartnerLogo(null);
+                          // Note: We don't remove from server immediately for better UX
+                        }}
+                      >
+                        <X className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+                    <input
+                      ref={partnerLogoRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => handleFileUpload(e.target.files, 'partner-logo')}
+                    />
+                    <Button
+                      variant="outline"
+                      onClick={() => partnerLogoRef.current?.click()}
+                      disabled={uploadPartnerLogoMutation.isPending}
+                    >
+                      {uploadPartnerLogoMutation.isPending ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Uploading...
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="w-4 h-4 mr-2" />
+                          Upload Partner Logo
+                        </>
+                      )}
+                    </Button>
+                    <p className="text-sm text-gray-500 mt-2">PNG, JPG up to 5MB</p>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
