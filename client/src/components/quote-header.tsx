@@ -21,10 +21,13 @@ import { cn } from "@/lib/utils";
 import { debounce } from "lodash";
 import { DEAL_STAGES } from "@shared/dealStageConstants";
 
+// Helper to convert empty strings to undefined for optional validation
+const emptyToUndefined = (v: unknown) => typeof v === "string" && v.trim() === "" ? undefined : v;
+
 const quoteFormSchema = insertQuoteSchema.extend({
   customerName: z.string().min(1, "Customer name is required"),
-  customerEmail: z.string().email("Invalid email format").optional(),
-  customerPhone: z.string().min(1, "Phone number must be at least 1 digit").optional(),
+  customerEmail: z.preprocess(emptyToUndefined, z.string().email("Invalid email format").optional()),
+  customerPhone: z.preprocess(emptyToUndefined, z.string().min(1, "Phone number must be at least 1 digit").optional()),
   customerCompany: z.string().optional(),
   dealStage: z.string().default("new_lead"),
 }).omit({ accountId: true, customerId: true });
