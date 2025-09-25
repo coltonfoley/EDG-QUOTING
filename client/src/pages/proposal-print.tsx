@@ -250,6 +250,58 @@ export default function ProposalPrint() {
           </div>
         </div>
 
+        {/* Project Overview */}
+        <div className="project-overview-section avoid-break">
+          <div className="section-header">
+            <h2>PROJECT OVERVIEW</h2>
+          </div>
+          <div className="project-overview-content">
+            <div className="overview-intro">
+              <p>
+                <strong>Transform your outdoor living experience</strong> with our premium patio and shade solutions. 
+                This comprehensive proposal outlines a complete outdoor comfort system designed specifically for your space, 
+                featuring state-of-the-art motorized screens and professional-grade shade structures.
+              </p>
+            </div>
+            
+            <div className="overview-benefits">
+              <div className="benefit-columns">
+                <div className="benefit-column">
+                  <h4>🏡 Enhanced Living Space</h4>
+                  <ul>
+                    <li>Extended outdoor seasons</li>
+                    <li>Protection from sun, wind & insects</li>
+                    <li>Increased property value</li>
+                  </ul>
+                </div>
+                <div className="benefit-column">
+                  <h4>⚙️ Premium Technology</h4>
+                  <ul>
+                    <li>Motorized operation with remote control</li>
+                    <li>Weather-resistant construction</li>
+                    <li>Professional installation & warranty</li>
+                  </ul>
+                </div>
+                <div className="benefit-column">
+                  <h4>🎯 Custom Solution</h4>
+                  <ul>
+                    <li>Tailored to your specific needs</li>
+                    <li>Quality materials & craftsmanship</li>
+                    <li>Full-service project management</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            <div className="overview-commitment">
+              <p>
+                <em>Our commitment: Delivering exceptional outdoor solutions with professional installation, 
+                comprehensive warranty coverage, and ongoing support to ensure your complete satisfaction.</em>
+              </p>
+            </div>
+          </div>
+        </div>
+
         {/* Product Renderings */}
         {activeRenderings && activeRenderings.length > 0 && (
           <div className="renderings-section avoid-break">
