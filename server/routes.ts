@@ -49,6 +49,7 @@ import type { ExtractedProduct } from "./openai";
 import { ObjectStorageService, ObjectNotFoundError, objectStorageClient } from "./objectStorage";
 import { ObjectPermission } from "./objectAcl";
 import type { InsertQuote } from "@shared/schema";
+import puppeteer from 'puppeteer';
 
 // Simple in-memory rate limiter for OpenAI API calls
 interface RateLimitEntry {
@@ -1877,6 +1878,150 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(204).send();
     } catch (error) {
       res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // Generate PDF proposal for quote (protected)
+  app.get("/api/quotes/:id/proposal.pdf", isAuthenticated, async (req, res) => {
+    const startTime = Date.now();
+    let browser: any = null;
+    
+    try {
+      // Validate ID parameter
+      const params = idParamSchema.safeParse(req.params);
+      if (!params.success) {
+        console.error("❌ PDF Generation - Invalid quote ID:", req.params.id);
+        return res.status(400).json({ 
+          message: "Invalid request parameters", 
+          errors: params.error.errors 
+        });
+      }
+
+      const quoteId = params.data.id;
+      console.log(`🔄 PDF Generation - Starting for quote ${quoteId}`);
+
+      // Validate quote exists and user has access
+      const quote = await storage.getQuoteWithDetails(quoteId);
+      if (!quote) {
+        console.error(`❌ PDF Generation - Quote ${quoteId} not found`);
+        return res.status(404).json({ message: "Quote not found" });
+      }
+
+      // Parse query parameters for PDF options
+      const showCover = req.query.cover === '1';
+      const showPricing = req.query.pricing !== '0'; // Default to true
+      const showContract = req.query.contract === '1';
+
+      console.log(`🔄 PDF Generation - Options: cover=${showCover}, pricing=${showPricing}, contract=${showContract}`);
+
+      // Launch Puppeteer with proper configuration
+      browser = await puppeteer.launch({
+        args: [
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-dev-shm-usage',
+          '--disable-background-timer-throttling',
+          '--disable-backgrounding-occluded-windows',
+          '--disable-renderer-backgrounding'
+        ],
+        headless: true
+      });
+
+      const page = await browser.newPage();
+      
+      // Set user agent and viewport for consistent rendering
+      await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
+      await page.setViewport({ width: 1200, height: 800 });
+
+      // Forward session cookie for authentication
+      if (req.headers.cookie) {
+        const cookies = req.headers.cookie.split(';').map(cookie => {
+          const [name, value] = cookie.trim().split('=');
+          return { name, value, domain: 'localhost', path: '/' };
+        });
+        await page.setCookie(...cookies);
+      }
+
+      // Construct the print page URL with options
+      const port = process.env.PORT || 5000;
+      const baseUrl = `http://localhost:${port}`;
+      const printUrl = `${baseUrl}/proposals/${quoteId}/print?cover=${showCover ? '1' : '0'}&pricing=${showPricing ? '1' : '0'}&contract=${showContract ? '1' : '0'}`;
+      
+      console.log(`🌐 PDF Generation - Navigating to: ${printUrl}`);
+
+      // Navigate to print page with timeout
+      await page.goto(printUrl, { 
+        waitUntil: 'networkidle0',
+        timeout: 30000 
+      });
+
+      // Wait for the page to signal it's ready for PDF generation
+      console.log(`⏳ PDF Generation - Waiting for page readiness signal...`);
+      await page.waitForFunction(() => {
+        return document.body.getAttribute('data-pdf-ready') === 'true';
+      }, { timeout: 15000 });
+
+      console.log(`✅ PDF Generation - Page ready, generating PDF...`);
+
+      // Generate PDF with professional settings
+      const pdfBuffer = await page.pdf({
+        format: 'Letter' as const,
+        printBackground: true,
+        preferCSSPageSize: true,
+        margin: {
+          top: '0.5in',
+          right: '0.5in', 
+          bottom: '0.7in',
+          left: '0.5in'
+        }
+      });
+
+      const endTime = Date.now();
+      const duration = endTime - startTime;
+      console.log(`✅ PDF Generation - Completed in ${duration}ms, PDF size: ${pdfBuffer.length} bytes`);
+
+      // Set response headers for PDF download
+      const filename = `proposal-${quote.quoteNumber || quoteId}.pdf`;
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.setHeader('Content-Length', pdfBuffer.length.toString());
+      res.setHeader('Cache-Control', 'no-cache');
+
+      // Send PDF
+      res.send(pdfBuffer);
+
+    } catch (error: any) {
+      const endTime = Date.now();
+      const duration = endTime - startTime;
+      
+      console.error(`❌ PDF Generation - Failed after ${duration}ms:`, error);
+      
+      if (error.name === 'TimeoutError') {
+        res.status(504).json({ 
+          message: "PDF generation timed out. The page may be taking too long to load or render.",
+          error: "TIMEOUT_ERROR" 
+        });
+      } else if (error.message?.includes('net::ERR_CONNECTION_REFUSED')) {
+        res.status(502).json({ 
+          message: "Unable to connect to the application for PDF generation. Please try again.",
+          error: "CONNECTION_ERROR" 
+        });
+      } else {
+        res.status(500).json({ 
+          message: "Failed to generate PDF. Please try again.",
+          error: "GENERATION_ERROR" 
+        });
+      }
+    } finally {
+      // Always close browser to prevent memory leaks
+      if (browser) {
+        try {
+          await browser.close();
+          console.log(`🧹 PDF Generation - Browser closed`);
+        } catch (closeError) {
+          console.error(`⚠️  PDF Generation - Error closing browser:`, closeError);
+        }
+      }
     }
   });
 

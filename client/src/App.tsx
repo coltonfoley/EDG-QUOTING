@@ -23,6 +23,7 @@ import ContractsPage from "@/pages/contracts";
 import Accounts from "@/pages/accounts";
 import AccountDetail from "@/pages/account-detail";
 import Pipeline from "@/pages/pipeline";
+import ProposalPrint from "@/pages/proposal-print";
 import { ReportIssueButton } from "@/components/report-issue-button";
 
 function GlobalLoadingIndicator() {
@@ -105,6 +106,7 @@ function Router() {
           <Route path="/admin" component={AdminPage} />
           <Route path="/admin/templates" component={AdminTemplatesPage} />
           <Route path="/admin/contracts" component={ContractsPage} />
+          <Route path="/proposals/:id/print" component={ProposalPrint} />
         </>
       )}
     </Switch>
