@@ -34,6 +34,7 @@ import {
   bulkUploadPricingSchema,
   createQuoteCoverPhotoSchema,
   createQuoteProductRenderingSchema,
+  insertQuotePartnerLogoSchema,
   updateQuoteCoverPhotoSchema,
   updateQuoteProductRenderingSchema,
   quoteIdParamSchema,
@@ -2084,6 +2085,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/quotes/:quoteId/partner-logo", isAuthenticated, async (req, res) => {
+    try {
+      const params = quoteIdParamSchema.safeParse(req.params);
+      if (!params.success) {
+        return res.status(400).json({ 
+          message: "Invalid request parameters", 
+          errors: params.error.errors 
+        });
+      }
+
+      // Validate quote ownership
+      const hasAccess = await storage.validateQuoteOwnership(params.data.quoteId, req.user?.id);
+      if (!hasAccess) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      const partnerLogo = await storage.getQuotePartnerLogo(params.data.quoteId);
+      res.json(partnerLogo || null); // Return null instead of 404 for consistency
+    } catch (error) {
+      console.error("Error getting quote partner logo:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
   app.post("/api/quotes/:quoteId/cover-photo", isAuthenticated, async (req, res) => {
     try {
       const params = quoteIdParamSchema.safeParse(req.params);
@@ -2320,16 +2345,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Create simple accessible URL using our quote images endpoint
       const publicUrl = `${req.protocol}://${req.get('host')}/quote-images/${sanitizedFilename}`;
       
-      // Update the quote with the partner logo URL
-      const updatedQuote = await storage.updateQuote(params.data.quoteId, {
-        partnerLogoStorageUrl: publicUrl
-      });
+      // Create database record using the new partner logo table
+      const logoData = {
+        quoteId: params.data.quoteId,
+        filename: sanitizedFilename,
+        originalName: file.originalname,
+        storageUrl: publicUrl,
+        mimeType: file.mimetype,
+        fileSize: file.size
+      };
       
-      res.status(201).json({
-        message: "Partner logo uploaded successfully",
-        logoUrl: publicUrl,
-        filename: sanitizedFilename
-      });
+      const partnerLogo = await storage.createQuotePartnerLogo(logoData);
+      console.log(`✅ Partner logo saved: ${partnerLogo.filename}`);
+      res.status(201).json(partnerLogo);
     } catch (error) {
       console.error("Error uploading partner logo:", error);
       res.status(500).json({ message: "Failed to upload partner logo" });
