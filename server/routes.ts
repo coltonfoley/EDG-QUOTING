@@ -1997,7 +1997,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
         timeout: 60000 
       });
 
-      // Debug: Check page content after navigation
+      // Wait for React to load and auth to complete
+      console.log(`⏳ PDF Generation - Waiting for React app to load and authenticate...`);
+      
+      try {
+        await page.waitForFunction(() => {
+          // Check if React has rendered something
+          const hasReactContent = document.querySelector('#root') !== null;
+          const hasAuthContent = document.body.innerText.length > 10;
+          return hasReactContent && hasAuthContent;
+        }, { timeout: 15000 });
+        
+        console.log(`✅ PDF Generation - React app loaded successfully`);
+      } catch (reactError) {
+        console.log(`⚠️ PDF Generation - React loading timeout, checking app state...`);
+        
+        // Debug what's actually on the page after React timeout
+        const reactState = await page.evaluate(() => {
+          return {
+            hasRoot: document.querySelector('#root') !== null,
+            rootContent: document.querySelector('#root')?.innerHTML?.slice(0, 200) || 'No root element',
+            bodyText: document.body.innerText.slice(0, 200),
+            hasLoadingSpinner: document.body.innerText.includes('Loading application'),
+            hasAuthError: document.body.innerText.includes('Connection Error'),
+            currentURL: window.location.href,
+          };
+        });
+        
+        console.log(`🔍 PDF Generation - React state:`, JSON.stringify(reactState, null, 2));
+      }
+
+      // Debug: Check page content after React loads  
       const pageTitle = await page.title();
       const bodyContent = await page.evaluate(() => document.body.innerText.length);
       console.log(`🔍 PDF Generation - Page title: "${pageTitle}", body text length: ${bodyContent}`);
