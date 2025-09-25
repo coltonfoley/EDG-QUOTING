@@ -291,7 +291,7 @@ export const insertAccountSchema = createInsertSchema(accounts).omit({
 }).extend({
   // Business contact information (optional) - handle empty strings properly
   email: z.preprocess(emptyToUndefined, z.string().email("Invalid email format").optional()),
-  phone: z.preprocess(emptyToUndefined, z.string().min(10, "Phone number must be at least 10 digits").optional()),
+  phone: z.preprocess(emptyToUndefined, z.string().min(1, "Phone number cannot be empty").optional()),
   accountType: z.enum(["general_contractor", "homeowner", "commercial"]).default("homeowner"),
   paymentTerms: z.preprocess(emptyToUndefined, z.string().optional()),
   billingAddress: z.preprocess(emptyToUndefined, z.string().optional()),
@@ -303,7 +303,7 @@ export const insertContactSchema = createInsertSchema(contacts).omit({
   updatedAt: true,
 }).extend({
   role: z.string().default("primary_contact"),
-  phone: z.string().optional().nullable(),
+  phone: z.preprocess(emptyToUndefined, z.string().optional()),
   isPrimary: z.boolean().default(false),
 });
 
