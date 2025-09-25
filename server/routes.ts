@@ -1442,7 +1442,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           
           if (importData.importOptions.customerHandling === 'create_new') {
             const customerData = {
-              name: firstQuote.customer.name || 'Combined Import Customer',
+              name: firstQuote.customer.name || '',
               email: firstQuote.customer.email || `combined_import_${Date.now()}@example.com`,
               phone: firstQuote.customer.phone || '',
               company: firstQuote.customer.company || null,
