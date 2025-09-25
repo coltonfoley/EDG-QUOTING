@@ -81,9 +81,9 @@ export default function ProposalPrint() {
     // Add logo as fallback
     images.push(logoPath);
     
-    // Add partner logo if present
+    // Add partner logo if present (already a served URL, no proxy needed)
     if (quote?.partnerLogoStorageUrl) {
-      images.push(getProxiedImageUrl(quote.partnerLogoStorageUrl));
+      images.push(quote.partnerLogoStorageUrl);
     }
     
     // Add cover photo if enabled
@@ -101,13 +101,16 @@ export default function ProposalPrint() {
     setTotalImages(images.length);
     setImagesLoaded(0);
 
-    // Preload images
-    images.forEach(src => {
+    // Preload images with enhanced debugging
+    images.forEach((src, index) => {
+      console.log(`📸 Preloading image ${index + 1}/${images.length}: ${src}`);
       const img = new Image();
       img.onload = () => {
+        console.log(`✅ Image loaded successfully: ${src}`);
         setImagesLoaded(prev => prev + 1);
       };
       img.onerror = () => {
+        console.log(`❌ Image failed to load: ${src}`);
         setImagesLoaded(prev => prev + 1); // Count errors as loaded to not hang
       };
       img.src = src;
