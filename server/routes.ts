@@ -34,7 +34,6 @@ import {
   bulkUploadPricingSchema,
   createQuoteCoverPhotoSchema,
   createQuoteProductRenderingSchema,
-  insertQuotePartnerLogoSchema,
   updateQuoteCoverPhotoSchema,
   updateQuoteProductRenderingSchema,
   quoteIdParamSchema,
@@ -50,7 +49,6 @@ import type { ExtractedProduct } from "./openai";
 import { ObjectStorageService, ObjectNotFoundError, objectStorageClient } from "./objectStorage";
 import { ObjectPermission } from "./objectAcl";
 import type { InsertQuote } from "@shared/schema";
-import puppeteer from 'puppeteer';
 
 // Simple in-memory rate limiter for OpenAI API calls
 interface RateLimitEntry {
@@ -430,7 +428,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Get the bucket and list files to find the one ending with our filename
       const privateDir = objectStorageService.getPrivateObjectDir();
-      const directories = ['cover-photos', 'product-renderings', 'partner-logos'];
+      const directories = ['cover-photos', 'product-renderings'];
       
       for (const dir of directories) {
         try {
@@ -443,40 +441,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Look for a file that ends with our filename
           const matchingFile = files.find(file => file.name.endsWith(filename));
           if (matchingFile) {
-            // Get file metadata to set proper headers
-            const [metadata] = await matchingFile.getMetadata();
-            
-            // Set proper content type based on file extension or metadata
-            let contentType = metadata.contentType;
-            if (!contentType) {
-              // Fallback to determining content type from filename
-              const ext = filename.toLowerCase().split('.').pop();
-              switch (ext) {
-                case 'jpg':
-                case 'jpeg':
-                  contentType = 'image/jpeg';
-                  break;
-                case 'png':
-                  contentType = 'image/png';
-                  break;
-                case 'gif':
-                  contentType = 'image/gif';
-                  break;
-                case 'webp':
-                  contentType = 'image/webp';
-                  break;
-                default:
-                  contentType = 'application/octet-stream';
-              }
-            }
-            
-            // Set response headers
-            res.setHeader('Content-Type', contentType);
-            res.setHeader('Cache-Control', 'public, max-age=3600'); // Cache for 1 hour
-            res.setHeader('Access-Control-Allow-Origin', '*'); // Allow CORS for PDF generation
-            
-            console.log(`📷 Serving quote image: ${filename} (${contentType})`);
-            
             // Stream the file to the response
             const stream = matchingFile.createReadStream();
             stream.pipe(res);
@@ -1882,314 +1846,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Generate PDF proposal for quote (protected)
-  app.get("/api/quotes/:id/proposal.pdf", isAuthenticated, async (req, res) => {
-    const startTime = Date.now();
-    let browser: any = null;
-    
-    try {
-      // Validate ID parameter
-      const params = idParamSchema.safeParse(req.params);
-      if (!params.success) {
-        console.error("❌ PDF Generation - Invalid quote ID:", req.params.id);
-        return res.status(400).json({ 
-          message: "Invalid request parameters", 
-          errors: params.error.errors 
-        });
-      }
-
-      const quoteId = params.data.id;
-      console.log(`🔄 PDF Generation - Starting for quote ${quoteId}`);
-
-      // Validate quote exists and user has access
-      const quote = await storage.getQuoteWithDetails(quoteId);
-      if (!quote) {
-        console.error(`❌ PDF Generation - Quote ${quoteId} not found`);
-        return res.status(404).json({ message: "Quote not found" });
-      }
-
-      // Parse query parameters for PDF options
-      const showCover = req.query.cover === '1';
-      const showPricing = req.query.pricing !== '0'; // Default to true
-      const showContract = req.query.contract === '1';
-
-      console.log(`🔄 PDF Generation - Options: cover=${showCover}, pricing=${showPricing}, contract=${showContract}`);
-
-      // Fetch all required data server-side
-      console.log(`📊 PDF Generation - Fetching quote data...`);
-      const [coverPhotos, productRenderings, partnerLogo] = await Promise.all([
-        storage.getQuoteCoverPhotos(quoteId),
-        storage.getQuoteProductRenderings(quoteId), 
-        storage.getQuotePartnerLogo(quoteId)
-      ]);
-
-      // Get active images
-      const activeCoverPhoto = coverPhotos?.find(photo => photo.isActive);
-      const activeRenderings = productRenderings?.filter(rendering => rendering.isActive)
-        .sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
-
-      // Calculate totals server-side
-      const lineItemTotals = quote.lineItems.map(item => {
-        const qty = parseFloat(item.quantity.toString());
-        const price = parseFloat(item.unitPrice.toString());
-        const markup = parseFloat(item.markupValue.toString());
-        const baseTotal = qty * price;
-        const total = item.markupType === 'percentage' 
-          ? baseTotal + (baseTotal * (markup / 100))
-          : baseTotal + markup;
-        return { ...item, qty, price, total };
-      });
-
-      const subtotal = lineItemTotals.reduce((sum, item) => sum + item.total, 0);
-      const shippingAmount = parseFloat(quote.shipping || '0');
-      const discountAmount = parseFloat(quote.discount || '0');
-      const taxAmount = (subtotal + shippingAmount - discountAmount) * (parseFloat(quote.taxRate || '0') / 100);
-      const finalTotal = subtotal + shippingAmount + taxAmount - discountAmount;
-
-      console.log(`📊 PDF Generation - Data loaded, generating HTML...`);
-
-      // Generate HTML directly server-side
-      const proposalHTML = `
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <meta charset="utf-8">
-          <title>Proposal - ${quote.quoteNumber}</title>
-          <style>
-            @page { 
-              size: Letter; 
-              margin: 0.5in; 
-            }
-            body { 
-              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
-              margin: 0; 
-              padding: 0; 
-              font-size: 14px;
-              line-height: 1.4;
-            }
-            .page { 
-              page-break-after: always; 
-              min-height: 100vh;
-              display: flex;
-              flex-direction: column;
-              padding: 20px;
-            }
-            .page:last-child { page-break-after: auto; }
-            .cover-image { width: 100%; max-height: 400px; object-fit: cover; }
-            .project-header { text-align: center; margin-bottom: 40px; }
-            .project-title { font-size: 28px; font-weight: bold; margin-bottom: 10px; }
-            .project-location { font-size: 18px; color: #666; margin-bottom: 10px; }
-            .project-date { font-size: 14px; color: #888; }
-            .company-info { text-align: center; margin-top: auto; }
-            .company-name { font-size: 24px; font-weight: bold; margin-bottom: 10px; }
-            .gallery-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; margin: 20px 0; }
-            .gallery-image img { width: 100%; height: 250px; object-fit: cover; border-radius: 8px; }
-            .pricing-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
-            .pricing-table th, .pricing-table td { border: 1px solid #ddd; padding: 12px; text-align: left; }
-            .pricing-table th { background-color: #f5f5f5; font-weight: bold; }
-            .total-row { font-weight: bold; background-color: #f9f9f9; }
-            .disclaimer { font-size: 12px; color: #666; margin-top: 30px; padding: 15px; background-color: #f9f9f9; }
-            .contract-content { white-space: pre-line; line-height: 1.6; }
-          </style>
-        </head>
-        <body>
-          <!-- Cover Page -->
-          <div class="page">
-            <div style="text-align: center;">
-              <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==" alt="Cover" class="cover-image" />
-            </div>
-          </div>
-
-          <!-- Info Page -->
-          <div class="page">
-            <div class="project-header">
-              <h1 class="project-title">${quote.projectName || (quote.account.name ? quote.account.name.toUpperCase() + ' PROJECT' : 'OUTDOOR LIVING PROJECT')}</h1>
-              <h2 class="project-location">${quote.projectAddress || quote.account.billingAddress || 'PROJECT LOCATION'}</h2>
-              <div class="project-date">${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }).toUpperCase()}</div>
-            </div>
-            
-            ${quote.notes ? `<div style="margin: 30px 0;"><h3>Additional Notes:</h3><div>${quote.notes}</div></div>` : ''}
-            
-            <div class="company-info">
-              <div class="company-name">EDG Patio & Shade</div>
-              <div>1802 Holian Drive</div>
-              <div>Spring Grove, IL 60081</div>
-              <div>+1 (815) 581-0138</div>
-              <div>info@edgpatioshade.com</div>
-            </div>
-            
-            <div class="disclaimer">
-              This quote is for estimation purposes and is not a guarantee of cost for services. Quote is based on current information 
-              from manufacturer about the project requirements. Actual cost may change once project elements are finalized. Client 
-              will be notified of any changes in cost prior to them being incurred.
-            </div>
-          </div>
-
-          <!-- Gallery Page -->
-          ${showCover || (activeRenderings && activeRenderings.length > 0) ? `
-          <div class="page">
-            <h2 style="text-align: center; margin-bottom: 30px;">Project Gallery</h2>
-            ${showCover && activeCoverPhoto ? `
-              <div style="margin-bottom: 30px;">
-                <h3>Layout Design:</h3>
-                <img src="${activeCoverPhoto.storageUrl}" alt="Project Layout" style="width: 100%; max-height: 400px; object-fit: cover;" />
-              </div>
-            ` : ''}
-            
-            ${activeRenderings && activeRenderings.length > 0 ? `
-              <div>
-                <h3>Product Renderings:</h3>
-                <div class="gallery-grid">
-                  ${activeRenderings.slice(0, 6).map((rendering, index) => `
-                    <div class="gallery-image">
-                      <img src="${rendering.storageUrl}" alt="Rendering ${index + 1}" />
-                    </div>
-                  `).join('')}
-                </div>
-              </div>
-            ` : ''}
-          </div>
-          ` : ''}
-
-          <!-- Pricing Page -->
-          ${showPricing ? `
-          <div class="page">
-            <h2 style="text-align: center; margin-bottom: 30px;">Project Investment</h2>
-            
-            <table class="pricing-table">
-              <thead>
-                <tr>
-                  <th style="width: 60%;">PRODUCT</th>
-                  <th style="width: 15%;">QTY</th>
-                  <th style="width: 25%;">TOTAL</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${lineItemTotals.map(item => `
-                  <tr>
-                    <td>${item.description}</td>
-                    <td>${item.qty}</td>
-                    <td>$${item.total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                  </tr>
-                `).join('')}
-                
-                ${shippingAmount > 0 ? `
-                <tr>
-                  <td>Shipping & Handling</td>
-                  <td>1</td>
-                  <td>$${shippingAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                </tr>
-                ` : ''}
-                
-                ${taxAmount > 0 ? `
-                <tr>
-                  <td>Sales Tax</td>
-                  <td></td>
-                  <td>$${taxAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                </tr>
-                ` : ''}
-
-                <tr class="total-row">
-                  <td><strong>TOTAL PROJECT INVESTMENT</strong></td>
-                  <td></td>
-                  <td><strong>$${finalTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          ` : ''}
-
-          <!-- Contract Page -->
-          ${showContract && (quote.contractTemplate?.terms || quote.customContractTerms) ? `
-          <div class="page">
-            <h2 style="text-align: center; margin-bottom: 30px;">Terms & Conditions</h2>
-            <div class="contract-content">
-              ${quote.contractTemplate?.terms || quote.customContractTerms || ''}
-            </div>
-          </div>
-          ` : ''}
-        </body>
-        </html>
-      `;
-
-      console.log(`🚀 PDF Generation - HTML generated, launching Puppeteer...`);
-
-      // Launch Puppeteer with system Chromium for NixOS compatibility  
-      const chromiumPath = process.env.CHROMIUM_PATH || '/nix/store/zi4f80l169xlmivz8vja8wlphq74qqk0-chromium-125.0.6422.141/bin/chromium';
-      browser = await puppeteer.launch({
-        executablePath: chromiumPath,
-        args: ['--no-sandbox', '--disable-setuid-sandbox'],
-        headless: true
-      });
-
-      const page = await browser.newPage();
-      await page.setContent(proposalHTML, { waitUntil: 'networkidle0' });
-
-      console.log(`📄 PDF Generation - Converting HTML to PDF...`);
-
-      // Generate PDF with professional settings
-      const pdfBuffer = await page.pdf({
-        format: 'Letter' as const,
-        printBackground: true,
-        preferCSSPageSize: true,
-        margin: {
-          top: '0.5in',
-          right: '0.5in', 
-          bottom: '0.7in',
-          left: '0.5in'
-        }
-      });
-
-      const endTime = Date.now();
-      const duration = endTime - startTime;
-      console.log(`✅ PDF Generation - Completed in ${duration}ms, PDF size: ${pdfBuffer.length} bytes`);
-
-      // Set response headers for PDF download
-      const filename = `proposal-${quote.quoteNumber || quoteId}.pdf`;
-      res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-      res.setHeader('Content-Length', pdfBuffer.length.toString());
-      res.setHeader('Cache-Control', 'no-cache');
-      res.setHeader('Content-Encoding', 'identity');
-
-      // Send PDF buffer directly to prevent encoding issues
-      res.end(pdfBuffer, 'binary');
-
-    } catch (error: any) {
-      const endTime = Date.now();
-      const duration = endTime - startTime;
-      
-      console.error(`❌ PDF Generation - Failed after ${duration}ms:`, error);
-      
-      if (error.name === 'TimeoutError') {
-        res.status(504).json({ 
-          message: "PDF generation timed out. The page may be taking too long to load or render.",
-          error: "TIMEOUT_ERROR" 
-        });
-      } else if (error.message?.includes('net::ERR_CONNECTION_REFUSED')) {
-        res.status(502).json({ 
-          message: "Unable to connect to the application for PDF generation. Please try again.",
-          error: "CONNECTION_ERROR" 
-        });
-      } else {
-        res.status(500).json({ 
-          message: "Failed to generate PDF. Please try again.",
-          error: "GENERATION_ERROR" 
-        });
-      }
-    } finally {
-      // Always close browser to prevent memory leaks
-      if (browser) {
-        try {
-          await browser.close();
-          console.log(`🧹 PDF Generation - Browser closed`);
-        } catch (closeError) {
-          console.error(`⚠️  PDF Generation - Error closing browser:`, closeError);
-        }
-      }
-    }
-  });
-
   // Quote image routes (protected)
   app.get("/api/quotes/:quoteId/cover-photos", isAuthenticated, async (req, res) => {
     try {
@@ -2239,30 +1895,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(renderings);
     } catch (error) {
       console.error("Error getting quote product renderings:", error);
-      res.status(500).json({ message: "Internal server error" });
-    }
-  });
-
-  app.get("/api/quotes/:quoteId/partner-logo", isAuthenticated, async (req, res) => {
-    try {
-      const params = quoteIdParamSchema.safeParse(req.params);
-      if (!params.success) {
-        return res.status(400).json({ 
-          message: "Invalid request parameters", 
-          errors: params.error.errors 
-        });
-      }
-
-      // Validate quote ownership
-      const hasAccess = await storage.validateQuoteOwnership(params.data.quoteId, req.user?.id);
-      if (!hasAccess) {
-        return res.status(403).json({ message: "Access denied" });
-      }
-
-      const partnerLogo = await storage.getQuotePartnerLogo(params.data.quoteId);
-      res.json(partnerLogo || null); // Return null instead of 404 for consistency
-    } catch (error) {
-      console.error("Error getting quote partner logo:", error);
       res.status(500).json({ message: "Internal server error" });
     }
   });
@@ -2438,87 +2070,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error uploading product rendering:", error);
       res.status(500).json({ message: "Failed to upload product rendering" });
-    }
-  });
-
-  // Partner logo upload endpoint
-  app.post("/api/quotes/:quoteId/partner-logo", isAuthenticated, upload.single('image'), async (req: any, res) => {
-    try {
-      const params = quoteIdParamSchema.safeParse(req.params);
-      if (!params.success) {
-        return res.status(400).json({ 
-          message: "Invalid request parameters", 
-          errors: params.error.errors 
-        });
-      }
-
-      // Validate quote ownership
-      const hasAccess = await storage.validateQuoteOwnership(params.data.quoteId, req.user?.id);
-      if (!hasAccess) {
-        return res.status(403).json({ message: "Access denied" });
-      }
-
-      if (!req.file) {
-        return res.status(400).json({ message: "No file uploaded" });
-      }
-
-      // Validate file type (images only)
-      if (!req.file.mimetype.startsWith('image/')) {
-        return res.status(400).json({ message: "Only image files are allowed" });
-      }
-
-      // Validate file size (5MB limit)
-      const maxSize = 5 * 1024 * 1024; // 5MB
-      if (req.file.size > maxSize) {
-        return res.status(400).json({ message: "File size must be less than 5MB" });
-      }
-
-      const file = req.file;
-      const objectStorageService = new ObjectStorageService();
-      
-      // Create a custom path for the partner logo
-      const sanitizedFilename = file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
-      const timestamp = Date.now();
-      const customPath = `partner-logos/${timestamp}-${sanitizedFilename}`;
-      
-      // Upload directly to object storage using Google Cloud Storage client
-      const privateDir = objectStorageService.getPrivateObjectDir();
-      const fullPath = `${privateDir}/${customPath}`;
-      
-      // Parse bucket name and object name from the full path
-      const pathParts = fullPath.split('/');
-      const bucketName = pathParts[1]; // Skip the leading slash
-      const objectName = pathParts.slice(2).join('/');
-      
-      // Upload file to Google Cloud Storage
-      const bucket = objectStorageClient.bucket(bucketName);
-      const cloudFile = bucket.file(objectName);
-      
-      await cloudFile.save(file.buffer, {
-        metadata: {
-          contentType: file.mimetype,
-        },
-      });
-      
-      // Create simple accessible URL using our quote images endpoint
-      const publicUrl = `${req.protocol}://${req.get('host')}/quote-images/${sanitizedFilename}`;
-      
-      // Create database record using the new partner logo table
-      const logoData = {
-        quoteId: params.data.quoteId,
-        filename: sanitizedFilename,
-        originalName: file.originalname,
-        storageUrl: publicUrl,
-        mimeType: file.mimetype,
-        fileSize: file.size
-      };
-      
-      const partnerLogo = await storage.createQuotePartnerLogo(logoData);
-      console.log(`✅ Partner logo saved: ${partnerLogo.filename}`);
-      res.status(201).json(partnerLogo);
-    } catch (error) {
-      console.error("Error uploading partner logo:", error);
-      res.status(500).json({ message: "Failed to upload partner logo" });
     }
   });
 

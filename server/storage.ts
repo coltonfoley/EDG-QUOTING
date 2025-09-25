@@ -1,4 +1,4 @@
-import { accounts, customers, contacts, quotes, lineItems, products, users, contractTemplates, proposalTemplates, pricingTables, productAccessories, quoteCoverPhotos, quoteProductRenderings, quotePartnerLogos, issueReports, type Account, type Customer, type Contact, type Quote, type LineItem, type Product, type User, type ContractTemplate, type ProposalTemplate, type PricingTable, type ProductAccessory, type QuoteCoverPhoto, type QuoteProductRendering, type QuotePartnerLogo, type IssueReport, type InsertAccount, type InsertCustomer, type InsertContact, type InsertQuote, type InsertLineItem, type InsertProduct, type InsertUser, type InsertContractTemplate, type InsertProposalTemplate, type InsertPricingTable, type InsertProductAccessory, type InsertQuoteCoverPhoto, type InsertQuoteProductRendering, type InsertQuotePartnerLogo, type InsertIssueReport, type QuoteWithDetails, type ProductWithDetails } from "@shared/schema";
+import { accounts, customers, contacts, quotes, lineItems, products, users, contractTemplates, proposalTemplates, pricingTables, productAccessories, quoteCoverPhotos, quoteProductRenderings, issueReports, type Account, type Customer, type Contact, type Quote, type LineItem, type Product, type User, type ContractTemplate, type ProposalTemplate, type PricingTable, type ProductAccessory, type QuoteCoverPhoto, type QuoteProductRendering, type IssueReport, type InsertAccount, type InsertCustomer, type InsertContact, type InsertQuote, type InsertLineItem, type InsertProduct, type InsertUser, type InsertContractTemplate, type InsertProposalTemplate, type InsertPricingTable, type InsertProductAccessory, type InsertQuoteCoverPhoto, type InsertQuoteProductRendering, type InsertIssueReport, type QuoteWithDetails, type ProductWithDetails } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, inArray, sql, and, ne, or, ilike } from "drizzle-orm";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
@@ -141,16 +141,12 @@ export interface IStorage {
   // Quote image methods
   getQuoteCoverPhoto(quoteId: number): Promise<QuoteCoverPhoto | undefined>;
   getQuoteProductRenderings(quoteId: number): Promise<QuoteProductRendering[]>;
-  getQuotePartnerLogo(quoteId: number): Promise<QuotePartnerLogo | undefined>;
   createQuoteCoverPhoto(photo: InsertQuoteCoverPhoto): Promise<QuoteCoverPhoto>;
   createQuoteProductRendering(rendering: InsertQuoteProductRendering): Promise<QuoteProductRendering>;
-  createQuotePartnerLogo(logo: InsertQuotePartnerLogo): Promise<QuotePartnerLogo>;
   updateQuoteCoverPhoto(id: number, photo: Partial<InsertQuoteCoverPhoto>): Promise<QuoteCoverPhoto | undefined>;
   updateQuoteProductRendering(id: number, rendering: Partial<InsertQuoteProductRendering>): Promise<QuoteProductRendering | undefined>;
-  updateQuotePartnerLogo(id: number, logo: Partial<InsertQuotePartnerLogo>): Promise<QuotePartnerLogo | undefined>;
   deleteQuoteCoverPhoto(id: number): Promise<boolean>;
   deleteQuoteProductRendering(id: number): Promise<boolean>;
-  deleteQuotePartnerLogo(id: number): Promise<boolean>;
   deleteQuoteImagesByQuoteId(quoteId: number): Promise<boolean>;
 
   // Issue report methods
@@ -279,7 +275,6 @@ export class MemStorage {
       taxRate: insertQuote.taxRate || "0",
       discount: insertQuote.discount || "0",
       shipping: insertQuote.shipping || "0",
-      partnerLogoStorageUrl: insertQuote.partnerLogoStorageUrl || null, // Fix TypeScript error
       lostReason: insertQuote.lostReason || null,
       contractTemplateId: insertQuote.contractTemplateId || null,
       customContractTerms: insertQuote.customContractTerms || null,
@@ -1613,48 +1608,6 @@ export class DatabaseStorage implements IStorage {
       .update(quoteCoverPhotos)
       .set({ isActive: false })
       .where(eq(quoteCoverPhotos.id, id));
-    return (result.rowCount || 0) > 0;
-  }
-
-  async getQuotePartnerLogo(quoteId: number): Promise<QuotePartnerLogo | undefined> {
-    const [logo] = await db
-      .select()
-      .from(quotePartnerLogos)
-      .where(and(eq(quotePartnerLogos.quoteId, quoteId), eq(quotePartnerLogos.isActive, true)))
-      .orderBy(desc(quotePartnerLogos.uploadedAt))
-      .limit(1);
-    return logo || undefined;
-  }
-
-  async createQuotePartnerLogo(logo: InsertQuotePartnerLogo): Promise<QuotePartnerLogo> {
-    // Soft delete any existing active partner logos for this quote (business rule: one active partner logo per quote)
-    await db
-      .update(quotePartnerLogos)
-      .set({ isActive: false })
-      .where(and(eq(quotePartnerLogos.quoteId, logo.quoteId), eq(quotePartnerLogos.isActive, true)));
-
-    const [created] = await db
-      .insert(quotePartnerLogos)
-      .values(logo)
-      .returning();
-    return created;
-  }
-
-  async updateQuotePartnerLogo(id: number, logo: Partial<InsertQuotePartnerLogo>): Promise<QuotePartnerLogo | undefined> {
-    const [updated] = await db
-      .update(quotePartnerLogos)
-      .set(logo)
-      .where(eq(quotePartnerLogos.id, id))
-      .returning();
-    return updated || undefined;
-  }
-
-  async deleteQuotePartnerLogo(id: number): Promise<boolean> {
-    // Soft delete by setting isActive to false
-    const result = await db
-      .update(quotePartnerLogos)
-      .set({ isActive: false })
-      .where(eq(quotePartnerLogos.id, id));
     return (result.rowCount || 0) > 0;
   }
 
