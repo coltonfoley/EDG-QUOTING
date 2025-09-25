@@ -2258,6 +2258,85 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Partner logo upload endpoint
+  app.post("/api/quotes/:quoteId/partner-logo", isAuthenticated, upload.single('image'), async (req: any, res) => {
+    try {
+      const params = quoteIdParamSchema.safeParse(req.params);
+      if (!params.success) {
+        return res.status(400).json({ 
+          message: "Invalid request parameters", 
+          errors: params.error.errors 
+        });
+      }
+
+      // Validate quote ownership
+      const hasAccess = await storage.validateQuoteOwnership(params.data.quoteId, req.user?.id);
+      if (!hasAccess) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      if (!req.file) {
+        return res.status(400).json({ message: "No file uploaded" });
+      }
+
+      // Validate file type (images only)
+      if (!req.file.mimetype.startsWith('image/')) {
+        return res.status(400).json({ message: "Only image files are allowed" });
+      }
+
+      // Validate file size (5MB limit)
+      const maxSize = 5 * 1024 * 1024; // 5MB
+      if (req.file.size > maxSize) {
+        return res.status(400).json({ message: "File size must be less than 5MB" });
+      }
+
+      const file = req.file;
+      const objectStorageService = new ObjectStorageService();
+      
+      // Create a custom path for the partner logo
+      const sanitizedFilename = file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
+      const timestamp = Date.now();
+      const customPath = `partner-logos/${timestamp}-${sanitizedFilename}`;
+      
+      // Upload directly to object storage using Google Cloud Storage client
+      const privateDir = objectStorageService.getPrivateObjectDir();
+      const fullPath = `${privateDir}/${customPath}`;
+      
+      // Parse bucket name and object name from the full path
+      const pathParts = fullPath.split('/');
+      const bucketName = pathParts[1]; // Skip the leading slash
+      const objectName = pathParts.slice(2).join('/');
+      
+      // Upload file to Google Cloud Storage
+      const bucket = objectStorageClient.bucket(bucketName);
+      const cloudFile = bucket.file(objectName);
+      
+      await cloudFile.save(file.buffer, {
+        metadata: {
+          contentType: file.mimetype,
+        },
+      });
+      
+      // Create simple accessible URL using our quote images endpoint
+      const publicUrl = `${req.protocol}://${req.get('host')}/quote-images/${sanitizedFilename}`;
+      
+      // Update the quote with the partner logo URL
+      const updatedQuote = await storage.updateQuote(params.data.quoteId, {
+        partnerLogoStorageUrl: publicUrl
+      });
+      
+      console.log(`✅ Partner logo saved for quote ${params.data.quoteId}: ${sanitizedFilename}`);
+      res.status(201).json({
+        message: "Partner logo uploaded successfully",
+        logoUrl: publicUrl,
+        filename: sanitizedFilename
+      });
+    } catch (error) {
+      console.error("Error uploading partner logo:", error);
+      res.status(500).json({ message: "Failed to upload partner logo" });
+    }
+  });
+
   app.put("/api/quote-images/cover-photo/:imageId", isAuthenticated, async (req, res) => {
     try {
       const params = imageIdParamSchema.safeParse(req.params);

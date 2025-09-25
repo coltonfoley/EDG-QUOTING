@@ -79,6 +79,7 @@ export const quotes = pgTable("quotes", {
   taxRate: decimal("tax_rate", { precision: 5, scale: 2 }).default("0"),
   discount: decimal("discount", { precision: 5, scale: 2 }).default("0"),
   shipping: decimal("shipping", { precision: 10, scale: 2 }).default("0"),
+  partnerLogoStorageUrl: text("partner_logo_storage_url"), // URL for partner/company logo upload
   dealStage: text("deal_stage").notNull().default("new_lead"), // new_lead, qualifying, consultation_scheduled, building_estimate, quote_sent, closed_won, closed_lost, on_hold
   lostReason: text("lost_reason"), // price, timeline, competitor, no_budget, etc.
   // Contract and signature fields
