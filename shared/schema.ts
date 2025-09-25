@@ -71,6 +71,7 @@ export const quotes = pgTable("quotes", {
   quoteNumber: text("quote_number").notNull().unique(),
   customerId: integer("customer_id").notNull(), // Legacy column for backward compatibility
   accountId: integer("account_id"), // New column name, nullable for now
+  contactId: integer("contact_id"), // Reference to specific individual contact
   assignedRepId: text("assigned_rep_id"), // foreign key to users table (for sales rep assignment)
   projectName: text("project_name"),
   projectAddress: text("project_address"),
@@ -94,6 +95,7 @@ export const quotes = pgTable("quotes", {
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => [
   index("idx_quotes_account_id").on(table.accountId),
+  index("idx_quotes_contact_id").on(table.contactId),
   index("idx_quotes_deal_stage").on(table.dealStage),
   index("idx_quotes_assigned_rep").on(table.assignedRepId),
   index("idx_quotes_account_created").on(table.accountId, table.createdAt),
