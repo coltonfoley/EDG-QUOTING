@@ -383,6 +383,8 @@ async function extractTextFromPDF(pdfBuffer: Buffer): Promise<string | null> {
 
 // Extract quote data from text using OpenAI
 async function extractQuoteDataFromText(textContent: string): Promise<ExtractedQuote | null> {
+  let parsedContent: any;
+  
   try {
     console.log('🤖 Processing text with OpenAI for quote extraction');
     
@@ -439,7 +441,6 @@ CRITICAL RULES:
       return null;
     }
 
-    let parsedContent;
     try {
       parsedContent = JSON.parse(content);
     } catch (jsonError) {
@@ -461,7 +462,23 @@ CRITICAL RULES:
     return extracted;
 
   } catch (error) {
-    console.error('Error extracting quote data from text:', error);
+    // Handle Zod validation errors specifically
+    if (error instanceof z.ZodError) {
+      const validationIssues = error.issues.map(issue => 
+        `${issue.path.join('.')}: ${issue.message}`
+      );
+      
+      console.error('📋 Quote data validation failed:', {
+        message: 'AI response did not match expected quote structure',
+        validationIssues: validationIssues,
+        // Log truncated/redacted data (remove potential PII)
+        receivedDataSample: parsedContent ? 
+          JSON.stringify(parsedContent, null, 2).substring(0, 500) + '...' : 
+          'No data parsed'
+      });
+    } else {
+      console.error('Error extracting quote data from text:', error);
+    }
     return null;
   }
 }
@@ -582,6 +599,8 @@ export async function extractQuoteDataFromImages(images: Array<{index: number, i
 }
 
 async function processImagesInSingleCall(images: Array<{index: number, imageBase64: string}>): Promise<ExtractedQuoteWithPageRefs | null> {
+  let parsedContent: any;
+  
   try {
     // Generate cache key based on image content (use first few characters of each image for efficiency)
     const cacheKeyInput = images.map(img => `${img.index}:${img.imageBase64.slice(0, 100)}`).join('|');
@@ -680,7 +699,6 @@ async function processImagesInSingleCall(images: Array<{index: number, imageBase
       return null;
     }
 
-    let parsedContent;
     try {
       parsedContent = JSON.parse(content);
     } catch (jsonError) {
@@ -707,7 +725,23 @@ async function processImagesInSingleCall(images: Array<{index: number, imageBase
     
     return extracted;
   } catch (error) {
-    console.error('Error in processImagesInSingleCall:', error);
+    // Handle Zod validation errors specifically  
+    if (error instanceof z.ZodError) {
+      const validationIssues = error.issues.map(issue => 
+        `${issue.path.join('.')}: ${issue.message}`
+      );
+      
+      console.error('📋 Quote data validation failed (vision processing):', {
+        message: 'AI response did not match expected quote structure',
+        validationIssues: validationIssues,
+        // Log truncated/redacted data (remove potential PII)
+        receivedDataSample: parsedContent ? 
+          JSON.stringify(parsedContent, null, 2).substring(0, 500) + '...' : 
+          'No data parsed'
+      });
+    } else {
+      console.error('Error in processImagesInSingleCall:', error);
+    }
     return null;
   }
 }
