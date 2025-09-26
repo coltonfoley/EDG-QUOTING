@@ -84,6 +84,17 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
     enabled: open && !!quote.id,
   });
 
+  // Fetch groups for this quote
+  const { data: groups = [] } = useQuery({
+    queryKey: ["/api/quotes", quote.id, "groups"],
+    queryFn: async () => {
+      const response = await fetch(`/api/quotes/${quote.id}/groups`);
+      if (!response.ok) throw new Error('Failed to fetch groups');
+      return response.json();
+    },
+    enabled: open && !!quote.id,
+  });
+
   // Mutations for uploading images
   const uploadCoverPhotoMutation = useMutation({
     mutationFn: async (file: File) => {
@@ -741,6 +752,26 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
       const drawProfessionalTable = () => {
         if (quote.lineItems.length === 0) return;
         
+        // Build grouped line items structure
+        const orderedGroups = [...groups].sort((a: any, b: any) => a.position - b.position);
+        const itemsByGroup = new Map<string, any[]>();
+        orderedGroups.forEach(g => itemsByGroup.set(g.id, []));
+
+        const ungrouped: any[] = [];
+        quote.lineItems.forEach(li => {
+          if (li.groupId && itemsByGroup.has(li.groupId)) {
+            itemsByGroup.get(li.groupId)!.push(li);
+          } else {
+            ungrouped.push(li);
+          }
+        });
+
+        // Sort within groups by position
+        itemsByGroup.forEach((arr, gid) => {
+          arr.sort((a: any, b: any) => (a.position ?? 0) - (b.position ?? 0));
+        });
+        ungrouped.sort((a: any, b: any) => (a.position ?? 0) - (b.position ?? 0));
+        
         // Padding constants and layout metrics
         const lineHeight = 4;
         const padX = 3;
@@ -900,9 +931,23 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         // Draw table header
         drawTableHeader();
         
-        // Draw table rows
-        quote.lineItems.forEach((item, index) => {
-          drawTableRow(item, index);
+        // Draw table rows in grouped order
+        let itemIndex = 0;
+        
+        // First draw ungrouped items
+        ungrouped.forEach((item) => {
+          drawTableRow(item, itemIndex++);
+        });
+        
+        // Then draw grouped items
+        orderedGroups.forEach(group => {
+          const groupItems = itemsByGroup.get(group.id) || [];
+          if (groupItems.length > 0) {
+            // TODO: Add group header row if needed
+            groupItems.forEach((item) => {
+              drawTableRow(item, itemIndex++);
+            });
+          }
         });
         
         addSpace('sm'); // 12mm
