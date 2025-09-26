@@ -530,7 +530,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
   });
 
   // Set pending mutation references when they start
-  createLineItemMutation.mutateAsync = (data: any) => {
+  const createLineItemWithTracking = (data: any) => {
     pendingMutations.current.create = createLineItemMutation;
     return createLineItemMutation.mutate(data);
   };
@@ -1317,7 +1317,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                   <>
                     <UngroupedSection 
                       lineItems={groupedLineItems.ungrouped}
-                      onCreateGroup={handleCreateGroup}
+                      onCreateGroup={() => setShowCreateGroupDialog(true)}
                     />
                     <SortableContext 
                       items={groupedLineItems.ungrouped.map(item => `item-${item.id}`)}
