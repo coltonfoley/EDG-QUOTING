@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { FileText, Upload, X, Download, Loader2, Eye, Image, Camera } from 'lucide-react';
-import { formatCurrency, calculateQuoteTotals } from '@/lib/utils';
+import { formatCurrency, calculateQuoteTotals, calculateLineItemTotal } from '@/lib/utils';
 import { getProxiedImageUrl } from '@/lib/image-utils';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import type { QuoteWithDetails, QuoteCoverPhoto, QuoteProductRendering } from '@shared/schema';
@@ -838,11 +838,16 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         const drawTableRow = (item: any, index: number) => {
           const qty = parseFloat(item.quantity.toString());
           const price = parseFloat(item.unitPrice.toString());
-          const markup = parseFloat(item.markupValue.toString());
-          const baseTotal = qty * price;
-          const total = item.markupType === 'percentage' 
-            ? baseTotal + (baseTotal * (markup / 100))
-            : baseTotal + markup;
+          
+          // Use shared calculation helper to ensure consistency
+          const total = calculateLineItemTotal(
+            item.quantity,
+            item.unitPrice,
+            item.markupType,
+            item.markupValue,
+            item.discountType || "percentage",
+            item.discountValue || 0
+          );
           
           // Calculate proper row height based on description wrapping
           const maxDescWidth = columns[0].width - 2*padX;
@@ -987,11 +992,15 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
           } else {
             // When collapsed, compute subtotal from data without drawing rows
             groupSubtotal = items.reduce((sum, item) => {
-              const qty = Number(item.quantity || 0);
-              const price = Number(item.unitPrice || 0);
-              const markup = Number(item.markupValue || 0);
-              const base = qty * price;
-              const lineTotal = item.markupType === 'percentage' ? base + base*(markup/100) : base + markup;
+              // Use same shared calculation helper as drawTableRow
+              const lineTotal = calculateLineItemTotal(
+                item.quantity,
+                item.unitPrice,
+                item.markupType,
+                item.markupValue,
+                item.discountType || "percentage",
+                item.discountValue || 0
+              );
               return sum + lineTotal;
             }, 0);
           }
