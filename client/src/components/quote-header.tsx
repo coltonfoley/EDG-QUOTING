@@ -340,7 +340,6 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
                   />
                 </div>
               </div>
-            </div>
             
           </form>
         </Form>
