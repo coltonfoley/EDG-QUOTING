@@ -748,13 +748,13 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         const rowHeight = 14;
         const headerHeight = 12;
         
-        // Column configuration - simplified to essential fields only
+        // Column configuration with proper proportions
         const tableWidth = contentWidth;
         const columns = [
-          { header: 'Description', width: tableWidth * 0.50, dataAlign: 'left' },
-          { header: 'Qty', width: tableWidth * 0.15, dataAlign: 'center' },
-          { header: 'Price', width: tableWidth * 0.175, dataAlign: 'right' },
-          { header: 'Total', width: tableWidth * 0.175, dataAlign: 'right' }
+          { header: 'Description', width: tableWidth * 0.60, dataAlign: 'left' },
+          { header: 'Qty', width: tableWidth * 0.10, dataAlign: 'right' },
+          { header: 'Price', width: tableWidth * 0.15, dataAlign: 'right' },
+          { header: 'Total', width: tableWidth * 0.15, dataAlign: 'right' }
         ];
         
         const tableX = margin;
@@ -803,6 +803,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
           setColor('primary');
         };
         
+        // Enhanced drawTableRow helper with zebra striping and pagination
         const drawTableRow = (item: any, index: number) => {
           const qty = parseFloat(item.quantity.toString());
           const price = parseFloat(item.unitPrice.toString());
@@ -818,18 +819,25 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
           const actualRowHeight = Math.max(rowHeight, padY*2 + descLines.length*lineHeight);
           
           // Check for page break and redraw header if needed
-          if (checkPageBreak(actualRowHeight + 6)) {
+          if (checkPageBreak(actualRowHeight + spacing.xs)) {
+            addNewPage();
             drawTableHeader();
           }
           
           const cellTop = yPosition;
           const cellBottom = cellTop + actualRowHeight;
           
+          // Zebra striping for better readability
+          if (index % 2 === 1) {
+            pdf.setFillColor(250, 250, 250); // Very light gray for alternate rows
+            pdf.rect(tableX, cellTop, contentWidth, actualRowHeight, 'F');
+          }
+          
           // Set font for row content
           setFont('small');
           setColor('primary');
           
-          // Row data - simplified to essential fields only
+          // Row data with proper numeric formatting
           const rowData = [
             item.description, // Full description (multi-line)
             qty.toString(),
@@ -858,25 +866,26 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
                 pdf.text(descLines[i], textX, textY, { align: col.dataAlign as any });
               }
             } else {
-              const textY = cellTop + padY + 3; // Single line with padding
+              // Center text vertically in single-line cells
+              const textY = cellTop + (actualRowHeight / 2) + 1;
               pdf.text(rowData[colIndex], textX, textY, { align: col.dataAlign as any });
             }
             
             currentX += col.width;
           });
           
-          // Draw borders for this row
+          // Draw subtle row separators
           const [tr, tg, tb] = colors.tableLines;
           pdf.setDrawColor(tr, tg, tb);
-          pdf.setLineWidth(0.35);
+          pdf.setLineWidth(0.25); // Thinner lines for subtle separation
           
           // Draw horizontal line at bottom of row
           pdf.line(tableX, cellBottom, tableX + contentWidth, cellBottom);
           
           // Draw vertical column dividers for this row
           currentX = tableX;
-          columns.forEach((col, index) => {
-            if (index > 0) {
+          columns.forEach((col, colIndex) => {
+            if (colIndex > 0) {
               pdf.line(currentX, cellTop, currentX, cellBottom);
             }
             currentX += col.width;
