@@ -1485,14 +1485,23 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
               continue;
             }
             
-            // Check for page break
+            // Check for page break with contract-specific header handling
             yPosition = ensureSpace(pdf, yPosition, spacing.md, {
               marginTop: margin,
               marginBottom: margin,
               footerReserve: 15,
               onNewPage: () => {
                 currentPage++;
-                drawHeader();
+                // Redraw the branded contract header on new pages
+                const [r, g, b] = colors.accent;
+                pdf.setFillColor(r, g, b);
+                pdf.rect(margin, margin + spacing.lg - 8, contentWidth, 18, 'F');
+                setColor('onAccent');
+                setFont('h2');
+                pdf.text('CONTRACT TERMS & CONDITIONS (CONTINUED)', margin + 5, margin + spacing.lg + 2);
+                setColor('primary');
+                // Set yPosition to start after the contract header
+                yPosition = margin + spacing.lg + 18 + spacing.sm;
               }
             });
             
