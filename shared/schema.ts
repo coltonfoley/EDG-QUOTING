@@ -223,6 +223,20 @@ export const productAccessories = pgTable("product_accessories", {
   index("idx_product_accessories_accessory_product").on(table.accessoryProductId),
 ]);
 
+// Groups table for organizing line items
+export const groups = pgTable("groups", {
+  id: text("id").primaryKey(), // UUID for groups
+  quoteId: integer("quote_id").notNull(),
+  title: text("title").notNull(),
+  position: integer("position").notNull().default(0), // sortable index among groups
+  isCollapsed: boolean("is_collapsed").default(false), // UI state for collapsing groups
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_groups_quote_id").on(table.quoteId),
+  index("idx_groups_position").on(table.quoteId, table.position),
+]);
+
 export const lineItems = pgTable("line_items", {
   id: serial("id").primaryKey(),
   quoteId: integer("quote_id").notNull(),
@@ -239,10 +253,15 @@ export const lineItems = pgTable("line_items", {
   configData: jsonb("config_data"), // JSON object storing configuration values (dimensions, options, etc.)
   baseProductId: integer("base_product_id"), // reference to base product for accessories
   isAccessory: boolean("is_accessory").default(false),
+  // Grouping and ordering fields
+  groupId: text("group_id"), // nullable = ungrouped items
+  position: integer("position").notNull().default(0), // sortable index within its group
 }, (table) => [
   index("idx_line_items_quote_id").on(table.quoteId),
   index("idx_line_items_product_id").on(table.productId),
   index("idx_line_items_base_product_id").on(table.baseProductId),
+  index("idx_line_items_group_id").on(table.groupId),
+  index("idx_line_items_group_position").on(table.groupId, table.position),
 ]);
 
 // Issue reports table for user feedback and bug tracking
@@ -376,6 +395,16 @@ export const insertProductAccessorySchema = createInsertSchema(productAccessorie
   createdAt: true,
 });
 
+export const insertGroupSchema = createInsertSchema(groups).omit({
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  id: z.string().min(1, "Group ID is required"),
+  title: z.string().min(1, "Group title is required"),
+  position: z.number().int().min(0).default(0),
+  isCollapsed: z.boolean().default(false),
+});
+
 export const insertLineItemSchema = createInsertSchema(lineItems).omit({
   id: true,
 }).extend({
@@ -384,6 +413,8 @@ export const insertLineItemSchema = createInsertSchema(lineItems).omit({
   unitPrice: z.union([z.string(), z.number()]).transform(val => typeof val === 'string' ? val : val.toString()),
   markupValue: z.union([z.string(), z.number()]).transform(val => typeof val === 'string' ? val : val.toString()),
   discountValue: z.union([z.string(), z.number()]).transform(val => typeof val === 'string' ? val : val.toString()),
+  groupId: z.string().nullable().optional(),
+  position: z.number().int().min(0).default(0),
 });
 
 export const insertContractTemplateSchema = createInsertSchema(contractTemplates).omit({
@@ -439,6 +470,7 @@ export type Customer = typeof accounts.$inferSelect; // Legacy alias
 export type Quote = typeof quotes.$inferSelect;
 export type Product = typeof products.$inferSelect;
 export type LineItem = typeof lineItems.$inferSelect;
+export type Group = typeof groups.$inferSelect;
 export type ContractTemplate = typeof contractTemplates.$inferSelect;
 export type ProposalTemplate = typeof proposalTemplates.$inferSelect;
 export type PricingTable = typeof pricingTables.$inferSelect;
@@ -453,6 +485,7 @@ export type InsertCustomer = z.infer<typeof insertAccountSchema>; // Legacy alia
 export type InsertQuote = z.infer<typeof insertQuoteSchema>;
 export type InsertProduct = z.infer<typeof insertProductSchema>;
 export type InsertLineItem = z.infer<typeof insertLineItemSchema>;
+export type InsertGroup = z.infer<typeof insertGroupSchema>;
 export type InsertContractTemplate = z.infer<typeof insertContractTemplateSchema>;
 export type InsertProposalTemplate = z.infer<typeof insertProposalTemplateSchema>;
 export type InsertPricingTable = z.infer<typeof insertPricingTableSchema>;
