@@ -63,8 +63,9 @@ export function GroupHeader({
   };
 
   return (
-    <div ref={setNodeRef} className="bg-gray-50 border-b border-gray-300" data-testid={`group-header-${group.id}`}>
-      <div className="flex items-center justify-between px-4 py-3">
+    <tr ref={setNodeRef} className="bg-gray-50 border-b border-gray-300" data-testid={`group-header-${group.id}`}>
+      <td colSpan={9} className="px-4 py-3">
+        <div className="flex items-center justify-between">
         <div className="flex items-center space-x-3">
           {/* Drag handle */}
           <div className="cursor-grab hover:cursor-grabbing text-gray-400" data-testid={`group-drag-handle-${group.id}`}>
@@ -131,8 +132,9 @@ export function GroupHeader({
             <Trash2 className="h-4 w-4" />
           </Button>
         </div>
-      </div>
-    </div>
+        </div>
+      </td>
+    </tr>
   );
 }
 
@@ -144,8 +146,9 @@ interface GroupFooterProps {
 
 export function GroupFooter({ group, lineItems, onAddItem }: GroupFooterProps) {
   return (
-    <div className="bg-gray-50 border-b border-gray-300 px-4 py-2" data-testid={`group-footer-${group.id}`}>
-      <div className="flex items-center justify-between">
+    <tr className="bg-gray-50 border-b border-gray-300" data-testid={`group-footer-${group.id}`}>
+      <td colSpan={9} className="px-4 py-2">
+        <div className="flex items-center justify-between">
         <Button
           variant="outline"
           size="sm"
@@ -161,8 +164,9 @@ export function GroupFooter({ group, lineItems, onAddItem }: GroupFooterProps) {
           {lineItems.length} {lineItems.length === 1 ? 'item' : 'items'} • 
           Total: {formatCurrency(calculateGroupSubtotal(lineItems))}
         </div>
-      </div>
-    </div>
+        </div>
+      </td>
+    </tr>
   );
 }
 
@@ -182,8 +186,9 @@ export function UngroupedSection({ lineItems, onCreateGroup }: UngroupedSectionP
   const ungroupedMargin = calculateGroupMargin(lineItems);
 
   return (
-    <div ref={setNodeRef} className="bg-gray-50 border-b border-gray-300" data-testid="ungrouped-section">
-      <div className="flex items-center justify-between px-4 py-3">
+    <tr ref={setNodeRef} className="bg-gray-50 border-b border-gray-300" data-testid="ungrouped-section">
+      <td colSpan={9} className="px-4 py-3">
+        <div className="flex items-center justify-between">
         <div className="flex items-center space-x-3">
           <div className="text-sm font-medium text-gray-900">
             Ungrouped Items
@@ -211,8 +216,9 @@ export function UngroupedSection({ lineItems, onCreateGroup }: UngroupedSectionP
             Create Group
           </Button>
         </div>
-      </div>
-    </div>
+        </div>
+      </td>
+    </tr>
   );
 }
 
