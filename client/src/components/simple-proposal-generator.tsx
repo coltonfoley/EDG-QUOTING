@@ -1193,35 +1193,46 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         
         checkPageBreak(60);
         
-        // Professional section header with teal background - matching our style
+        // Small teal chip section label
         const [r, g, b] = colors.accent;
-        pdf.setFillColor(r, g, b);
-        pdf.rect(margin, yPosition - 5, contentWidth, 15, 'F');
+        const chipText = 'PRODUCT RENDERINGS';
         
-        // Dark text on teal background for better contrast
+        // Measure text width for chip sizing
+        setFont('small');
+        const textWidth = pdf.getTextWidth(chipText);
+        const chipWidth = textWidth + 12; // 6mm padding on each side
+        const chipHeight = 8;
+        
+        // Draw rounded chip background
+        pdf.setFillColor(r, g, b);
+        pdf.roundedRect(margin, yPosition - 2, chipWidth, chipHeight, 2, 2, 'F');
+        
+        // Chip text
         setColor('onAccent');
-        setFont('h2');
-        pdf.text('PRODUCT RENDERINGS', margin + 5, yPosition + 5);
+        pdf.text(chipText, margin + 6, yPosition + 3);
         
         // Reset to black text
         setColor('primary');
-        addSpace('md'); // 18mm
+        addSpace('sm'); // 12mm
         
-        // Professional image grid layout
-        const imagesPerRow = 3;
-        const imageWidth = (contentWidth - 20) / imagesPerRow;
+        // Professional grid layout with equal gutters
+        const imagesPerRow = productRenderings.length >= 4 ? 3 : 2; // Adaptive: 3-col for 4+ images, 2-col otherwise
+        const gutterWidth = 6; // 6mm gutters between images
+        const totalGutterWidth = (imagesPerRow - 1) * gutterWidth;
+        const imageWidth = (contentWidth - totalGutterWidth) / imagesPerRow;
         const imageHeight = 40;
+        
         let currentX = margin;
         let imagesInCurrentRow = 0;
         
         for (let i = 0; i < Math.min(productRenderings.length, 6); i++) {
           if (imagesInCurrentRow === 0) {
-            checkPageBreak(imageHeight + 10);
+            checkPageBreak(imageHeight + spacing.sm);
           }
           
           try {
             const { dataUrl, format } = await getImageDataForPDF(productRenderings[i]);
-            pdf.addImage(dataUrl, format, currentX, yPosition, imageWidth - 5, imageHeight);
+            pdf.addImage(dataUrl, format, currentX, yPosition, imageWidth, imageHeight);
             
             // Clean up converted image URL if different from original
             if (dataUrl !== productRenderings[i].preview) {
@@ -1231,18 +1242,19 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
             console.warn(`Could not add rendering ${i} to PDF:`, e);
           }
           
-          currentX += imageWidth;
+          // Move to next position with proper gutter spacing
+          currentX += imageWidth + gutterWidth;
           imagesInCurrentRow++;
           
           if (imagesInCurrentRow === imagesPerRow) {
-            yPosition += imageHeight + 10;
+            yPosition += imageHeight + spacing.sm; // Grid-based vertical spacing
             currentX = margin;
             imagesInCurrentRow = 0;
           }
         }
         
         if (imagesInCurrentRow > 0) {
-          yPosition += imageHeight + 10;
+          yPosition += imageHeight + spacing.sm;
         }
         addSpace('sm'); // 12mm
       };
