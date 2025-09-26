@@ -124,6 +124,21 @@ export function AccountComboboxWithCreate({
 
   const selectedAccount = currentAccount || accounts.find((account: Account) => account.id === value);
 
+  // Helper function to get a meaningful label for an account
+  const getAccountLabel = (account: Account | undefined): string => {
+    if (!account) return "";
+    
+    const name = account.name?.trim();
+    const company = account.company?.trim();
+    const email = account.email?.trim();
+    
+    if (name) return company ? `${name} (${company})` : name;
+    if (company) return company;
+    if (email) return email;
+    
+    return `Account #${account.id}`;
+  };
+
   const handleCreateAccount = () => {
     if (!newAccount.name || !newAccount.email || !newAccount.phone) {
       toast({
@@ -144,7 +159,7 @@ export function AccountComboboxWithCreate({
   };
 
   const displayName = selectedAccount 
-    ? `${selectedAccount.name}${selectedAccount.company ? ` (${selectedAccount.company})` : ""}`
+    ? getAccountLabel(selectedAccount) || placeholder
     : placeholder;
 
   return (
@@ -190,10 +205,7 @@ export function AccountComboboxWithCreate({
                         )}
                       />
                       <div className="flex flex-col">
-                        <span className="font-medium">{account.name}</span>
-                        {account.company && (
-                          <span className="text-sm text-gray-500">{account.company}</span>
-                        )}
+                        <span className="font-medium">{getAccountLabel(account)}</span>
                         <span className="text-xs text-gray-400">{account.email}</span>
                       </div>
                     </CommandItem>
