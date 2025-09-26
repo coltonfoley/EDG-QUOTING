@@ -438,7 +438,8 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/quotes"] });
+      // Only invalidate the specific quote and its groups to avoid cancel storms
+      queryClient.invalidateQueries({ queryKey: [`/api/quotes/${quoteId}`] });
       queryClient.invalidateQueries({ queryKey: ["/api/quotes", quoteId, "groups"] });
     },
     onError: (error: any) => {
