@@ -1166,72 +1166,102 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
       const drawProductRenderingsSection = async () => {
         if (productRenderings.length === 0) return;
         
-        checkPageBreak(60);
+        // === DEDICATED FULL-PAGE GALLERY ===
+        // Start renderings on their own page(s) for maximum impact
+        addNewPage();
         
-        // Small teal chip section label
         const [r, g, b] = colors.accent;
-        const chipText = 'PRODUCT RENDERINGS';
         
-        // Measure text width for chip sizing
-        setFont('small');
-        const textWidth = pdf.getTextWidth(chipText);
-        const chipWidth = textWidth + 12; // 6mm padding on each side
-        const chipHeight = 8;
-        
-        // Draw rounded chip background
+        // Gallery page header
         pdf.setFillColor(r, g, b);
-        pdf.roundedRect(margin, yPosition - 2, chipWidth, chipHeight, 2, 2, 'F');
+        pdf.rect(margin, yPosition - 8, contentWidth, 18, 'F');
         
-        // Chip text
         setColor('onAccent');
-        pdf.text(chipText, margin + 6, yPosition + 3);
+        setFont('h2');
+        pdf.text('PRODUCT RENDERINGS', margin + 5, yPosition + 2);
         
-        // Reset to black text
         setColor('primary');
-        addSpace('sm'); // 12mm
+        addSpace('lg'); // 24mm space after header
         
-        // Professional grid layout with equal gutters
-        const imagesPerRow = productRenderings.length >= 4 ? 3 : 2; // Adaptive: 3-col for 4+ images, 2-col otherwise
-        const gutterWidth = 6; // 6mm gutters between images
-        const totalGutterWidth = (imagesPerRow - 1) * gutterWidth;
-        const imageWidth = (contentWidth - totalGutterWidth) / imagesPerRow;
-        const imageHeight = 40;
+        // Calculate dimensions for showcase images
+        const maxImageHeight = (pageHeight - margin * 2 - 50) * 0.75; // 75% of available page height
+        const maxImageWidth = contentWidth;
         
-        let currentX = margin;
-        let imagesInCurrentRow = 0;
+        // Show 1-2 large images per page
+        const imagesPerPage = 2;
+        let imageIndex = 0;
         
-        for (let i = 0; i < Math.min(productRenderings.length, 6); i++) {
-          if (imagesInCurrentRow === 0) {
-            checkPageBreak(imageHeight + spacing.sm);
-          }
+        while (imageIndex < productRenderings.length) {
+          let imagesOnCurrentPage = 0;
+          const startingY = yPosition;
           
-          try {
-            const { dataUrl, format } = await getImageDataForPDF(productRenderings[i]);
-            pdf.addImage(dataUrl, format, currentX, yPosition, imageWidth, imageHeight);
+          // Place up to 2 images on current page
+          for (let i = 0; i < imagesPerPage && imageIndex < productRenderings.length; i++) {
+            const rendering = productRenderings[imageIndex];
             
-            // Clean up converted image URL if different from original
-            if (dataUrl !== productRenderings[i].preview) {
-              URL.revokeObjectURL(dataUrl);
+            try {
+              const { dataUrl, format } = await getImageDataForPDF(rendering);
+              
+              // Calculate actual image dimensions maintaining aspect ratio
+              const img = document.createElement('img') as HTMLImageElement;
+              img.src = dataUrl;
+              await img.decode();
+              
+              const aspectRatio = img.width / img.height;
+              
+              // Size image to fit within max dimensions while maintaining aspect ratio
+              let imageWidth = maxImageWidth;
+              let imageHeight = imageWidth / aspectRatio;
+              
+              // If height exceeds max, scale down to fit height
+              if (imageHeight > maxImageHeight) {
+                imageHeight = maxImageHeight;
+                imageWidth = imageHeight * aspectRatio;
+              }
+              
+              // Center image horizontally
+              const imageX = margin + (contentWidth - imageWidth) / 2;
+              
+              // Add image to PDF
+              pdf.addImage(dataUrl, format, imageX, yPosition, imageWidth, imageHeight);
+              
+              // Move position for next image
+              yPosition += imageHeight + spacing.lg; // 24mm spacing between images
+              imagesOnCurrentPage++;
+              
+              // Clean up converted image URL if different from original
+              if (dataUrl !== rendering.preview) {
+                URL.revokeObjectURL(dataUrl);
+              }
+              
+            } catch (e) {
+              console.warn(`Could not add rendering ${imageIndex} to PDF:`, e);
+              // Add some space even if image fails
+              addSpace('xl'); // 30mm
             }
-          } catch (e) {
-            console.warn(`Could not add rendering ${i} to PDF:`, e);
+            
+            imageIndex++;
           }
           
-          // Move to next position with proper gutter spacing
-          currentX += imageWidth + gutterWidth;
-          imagesInCurrentRow++;
-          
-          if (imagesInCurrentRow === imagesPerRow) {
-            yPosition += imageHeight + spacing.sm; // Grid-based vertical spacing
-            currentX = margin;
-            imagesInCurrentRow = 0;
+          // If we have more images and we've used the current page, start a new page
+          if (imageIndex < productRenderings.length && imagesOnCurrentPage > 0) {
+            addNewPage();
+            
+            // Add gallery header to continuation pages
+            pdf.setFillColor(r, g, b);
+            pdf.rect(margin, yPosition - 8, contentWidth, 18, 'F');
+            
+            setColor('onAccent');
+            setFont('h2');
+            pdf.text('PRODUCT RENDERINGS (CONTINUED)', margin + 5, yPosition + 2);
+            
+            setColor('primary');
+            addSpace('lg'); // 24mm space after header
           }
         }
         
-        if (imagesInCurrentRow > 0) {
-          yPosition += imageHeight + spacing.sm;
-        }
-        addSpace('sm'); // 12mm
+        // Ensure we have proper spacing at the end
+        addSpace('xl'); // 30mm final spacing
       };
 
       // === MAIN PDF GENERATION FLOW ===
