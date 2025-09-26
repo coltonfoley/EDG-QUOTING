@@ -1047,11 +1047,10 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
           }
         }
         
-        // Clean header - logo only (no redundant text)
-        
-        // Contact info with style
+        // Contact info integrated into header
         const rightX = pageWidth - margin;
         setFont('small');
+        setColor('onAccent'); // Dark text on teal background
         pdf.text('www.edgpatioshade.com', rightX, 16, { align: 'right' });
         pdf.text('+1 (815) 581-0138', rightX, 22, { align: 'right' });
         pdf.text('info@edgpatioshade.com', rightX, 28, { align: 'right' });
@@ -1065,9 +1064,10 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         pdf.setFont('helvetica', 'bold');
         pdf.text('PROJECT PROPOSAL', margin, yPosition);
         
-        // Teal accent line under title
-        pdf.setFillColor(r, g, b);
-        pdf.rect(margin, yPosition + 5, 120, 3, 'F');
+        // Thin left-aligned rule under title
+        pdf.setDrawColor(60, 60, 60); // Dark gray
+        pdf.setLineWidth(0.5); // Thin line
+        pdf.line(margin, yPosition + 5, margin + 80, yPosition + 5); // Left-aligned rule
         
         // Project name with style
         addSpace('md'); // 18mm
@@ -1124,14 +1124,13 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         const panelX = pageWidth - margin - panelWidth;
         const customer = quote.account ?? quote.customer;
         
-        // Professional background with teal accent
-        const [accentR, accentG, accentB] = colors.accent;
-        pdf.setFillColor(248, 248, 248); // Light gray background
+        // Subtle white box with 1pt gray border
+        pdf.setFillColor(255, 255, 255); // White background
         pdf.roundedRect(panelX - 5, rectTop, panelWidth + 10, panelHeight, 3, 3, 'F');
         
-        // Add teal accent border
-        pdf.setDrawColor(accentR, accentG, accentB);
-        pdf.setLineWidth(2);
+        // 1pt gray border
+        pdf.setDrawColor(153, 153, 153); // Gray
+        pdf.setLineWidth(0.35); // 1pt line
         pdf.roundedRect(panelX - 5, rectTop, panelWidth + 10, panelHeight, 3, 3, 'S');
         
         // Metadata content
