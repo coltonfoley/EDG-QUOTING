@@ -1156,11 +1156,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         // Clean, minimalist design - no overlay box needed
         
         
-        // Add new page for main content (this will be page 2)
-        pdf.addPage();
-        currentPage++;
-        yPosition = margin + 25; // Leave space for header with logo and title
-        drawHeader(); // This runs on page 2
+        // Cover page complete - next content will start on a new page when needed
       };
 
       const drawProductRenderingsSection = async () => {
@@ -1219,6 +1215,26 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
                 imageWidth = imageHeight * aspectRatio;
               }
               
+              // Check if image will fit on current page
+              const remainingSpace = pageHeight - yPosition - margin;
+              if (imageHeight > remainingSpace && imagesOnCurrentPage > 0) {
+                // Image won't fit, start new page
+                addNewPage();
+                
+                // Add gallery header to new page
+                pdf.setFillColor(r, g, b);
+                pdf.rect(margin, yPosition - 8, contentWidth, 18, 'F');
+                
+                setColor('onAccent');
+                setFont('h2');
+                pdf.text('PRODUCT RENDERINGS (CONTINUED)', margin + 5, yPosition + 2);
+                
+                setColor('primary');
+                addSpace('lg'); // 24mm space after header
+                
+                imagesOnCurrentPage = 0; // Reset counter for new page
+              }
+              
               // Center image horizontally
               const imageX = margin + (contentWidth - imageWidth) / 2;
               
@@ -1243,21 +1259,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
             imageIndex++;
           }
           
-          // If we have more images and we've used the current page, start a new page
-          if (imageIndex < productRenderings.length && imagesOnCurrentPage > 0) {
-            addNewPage();
-            
-            // Add gallery header to continuation pages
-            pdf.setFillColor(r, g, b);
-            pdf.rect(margin, yPosition - 8, contentWidth, 18, 'F');
-            
-            setColor('onAccent');
-            setFont('h2');
-            pdf.text('PRODUCT RENDERINGS (CONTINUED)', margin + 5, yPosition + 2);
-            
-            setColor('primary');
-            addSpace('lg'); // 24mm space after header
-          }
+          // Page break logic is now handled inside the loop
         }
         
         // Ensure we have proper spacing at the end
@@ -1269,16 +1271,12 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
       // Step 1: Professional cover page (if enabled)
       await drawProfessionalCoverPage();
       
-      // Step 2: Generate main estimate page
-      if (!includeCoverPage) {
-        // Only add header/footer if we didn't create a cover page
-        drawHeader();
-      }
-      // Note: If cover page was created, header/footer are already added in drawProfessionalCoverPage
-      
-      
-      // Step 3: Add product renderings (if uploaded)
+      // Step 2: Add product renderings (if uploaded) - on their own page(s)
       await drawProductRenderingsSection();
+      
+      // Step 3: Generate main estimate page
+      addNewPage();
+      drawHeader(); // This adds the proper header for the estimate page
       
       drawProfessionalTable();
       drawTotalsSection();
