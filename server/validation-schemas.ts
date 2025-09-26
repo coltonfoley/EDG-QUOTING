@@ -5,6 +5,7 @@ import {
   insertCustomerSchema as baseCustomerSchema,
   insertQuoteSchema as baseQuoteSchema,
   insertLineItemSchema as baseLineItemSchema,
+  insertGroupSchema as baseGroupSchema,
   insertProductSchema as baseProductSchema,
   insertContractTemplateSchema as baseContractTemplateSchema,
   insertProposalTemplateSchema as baseProposalTemplateSchema,
@@ -311,6 +312,38 @@ export const insertLineItemSchema = baseLineItemSchema.extend({
     }, "Discount value can have maximum 2 decimal places"),
   isAccessory: z.boolean().optional(),
   configData: z.any().optional()
+});
+
+// Enhanced Group validation
+export const insertGroupSchema = baseGroupSchema.extend({
+  id: z.string().min(1, "Group ID is required").max(255, "Group ID is too long"),
+  quoteId: z.number().int().positive("Quote ID must be a positive integer"),
+  title: z.string().min(1, "Group title is required").max(500, "Group title is too long"),
+  position: z.number().int().min(0, "Position must be non-negative").default(0),
+  isCollapsed: z.boolean().default(false)
+});
+
+// Group ID parameter validation
+export const groupIdParamSchema = z.object({
+  groupId: z.string().min(1, "Group ID is required")
+});
+
+// Reordering validation schemas
+export const reorderLineItemsSchema = z.object({
+  moves: z.array(z.object({
+    id: z.number().int().positive("Line item ID must be a positive integer"),
+    groupId: z.string().nullable().optional(),
+    position: z.number().int().min(0, "Position must be non-negative")
+  })).min(1, "At least one move is required"),
+  quoteId: z.number().int().positive("Quote ID must be a positive integer")
+});
+
+export const reorderGroupsSchema = z.object({
+  quoteId: z.number().int().positive("Quote ID must be a positive integer"),
+  groupPositions: z.array(z.object({
+    id: z.string().min(1, "Group ID is required"),
+    position: z.number().int().min(0, "Position must be non-negative")
+  })).min(1, "At least one group position is required")
 });
 
 // Enhanced Product validation - Phase B: manufacturer is required

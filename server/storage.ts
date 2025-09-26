@@ -1,4 +1,4 @@
-import { accounts, customers, contacts, quotes, lineItems, products, users, contractTemplates, proposalTemplates, pricingTables, productAccessories, quoteCoverPhotos, quoteProductRenderings, issueReports, type Account, type Customer, type Contact, type Quote, type LineItem, type Product, type User, type ContractTemplate, type ProposalTemplate, type PricingTable, type ProductAccessory, type QuoteCoverPhoto, type QuoteProductRendering, type IssueReport, type InsertAccount, type InsertCustomer, type InsertContact, type InsertQuote, type InsertLineItem, type InsertProduct, type InsertUser, type InsertContractTemplate, type InsertProposalTemplate, type InsertPricingTable, type InsertProductAccessory, type InsertQuoteCoverPhoto, type InsertQuoteProductRendering, type InsertIssueReport, type QuoteWithDetails, type ProductWithDetails } from "@shared/schema";
+import { accounts, customers, contacts, quotes, lineItems, groups, products, users, contractTemplates, proposalTemplates, pricingTables, productAccessories, quoteCoverPhotos, quoteProductRenderings, issueReports, type Account, type Customer, type Contact, type Quote, type LineItem, type Group, type Product, type User, type ContractTemplate, type ProposalTemplate, type PricingTable, type ProductAccessory, type QuoteCoverPhoto, type QuoteProductRendering, type IssueReport, type InsertAccount, type InsertCustomer, type InsertContact, type InsertQuote, type InsertLineItem, type InsertGroup, type InsertProduct, type InsertUser, type InsertContractTemplate, type InsertProposalTemplate, type InsertPricingTable, type InsertProductAccessory, type InsertQuoteCoverPhoto, type InsertQuoteProductRendering, type InsertIssueReport, type QuoteWithDetails, type ProductWithDetails } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, inArray, sql, and, ne, or, ilike } from "drizzle-orm";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
@@ -106,6 +106,16 @@ export interface IStorage {
   deleteLineItemsByQuoteId(quoteId: number): Promise<boolean>;
   bulkDeleteLineItems(ids: number[]): Promise<number>;
   bulkUpdateLineItems(ids: number[], updates: Partial<InsertLineItem>): Promise<number>;
+  reorderLineItems(moves: { id: number; groupId: string | null; position: number }[], quoteId: number): Promise<boolean>;
+
+  // Group methods
+  getGroup(id: string): Promise<Group | undefined>;
+  getGroupsByQuoteId(quoteId: number): Promise<Group[]>;
+  createGroup(group: InsertGroup): Promise<Group>;
+  updateGroup(id: string, group: Partial<InsertGroup>): Promise<Group | undefined>;
+  deleteGroup(id: string): Promise<boolean>;
+  deleteGroupsByQuoteId(quoteId: number): Promise<boolean>;
+  reorderGroups(quoteId: number, groupPositions: { id: string; position: number }[]): Promise<boolean>;
 
   // User authentication methods
   getUser(id: any): Promise<User | undefined>;
@@ -1044,6 +1054,101 @@ export class DatabaseStorage implements IStorage {
       .where(inArray(lineItems.id, ids))
       .returning();
     return result.length;
+  }
+
+  async reorderLineItems(moves: { id: number; groupId: string | null; position: number }[], quoteId: number): Promise<boolean> {
+    try {
+      // Update each line item with its new groupId and position
+      for (const move of moves) {
+        await db
+          .update(lineItems)
+          .set({ 
+            groupId: move.groupId, 
+            position: move.position 
+          })
+          .where(and(
+            eq(lineItems.id, move.id),
+            eq(lineItems.quoteId, quoteId)
+          ));
+      }
+      return true;
+    } catch (error) {
+      console.error('Error reordering line items:', error);
+      return false;
+    }
+  }
+
+  // Group methods
+  async getGroup(id: string): Promise<Group | undefined> {
+    const [group] = await db.select().from(groups).where(eq(groups.id, id));
+    return group;
+  }
+
+  async getGroupsByQuoteId(quoteId: number): Promise<Group[]> {
+    return await db
+      .select()
+      .from(groups)
+      .where(eq(groups.quoteId, quoteId))
+      .orderBy(groups.position);
+  }
+
+  async createGroup(group: InsertGroup): Promise<Group> {
+    const [newGroup] = await db
+      .insert(groups)
+      .values(group)
+      .returning();
+    return newGroup;
+  }
+
+  async updateGroup(id: string, groupData: Partial<InsertGroup>): Promise<Group | undefined> {
+    const [updated] = await db
+      .update(groups)
+      .set({ 
+        ...groupData, 
+        updatedAt: sql`CURRENT_TIMESTAMP` 
+      })
+      .where(eq(groups.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteGroup(id: string): Promise<boolean> {
+    // First, move all line items in this group to ungrouped (groupId = null)
+    await db
+      .update(lineItems)
+      .set({ groupId: null })
+      .where(eq(lineItems.groupId, id));
+
+    // Then delete the group
+    const result = await db.delete(groups).where(eq(groups.id, id));
+    return (result.rowCount || 0) > 0;
+  }
+
+  async deleteGroupsByQuoteId(quoteId: number): Promise<boolean> {
+    await db.delete(groups).where(eq(groups.quoteId, quoteId));
+    return true;
+  }
+
+  async reorderGroups(quoteId: number, groupPositions: { id: string; position: number }[]): Promise<boolean> {
+    try {
+      // Update each group with its new position
+      for (const groupPos of groupPositions) {
+        await db
+          .update(groups)
+          .set({ 
+            position: groupPos.position,
+            updatedAt: sql`CURRENT_TIMESTAMP`
+          })
+          .where(and(
+            eq(groups.id, groupPos.id),
+            eq(groups.quoteId, quoteId)
+          ));
+      }
+      return true;
+    } catch (error) {
+      console.error('Error reordering groups:', error);
+      return false;
+    }
   }
 
   // Authorization methods for line item security
