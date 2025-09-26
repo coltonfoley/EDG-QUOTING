@@ -14,6 +14,10 @@ import {
   updateQuoteSchema,
   updateAccountSchema,
   insertLineItemSchema,
+  insertGroupSchema,
+  groupIdParamSchema,
+  reorderLineItemsSchema,
+  reorderGroupsSchema,
   insertProductSchema,
   insertContractTemplateSchema,
   insertProposalTemplateSchema,
@@ -2378,6 +2382,165 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Invalid update data", errors: error.errors });
       }
       console.error("Bulk update error:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // Line item reordering route
+  app.patch("/api/line-items/reorder", isAuthenticated, async (req, res) => {
+    try {
+      const validatedData = reorderLineItemsSchema.safeParse(req.body);
+      if (!validatedData.success) {
+        return res.status(400).json({
+          message: "Invalid request data",
+          errors: validatedData.error.errors
+        });
+      }
+
+      const { moves, quoteId } = validatedData.data;
+      const success = await storage.reorderLineItems(moves, quoteId);
+      
+      if (!success) {
+        return res.status(500).json({ message: "Failed to reorder line items" });
+      }
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error reordering line items:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // Group routes
+  app.get("/api/quotes/:quoteId/groups", isAuthenticated, async (req, res) => {
+    try {
+      const params = queryIdParamSchema.safeParse(req.params);
+      if (!params.success) {
+        return res.status(400).json({
+          message: "Invalid request parameters",
+          errors: params.error.errors
+        });
+      }
+
+      const groups = await storage.getGroupsByQuoteId(params.data.quoteId);
+      res.json(groups);
+    } catch (error) {
+      console.error("Error fetching groups:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.post("/api/quotes/:quoteId/groups", isAuthenticated, async (req, res) => {
+    try {
+      const params = queryIdParamSchema.safeParse(req.params);
+      if (!params.success) {
+        return res.status(400).json({
+          message: "Invalid request parameters",
+          errors: params.error.errors
+        });
+      }
+
+      const groupData = insertGroupSchema.parse({ ...req.body, quoteId: params.data.quoteId });
+      const group = await storage.createGroup(groupData);
+      res.status(201).json(group);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid group data", errors: error.errors });
+      }
+      console.error("Error creating group:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.get("/api/groups/:groupId", isAuthenticated, async (req, res) => {
+    try {
+      const params = groupIdParamSchema.safeParse(req.params);
+      if (!params.success) {
+        return res.status(400).json({
+          message: "Invalid request parameters",
+          errors: params.error.errors
+        });
+      }
+
+      const group = await storage.getGroup(params.data.groupId);
+      if (!group) {
+        return res.status(404).json({ message: "Group not found" });
+      }
+      res.json(group);
+    } catch (error) {
+      console.error("Error fetching group:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.put("/api/groups/:groupId", isAuthenticated, async (req, res) => {
+    try {
+      const params = groupIdParamSchema.safeParse(req.params);
+      if (!params.success) {
+        return res.status(400).json({
+          message: "Invalid request parameters",
+          errors: params.error.errors
+        });
+      }
+
+      const groupData = insertGroupSchema.partial().parse(req.body);
+      const group = await storage.updateGroup(params.data.groupId, groupData);
+      
+      if (!group) {
+        return res.status(404).json({ message: "Group not found" });
+      }
+      res.json(group);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid group data", errors: error.errors });
+      }
+      console.error("Error updating group:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.delete("/api/groups/:groupId", isAuthenticated, async (req, res) => {
+    try {
+      const params = groupIdParamSchema.safeParse(req.params);
+      if (!params.success) {
+        return res.status(400).json({
+          message: "Invalid request parameters",
+          errors: params.error.errors
+        });
+      }
+
+      const deleted = await storage.deleteGroup(params.data.groupId);
+      if (!deleted) {
+        return res.status(404).json({ message: "Group not found" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting group:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // Group reordering route
+  app.patch("/api/groups/reorder", isAuthenticated, async (req, res) => {
+    try {
+      const validatedData = reorderGroupsSchema.safeParse(req.body);
+      if (!validatedData.success) {
+        return res.status(400).json({
+          message: "Invalid request data",
+          errors: validatedData.error.errors
+        });
+      }
+
+      const { quoteId, groupPositions } = validatedData.data;
+      const success = await storage.reorderGroups(quoteId, groupPositions);
+      
+      if (!success) {
+        return res.status(500).json({ message: "Failed to reorder groups" });
+      }
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error reordering groups:", error);
       res.status(500).json({ message: "Internal server error" });
     }
   });
