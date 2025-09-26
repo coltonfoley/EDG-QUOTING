@@ -939,13 +939,17 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         }
         
         // Draw light gray background box for entire totals section
+        // Calculate proper box dimensions to contain all text
+        const boxLeft = labelsX - 25; // More space for left-aligned labels
+        const boxWidth = totalsWidth + 35; // Wider to contain both labels and values
+        
         pdf.setFillColor(245, 245, 245); // Light gray background
-        pdf.roundedRect(labelsX - 8, yPosition - 5, totalsWidth + 16, totalBoxHeight + 10, 3, 3, 'F');
+        pdf.roundedRect(boxLeft, yPosition - 5, boxWidth, totalBoxHeight + 10, 3, 3, 'F');
         
         // Draw subtle border around totals box
         pdf.setDrawColor(200, 200, 200);
         pdf.setLineWidth(0.5);
-        pdf.roundedRect(labelsX - 8, yPosition - 5, totalsWidth + 16, totalBoxHeight + 10, 3, 3, 'S');
+        pdf.roundedRect(boxLeft, yPosition - 5, boxWidth, totalBoxHeight + 10, 3, 3, 'S');
         
         if (hasTaxOrDiscounts) {
           // Subtotal
