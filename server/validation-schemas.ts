@@ -255,8 +255,8 @@ export type CreateQuoteBody = z.infer<typeof createQuoteSchema>;
 // Update schema for quotes - more lenient validation for partial updates
 export const updateQuoteSchema = z.object({
   quoteNumber: z.string().min(1, "Quote number is required").max(50, "Quote number is too long").optional(),
-  accountId: z.number().int().positive("Account ID must be a positive integer").optional(),
-  contactId: z.number().int().positive("Contact ID must be a positive integer").optional(),
+  accountId: z.number().int().positive("Account ID must be a positive integer").nullable().optional(),
+  contactId: z.number().int().positive("Contact ID must be a positive integer").nullable().optional(),
 
   dealStage: z.enum(["new_lead", "qualifying", "consultation_scheduled", "building_estimate", "quote_sent", "closed_won", "closed_lost", "on_hold"]).optional(),
   lostReason: z.string().max(500, "Lost reason is too long").optional().nullable(),
