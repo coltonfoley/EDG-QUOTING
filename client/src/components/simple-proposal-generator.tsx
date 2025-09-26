@@ -1372,15 +1372,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
               addSpace('sm'); // 12mm before sections
               setFont('h3');
               setColor('primary');
-              
-              if (isKeySection) {
-                // Simple bullet for key sections
-                pdf.setFillColor(r, g, b);
-                pdf.circle(margin + 3, yPosition - 1, 1.5, 'F');
-                pdf.text(trimmedLine, margin + 8, yPosition);
-              } else {
-                pdf.text(trimmedLine, margin, yPosition);
-              }
+              pdf.text(trimmedLine, margin, yPosition);
               addSpace('xs'); // 6mm after header
               
             } else {
@@ -1388,14 +1380,20 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
               setFont('body');
               setColor('primary');
               
-              const wrappedLines = pdf.splitTextToSize(trimmedLine, contentWidth - 4);
+              // Use a more conservative width to prevent text breaking issues
+              const safeWidth = contentWidth - 10;
+              const wrappedLines = pdf.splitTextToSize(trimmedLine, safeWidth);
               
               for (let j = 0; j < wrappedLines.length; j++) {
                 pdf.text(wrappedLines[j], margin, yPosition);
-                addSpace('xs'); // 6mm line height for readability
+                if (j < wrappedLines.length - 1) {
+                  // Only add line spacing between wrapped lines, not after
+                  addCustomSpace(4); // 6mm line height (rounded to grid)
+                }
               }
               
-              addSpace('xs'); // Extra spacing between paragraphs
+              // Only add paragraph spacing at the end of each complete paragraph
+              addSpace('xs'); // 6mm spacing between paragraphs
             }
           }
         }
