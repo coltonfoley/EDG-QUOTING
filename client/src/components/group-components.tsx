@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ChevronDown, ChevronRight, Trash2, Plus, GripVertical } from "lucide-react";
 import { formatCurrency, calculateGroupSubtotal, calculateGroupMargin } from "@/lib/utils";
+import { useDroppable } from '@dnd-kit/core';
 import type { LineItem } from "@shared/schema";
 
 export interface Group {
@@ -37,6 +38,10 @@ export function GroupHeader({
 }: GroupHeaderProps) {
   const [editTitle, setEditTitle] = useState(group.title);
 
+  const { setNodeRef } = useDroppable({
+    id: `group-${group.id}`
+  });
+
   const groupSubtotal = calculateGroupSubtotal(lineItems);
   const groupMargin = calculateGroupMargin(lineItems);
   const itemCount = lineItems.length;
@@ -58,7 +63,7 @@ export function GroupHeader({
   };
 
   return (
-    <div className="bg-gray-50 border-b border-gray-300" data-testid={`group-header-${group.id}`}>
+    <div ref={setNodeRef} className="bg-gray-50 border-b border-gray-300" data-testid={`group-header-${group.id}`}>
       <div className="flex items-center justify-between px-4 py-3">
         <div className="flex items-center space-x-3">
           {/* Drag handle */}
@@ -169,11 +174,15 @@ interface UngroupedSectionProps {
 export function UngroupedSection({ lineItems, onCreateGroup }: UngroupedSectionProps) {
   if (lineItems.length === 0) return null;
 
+  const { setNodeRef } = useDroppable({
+    id: "ungrouped"
+  });
+
   const ungroupedSubtotal = calculateGroupSubtotal(lineItems);
   const ungroupedMargin = calculateGroupMargin(lineItems);
 
   return (
-    <div className="bg-gray-50 border-b border-gray-300" data-testid="ungrouped-section">
+    <div ref={setNodeRef} className="bg-gray-50 border-b border-gray-300" data-testid="ungrouped-section">
       <div className="flex items-center justify-between px-4 py-3">
         <div className="flex items-center space-x-3">
           <div className="text-sm font-medium text-gray-900">
