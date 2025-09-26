@@ -346,3 +346,54 @@ export function generateQuoteNumber(): string {
   const uniqueId = `${timestamp.toString().slice(-8)}${random}`;
   return `QT-${year}-${uniqueId}`;
 }
+
+// Group management utilities
+export function generateGroupId(): string {
+  return `group-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+}
+
+/**
+ * Calculates the subtotal for a group of line items
+ * @param lineItems - Array of line items in the group
+ * @returns Group subtotal rounded to 2 decimal places
+ */
+export function calculateGroupSubtotal(lineItems: any[]): number {
+  if (!lineItems || lineItems.length === 0) return 0;
+  
+  const subtotal = lineItems.reduce((total, item) => {
+    const itemTotal = calculateLineItemTotal(
+      item.quantity,
+      item.unitPrice,
+      item.markupType,
+      item.markupValue,
+      item.discountType,
+      item.discountValue
+    );
+    return safeAdd(total, itemTotal);
+  }, 0);
+  
+  return roundCurrency(subtotal);
+}
+
+/**
+ * Calculates the total margin for a group of line items
+ * @param lineItems - Array of line items in the group
+ * @returns Group margin total rounded to 2 decimal places
+ */
+export function calculateGroupMargin(lineItems: any[]): number {
+  if (!lineItems || lineItems.length === 0) return 0;
+  
+  const marginTotal = lineItems.reduce((total, item) => {
+    const itemMargin = calculateLineItemMargin(
+      item.quantity,
+      item.unitPrice,
+      item.markupType,
+      item.markupValue,
+      item.discountType,
+      item.discountValue
+    );
+    return safeAdd(total, itemMargin);
+  }, 0);
+  
+  return roundCurrency(marginTotal);
+}
