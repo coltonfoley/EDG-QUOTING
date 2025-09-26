@@ -911,6 +911,9 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
       const drawTotalsSection = () => {
         if (!showPricing) return;
         
+        // Add spacer before totals section
+        addSpace('sm'); // 12mm spacer
+        
         checkPageBreak(60);
         
         // Professional totals area
@@ -924,13 +927,30 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         // Check if we have tax or discounts that make total different from subtotal
         const hasTaxOrDiscounts = totals.taxAmount > 0 || totals.discountAmount > 0;
         
+        // Calculate total box height based on content
+        const baseHeight = 15; // Height for TOTAL row
+        const itemHeight = 8; // Height per subtotal item
+        let totalBoxHeight = baseHeight;
+        
         if (hasTaxOrDiscounts) {
-          // Add subtle background for itemized totals
-          const bgHeight = (totals.taxAmount > 0 ? 30 : 20) + (totals.discountAmount > 0 ? 6 : 0);
-          pdf.setFillColor(248, 248, 248);
-          pdf.roundedRect(labelsX - 5, yPosition - 5, totalsWidth + 10, bgHeight, 2, 2, 'F');
-          
+          totalBoxHeight += itemHeight; // Subtotal
+          if (totals.taxAmount > 0) totalBoxHeight += itemHeight; // Tax
+          if (totals.discountAmount > 0) totalBoxHeight += itemHeight; // Discount
+        }
+        
+        // Draw light gray background box for entire totals section
+        pdf.setFillColor(245, 245, 245); // Light gray background
+        pdf.roundedRect(labelsX - 8, yPosition - 5, totalsWidth + 16, totalBoxHeight + 10, 3, 3, 'F');
+        
+        // Draw subtle border around totals box
+        pdf.setDrawColor(200, 200, 200);
+        pdf.setLineWidth(0.5);
+        pdf.roundedRect(labelsX - 8, yPosition - 5, totalsWidth + 16, totalBoxHeight + 10, 3, 3, 'S');
+        
+        if (hasTaxOrDiscounts) {
           // Subtotal
+          setFont('body');
+          setColor('primary');
           pdf.text('Subtotal:', labelsX, yPosition, { align: 'right' });
           pdf.text(formatCurrency(totals.subtotal), totalsX + totalsWidth, yPosition, { align: 'right' });
           addSpace('xs'); // 6mm
@@ -949,38 +969,23 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
             addSpace('xs'); // 6mm
           }
           
-          // Branded total line
-          const [r, g, b] = colors.accent;
-          pdf.setDrawColor(r, g, b);
-          pdf.setLineWidth(2);
+          // Separator line before total
+          pdf.setDrawColor(180, 180, 180);
+          pdf.setLineWidth(0.5);
           pdf.line(labelsX, yPosition, totalsX + totalsWidth, yPosition);
-          addSpace('sm'); // 12mm
-          
-          // Branded total with teal background
-          pdf.setFillColor(r, g, b);
-          pdf.rect(labelsX - 2, yPosition - 4, totalsWidth + 7, 12, 'F');
-          
-          setColor('onAccent');
-          setFont('h2');
-          pdf.text('TOTAL:', labelsX, yPosition + 2, { align: 'right' });
-          pdf.text(formatCurrency(totals.total), totalsX + totalsWidth, yPosition + 2, { align: 'right' });
-        } else {
-          // Simple total when no tax/discounts - just a clean total line
-          const [r, g, b] = colors.accent;
-          
-          // Simple branded line above total
-          pdf.setDrawColor(r, g, b);
-          pdf.setLineWidth(1.5);
-          pdf.line(labelsX, yPosition, totalsX + totalsWidth, yPosition);
-          addSpace('sm'); // 12mm
-          
-          // Clean total display
-          setFont('h2');
-          pdf.text('TOTAL:', labelsX, yPosition, { align: 'right' });
-          pdf.text(formatCurrency(totals.total), totalsX + totalsWidth, yPosition, { align: 'right' });
+          addSpace('xs'); // 6mm
         }
         
-        setColor('primary'); // Reset
+        // Bold TOTAL with increased font size
+        pdf.setFontSize(fonts.h2.size + 2); // Increase by 2pts (15pt -> 17pt)
+        pdf.setFont('helvetica', 'bold');
+        setColor('primary');
+        pdf.text('TOTAL:', labelsX, yPosition, { align: 'right' });
+        pdf.text(formatCurrency(totals.total), totalsX + totalsWidth, yPosition, { align: 'right' });
+        
+        // Reset font and color
+        setColor('primary');
+        setFont('body'); // Reset to body font
         addSpace('md'); // 18mm
       };
       
