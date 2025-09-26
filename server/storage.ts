@@ -1066,20 +1066,36 @@ export class DatabaseStorage implements IStorage {
 
   async reorderLineItems(moves: { id: number; groupId: string | null; position: number }[], quoteId: number): Promise<boolean> {
     try {
-      // Update each line item with its new groupId and position
-      for (const move of moves) {
-        await db
-          .update(lineItems)
-          .set({ 
-            groupId: move.groupId, 
-            position: move.position 
-          })
-          .where(and(
-            eq(lineItems.id, move.id),
-            eq(lineItems.quoteId, quoteId)
-          ));
-      }
-      return true;
+      return await db.transaction(async (tx) => {
+        // Phase 1: Add temporary offset to positions to break ties
+        for (const move of moves) {
+          await tx
+            .update(lineItems)
+            .set({ 
+              position: move.position + 10000 
+            })
+            .where(and(
+              eq(lineItems.id, move.id),
+              eq(lineItems.quoteId, quoteId)
+            ));
+        }
+
+        // Phase 2: Set final positions and groupIds
+        for (const move of moves) {
+          await tx
+            .update(lineItems)
+            .set({ 
+              groupId: move.groupId, 
+              position: move.position 
+            })
+            .where(and(
+              eq(lineItems.id, move.id),
+              eq(lineItems.quoteId, quoteId)
+            ));
+        }
+        
+        return true;
+      });
     } catch (error) {
       console.error('Error reordering line items:', error);
       return false;
@@ -1145,20 +1161,37 @@ export class DatabaseStorage implements IStorage {
 
   async reorderGroups(quoteId: number, groupPositions: { id: string; position: number }[]): Promise<boolean> {
     try {
-      // Update each group with its new position
-      for (const groupPos of groupPositions) {
-        await db
-          .update(groups)
-          .set({ 
-            position: groupPos.position,
-            updatedAt: sql`CURRENT_TIMESTAMP`
-          })
-          .where(and(
-            eq(groups.id, groupPos.id),
-            eq(groups.quoteId, quoteId)
-          ));
-      }
-      return true;
+      return await db.transaction(async (tx) => {
+        // Phase 1: Add temporary offset to positions to break ties
+        for (const groupPos of groupPositions) {
+          await tx
+            .update(groups)
+            .set({ 
+              position: groupPos.position + 10000,
+              updatedAt: sql`CURRENT_TIMESTAMP`
+            })
+            .where(and(
+              eq(groups.id, groupPos.id),
+              eq(groups.quoteId, quoteId)
+            ));
+        }
+
+        // Phase 2: Set final positions
+        for (const groupPos of groupPositions) {
+          await tx
+            .update(groups)
+            .set({ 
+              position: groupPos.position,
+              updatedAt: sql`CURRENT_TIMESTAMP`
+            })
+            .where(and(
+              eq(groups.id, groupPos.id),
+              eq(groups.quoteId, quoteId)
+            ));
+        }
+        
+        return true;
+      });
     } catch (error) {
       console.error('Error reordering groups:', error);
       return false;
