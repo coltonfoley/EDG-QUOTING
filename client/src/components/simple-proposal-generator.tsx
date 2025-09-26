@@ -481,13 +481,13 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
       let yPosition = margin + 25; // Leave space for header with logo and title
       let currentPage = 1;
       
-      // Professional typography scale and brand tokens
+      // Professional typography scale - locked type scale
       const fonts = {
-        heading: { size: 16, weight: 'bold' },
-        subheading: { size: 14, weight: 'bold' },
-        body: { size: 10, weight: 'normal' },
-        small: { size: 9, weight: 'normal' },
-        caption: { size: 8, weight: 'normal' }
+        h1: { size: 19, weight: 'bold' },        // H1 (18–20pt) 
+        h2: { size: 15, weight: 'bold' },        // H2 (14–16pt)
+        h3: { size: 12, weight: 'bold' },        // H3 (12–13pt)
+        body: { size: 10, weight: 'normal' },    // Body (10pt)
+        small: { size: 9, weight: 'normal' }     // Small (9pt)
       };
       
       const colors = {
@@ -562,7 +562,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         }
         
         // Page title and project name in center
-        setFont('subheading');
+        setFont('h2');
         setColor('primary');
         const centerX = pageWidth / 2;
         pdf.text(pageTitle.toUpperCase(), centerX, headerY + 4, { align: 'center' });
@@ -596,7 +596,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         pdf.line(margin, footerY - 8, pageWidth - margin, footerY - 8);
         
         // Company name on left
-        setFont('caption');
+        setFont('small');
         setColor('primary');
         pdf.text(company.name, margin, footerY - 2, { align: 'left' });
         
@@ -625,7 +625,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         
         // White text on teal background
         pdf.setTextColor(255, 255, 255);
-        setFont('heading');
+        setFont('h1');
         pdf.text('PROFESSIONAL ESTIMATE', margin + 5, yPosition + 2);
         
         // Clean design without decorative lines
@@ -751,7 +751,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
           
           // White text on teal background
           pdf.setTextColor(255, 255, 255);
-          setFont('body');
+          setFont('h3');
           
           currentX = tableX;
           columns.forEach(col => {
@@ -791,8 +791,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
           const cellBottom = cellTop + actualRowHeight;
           
           // Set font for row content
-          pdf.setFontSize(9);
-          pdf.setFont('helvetica', 'normal');
+          setFont('small');
           setColor('primary');
           
           // Row data - simplified to essential fields only
@@ -918,7 +917,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
           pdf.rect(labelsX - 2, yPosition - 4, totalsWidth + 7, 12, 'F');
           
           pdf.setTextColor(255, 255, 255);
-          setFont('subheading');
+          setFont('h2');
           pdf.text('TOTAL:', labelsX, yPosition + 2, { align: 'right' });
           pdf.text(formatCurrency(totals.total), totalsX + totalsWidth, yPosition + 2, { align: 'right' });
         } else {
@@ -932,7 +931,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
           yPosition += 8;
           
           // Clean total display
-          setFont('subheading');
+          setFont('h2');
           pdf.text('TOTAL:', labelsX, yPosition, { align: 'right' });
           pdf.text(formatCurrency(totals.total), totalsX + totalsWidth, yPosition, { align: 'right' });
         }
@@ -1036,7 +1035,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         
         // Project name with style
         yPosition += 20;
-        setFont('heading');
+        setFont('h1');
         setColor('darkGray');
         pdf.text((quote.projectName || 'Outdoor Living Project').toUpperCase(), margin, yPosition);
         
@@ -1101,11 +1100,11 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         
         // Metadata content
         let metaY = metadataY + 5;
-        setFont('caption');
+        setFont('small');
         setColor('gray');
         
         // Project Name
-        setFont('caption');
+        setFont('small');
         setColor('gray');
         pdf.text('PROJECT', panelX, metaY);
         metaY += 6;
@@ -1120,7 +1119,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         
         // Customer Name
         if (customer.name) {
-          setFont('caption');
+          setFont('small');
           setColor('gray');
           pdf.text('CUSTOMER', panelX, metaY);
           metaY += 6;
@@ -1135,7 +1134,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         }
         
         // Date
-        setFont('caption');
+        setFont('small');
         setColor('gray');
         pdf.text('DATE', panelX, metaY);
         metaY += 6;
@@ -1166,7 +1165,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         
         // White text on teal background
         pdf.setTextColor(255, 255, 255);
-        setFont('subheading');
+        setFont('h2');
         pdf.text('PRODUCT RENDERINGS', margin + 5, yPosition + 5);
         
         // Reset to black text
@@ -1252,7 +1251,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         pdf.rect(margin, yPosition - 8, contentWidth, 18, 'F');
         
         pdf.setTextColor(255, 255, 255);
-        setFont('subheading');
+        setFont('h2');
         pdf.text('CONTRACT TERMS & CONDITIONS', margin + 5, yPosition + 2);
         
         // Clean design without decorative lines
