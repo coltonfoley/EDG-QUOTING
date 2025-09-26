@@ -512,13 +512,22 @@ export const imageProxySchema = z.object({
           return false;
         }
         
-        // Only allow specific Replit storage domains (exact match)
+        // Only allow specific Replit storage domains
         const allowedHosts = [
           'storage.replit.com'
         ];
         
-        // For external URLs, must be from allowed hosts
-        return allowedHosts.includes(hostname);
+        // For external URLs, check allowed hosts or .replit.dev subdomains
+        if (allowedHosts.includes(hostname)) {
+          return true;
+        }
+        
+        // Also allow .replit.dev subdomains (for deployed apps)
+        if (hostname.endsWith('.replit.dev')) {
+          return true;
+        }
+        
+        return false;
         
       } catch (error) {
         return false;
