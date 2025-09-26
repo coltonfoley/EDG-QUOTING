@@ -472,15 +472,28 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
     try {
       // Load logo for use throughout PDF
       const logoData = await loadLogo();
+      // Baseline grid system for consistent spacing
+      const BASELINE = 6; // 6mm baseline grid
+      
+      // Grid-based spacing constants
+      const spacing = {
+        xs: BASELINE,           // 6mm
+        sm: BASELINE * 2,       // 12mm
+        md: BASELINE * 3,       // 18mm
+        lg: BASELINE * 4,       // 24mm
+        xl: BASELINE * 5,       // 30mm
+        xxl: BASELINE * 6       // 36mm
+      };
+
       // Professional document setup - US Letter size
       const pdf = new jsPDF('p', 'mm', 'letter');
       const pageWidth = 215.9; // Letter width in mm
       const pageHeight = 279.4; // Letter height in mm
       const margin = 19; // Professional margins (3/4 inch)
       const contentWidth = pageWidth - (2 * margin);
-      let yPosition = margin + 25; // Leave space for header with logo and title
+      let yPosition = margin + spacing.lg; // Leave space for header with logo and title (24mm)
       let currentPage = 1;
-      
+
       // Professional typography scale - locked type scale
       const fonts = {
         h1: { size: 19, weight: 'bold' },        // H1 (18–20pt) 
@@ -525,6 +538,25 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
           pdf.setTextColor(r, g, b);
         }
       };
+
+      // Grid-based spacing helpers
+      const addSpace = (size: keyof typeof spacing) => {
+        yPosition += spacing[size];
+      };
+
+      const addCustomSpace = (mm: number) => {
+        // Round to nearest baseline increment
+        const gridUnits = Math.round(mm / BASELINE);
+        yPosition += gridUnits * BASELINE;
+      };
+
+      const addSectionBreak = () => {
+        addSpace('lg'); // Standard section break (24mm)
+      };
+
+      const addParagraphBreak = () => {
+        addSpace('sm'); // Standard paragraph break (12mm)
+      };
       
       const checkPageBreak = (heightNeeded: number) => {
         if (yPosition + heightNeeded > pageHeight - margin - 15) { // Leave space for footer
@@ -537,7 +569,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
       const addNewPage = () => {
         pdf.addPage();
         currentPage++;
-        yPosition = margin + 25; // Leave space for new header with logo and title
+        yPosition = margin + spacing.lg; // Leave space for header with logo and title (24mm)
         drawHeader();
       };
       
@@ -634,7 +666,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         
         // Reset text color
         setColor('primary');
-        yPosition += 25;
+        addSpace('lg'); // 24mm
       };
       
       const drawAddresses = () => {
@@ -646,21 +678,21 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         setFont('body');
         setColor('primary');
         pdf.text('Bill to', leftCol, yPosition);
-        yPosition += 6;
+        addSpace('xs'); // 6mm
         
         setFont('body');
         const customer = quote.account ?? quote.customer;
         pdf.text(customer.name, leftCol, yPosition);
-        yPosition += 4;
+        addSpace('xs'); // 6mm
         if (customer.company) {
           pdf.text(customer.company, leftCol, yPosition);
-          yPosition += 4;
+          addSpace('xs'); // 6mm
         }
         if (customer.billingAddress) {
           const billingLines = pdf.splitTextToSize(customer.billingAddress, (contentWidth / 2) - 10);
           for (const line of billingLines) {
             pdf.text(line, leftCol, yPosition);
-            yPosition += 4;
+            addSpace('xs'); // 6mm
           }
         }
         
@@ -679,11 +711,11 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
           }
         }
         
-        yPosition += 8; // Extra spacing after addresses
+        addSpace('sm'); // 12mm // Extra spacing after addresses
       };
       
       const drawEstimateDetails = () => {
-        yPosition += 10;
+        addSpace('sm'); // 12mm
         
         setFont('body');
         setColor('primary');
@@ -691,11 +723,11 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         // Create a simple details grid
         const detailsY = yPosition;
         pdf.text('Estimate details', margin, detailsY);
-        yPosition += 8;
+        addSpace('sm'); // 12mm
         
         // Estimate number and date
         pdf.text(`Estimate no.: ${quote.id}`, margin, yPosition);
-        yPosition += 4;
+        addSpace('xs'); // 6mm
         
         const estimateDate = new Date().toLocaleDateString('en-US', {
           month: '2-digit',
@@ -703,7 +735,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
           year: 'numeric'
         });
         pdf.text(`Estimate date: ${estimateDate}`, margin, yPosition);
-        yPosition += 15;
+        addSpace('md'); // 18mm
       };
       
       const drawProfessionalTable = () => {
@@ -865,7 +897,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
           drawTableRow(item, index);
         });
         
-        yPosition += 10;
+        addSpace('sm'); // 12mm
       };
       
       const drawTotalsSection = () => {
@@ -893,20 +925,20 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
           // Subtotal
           pdf.text('Subtotal:', labelsX, yPosition, { align: 'right' });
           pdf.text(formatCurrency(totals.subtotal), totalsX + totalsWidth, yPosition, { align: 'right' });
-          yPosition += 6;
+          addSpace('xs'); // 6mm
           
           // Sales tax
           if (totals.taxAmount > 0) {
             pdf.text('Sales tax:', labelsX, yPosition, { align: 'right' });
             pdf.text(formatCurrency(totals.taxAmount), totalsX + totalsWidth, yPosition, { align: 'right' });
-            yPosition += 6;
+            addSpace('xs'); // 6mm
           }
           
           // Discount
           if (totals.discountAmount > 0) {
             pdf.text('Discount:', labelsX, yPosition, { align: 'right' });
             pdf.text(`-${formatCurrency(totals.discountAmount)}`, totalsX + totalsWidth, yPosition, { align: 'right' });
-            yPosition += 6;
+            addSpace('xs'); // 6mm
           }
           
           // Branded total line
@@ -914,7 +946,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
           pdf.setDrawColor(r, g, b);
           pdf.setLineWidth(2);
           pdf.line(labelsX, yPosition, totalsX + totalsWidth, yPosition);
-          yPosition += 8;
+          addSpace('sm'); // 12mm
           
           // Branded total with teal background
           pdf.setFillColor(r, g, b);
@@ -932,7 +964,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
           pdf.setDrawColor(r, g, b);
           pdf.setLineWidth(1.5);
           pdf.line(labelsX, yPosition, totalsX + totalsWidth, yPosition);
-          yPosition += 8;
+          addSpace('sm'); // 12mm
           
           // Clean total display
           setFont('h2');
@@ -941,13 +973,13 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         }
         
         setColor('primary'); // Reset
-        yPosition += 20;
+        addSpace('md'); // 18mm
       };
       
       const drawSignatureSection = () => {
         checkPageBreak(50);
         
-        yPosition += 15;
+        addSpace('md'); // 18mm
         
         // Branded signature section header
         const [r, g, b] = colors.accent;
@@ -959,7 +991,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         pdf.text('CLIENT ACCEPTANCE', margin + 5, yPosition + 2);
         
         setColor('primary');
-        yPosition += 20;
+        addSpace('md'); // 18mm
         
         // Professional signature boxes
         const leftSigX = margin;
@@ -986,7 +1018,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         pdf.text('Signature:', rightSigX + 2, yPosition + 15);
         pdf.text('Print Name:', rightSigX + 2, yPosition + 20);
         
-        yPosition += 35;
+        addSpace('xxl'); // 36mm
       };
 
       const drawProfessionalCoverPage = async () => {
@@ -1038,14 +1070,14 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         pdf.rect(margin, yPosition + 5, 120, 3, 'F');
         
         // Project name with style
-        yPosition += 20;
+        addSpace('md'); // 18mm
         setFont('h1');
         setColor('darkGray');
         pdf.text((quote.projectName || 'Outdoor Living Project').toUpperCase(), margin, yPosition);
         
         
         // 3. Hero Cover Image (if provided)
-        yPosition += 25;
+        addSpace('lg'); // 24mm
         let imageStartY = yPosition;
         let imageEndY = yPosition;
         
@@ -1174,7 +1206,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         
         // Reset to black text
         setColor('primary');
-        yPosition += 20;
+        addSpace('md'); // 18mm
         
         // Professional image grid layout
         const imagesPerRow = 3;
@@ -1213,7 +1245,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         if (imagesInCurrentRow > 0) {
           yPosition += imageHeight + 10;
         }
-        yPosition += 10;
+        addSpace('sm'); // 12mm
       };
 
       // === MAIN PDF GENERATION FLOW ===
@@ -1244,7 +1276,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         if (yPosition > pageHeight - 80) {
           addNewPage();
         } else {
-          yPosition += 20;
+          addSpace('md'); // 18mm
         }
         
         checkPageBreak(30);
@@ -1261,7 +1293,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         // Clean design without decorative lines
         
         setColor('primary');
-        yPosition += 25;
+        addSpace('lg'); // 24mm
         
         // Get contract content
         const contractContent = quote.contractTemplate?.terms || quote.customContractTerms || '';
@@ -1279,7 +1311,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
             
             // Skip empty lines but add spacing
             if (!trimmedLine) {
-              yPosition += 4;
+              addSpace('xs'); // 6mm
               continue;
             }
             
@@ -1289,7 +1321,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
             if (isSectionStart) {
               // Add extra spacing before new sections (except the first one)
               if (inSection) {
-                yPosition += 8;
+                addSpace('sm'); // 12mm
               }
               inSection = true;
             }
@@ -1309,12 +1341,12 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
             // Render each wrapped line with proper spacing
             for (let j = 0; j < wrappedLines.length; j++) {
               pdf.text(wrappedLines[j], textStartX, yPosition);
-              yPosition += 4.5; // Slightly more line spacing for readability
+              addSpace('xs'); // 6mm for line spacing
             }
             
             // Add small spacing after each paragraph/section
             if (!isSectionStart || wrappedLines.length > 1) {
-              yPosition += 2;
+              addCustomSpace(2); // 6mm (rounded to grid)
             }
           }
         }
