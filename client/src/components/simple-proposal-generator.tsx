@@ -926,21 +926,82 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
           pdf.line(tableX + contentWidth, cellTop, tableX + contentWidth, cellBottom); // Right border
           
           yPosition = cellBottom;
+          return total; // Return value for subtotal accumulation
         };
         
+        // Helper: draw a group header row (light grey band)
+        const drawGroupHeader = (title: string) => {
+          const headerH = 10;
+          // Avoid page break splitting header
+          if (checkPageBreak(headerH + 2)) { 
+            drawTableHeader(); 
+          }
+          // Light grey band
+          pdf.setFillColor(240, 240, 240);
+          pdf.rect(tableX, yPosition, contentWidth, headerH, 'F');
+          setFont('body'); 
+          setColor('primary');
+          pdf.text(title, tableX + 3, yPosition + 7);
+          yPosition += headerH;
+        };
+
+        // Helper: draw a group subtotal row
+        const drawGroupSubtotal = (amount: number) => {
+          const rowH = 10;
+          if (checkPageBreak(rowH + 2)) { 
+            drawTableHeader(); 
+          }
+          setFont('body');
+          // Label cell (spans first 3 columns)
+          pdf.text('Group Subtotal', tableX + columns[0].width + columns[1].width + columns[2].width - 3, yPosition + 7, { align: 'right' });
+          // Amount in Total column
+          pdf.text(formatCurrency(amount), tableX + contentWidth - 3, yPosition + 7, { align: 'right' });
+          // Divider
+          const [tr, tg, tb] = colors.tableLines;
+          pdf.setDrawColor(tr, tg, tb); 
+          pdf.setLineWidth(0.35);
+          pdf.line(tableX, yPosition + rowH, tableX + contentWidth, yPosition + rowH);
+          yPosition += rowH;
+        };
+
         // Draw table header
         drawTableHeader();
         
-        // Build flattened, grouped order of line items
-        const itemsOrdered = [
-          ...ungrouped,
-          ...orderedGroups.flatMap(g => itemsByGroup.get(g.id) ?? [])
-        ];
-        
-        // Draw table rows in proper grouped order
-        itemsOrdered.forEach((item, index) => {
-          drawTableRow(item, index);
-        });
+        // Render each group in order with headers and subtotals
+        for (const g of orderedGroups) {
+          const items = (itemsByGroup.get(g.id) ?? []);
+          // Show header always; if collapsed, skip items but still show subtotal
+          drawGroupHeader(g.title);
+
+          let groupSubtotal = 0;
+          if (!g.isCollapsed) {
+            items.forEach((item, idx) => {
+              groupSubtotal += drawTableRow(item, idx); // drawTableRow now returns the row total
+            });
+          } else {
+            // When collapsed, compute subtotal from data without drawing rows
+            groupSubtotal = items.reduce((sum, item) => {
+              const qty = Number(item.quantity || 0);
+              const price = Number(item.unitPrice || 0);
+              const markup = Number(item.markupValue || 0);
+              const base = qty * price;
+              const lineTotal = item.markupType === 'percentage' ? base + base*(markup/100) : base + markup;
+              return sum + lineTotal;
+            }, 0);
+          }
+
+          drawGroupSubtotal(groupSubtotal);
+        }
+
+        // Ungrouped (if any)
+        if (ungrouped.length > 0) {
+          drawGroupHeader('Additional Items');
+          let ungroupedSubtotal = 0;
+          ungrouped.forEach((item, idx) => { 
+            ungroupedSubtotal += drawTableRow(item, idx); 
+          });
+          drawGroupSubtotal(ungroupedSubtotal);
+        }
         
         addSpace('sm'); // 12mm
       };
