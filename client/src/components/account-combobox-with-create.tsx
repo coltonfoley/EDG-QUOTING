@@ -61,7 +61,7 @@ export function AccountComboboxWithCreate({
     email: "",
     phone: "",
     company: "",
-    accountType: "homeowner" as const,
+    accountType: "homeowner" as "homeowner" | "general_contractor" | "commercial",
   });
 
   const debouncedSearchQuery = useDebounce(searchQuery, 300);

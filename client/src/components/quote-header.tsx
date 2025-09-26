@@ -21,12 +21,14 @@ import { cn } from "@/lib/utils";
 import { debounce } from "lodash";
 import { DEAL_STAGES } from "@shared/dealStageConstants";
 import { ContactComboboxWithCreate } from "@/components/contact-combobox-with-create";
+import { AccountComboboxWithCreate } from "@/components/account-combobox-with-create";
 
 const quoteFormSchema = insertQuoteSchema.extend({
   quoteNumber: z.string().optional(), // Auto-generated on server
+  accountId: z.number().optional(),
   contactId: z.number().optional(),
   dealStage: z.string().default("new_lead"),
-}).omit({ accountId: true });
+});
 
 type QuoteFormData = z.infer<typeof quoteFormSchema>;
 
@@ -59,7 +61,8 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
       taxRate: quote?.taxRate || "0",
       discount: quote?.discount || "0",
       shipping: quote?.shipping || "0",
-      contactId: undefined,
+      accountId: quote?.accountId || undefined,
+      contactId: quote?.contactId || undefined,
     },
   });
 
@@ -78,7 +81,8 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
         taxRate: quote.taxRate || "0",
         discount: quote.discount || "0",
         shipping: quote.shipping || "0",
-        contactId: undefined,
+        accountId: quote.accountId || undefined,
+        contactId: quote.contactId || undefined,
       });
     }
   }, [quote, form]);
@@ -192,6 +196,41 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div>
                 <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-lg font-semibold text-charcoal">Account Information</h3>
+                  <span className="text-sm text-gray-500">(Optional)</span>
+                </div>
+                
+                <div className="text-sm text-gray-600 mb-4">
+                  Account can be linked later if needed. Focus on getting the quote created quickly.
+                </div>
+                
+                <div className="space-y-3">
+                  <FormField
+                    control={form.control}
+                    name="accountId"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Account (Optional)</FormLabel>
+                        <FormControl>
+                          <AccountComboboxWithCreate
+                            value={field.value}
+                            onValueChange={field.onChange}
+                            placeholder="Search accounts or create new..."
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <div className="text-xs text-gray-500 bg-gray-50 p-3 rounded-md">
+                    <strong>Tip:</strong> You can create quotes quickly without selecting an account. 
+                    Accounts can be linked later when managing client relationships.
+                  </div>
+                </div>
+              </div>
+              
+              <div>
+                <div className="flex items-center justify-between mb-3">
                   <h3 className="text-lg font-semibold text-charcoal">Contact Information</h3>
                   <span className="text-sm text-gray-500">(Optional)</span>
                 </div>
@@ -224,9 +263,10 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
                   </div>
                 </div>
               </div>
-              
-              <div>
-                <h3 className="text-lg font-semibold text-charcoal mb-3">Project Details</h3>
+            </div>
+            
+            <div>
+              <h3 className="text-lg font-semibold text-charcoal mb-3">Project Details</h3>
                 <div className="space-y-3">
                   <FormField
                     control={form.control}
