@@ -570,20 +570,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         addSpace('sm'); // Standard paragraph break (12mm)
       };
       
-      const checkPageBreak = (heightNeeded: number) => {
-        if (yPosition + heightNeeded > pageHeight - margin - 15) { // Leave space for footer
-          addNewPage();
-          return true;
-        }
-        return false;
-      };
-      
-      const addNewPage = () => {
-        pdf.addPage();
-        currentPage++;
-        yPosition = margin + spacing.lg; // Leave space for header with logo and title (24mm)
-        drawHeader();
-      };
+      // Legacy functions removed - only use ensureSpace() for page breaks
       
       const stampHeader = (pageTitle: string, projectName: string) => {
         // Skip header on cover page - cover has its own branding
@@ -856,9 +843,15 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
           const actualRowHeight = Math.max(rowHeight, padY*2 + descLines.length*lineHeight);
           
           // Check for page break and redraw header if needed
-          if (checkPageBreak(actualRowHeight + spacing.xs)) {
-            drawTableHeader();
-          }
+          yPosition = ensureSpace(pdf, yPosition, actualRowHeight + spacing.xs, {
+            marginTop: margin,
+            marginBottom: margin,
+            footerReserve: 15,
+            onNewPage: () => {
+              currentPage++;
+              drawTableHeader();
+            }
+          });
           
           const cellTop = yPosition;
           const cellBottom = cellTop + actualRowHeight;
@@ -939,9 +932,15 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         const drawGroupHeader = (title: string) => {
           const headerH = 10;
           // Avoid page break splitting header
-          if (checkPageBreak(headerH + 2)) { 
-            drawTableHeader(); 
-          }
+          yPosition = ensureSpace(pdf, yPosition, headerH + 2, {
+            marginTop: margin,
+            marginBottom: margin,
+            footerReserve: 15,
+            onNewPage: () => {
+              currentPage++;
+              drawTableHeader();
+            }
+          });
           // Light grey band
           pdf.setFillColor(240, 240, 240);
           pdf.rect(tableX, yPosition, contentWidth, headerH, 'F');
@@ -954,9 +953,15 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         // Helper: draw a group subtotal row
         const drawGroupSubtotal = (amount: number) => {
           const rowH = 10;
-          if (checkPageBreak(rowH + 2)) { 
-            drawTableHeader(); 
-          }
+          yPosition = ensureSpace(pdf, yPosition, rowH + 2, {
+            marginTop: margin,
+            marginBottom: margin,
+            footerReserve: 15,
+            onNewPage: () => {
+              currentPage++;
+              drawTableHeader();
+            }
+          });
           setFont('body');
           // Label cell (spans first 3 columns)
           pdf.text('Group Subtotal', tableX + columns[0].width + columns[1].width + columns[2].width - 3, yPosition + 7, { align: 'right' });
@@ -984,9 +989,15 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
             items.forEach((item, idx) => {
               // Check page break before first data row to keep it with header
               if (idx === 0) {
-                if (checkPageBreak(14 + 2)) { // Row height + small buffer
-                  drawTableHeader();
-                }
+                yPosition = ensureSpace(pdf, yPosition, 14 + 2, {
+                  marginTop: margin,
+                  marginBottom: margin,
+                  footerReserve: 15,
+                  onNewPage: () => {
+                    currentPage++;
+                    drawTableHeader();
+                  }
+                });
               }
               groupSubtotal += drawTableRow(item, idx); // drawTableRow now returns the row total
             });
@@ -1016,9 +1027,15 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
           ungrouped.forEach((item, idx) => { 
             // Check page break before first data row to keep it with header
             if (idx === 0) {
-              if (checkPageBreak(14 + 2)) { // Row height + small buffer
-                drawTableHeader();
-              }
+              yPosition = ensureSpace(pdf, yPosition, 14 + 2, {
+                marginTop: margin,
+                marginBottom: margin,
+                footerReserve: 15,
+                onNewPage: () => {
+                  currentPage++;
+                  drawTableHeader();
+                }
+              });
             }
             ungroupedSubtotal += drawTableRow(item, idx); 
           });
@@ -1034,7 +1051,15 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         // Add spacer before totals section
         addSpace('sm'); // 12mm spacer
         
-        checkPageBreak(60);
+        yPosition = ensureSpace(pdf, yPosition, 60, {
+          marginTop: margin,
+          marginBottom: margin,
+          footerReserve: 15,
+          onNewPage: () => {
+            currentPage++;
+            drawHeader();
+          }
+        });
         
         // Professional totals area
         const totalsWidth = 75;
@@ -1294,7 +1319,9 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         
         // === DEDICATED FULL-PAGE GALLERY ===
         // Start renderings on their own page(s) for maximum impact
-        addNewPage();
+        pdf.addPage();
+        currentPage++;
+        yPosition = margin + spacing.lg;
         
         const [r, g, b] = colors.accent;
         
@@ -1354,7 +1381,9 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
             
             // Start new page for next image (except for the last one)
             if (i < productRenderings.length - 1) {
-              addNewPage();
+              pdf.addPage();
+              currentPage++;
+              yPosition = margin + spacing.lg;
               
               // Add gallery header to continuation page
               pdf.setFillColor(r, g, b);
@@ -1386,7 +1415,9 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
       await drawProductRenderingsSection();
       
       // Step 3: Generate main estimate page
-      addNewPage();
+      pdf.addPage();
+      currentPage++;
+      yPosition = margin + spacing.lg;
       drawHeader(); // This adds the proper header for the estimate page
       
       drawProfessionalTable();
@@ -1398,7 +1429,9 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
       // Terms & Conditions section
       if (includeContract && hasContractData) {
         // Always start terms on a new page for clarity
-        addNewPage();
+        pdf.addPage();
+        currentPage++;
+        yPosition = margin + spacing.lg;
         
         // Branded terms header
         const [r, g, b] = colors.accent;
@@ -1449,7 +1482,15 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
             }
             
             // Check for page break
-            checkPageBreak(spacing.md);
+            yPosition = ensureSpace(pdf, yPosition, spacing.md, {
+              marginTop: margin,
+              marginBottom: margin,
+              footerReserve: 15,
+              onNewPage: () => {
+                currentPage++;
+                drawHeader();
+              }
+            });
             
             // Detect section headers (numbered sections)
             const isNumberedSection = /^\d+\./.test(trimmedLine);
