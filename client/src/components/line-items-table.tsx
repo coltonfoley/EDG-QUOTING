@@ -5,11 +5,35 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { Trash2, Plus, Package, Search, Filter, X, FileText, Loader2 } from "lucide-react";
-import { formatCurrency, calculateLineItemTotal, calculateLineItemMargin, applyDiscountToPrice, isValidNumber, clampValue, roundCurrency } from "@/lib/utils";
+import { Trash2, Plus, Package, Search, Filter, X, FileText, Loader2, GripVertical } from "lucide-react";
+import { formatCurrency, calculateLineItemTotal, calculateLineItemMargin, applyDiscountToPrice, isValidNumber, clampValue, roundCurrency, generateGroupId } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { LineItem, Product } from "@shared/schema";
+import { 
+  DndContext, 
+  DragEndEvent, 
+  DragOverEvent, 
+  DragStartEvent,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  closestCenter,
+  DragOverlay
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  useSortable
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { 
+  GroupHeader, 
+  GroupFooter, 
+  UngroupedSection, 
+  CreateGroupDialog,
+  type Group 
+} from './group-components';
 
 interface LineItemsTableProps {
   quoteId: number;
@@ -39,6 +63,11 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
   const [dimensions, setDimensions] = useState({ length: "", width: "" });
   const [calculatedPrice, setCalculatedPrice] = useState<number | null>(null);
   const [isCleaningDescriptions, setIsCleaningDescriptions] = useState(false);
+  
+  // Group management state
+  const [showCreateGroupDialog, setShowCreateGroupDialog] = useState(false);
+  const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
+  const [activeId, setActiveId] = useState<string | null>(null);
   
   // Debounced save timeout refs
   const debounceTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
@@ -133,6 +162,12 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
 
   const { data: products } = useQuery<Product[]>({
     queryKey: ["/api/products"],
+  });
+
+  // Fetch groups for this quote
+  const { data: groups = [] } = useQuery<Group[]>({
+    queryKey: ["/api/quotes", quoteId, "groups"],
+    enabled: !isUnsavedQuote
   });
 
   // Helper function to get product by ID
@@ -247,18 +282,29 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
         if (rowIndex > 0) {
           const columnTestId = column === 'unitPrice' ? 'unit-price' : 
                               column === 'markupValue' ? 'markup-value' : column;
-          const prevInput = document.querySelector(`[data-testid="input-${columnTestId}-${lineItems[rowIndex - 1].id}"]`) as HTMLInputElement;
-          prevInput?.focus();
+          const selector = `[data-testid="input-${columnTestId}-${lineItems[rowIndex - 1].id}"]`;
+          const element = document.querySelector(selector) as HTMLInputElement;
+          if (element) {
+            element.focus();
+            element.select();
+          }
         }
       } else {
         // Move down a row
         if (rowIndex < totalRows - 1) {
           const columnTestId = column === 'unitPrice' ? 'unit-price' : 
                               column === 'markupValue' ? 'markup-value' : column;
-          const nextInput = document.querySelector(`[data-testid="input-${columnTestId}-${lineItems[rowIndex + 1].id}"]`) as HTMLInputElement;
-          nextInput?.focus();
+          const selector = `[data-testid="input-${columnTestId}-${lineItems[rowIndex + 1].id}"]`;
+          const element = document.querySelector(selector) as HTMLInputElement;
+          if (element) {
+            element.focus();
+            element.select();
+          }
         }
       }
+    } else if (e.key === 'Tab') {
+      // Allow default Tab behavior for horizontal navigation
+      return;
     }
   }, [lineItems]);
 
@@ -340,6 +386,82 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
     },
   });
 
+  // Group mutations
+  const createGroupMutation = useMutation({
+    mutationFn: async (data: { id: string; title: string; quoteId: number; position?: number }) => {
+      const response = await apiRequest("POST", `/api/quotes/${quoteId}/groups`, data);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/quotes", quoteId, "groups"] });
+      toast({ title: "Group created successfully" });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to create group", variant: "destructive" });
+    },
+  });
+
+  const updateGroupMutation = useMutation({
+    mutationFn: async ({ groupId, data }: { groupId: string; data: Partial<Group> }) => {
+      const response = await apiRequest("PUT", `/api/groups/${groupId}`, data);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/quotes", quoteId, "groups"] });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to update group", variant: "destructive" });
+    },
+  });
+
+  const deleteGroupMutation = useMutation({
+    mutationFn: async (groupId: string) => {
+      await apiRequest("DELETE", `/api/groups/${groupId}`);
+      return groupId;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/quotes", quoteId, "groups"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/quotes"] });
+      toast({ title: "Group deleted successfully" });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to delete group", variant: "destructive" });
+    },
+  });
+
+  const reorderLineItemsMutation = useMutation({
+    mutationFn: async (moves: { id: number; groupId: string | null; position: number }[]) => {
+      const response = await apiRequest("PATCH", "/api/line-items/reorder", {
+        moves,
+        quoteId
+      });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/quotes"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/quotes", quoteId, "groups"] });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to reorder items", variant: "destructive" });
+    },
+  });
+
+  const reorderGroupsMutation = useMutation({
+    mutationFn: async (groupPositions: { id: string; position: number }[]) => {
+      const response = await apiRequest("PATCH", "/api/groups/reorder", {
+        quoteId,
+        groupPositions
+      });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/quotes", quoteId, "groups"] });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to reorder groups", variant: "destructive" });
+    },
+  });
+
   const deleteLineItemMutation = useMutation({
     mutationFn: async (id: number) => {
       await apiRequest("DELETE", `/api/line-items/${id}`);
@@ -366,26 +488,21 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
   });
 
   const calculatePricingMutation = useMutation({
-    mutationFn: async ({ productId, length, width }: { productId: number; length: number; width: number }) => {
-      const response = await apiRequest("POST", "/api/products/calculate-pricing", {
-        productId,
-        length,
-        width,
-      });
+    mutationFn: async (data: { productId: number; length: number; width: number }) => {
+      const response = await apiRequest("POST", "/api/calculate-price", data);
       return response.json();
     },
     onSuccess: (data) => {
       // Clear the pending mutation reference
       pendingMutations.current.calculate = null;
       
-      setCalculatedPrice(data.price);
-      // Update newItem with calculated price after successful calculation
       if (selectedConfigurableProduct) {
-        setNewItem(prev => ({
-          ...prev,
-          description: `${selectedConfigurableProduct.name} (${dimensions.length}" x ${dimensions.width}")`,
-          unitPrice: data.price?.toString() || selectedConfigurableProduct.defaultUnitPrice?.toString() || "0",
-        }));
+        setCalculatedPrice(data.price);
+        setNewItem({
+          ...newItem,
+          description: selectedConfigurableProduct.name,
+          unitPrice: data.price.toString(),
+        });
       }
     },
     onError: (error: any) => {
@@ -401,26 +518,50 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
     },
   });
 
-  const handleDeleteItem = async (id: number) => {
-    deleteLineItemMutation.mutate(id);
+  // Set pending mutation references when they start
+  createLineItemMutation.mutateAsync = (data: any) => {
+    pendingMutations.current.create = createLineItemMutation;
+    return createLineItemMutation.mutate(data);
   };
 
-  const handleAddItem = async () => {
-    const quantity = parseFloat(newItem.quantity) || 0;
-    const unitPrice = parseFloat(newItem.unitPrice) || 0;
-    const discountValue = parseFloat(newItem.discountValue) || 0;
-    const markupValue = parseFloat(newItem.markupValue) || 0;
-
+  const handleAddItem = () => {
+    // Validate new item
+    const errors: Record<string, string> = {};
+    
+    if (!newItem.description.trim()) {
+      errors.description = "Description is required";
+    }
+    
+    if (!newItem.quantity || parseFloat(newItem.quantity) <= 0) {
+      errors.quantity = "Quantity must be greater than 0";
+    }
+    
+    if (!newItem.unitPrice || parseFloat(newItem.unitPrice) < 0) {
+      errors.unitPrice = "Unit price must be a valid positive number";
+    }
+    
+    if (!newItem.markupValue || parseFloat(newItem.markupValue) < 0) {
+      errors.markupValue = "Markup value must be a valid positive number";
+    }
+    
+    if (Object.keys(errors).length > 0) {
+      setNewItemErrors(errors);
+      return;
+    }
+    
+    setNewItemErrors({});
+    
     const data = {
-      description: newItem.description,
-      quantity,
-      unitPrice,
-      discountType: newItem.discountType,
-      discountValue,
+      description: newItem.description.trim(),
+      quantity: parseFloat(newItem.quantity),
+      unitPrice: parseFloat(newItem.unitPrice),
       markupType: newItem.markupType,
-      markupValue,
+      markupValue: parseFloat(newItem.markupValue),
+      discountType: newItem.discountType,
+      discountValue: parseFloat(newItem.discountValue),
+      retailPrice: newItem.retailPrice ? parseFloat(newItem.retailPrice) : null,
     };
-
+    
     createLineItemMutation.mutate(data);
   };
 
@@ -456,6 +597,345 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
         }
       });
     }
+  };
+
+  // Drag and drop setup
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    })
+  );
+
+  // Group line items by groupId
+  const groupedLineItems = useMemo(() => {
+    const grouped: Record<string, LineItem[]> = {};
+    const ungrouped: LineItem[] = [];
+    
+    lineItems.forEach(item => {
+      if (item.groupId) {
+        if (!grouped[item.groupId]) {
+          grouped[item.groupId] = [];
+        }
+        grouped[item.groupId].push(item);
+      } else {
+        ungrouped.push(item);
+      }
+    });
+    
+    // Sort items within each group by position
+    Object.keys(grouped).forEach(groupId => {
+      grouped[groupId].sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+    });
+    
+    // Sort ungrouped items by position
+    ungrouped.sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+    
+    return { grouped, ungrouped };
+  }, [lineItems]);
+
+  // Sort groups by position
+  const sortedGroups = useMemo(() => {
+    return [...groups].sort((a, b) => a.position - b.position);
+  }, [groups]);
+
+  // Group management handlers
+  const handleCreateGroup = (title: string) => {
+    const groupId = generateGroupId();
+    const position = groups.length;
+    
+    createGroupMutation.mutate({
+      id: groupId,
+      title,
+      quoteId,
+      position
+    });
+  };
+
+  const handleToggleGroupCollapse = (groupId: string) => {
+    const group = groups.find(g => g.id === groupId);
+    if (group) {
+      updateGroupMutation.mutate({
+        groupId,
+        data: { isCollapsed: !group.isCollapsed }
+      });
+    }
+  };
+
+  const handleEditGroupTitle = (groupId: string, title: string) => {
+    updateGroupMutation.mutate({
+      groupId,
+      data: { title }
+    });
+  };
+
+  const handleDeleteGroup = (groupId: string) => {
+    // Move all items in this group to ungrouped
+    const itemsInGroup = groupedLineItems.grouped[groupId] || [];
+    const moves = itemsInGroup.map((item, index) => ({
+      id: item.id,
+      groupId: null,
+      position: index
+    }));
+    
+    if (moves.length > 0) {
+      reorderLineItemsMutation.mutate(moves);
+    }
+    
+    deleteGroupMutation.mutate(groupId);
+  };
+
+  // Drag and drop handlers
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveId(event.active.id as string);
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    setActiveId(null);
+
+    if (!over) return;
+
+    const activeId = active.id as string;
+    const overId = over.id as string;
+
+    // Handle group reordering
+    if (activeId.startsWith('group-') && overId.startsWith('group-')) {
+      const activeGroupId = activeId.replace('group-', '');
+      const overGroupId = overId.replace('group-', '');
+      
+      if (activeGroupId !== overGroupId) {
+        const activeIndex = sortedGroups.findIndex(g => g.id === activeGroupId);
+        const overIndex = sortedGroups.findIndex(g => g.id === overGroupId);
+        
+        const newGroups = [...sortedGroups];
+        const [removed] = newGroups.splice(activeIndex, 1);
+        newGroups.splice(overIndex, 0, removed);
+        
+        const groupPositions = newGroups.map((group, index) => ({
+          id: group.id,
+          position: index
+        }));
+        
+        reorderGroupsMutation.mutate(groupPositions);
+      }
+      return;
+    }
+
+    // Handle line item reordering
+    const activeItemId = parseInt(activeId.replace('item-', ''));
+    const activeItem = lineItems.find(item => item.id === activeItemId);
+    
+    if (!activeItem) return;
+
+    let targetGroupId: string | null = null;
+    let targetPosition = 0;
+
+    // Determine target group and position
+    if (overId.startsWith('group-')) {
+      targetGroupId = overId.replace('group-', '');
+      targetPosition = groupedLineItems.grouped[targetGroupId]?.length || 0;
+    } else if (overId === 'ungrouped') {
+      targetGroupId = null;
+      targetPosition = groupedLineItems.ungrouped.length;
+    } else if (overId.startsWith('item-')) {
+      const overItemId = parseInt(overId.replace('item-', ''));
+      const overItem = lineItems.find(item => item.id === overItemId);
+      
+      if (overItem) {
+        targetGroupId = overItem.groupId;
+        
+        const itemsInGroup = targetGroupId 
+          ? groupedLineItems.grouped[targetGroupId] || []
+          : groupedLineItems.ungrouped;
+        
+        targetPosition = itemsInGroup.findIndex(item => item.id === overItemId);
+        if (targetPosition === -1) targetPosition = 0;
+      }
+    }
+
+    // Only proceed if there's a change
+    if (activeItem.groupId === targetGroupId && activeItem.position === targetPosition) {
+      return;
+    }
+
+    // Create the move operation
+    const moves = [{
+      id: activeItemId,
+      groupId: targetGroupId,
+      position: targetPosition
+    }];
+
+    reorderLineItemsMutation.mutate(moves);
+  };
+
+  // Sortable Line Item Row Component
+  const SortableLineItemRow = ({ item, rowIndex }: { item: LineItem; rowIndex: number }) => {
+    const {
+      attributes,
+      listeners,
+      setNodeRef,
+      transform,
+      transition,
+      isDragging,
+    } = useSortable({ id: `item-${item.id}` });
+
+    const style = {
+      transform: CSS.Transform.toString(transform),
+      transition,
+      opacity: isDragging ? 0.5 : 1,
+    };
+
+    // Calculate values using current local values
+    const currentCost = parseFloat(getCurrentValue(item.id, 'unitPrice')) || 0;
+    const currentMarkupValue = parseFloat(getCurrentValue(item.id, 'markupValue')) || 0;
+    const currentMarkupType = getCurrentValue(item.id, 'markupType') || 'percentage';
+    const currentQuantity = parseFloat(getCurrentValue(item.id, 'quantity')) || 0;
+    
+    // Calculate price (cost + markup)
+    let price = currentCost;
+    if (currentMarkupType === 'percentage') {
+      price = currentCost + (currentCost * (currentMarkupValue / 100));
+    } else {
+      price = currentCost + currentMarkupValue;
+    }
+    
+    // Calculate margin (profit amount)
+    const marginAmount = calculateLineItemMargin(
+      currentQuantity,
+      currentCost,
+      currentMarkupType,
+      currentMarkupValue,
+      item.discountType,
+      item.discountValue
+    );
+    
+    // Calculate total
+    const total = calculateLineItemTotal(
+      currentQuantity,
+      currentCost,
+      currentMarkupType,
+      currentMarkupValue,
+      item.discountType,
+      item.discountValue
+    );
+
+    return (
+      <tr
+        ref={setNodeRef}
+        style={style}
+        {...attributes}
+        key={item.id}
+        className="hover:bg-gray-50"
+        data-testid={`row-line-item-${item.id}`}
+      >
+        {/* Drag handle */}
+        <td className="border-r border-gray-300 px-2 py-1 w-8">
+          <div {...listeners} className="cursor-grab hover:cursor-grabbing text-gray-400">
+            <GripVertical className="h-4 w-4" />
+          </div>
+        </td>
+
+        {/* Description - Always visible */}
+        <td className="border-r border-gray-300 px-3 py-1">
+          <Input
+            value={getCurrentValue(item.id, 'description')}
+            onChange={(e) => handleFieldChange(item.id, "description", e.target.value)}
+            onKeyDown={(e) => handleKeyDown(e, rowIndex, 'description')}
+            className="border-0 bg-transparent p-1 text-sm focus:ring-1 focus:ring-blue-500"
+            data-testid={`input-description-${item.id}`}
+          />
+          {validationErrors[`${item.id}-description`] && (
+            <div className="text-xs text-red-500 mt-1">{validationErrors[`${item.id}-description`]}</div>
+          )}
+        </td>
+
+        {/* Quantity - Always visible */}
+        <td className="border-r border-gray-300 px-3 py-1 w-20 text-center">
+          <Input
+            value={getCurrentValue(item.id, 'quantity')}
+            onChange={(e) => handleFieldChange(item.id, "quantity", e.target.value)}
+            onKeyDown={(e) => handleKeyDown(e, rowIndex, 'quantity')}
+            className="border-0 bg-transparent p-1 text-center text-sm focus:ring-1 focus:ring-blue-500"
+            data-testid={`input-quantity-${item.id}`}
+          />
+          {validationErrors[`${item.id}-quantity`] && (
+            <div className="text-xs text-red-500 mt-1">{validationErrors[`${item.id}-quantity`]}</div>
+          )}
+        </td>
+
+        {/* Cost - Hidden on small screens */}
+        <td className="border-r border-gray-300 px-3 py-1 text-center hidden lg:table-cell">
+          <Input
+            value={getCurrentValue(item.id, 'unitPrice')}
+            onChange={(e) => handleFieldChange(item.id, "unitPrice", e.target.value)}
+            onKeyDown={(e) => handleKeyDown(e, rowIndex, 'unitPrice')}
+            className="border-0 bg-transparent p-1 text-center text-sm focus:ring-1 focus:ring-blue-500"
+            data-testid={`input-unit-price-${item.id}`}
+          />
+          {validationErrors[`${item.id}-unitPrice`] && (
+            <div className="text-xs text-red-500 mt-1">{validationErrors[`${item.id}-unitPrice`]}</div>
+          )}
+        </td>
+
+        {/* Markup% - Hidden on small screens */}
+        <td className="border-r border-gray-300 px-3 py-1 text-center hidden lg:table-cell">
+          <div className="flex items-center space-x-1">
+            <Input
+              value={getCurrentValue(item.id, 'markupValue')}
+              onChange={(e) => handleFieldChange(item.id, "markupValue", e.target.value)}
+              onKeyDown={(e) => handleKeyDown(e, rowIndex, 'markupValue')}
+              className="border-0 bg-transparent p-1 text-center text-sm focus:ring-1 focus:ring-blue-500 flex-1"
+              data-testid={`input-markup-value-${item.id}`}
+            />
+            <Select
+              value={getCurrentValue(item.id, 'markupType')}
+              onValueChange={(value) => handleFieldChange(item.id, "markupType", value)}
+            >
+              <SelectTrigger className="w-12 h-6 border-0 bg-transparent p-0 text-xs" data-testid={`select-markup-type-${item.id}`}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="percentage">%</SelectItem>
+                <SelectItem value="dollar">$</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {validationErrors[`${item.id}-markupValue`] && (
+            <div className="text-xs text-red-500 mt-1">{validationErrors[`${item.id}-markupValue`]}</div>
+          )}
+        </td>
+
+        {/* Price - Always visible */}
+        <td className="border-r border-gray-300 px-3 py-1 text-center text-sm" data-testid={`text-price-${item.id}`}>
+          {formatCurrency(price)}
+        </td>
+
+        {/* Margin$ - Hidden on small screens */}
+        <td className="border-r border-gray-300 px-3 py-1 text-center text-sm hidden md:table-cell" data-testid={`text-margin-${item.id}`}>
+          {formatCurrency(marginAmount)}
+        </td>
+
+        {/* Total - Always visible */}
+        <td className="border-r border-gray-300 px-3 py-1 text-center font-medium text-sm" data-testid={`text-total-${item.id}`}>
+          {formatCurrency(total)}
+        </td>
+
+        {/* Actions - Always visible */}
+        <td className="px-3 py-1 text-center">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => deleteLineItemMutation.mutate(item.id)}
+            className="text-red-600 hover:text-red-700 hover:bg-red-50 p-1 h-auto"
+            data-testid={`button-delete-${item.id}`}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </td>
+      </tr>
+    );
   };
 
   // Clean descriptions function to remove PDF filename prefixes
@@ -642,57 +1122,70 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                         </SelectValue>
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="all" data-testid="manufacturer-option-all">All Manufacturers</SelectItem>
-                        {manufacturers.map(manufacturer => (
-                          <SelectItem key={manufacturer} value={manufacturer} data-testid={`manufacturer-option-${manufacturer.toLowerCase().replace(/\s+/g, '-')}`}>
+                        <SelectItem value="all">All Manufacturers</SelectItem>
+                        {manufacturers.map((manufacturer) => (
+                          <SelectItem key={manufacturer} value={manufacturer}>
                             {manufacturer}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
+                    
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setSearchTerm("");
+                        setSelectedManufacturer("all");
+                      }}
+                      className="px-3"
+                      data-testid="button-clear-filters"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
                   </div>
 
-                  {/* Products List */}
+                  {/* Products Grid */}
                   <div className="flex-1 overflow-y-auto border rounded-lg">
-                    {Object.entries(groupedProducts).length === 0 ? (
-                      <div className="text-center py-8 text-gray-500">
-                        No products found. Try adjusting your search or filters.
+                    {Object.keys(groupedProducts).length === 0 ? (
+                      <div className="p-8 text-center text-gray-500">
+                        No products found matching your criteria.
                       </div>
                     ) : (
-                      Object.entries(groupedProducts).map(([manufacturer, manufacturerProducts]) => (
-                        <div key={manufacturer} className="border-b border-gray-100 last:border-b-0">
-                          <div className="bg-gray-50 px-4 py-2 font-medium text-gray-900 text-sm sticky top-0" data-testid={`manufacturer-group-${manufacturer.toLowerCase().replace(/\s+/g, '-')}`}>
-                            {manufacturer} ({manufacturerProducts.length})
+                      Object.entries(groupedProducts).map(([manufacturer, products]) => (
+                        <div key={manufacturer} className="border-b border-gray-200 last:border-b-0">
+                          <div className="bg-gray-50 px-4 py-2 font-medium text-sm text-gray-700 border-b border-gray-200">
+                            {manufacturer} ({products.length})
                           </div>
-                          {manufacturerProducts.map((product) => (
-                            <div 
-                              key={product.id}
-                              className="p-4 border-b border-gray-50 last:border-b-0 hover:bg-gray-50 cursor-pointer transition-colors"
-                              onClick={() => handleProductSelect(product)}
-                              data-testid={`product-${product.id}`}
-                            >
-                              <div className="flex justify-between items-start">
-                                <div className="flex-1">
-                                  <h4 className="font-medium text-gray-900">{product.name}</h4>
-                                  {product.description && (
-                                    <p className="text-sm text-gray-600 mt-1">{product.description}</p>
-                                  )}
-                                  <div className="flex items-center gap-4 mt-2">
-                                    {product.defaultUnitPrice && (
-                                      <span className="text-sm font-medium text-gray-900">
-                                        {formatCurrency(Number(product.defaultUnitPrice))}
-                                      </span>
-                                    )}
-                                    {product.productType === 'configurable' && (
-                                      <Badge variant="outline" className="text-purple-700 border-purple-300">
-                                        Configurable
-                                      </Badge>
-                                    )}
+                          <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                            {products.map((product) => (
+                              <div
+                                key={product.id}
+                                onClick={() => handleProductSelect(product)}
+                                className="p-3 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer transition-colors"
+                                data-testid={`product-card-${product.id}`}
+                              >
+                                <div className="font-medium text-sm text-gray-900 mb-1">
+                                  {product.name}
+                                </div>
+                                {product.description && (
+                                  <div className="text-xs text-gray-600 mb-2 line-clamp-2">
+                                    {product.description}
                                   </div>
+                                )}
+                                <div className="flex justify-between items-center">
+                                  <div className="text-sm font-medium text-green-600">
+                                    {formatCurrency(product.defaultUnitPrice || 0)}
+                                  </div>
+                                  {product.productType === "configurable" && (
+                                    <Badge variant="secondary" className="text-xs">
+                                      Configurable
+                                    </Badge>
+                                  )}
                                 </div>
                               </div>
-                            </div>
-                          ))}
+                            ))}
+                          </div>
                         </div>
                       ))
                     )}
@@ -722,301 +1215,256 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
           </div>
         )}
         
-        <div className="overflow-x-auto">
-          <table className="w-full border border-gray-300 divide-y divide-gray-300">
-            <colgroup>
-              <col style={{width: '30%'}} /> {/* Description */}
-              <col style={{width: '80px'}} /> {/* Quantity */}
-              <col style={{width: '100px'}} /> {/* Cost */}
-              <col style={{width: '80px'}} /> {/* Markup% */}
-              <col style={{width: '120px'}} /> {/* Price */}
-              <col style={{width: '100px'}} /> {/* Margin$ */}
-              <col style={{width: '140px'}} /> {/* Total */}
-              <col style={{width: '80px'}} /> {/* Actions */}
-            </colgroup>
-            <thead>
-              <tr className="bg-gray-100">
-                <th className="border-r border-gray-300 px-3 py-2 text-left text-sm font-medium text-gray-700">
-                  Description
-                </th>
-                <th className="border-r border-gray-300 px-3 py-2 text-center text-sm font-medium text-gray-700">
-                  QTY
-                </th>
-                <th className="border-r border-gray-300 px-3 py-2 text-center text-sm font-medium text-gray-700 hidden lg:table-cell">
-                  Cost
-                </th>
-                <th className="border-r border-gray-300 px-3 py-2 text-center text-sm font-medium text-gray-700 hidden lg:table-cell">
-                  Markup%
-                </th>
-                <th className="border-r border-gray-300 px-3 py-2 text-center text-sm font-medium text-gray-700">
-                  Price
-                </th>
-                <th className="border-r border-gray-300 px-3 py-2 text-center text-sm font-medium text-gray-700 hidden md:table-cell">
-                  Margin$
-                </th>
-                <th className="border-r border-gray-300 px-3 py-2 text-center text-sm font-medium text-gray-700">
-                  Total
-                </th>
-                <th className="px-3 py-2 text-center text-sm font-medium text-gray-700">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-300">
-              {lineItems.map((item, rowIndex) => {
-                // Calculate values using current local values
-                const currentCost = parseFloat(getCurrentValue(item.id, 'unitPrice')) || 0;
-                const currentMarkupValue = parseFloat(getCurrentValue(item.id, 'markupValue')) || 0;
-                const currentMarkupType = getCurrentValue(item.id, 'markupType') || 'percentage';
-                const currentQuantity = parseFloat(getCurrentValue(item.id, 'quantity')) || 0;
-                
-                // Calculate price (cost + markup)
-                let price = currentCost;
-                if (currentMarkupType === 'percentage') {
-                  price = currentCost + (currentCost * (currentMarkupValue / 100));
-                } else {
-                  price = currentCost + currentMarkupValue;
-                }
-                
-                // Calculate margin (profit amount)
-                const marginAmount = calculateLineItemMargin(
-                  currentQuantity,
-                  currentCost,
-                  currentMarkupType,
-                  currentMarkupValue,
-                  item.discountType,
-                  item.discountValue
-                );
-                
-                // Calculate total
-                const total = calculateLineItemTotal(
-                  currentQuantity,
-                  currentCost,
-                  currentMarkupType,
-                  currentMarkupValue,
-                  item.discountType,
-                  item.discountValue
-                );
-                
-                return (
-                  <tr key={item.id} className="hover:bg-gray-50">
-                    {/* Description - Always visible */}
-                    <td className="border-r border-gray-300 px-3 py-1">
-                      <Input
-                        value={getCurrentValue(item.id, 'description')}
-                        onChange={(e) => handleFieldChange(item.id, "description", e.target.value)}
-                        onKeyDown={(e) => handleKeyDown(e, rowIndex, 'description')}
-                        className="border-0 bg-transparent p-1 text-sm focus:ring-1 focus:ring-blue-500"
-                        data-testid={`input-description-${item.id}`}
-                      />
-                      {validationErrors[`${item.id}-description`] && (
-                        <div className="text-xs text-red-500 mt-1">{validationErrors[`${item.id}-description`]}</div>
-                      )}
-                    </td>
-                    
-                    {/* Quantity - Always visible */}
-                    <td className="border-r border-gray-300 px-3 py-1">
-                      <Input
-                        type="number"
-                        step="0.01"
-                        min="0.01"
-                        value={getCurrentValue(item.id, 'quantity')}
-                        onChange={(e) => handleFieldChange(item.id, "quantity", e.target.value)}
-                        onKeyDown={(e) => handleKeyDown(e, rowIndex, 'quantity')}
-                        className="border-0 bg-transparent p-1 text-sm text-center tabular-nums focus:ring-1 focus:ring-blue-500"
-                        data-testid={`input-quantity-${item.id}`}
-                      />
-                      {validationErrors[`${item.id}-quantity`] && (
-                        <div className="text-xs text-red-500 mt-1">{validationErrors[`${item.id}-quantity`]}</div>
-                      )}
-                    </td>
-                    
-                    {/* Cost - Hidden on tablet/mobile */}
-                    <td className="border-r border-gray-300 px-3 py-1 hidden lg:table-cell">
-                      <Input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={getCurrentValue(item.id, 'unitPrice')}
-                        onChange={(e) => handleFieldChange(item.id, "unitPrice", e.target.value)}
-                        onKeyDown={(e) => handleKeyDown(e, rowIndex, 'unitPrice')}
-                        className="border-0 bg-transparent p-1 text-sm text-center tabular-nums focus:ring-1 focus:ring-blue-500"
-                        data-testid={`input-cost-${item.id}`}
-                      />
-                      {validationErrors[`${item.id}-unitPrice`] && (
-                        <div className="text-xs text-red-500 mt-1">{validationErrors[`${item.id}-unitPrice`]}</div>
-                      )}
-                    </td>
-                    
-                    {/* Markup% - Hidden on tablet/mobile */}
-                    <td className="border-r border-gray-300 px-3 py-1 hidden lg:table-cell">
-                      <div className="flex items-center space-x-1">
-                        <Input
-                          type="number"
-                          step="0.1"
-                          min="0"
-                          max="1000"
-                          value={getCurrentValue(item.id, 'markupValue')}
-                          onChange={(e) => handleFieldChange(item.id, "markupValue", e.target.value)}
-                          onKeyDown={(e) => handleKeyDown(e, rowIndex, 'markupValue')}
-                          className="border-0 bg-transparent p-1 text-sm text-center tabular-nums focus:ring-1 focus:ring-blue-500 w-16"
-                          data-testid={`input-markup-value-${item.id}`}
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+        >
+          <div className="overflow-x-auto">
+            <table className="w-full border border-gray-300 divide-y divide-gray-300">
+              <colgroup>
+                <col style={{width: '40px'}} /> {/* Drag Handle */}
+                <col style={{width: '28%'}} /> {/* Description */}
+                <col style={{width: '80px'}} /> {/* Quantity */}
+                <col style={{width: '100px'}} /> {/* Cost */}
+                <col style={{width: '80px'}} /> {/* Markup% */}
+                <col style={{width: '120px'}} /> {/* Price */}
+                <col style={{width: '100px'}} /> {/* Margin$ */}
+                <col style={{width: '140px'}} /> {/* Total */}
+                <col style={{width: '80px'}} /> {/* Actions */}
+              </colgroup>
+              <thead>
+                <tr className="bg-gray-100">
+                  <th className="border-r border-gray-300 px-2 py-2 text-center text-sm font-medium text-gray-700 w-8">
+                    <GripVertical className="h-4 w-4 mx-auto" />
+                  </th>
+                  <th className="border-r border-gray-300 px-3 py-2 text-left text-sm font-medium text-gray-700">
+                    Description
+                  </th>
+                  <th className="border-r border-gray-300 px-3 py-2 text-center text-sm font-medium text-gray-700">
+                    QTY
+                  </th>
+                  <th className="border-r border-gray-300 px-3 py-2 text-center text-sm font-medium text-gray-700 hidden lg:table-cell">
+                    Cost
+                  </th>
+                  <th className="border-r border-gray-300 px-3 py-2 text-center text-sm font-medium text-gray-700 hidden lg:table-cell">
+                    Markup%
+                  </th>
+                  <th className="border-r border-gray-300 px-3 py-2 text-center text-sm font-medium text-gray-700">
+                    Price
+                  </th>
+                  <th className="border-r border-gray-300 px-3 py-2 text-center text-sm font-medium text-gray-700 hidden md:table-cell">
+                    Margin$
+                  </th>
+                  <th className="border-r border-gray-300 px-3 py-2 text-center text-sm font-medium text-gray-700">
+                    Total
+                  </th>
+                  <th className="px-3 py-2 text-center text-sm font-medium text-gray-700">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-300">
+                {/* Render ungrouped items first */}
+                {groupedLineItems.ungrouped.length > 0 && (
+                  <>
+                    <UngroupedSection 
+                      lineItems={groupedLineItems.ungrouped}
+                      onCreateGroup={handleCreateGroup}
+                    />
+                    <SortableContext 
+                      items={groupedLineItems.ungrouped.map(item => `item-${item.id}`)}
+                      strategy={verticalListSortingStrategy}
+                    >
+                      {groupedLineItems.ungrouped.map((item, rowIndex) => (
+                        <SortableLineItemRow
+                          key={item.id}
+                          item={item}
+                          rowIndex={rowIndex}
                         />
-                        <Select
-                          value={getCurrentValue(item.id, 'markupType')}
-                          onValueChange={(value) => handleFieldChange(item.id, "markupType", value)}
+                      ))}
+                    </SortableContext>
+                  </>
+                )}
+
+                {/* Render groups */}
+                {sortedGroups.map((group) => {
+                  const groupItems = groupedLineItems.grouped[group.id] || [];
+                  
+                  return (
+                    <React.Fragment key={group.id}>
+                      <GroupHeader
+                        group={group}
+                        lineItems={groupItems}
+                        onToggleCollapse={handleToggleGroupCollapse}
+                        onEditTitle={handleEditGroupTitle}
+                        onDeleteGroup={handleDeleteGroup}
+                        isEditing={editingGroupId === group.id}
+                        onStartEdit={() => setEditingGroupId(group.id)}
+                        onCancelEdit={() => setEditingGroupId(null)}
+                      />
+                      
+                      {!group.isCollapsed && (
+                        <SortableContext 
+                          items={groupItems.map(item => `item-${item.id}`)}
+                          strategy={verticalListSortingStrategy}
                         >
-                          <SelectTrigger className="h-6 w-8 border-0 bg-transparent text-xs p-0 focus:ring-1 focus:ring-blue-500">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="percentage">%</SelectItem>
-                            <SelectItem value="dollar">$</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      {validationErrors[`${item.id}-markupValue`] && (
-                        <div className="text-xs text-red-500 mt-1">{validationErrors[`${item.id}-markupValue`]}</div>
+                          {groupItems.map((item, rowIndex) => (
+                            <SortableLineItemRow
+                              key={item.id}
+                              item={item}
+                              rowIndex={rowIndex}
+                            />
+                          ))}
+                        </SortableContext>
                       )}
-                    </td>
-                    
-                    {/* Price - Always visible */}
-                    <td className="border-r border-gray-300 px-3 py-2 text-center text-sm tabular-nums font-medium">
-                      {formatCurrency(price)}
-                    </td>
-                    
-                    {/* Margin$ - Hidden on mobile */}
-                    <td className={`border-r border-gray-300 px-3 py-2 text-center text-sm tabular-nums font-medium hidden md:table-cell ${
-                      marginAmount >= 0 ? 'text-green-600' : 'text-red-600'
-                    }`}>
-                      {formatCurrency(marginAmount)}
-                    </td>
-                    
-                    {/* Total - Always visible */}
-                    <td className="border-r border-gray-300 px-3 py-2 text-center text-sm tabular-nums font-medium">
-                      {formatCurrency(total)}
-                    </td>
-                    
-                    {/* Actions - Always visible */}
-                    <td className="px-3 py-2 text-center">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleDeleteItem(item.id)}
-                        className="h-6 w-6 p-0 text-red-600 hover:text-red-800"
-                        data-testid={`button-delete-${item.id}`}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      
+                      {!group.isCollapsed && (
+                        <GroupFooter
+                          group={group}
+                          lineItems={groupItems}
+                          onAddItem={() => setShowNewItemForm(true)}
+                        />
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+
+                {/* Show message if no items at all */}
+                {lineItems.length === 0 && (
+                  <tr>
+                    <td colSpan={9} className="px-4 py-8 text-center text-gray-500">
+                      No line items yet. Click "Add Item" to get started.
                     </td>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-          
-        {/* New Item Form */}
-        {showNewItemForm && !isUnsavedQuote && (
-          <div className="border-t border-gray-300 p-4 bg-gray-50">
-            <h4 className="font-medium text-gray-900 mb-3">Add New Item</h4>
-            <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
-              {/* Description */}
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                <Input
-                  placeholder="Item description"
-                  value={newItem.description}
-                  onChange={(e) => setNewItem({ ...newItem, description: e.target.value })}
-                  className="text-sm"
-                  data-testid="input-description-new"
-                />
-                {newItemErrors.description && (
-                  <div className="text-xs text-red-500 mt-1">{newItemErrors.description}</div>
                 )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* DragOverlay for visual feedback */}
+          <DragOverlay>
+            {activeId ? (
+              <div className="bg-white shadow-lg border border-gray-300 rounded p-2">
+                Dragging {activeId.startsWith('group-') ? 'Group' : 'Item'}
               </div>
-              
-              {/* Quantity */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Quantity</label>
+            ) : null}
+          </DragOverlay>
+        </DndContext>
+      </div>
+
+      {/* Add new item form */}
+      {showNewItemForm && (
+        <div className="bg-gray-50 border-t border-gray-300 p-4">
+          <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+              <Input
+                value={newItem.description}
+                onChange={(e) => setNewItem({ ...newItem, description: e.target.value })}
+                placeholder="Enter description"
+                className="text-sm"
+                data-testid="input-new-description"
+              />
+              {newItemErrors.description && (
+                <div className="text-xs text-red-500 mt-1">{newItemErrors.description}</div>
+              )}
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Quantity</label>
+              <Input
+                value={newItem.quantity}
+                onChange={(e) => setNewItem({ ...newItem, quantity: e.target.value })}
+                placeholder="1"
+                type="number"
+                step="0.01"
+                className="text-sm"
+                data-testid="input-new-quantity"
+              />
+              {newItemErrors.quantity && (
+                <div className="text-xs text-red-500 mt-1">{newItemErrors.quantity}</div>
+              )}
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Unit Price</label>
+              <Input
+                value={newItem.unitPrice}
+                onChange={(e) => setNewItem({ ...newItem, unitPrice: e.target.value })}
+                placeholder="0.00"
+                type="number"
+                step="0.01"
+                className="text-sm"
+                data-testid="input-new-unit-price"
+              />
+              {newItemErrors.unitPrice && (
+                <div className="text-xs text-red-500 mt-1">{newItemErrors.unitPrice}</div>
+              )}
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Markup</label>
+              <div className="flex space-x-1">
                 <Input
+                  value={newItem.markupValue}
+                  onChange={(e) => setNewItem({ ...newItem, markupValue: e.target.value })}
+                  placeholder="0"
                   type="number"
                   step="0.01"
-                  min="0.01"
-                  value={newItem.quantity}
-                  onChange={(e) => setNewItem({ ...newItem, quantity: e.target.value })}
-                  className="text-sm text-center tabular-nums"
-                  data-testid="input-quantity-new"
+                  className="text-sm flex-1"
+                  data-testid="input-new-markup-value"
                 />
-                {newItemErrors.quantity && (
-                  <div className="text-xs text-red-500 mt-1">{newItemErrors.quantity}</div>
-                )}
-              </div>
-              
-              {/* Cost */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Cost</label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={newItem.unitPrice}
-                  onChange={(e) => setNewItem({ ...newItem, unitPrice: e.target.value })}
-                  className="text-sm text-center tabular-nums"
-                  data-testid="input-cost-new"
-                />
-                {newItemErrors.unitPrice && (
-                  <div className="text-xs text-red-500 mt-1">{newItemErrors.unitPrice}</div>
-                )}
-              </div>
-              
-              {/* Markup% */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Markup</label>
-                <div className="flex items-center space-x-1">
-                  <Input
-                    type="number"
-                    step="0.1"
-                    min="0"
-                    max="1000"
-                    value={newItem.markupValue}
-                    onChange={(e) => setNewItem({ ...newItem, markupValue: e.target.value })}
-                    className="text-sm text-center tabular-nums"
-                    data-testid="input-markup-value-new"
-                  />
-                  <Select
-                    value={newItem.markupType}
-                    onValueChange={(value) => setNewItem({ ...newItem, markupType: value as "percentage" | "dollar" })}
-                  >
-                    <SelectTrigger className="w-12 text-xs">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="percentage">%</SelectItem>
-                      <SelectItem value="dollar">$</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                {newItemErrors.markupValue && (
-                  <div className="text-xs text-red-500 mt-1">{newItemErrors.markupValue}</div>
-                )}
-              </div>
-              
-              {/* Add Button */}
-              <div className="flex items-end">
-                <Button
-                  onClick={handleAddItem}
-                  disabled={!newItem.description || createLineItemMutation.isPending}
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm"
-                  data-testid="button-save-new-item"
+                <Select
+                  value={newItem.markupType}
+                  onValueChange={(value: "percentage" | "dollar") => 
+                    setNewItem({ ...newItem, markupType: value })
+                  }
                 >
-                  {createLineItemMutation.isPending ? "Adding..." : "Add Item"}
-                </Button>
+                  <SelectTrigger className="w-16 text-sm" data-testid="select-new-markup-type">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="percentage">%</SelectItem>
+                    <SelectItem value="dollar">$</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {newItemErrors.markupValue && (
+                <div className="text-xs text-red-500 mt-1">{newItemErrors.markupValue}</div>
+              )}
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Total</label>
+              <div className="bg-gray-100 border border-gray-300 rounded px-3 py-2 text-sm text-gray-700">
+                {formatCurrency(
+                  calculateLineItemTotal(
+                    newItem.quantity,
+                    newItem.unitPrice,
+                    newItem.markupType,
+                    newItem.markupValue
+                  )
+                )}
               </div>
             </div>
+            <div className="flex items-end space-x-2">
+              <Button
+                onClick={handleAddItem}
+                className="bg-green-600 hover:bg-green-700 text-white text-sm"
+                data-testid="button-save-item"
+              >
+                Save
+              </Button>
+              <Button
+                onClick={() => setShowNewItemForm(false)}
+                variant="outline"
+                className="text-sm"
+                data-testid="button-cancel-item"
+              >
+                Cancel
+              </Button>
+            </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Dimension Dialog */}
       <Dialog open={showDimensionDialog} onOpenChange={setShowDimensionDialog}>
@@ -1024,52 +1472,42 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
           <DialogHeader>
             <DialogTitle>Enter Dimensions</DialogTitle>
           </DialogHeader>
-          
           <div className="space-y-4">
-            <p className="text-sm text-gray-600">
-              Please enter the dimensions for <strong>{selectedConfigurableProduct?.name}</strong>
-            </p>
-            
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Length (inches)</label>
-                <Input
-                  type="number"
-                  step="0.1"
-                  min="0.1"
-                  placeholder="0"
-                  value={dimensions.length}
-                  onChange={(e) => setDimensions({ ...dimensions, length: e.target.value })}
-                  className="text-center"
-                  data-testid="input-dimension-length"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Width (inches)</label>
-                <Input
-                  type="number"
-                  step="0.1"
-                  min="0.1"
-                  placeholder="0"
-                  value={dimensions.width}
-                  onChange={(e) => setDimensions({ ...dimensions, width: e.target.value })}
-                  className="text-center"
-                  data-testid="input-dimension-width"
-                />
-              </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Length (ft)
+              </label>
+              <Input
+                type="number"
+                step="0.1"
+                value={dimensions.length}
+                onChange={(e) => setDimensions({ ...dimensions, length: e.target.value })}
+                placeholder="0.0"
+                data-testid="input-length"
+              />
             </div>
-
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Width (ft)
+              </label>
+              <Input
+                type="number"
+                step="0.1"
+                value={dimensions.width}
+                onChange={(e) => setDimensions({ ...dimensions, width: e.target.value })}
+                placeholder="0.0"
+                data-testid="input-width"
+              />
+            </div>
             {calculatedPrice !== null && (
-              <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
-                <p className="text-sm text-blue-800">
-                  <strong>Calculated Price:</strong> {formatCurrency(calculatedPrice)}
-                </p>
+              <div className="p-3 bg-green-50 border border-green-200 rounded">
+                <div className="text-sm text-green-800">
+                  Calculated Price: {formatCurrency(calculatedPrice)}
+                </div>
               </div>
             )}
-            
-            <div className="flex justify-end space-x-3 pt-4">
+            <div className="flex justify-end space-x-2">
               <Button
-                type="button"
                 variant="outline"
                 onClick={() => setShowDimensionDialog(false)}
                 data-testid="button-cancel-dimensions"
@@ -1079,7 +1517,6 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
               <Button
                 onClick={handleDimensionSubmit}
                 disabled={!dimensions.length || !dimensions.width || calculatePricingMutation.isPending}
-                className="bg-blue-600 hover:bg-blue-700 text-white"
                 data-testid="button-confirm-dimensions"
               >
                 {calculatePricingMutation.isPending ? "Calculating..." : "Add to Quote"}
@@ -1088,6 +1525,14 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Create Group Dialog */}
+      <CreateGroupDialog
+        open={showCreateGroupDialog}
+        onClose={() => setShowCreateGroupDialog(false)}
+        onCreateGroup={handleCreateGroup}
+      />
+
     </div>
   );
 }
