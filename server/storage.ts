@@ -339,6 +339,7 @@ export class MemStorage {
       isAccessory: insertLineItem.isAccessory || false,
       discountType: insertLineItem.discountType || "percentage",
       discountValue: insertLineItem.discountValue || "0",
+      groupId: insertLineItem.groupId ?? null,
     };
     this.lineItems.set(id, lineItem);
     return lineItem;
@@ -1109,6 +1110,8 @@ export class DatabaseStorage implements IStorage {
         title: groups.title,
         position: groups.position,
         isCollapsed: groups.isCollapsed,
+        createdAt: groups.createdAt,
+        updatedAt: groups.updatedAt,
       })
       .from(groups)
       .where(eq(groups.quoteId, quoteId))

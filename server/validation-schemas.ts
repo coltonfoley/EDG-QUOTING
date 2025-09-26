@@ -189,6 +189,69 @@ export const insertQuoteSchema = baseQuoteSchema.extend({
   path: ["contractTemplateId", "customContractTerms"]
 });
 
+// Enhanced quote creation schema with optional customer creation hint
+export const createQuoteSchema = z.object({
+  // Base quote fields (optional account/contact linkage)
+  accountId: z.number().int().positive("Account ID must be a positive integer").optional().nullable(),
+  contactId: z.number().int().positive("Contact ID must be a positive integer").optional().nullable(),
+  
+  // Optional auto-create hint for customer
+  customerCreate: z.object({
+    name: z.string().min(1, "Name is required").max(200, "Name is too long").optional(),
+    email: z.string().email("Invalid email format").max(254, "Email is too long").optional(),
+    phone: z.string().max(50, "Phone is too long").optional(),
+    company: z.string().max(200, "Company name is too long").optional(),
+  }).optional().nullable(),
+  
+  // Quote project details
+  projectName: z.string().max(500, "Project name is too long").optional(),
+  projectAddress: z.string().max(1000, "Project address is too long").optional(),
+  jobsiteAddress: z.string().max(1000, "Jobsite address is too long").optional().nullable(),
+  estimatedStartDate: z.string().optional(),
+  notes: z.string().max(5000, "Notes are too long").optional(),
+  
+  // Financial fields
+  taxRate: z.union([z.string(), z.number(), z.null()])
+    .transform(val => val === null ? "0" : (typeof val === 'string' ? val : val.toString()))
+    .refine(val => {
+      const num = parseFloat(val);
+      return !isNaN(num) && num >= 0 && num <= 100;
+    }, "Tax rate must be between 0 and 100")
+    .optional(),
+  discount: z.union([z.string(), z.number(), z.null()])
+    .transform(val => val === null ? "0" : (typeof val === 'string' ? val : val.toString()))
+    .refine(val => {
+      const num = parseFloat(val);
+      return !isNaN(num) && num >= 0 && num <= 100;
+    }, "Discount must be between 0 and 100")
+    .optional(),
+  shipping: z.union([z.string(), z.number(), z.null()])
+    .transform(val => val === null ? "0" : (typeof val === 'string' ? val : val.toString()))
+    .refine(val => {
+      const num = parseFloat(val);
+      return !isNaN(num) && num >= 0 && num <= 1000000;
+    }, "Shipping must be between 0 and 1,000,000")
+    .optional(),
+    
+  // Deal management
+  dealStage: z.enum(["new_lead", "qualifying", "consultation_scheduled", "building_estimate", "quote_sent", "closed_won", "closed_lost", "on_hold"]).default("new_lead").optional(),
+  lostReason: z.string().max(500, "Lost reason is too long").optional().nullable(),
+  
+  // Contract fields
+  contractTemplateId: z.number().int().positive().optional().nullable(),
+  customContractTerms: z.string().max(10000, "Custom contract terms are too long").optional().nullable(),
+}).refine((data) => {
+  // Enforce mutual exclusivity: cannot have both template and custom terms
+  const hasTemplate = data.contractTemplateId !== null && data.contractTemplateId !== undefined;
+  const hasCustomTerms = data.customContractTerms !== null && data.customContractTerms !== undefined && data.customContractTerms.trim() !== "";
+  return !(hasTemplate && hasCustomTerms);
+}, {
+  message: "Cannot specify both a contract template and custom contract terms",
+  path: ["contractTemplateId", "customContractTerms"]
+});
+
+export type CreateQuoteBody = z.infer<typeof createQuoteSchema>;
+
 // Update schema for quotes - more lenient validation for partial updates
 export const updateQuoteSchema = z.object({
   quoteNumber: z.string().min(1, "Quote number is required").max(50, "Quote number is too long").optional(),
