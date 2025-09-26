@@ -976,6 +976,12 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
           let groupSubtotal = 0;
           if (!g.isCollapsed) {
             items.forEach((item, idx) => {
+              // Check page break before first data row to keep it with header
+              if (idx === 0) {
+                if (checkPageBreak(14 + 2)) { // Row height + small buffer
+                  drawTableHeader();
+                }
+              }
               groupSubtotal += drawTableRow(item, idx); // drawTableRow now returns the row total
             });
           } else {
@@ -998,6 +1004,12 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
           drawGroupHeader('Additional Items');
           let ungroupedSubtotal = 0;
           ungrouped.forEach((item, idx) => { 
+            // Check page break before first data row to keep it with header
+            if (idx === 0) {
+              if (checkPageBreak(14 + 2)) { // Row height + small buffer
+                drawTableHeader();
+              }
+            }
             ungroupedSubtotal += drawTableRow(item, idx); 
           });
           drawGroupSubtotal(ungroupedSubtotal);
