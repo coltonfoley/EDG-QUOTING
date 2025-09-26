@@ -1116,7 +1116,9 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         // Check if we need a new page for acceptance section
         const acceptanceHeight = 80; // Estimated height needed for acceptance section
         if (checkPageBreak(acceptanceHeight)) {
-          // Push to new page if table runs long
+          // Add new page and reset position if not enough space
+          addNewPage();
+          drawHeader(); // Add header to new page
         }
         
         addSpace('lg'); // 24mm spacing before acceptance
