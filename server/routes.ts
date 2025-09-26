@@ -43,7 +43,9 @@ import {
   quoteIdParamSchema,
   imageIdParamSchema,
   insertIssueReportSchema,
-  quickCreateContactSchema
+  quickCreateContactSchema,
+  createQuoteSchema,
+  CreateQuoteBody
 } from "./validation-schemas";
 import multer from "multer";
 import * as XLSX from "xlsx";
@@ -1180,21 +1182,129 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Helper function to handle customer attachment based on attachCustomer behavior
+  async function handleCustomerAttachment(
+    customerData: { name?: string | null; email?: string | null; phone?: string | null; company?: string | null; address?: string | null },
+    attachCustomer: 'auto' | 'none' | 'match_only',
+    existingCustomerId?: number
+  ): Promise<{ accountId: number | null; wasCreated: boolean }> {
+    if (attachCustomer === 'none') {
+      // Never attach during import
+      return { accountId: null, wasCreated: false };
+    }
+
+    // Try to find existing customer by email first, then by name
+    let existingAccount = null;
+    if (customerData.email) {
+      existingAccount = await storage.getAccountByEmail(customerData.email);
+    }
+    
+    if (!existingAccount && customerData.name) {
+      // Try to find by name if no email match
+      const accounts = await storage.getAllAccounts();
+      existingAccount = accounts.find(acc => 
+        acc.name.toLowerCase().trim() === (customerData.name?.toLowerCase().trim() || '')
+      );
+    }
+
+    if (existingAccount) {
+      // Found match - attach the existing account
+      console.log(`Found existing account match: ${existingAccount.name} (ID: ${existingAccount.id})`);
+      return { accountId: existingAccount.id, wasCreated: false };
+    }
+
+    if (attachCustomer === 'match_only') {
+      // Only attach if found; else leave null
+      return { accountId: null, wasCreated: false };
+    }
+
+    if (attachCustomer === 'auto') {
+      // Create if no match (old behavior)
+      const accountData = {
+        name: customerData.name || '',
+        email: customerData.email || `import_${Date.now()}@example.com`,
+        phone: customerData.phone || '',
+        company: customerData.company || undefined,
+        accountType: 'homeowner' as const,
+        paymentTerms: 'net_30' as const,
+        billingAddress: customerData.address || undefined,
+      };
+
+      console.log('Creating new account for import:', accountData);
+      const newAccount = await storage.createAccount(accountData);
+      return { accountId: newAccount.id, wasCreated: true };
+    }
+
+    return { accountId: null, wasCreated: false };
+  }
+
+  // Helper function to upsert account from customer creation hint
+  async function upsertAccountFromHint(customerCreate: NonNullable<CreateQuoteBody['customerCreate']>) {
+    try {
+      // Check if account exists by email (if provided)
+      if (customerCreate.email) {
+        const existingAccount = await storage.getAccountByEmail(customerCreate.email);
+        if (existingAccount) {
+          console.log(`Found existing account by email: ${customerCreate.email}`);
+          return existingAccount;
+        }
+      }
+      
+      // Create new account with provided data
+      const accountData = {
+        name: customerCreate.name || '',
+        email: customerCreate.email || '',
+        phone: customerCreate.phone || '',
+        company: customerCreate.company || undefined,
+        accountType: 'homeowner' as const,
+        paymentTerms: 'net_30' as const,
+        billingAddress: undefined,
+      };
+      
+      console.log('Creating new account from customer hint:', accountData);
+      const newAccount = await storage.createAccount(accountData);
+      return newAccount;
+    } catch (error) {
+      console.error('Error upserting account from hint:', error);
+      throw error;
+    }
+  }
+
   app.post("/api/quotes", isAuthenticated, async (req, res) => {
     try {
       console.log("Quote creation request body:", JSON.stringify(req.body, null, 2));
-      const parsedData = insertQuoteSchema.parse(req.body);
-      // Ensure required fields have defaults and optional fields are properly handled
+      const { accountId, contactId, customerCreate, ...baseQuoteData } = createQuoteSchema.parse(req.body);
+      
+      let resolvedAccountId = accountId ?? null;
+      let resolvedContactId = contactId ?? null;
+
+      // Only create/get an Account when explicitly requested via customerCreate
+      if (!resolvedAccountId && customerCreate) {
+        console.log("Creating account from customer hint");
+        const account = await upsertAccountFromHint(customerCreate);
+        resolvedAccountId = account.id;
+      }
+
+      // Build the quote data for storage
       const quoteData: InsertQuote = {
-        ...parsedData,
-        quoteNumber: parsedData.quoteNumber || `Q-${Date.now()}`,
-        projectName: parsedData.projectName || "",
-        projectAddress: parsedData.projectAddress || "",
-        estimatedStartDate: parsedData.estimatedStartDate || "",
-        notes: parsedData.notes || "",
-        jobsiteAddress: parsedData.jobsiteAddress || undefined,
-        lostReason: parsedData.lostReason || undefined,
+        ...baseQuoteData,
+        accountId: resolvedAccountId,
+        contactId: resolvedContactId,
+        quoteNumber: `Q-${Date.now()}`, // Auto-generate unique quote number
+        projectName: baseQuoteData.projectName || "",
+        projectAddress: baseQuoteData.projectAddress || "",
+        estimatedStartDate: baseQuoteData.estimatedStartDate || "",
+        notes: baseQuoteData.notes || "",
+        taxRate: baseQuoteData.taxRate || "0",
+        discount: baseQuoteData.discount || "0", 
+        shipping: baseQuoteData.shipping || "0",
+        dealStage: baseQuoteData.dealStage || "new_lead",
+        jobsiteAddress: baseQuoteData.jobsiteAddress || undefined,
+        lostReason: baseQuoteData.lostReason || undefined,
+        contractTemplateId: baseQuoteData.contractTemplateId || undefined,
+        customContractTerms: baseQuoteData.customContractTerms || undefined,
       };
+      
       const quote = await storage.createQuote(quoteData);
       res.status(201).json(quote);
     } catch (error: any) {
@@ -1373,7 +1483,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           createNewQuote: z.boolean(),
           combineIntoSingleQuote: z.boolean(),
           existingQuoteId: z.number().optional(),
-          customerHandling: z.enum(['create_new', 'use_existing']),
+          attachCustomer: z.enum(['auto', 'none', 'match_only']).default('match_only'),
           existingCustomerId: z.number().optional(),
         }),
         extractedQuotes: z.array(z.object({
@@ -1441,29 +1551,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Special handling for combining multiple PDFs into single quote
       if (importData.importOptions.createNewQuote && importData.importOptions.combineIntoSingleQuote && importData.extractedQuotes.length > 1) {
         try {
-          // Create a single customer account (use first PDF's customer data)
+          // Handle customer attachment for combined import (use first PDF's customer data)
           const firstQuote = importData.extractedQuotes[0];
-          let accountId: number;
+          const { accountId, wasCreated } = await handleCustomerAttachment(
+            firstQuote.customer,
+            importData.importOptions.attachCustomer,
+            importData.importOptions.existingCustomerId
+          );
           
-          if (importData.importOptions.customerHandling === 'create_new') {
-            const customerData = {
-              name: firstQuote.customer.name || '',
-              email: firstQuote.customer.email || `combined_import_${Date.now()}@example.com`,
-              phone: firstQuote.customer.phone || '',
-              company: firstQuote.customer.company || null,
-              address: firstQuote.customer.address || null,
-              accountType: 'homeowner' as const
-            };
-
-            const newAccount = await storage.createAccount(customerData);
-            accountId = newAccount.id;
+          if (wasCreated) {
             results.summary.customersCreated++;
-            console.log(`✅ Created combined import customer: ${customerData.name} (ID: ${accountId})`);
-          } else {
-            accountId = importData.importOptions.existingCustomerId || (await storage.getAllAccounts())[0]?.id;
-            if (!accountId) {
-              throw new Error('No customer account available for combined import');
-            }
           }
 
           // Create single quote with combined data
@@ -1505,7 +1602,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
                     markupType: 'percentage' as const,
                     markupValue: '0',
                     discountType: 'percentage' as const,
-                    discountValue: '0'
+                    discountValue: '0',
+                    position: totalLineItemsAdded
                   };
 
                   await storage.createLineItem(lineItemData);
@@ -1551,41 +1649,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Process each extracted quote individually (original logic)
       for (const extractedQuote of importData.extractedQuotes) {
         try {
-          let accountId: number;
-
-          // Handle customer creation/matching
-          if (importData.importOptions.customerHandling === 'create_new') {
-            // Create new customer account
-            const customerData = {
-              name: extractedQuote.customer.name || 'Unknown Customer',
-              email: extractedQuote.customer.email || `unknown_${Date.now()}@example.com`,
-              phone: extractedQuote.customer.phone || '',
-              company: extractedQuote.customer.company || null,
-              address: extractedQuote.customer.address || null,
-              accountType: 'homeowner' as const
-            };
-
-            const newAccount = await storage.createAccount(customerData);
-            accountId = newAccount.id;
+          // Handle customer attachment based on attachCustomer behavior
+          const { accountId, wasCreated } = await handleCustomerAttachment(
+            extractedQuote.customer,
+            importData.importOptions.attachCustomer,
+            importData.importOptions.existingCustomerId
+          );
+          
+          if (wasCreated) {
             results.summary.customersCreated++;
-            console.log(`✅ Created new customer account: ${customerData.name} (ID: ${accountId})`);
-          } else {
-            // Use existing customer or try to match
-            if (importData.importOptions.existingCustomerId) {
-              accountId = importData.importOptions.existingCustomerId;
-            } else {
-              // Try to match by name/email, fallback to first customer
-              const accounts = await storage.getAllAccounts();
-              const matchedAccount = accounts.find(acc => 
-                (extractedQuote.customer.name && acc.name.toLowerCase().includes(extractedQuote.customer.name.toLowerCase())) ||
-                (extractedQuote.customer.email && acc.email === extractedQuote.customer.email)
-              );
-              accountId = matchedAccount?.id || accounts[0]?.id;
-              
-              if (!accountId) {
-                throw new Error('No customer account available for matching');
-              }
-            }
           }
 
           // Handle quote creation or line item addition
@@ -1621,7 +1693,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
                     markupType: 'percentage' as const,
                     markupValue: '0', // Default markup
                     discountType: 'percentage' as const,
-                    discountValue: '0'
+                    discountValue: '0',
+                    position: lineItemsAdded
                   };
 
                   await storage.createLineItem(lineItemData);
@@ -1669,7 +1742,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
                     markupType: 'percentage' as const,
                     markupValue: '0', // Default markup
                     discountType: 'percentage' as const,
-                    discountValue: '0'
+                    discountValue: '0',
+                    position: lineItemsAdded
                   };
 
                   await storage.createLineItem(lineItemData);
