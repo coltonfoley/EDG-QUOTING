@@ -1114,76 +1114,67 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
       };
       
       const drawSignatureSection = () => {
-        // Measure actual acceptance block height using current fonts and spacing
-        const acceptanceHeight = measureAcceptanceBlock(pdf, {
+        // Single source of truth: configure once, measure once, draw with same config
+        const cfg = {
           heading: "CLIENT ACCEPTANCE",
           width: contentWidth,
-          headingFontSizePt: fonts.body.size, // 10pt
-          bodyFontSizePt: fonts.body.size,   // 10pt
-          spacingTop: spacing.lg,            // 24mm spacing before acceptance
-          spacingAfterHeading: spacing.lg,   // 24mm after header
-          fieldGap: spacing.md,              // 18mm between signature fields  
-          labelGap: spacing.xs,              // 6mm from label to line
-          bottomPadding: spacing.xl,         // 30mm final spacing
+          headingFontSizePt: 14,
+          bodyFontSizePt: 11,
+          spacingTop: 12,           // mm above the block
+          spacingAfterHeading: 6,
+          fieldGap: 8,
+          labelGap: 2,
+          bottomPadding: 10,
           fields: [
-            {label: "Signature:", lineWidthMm: 120},
-            {label: "Date:", lineWidthMm: 120},
-            {label: "Print Name:", lineWidthMm: 120}
-          ]
+            { label: "Signature:",  lineWidthMm: contentWidth * 0.62 },
+            { label: "Date:",       lineWidthMm: contentWidth * 0.30 },
+            { label: "Print Name:", lineWidthMm: contentWidth * 0.62 },
+          ],
+        };
+
+        const blockH = measureAcceptanceBlock(pdf, cfg);
+
+        // ensure we have space; if not, add page and reset y
+        yPosition = ensureSpace(pdf, yPosition, blockH, {
+          marginTop: margin,
+          marginBottom: margin,     // your bottom content margin, e.g., 19
+          footerReserve: 15,        // your reserved footer band
+          onNewPage: () => {
+            // if you need to re-draw page header on new page, do it here
+            drawHeader();
+          }
         });
-        
-        yPosition = ensureSpace(pdf, yPosition, acceptanceHeight, {
-          marginTop: margin + spacing.lg, // top margin + header space
-          marginBottom: margin,
-          footerReserve: 15, // matches actual footer reserve
-          onNewPage: drawHeader
-        });
-        
-        addSpace('lg'); // 24mm spacing before acceptance
-        
-        // Branded signature section header
-        const [r, g, b] = colors.accent;
-        pdf.setFillColor(r, g, b);
-        pdf.rect(margin, yPosition - 5, contentWidth, 12, 'F');
-        
-        setColor('onAccent');
-        setFont('body');
-        pdf.text('CLIENT ACCEPTANCE', margin + 5, yPosition + 2);
-        
-        setColor('primary');
-        addSpace('lg'); // 24mm after header
-        
-        // Professional signature lines with labels
-        const lineLength = 120; // Length of signature lines
-        const lineX = margin + 20; // Indent signature lines slightly
-        
-        // Signature line
-        setFont('body');
-        setColor('primary');
-        pdf.text('Signature:', lineX, yPosition);
-        
-        addSpace('xs'); // 6mm spacing
-        pdf.setDrawColor(60, 60, 60); // Dark gray line
-        pdf.setLineWidth(0.5);
-        pdf.line(lineX, yPosition, lineX + lineLength, yPosition); // Signature line
-        
-        addSpace('md'); // 18mm between signature lines
-        
-        // Date line
-        pdf.text('Date:', lineX, yPosition);
-        
-        addSpace('xs'); // 6mm spacing
-        pdf.line(lineX, yPosition, lineX + lineLength, yPosition); // Date line
-        
-        addSpace('md'); // 18mm between signature lines
-        
-        // Print Name line
-        pdf.text('Print Name:', lineX, yPosition);
-        
-        addSpace('xs'); // 6mm spacing
-        pdf.line(lineX, yPosition, lineX + lineLength, yPosition); // Print name line
-        
-        addSpace('xl'); // 30mm final spacing
+
+        // now DRAW with the same config used to measure
+        yPosition += cfg.spacingTop;
+
+        // Header (no teal fill; make legal/contract look distinct)
+        pdf.setFont("helvetica", "bold");
+        pdf.setFontSize(cfg.headingFontSizePt);
+        pdf.text(cfg.heading, margin, yPosition);
+        yPosition += cfg.headingFontSizePt * 0.352778 * 1.2; // advance by heading line-height
+
+        // divider
+        pdf.setDrawColor(200);
+        pdf.line(margin, yPosition + 2, margin + contentWidth, yPosition + 2);
+        yPosition += cfg.spacingAfterHeading;
+
+        // Body labels + lines
+        pdf.setFont("helvetica", "normal");
+        pdf.setFontSize(cfg.bodyFontSizePt);
+
+        const drawField = (label: string, lineWidthMm: number) => {
+          const labelH = cfg.bodyFontSizePt * 0.352778 * 1.15;
+          pdf.text(label, margin, yPosition + labelH);
+          // label -> line gap
+          const lineY = yPosition + labelH + cfg.labelGap;
+          pdf.line(margin + 28, lineY, margin + 28 + lineWidthMm, lineY); // shift 28mm to leave label
+          yPosition = lineY + cfg.fieldGap;
+        };
+
+        cfg.fields.forEach(f => drawField(f.label, f.lineWidthMm));
+
+        yPosition += cfg.bottomPadding;
       };
 
       const drawProfessionalCoverPage = async () => {
