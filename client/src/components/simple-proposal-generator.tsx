@@ -491,13 +491,15 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
       };
       
       const colors = {
-        primary: [0, 0, 0], // Black #000000
+        primary: [60, 60, 60], // Dark body text #3C3C3C
         white: [255, 255, 255], // White #ffffff
         accent: [66, 255, 193], // EDG Teal #42ffc1
         accentRgb: '#42ffc1', // For hex operations
-        gray: [128, 128, 128],
+        gray: [153, 153, 153], // Darker table lines #999999
         lightGray: [240, 240, 240],
-        darkGray: [60, 60, 60]
+        darkGray: [60, 60, 60],
+        tableLines: [153, 153, 153], // Table border color #999999
+        onAccent: [0, 0, 0] // Dark text on teal background #000000
       };
       
       // Company information
@@ -623,8 +625,8 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         
         // Clean design without shadow effects
         
-        // White text on teal background
-        pdf.setTextColor(255, 255, 255);
+        // Dark text on teal background for better contrast
+        setColor('onAccent');
         setFont('h1');
         pdf.text('PROFESSIONAL ESTIMATE', margin + 5, yPosition + 2);
         
@@ -734,7 +736,8 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
           pdf.rect(tableX, headerTop, contentWidth, headerHeight, 'F');
           
           // Draw header borders
-          pdf.setDrawColor(200, 200, 200);
+          const [tr, tg, tb] = colors.tableLines;
+          pdf.setDrawColor(tr, tg, tb);
           pdf.setLineWidth(0.35);
           let currentX = tableX;
           
@@ -749,8 +752,8 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
           // Draw header border outline
           pdf.rect(tableX, headerTop, contentWidth, headerHeight, 'S');
           
-          // White text on teal background
-          pdf.setTextColor(255, 255, 255);
+          // Dark text on teal background for better contrast
+          setColor('onAccent');
           setFont('h3');
           
           currentX = tableX;
@@ -831,7 +834,8 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
           });
           
           // Draw borders for this row
-          pdf.setDrawColor(200, 200, 200);
+          const [tr, tg, tb] = colors.tableLines;
+          pdf.setDrawColor(tr, tg, tb);
           pdf.setLineWidth(0.35);
           
           // Draw horizontal line at bottom of row
@@ -916,7 +920,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
           pdf.setFillColor(r, g, b);
           pdf.rect(labelsX - 2, yPosition - 4, totalsWidth + 7, 12, 'F');
           
-          pdf.setTextColor(255, 255, 255);
+          setColor('onAccent');
           setFont('h2');
           pdf.text('TOTAL:', labelsX, yPosition + 2, { align: 'right' });
           pdf.text(formatCurrency(totals.total), totalsX + totalsWidth, yPosition + 2, { align: 'right' });
@@ -950,7 +954,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         pdf.setFillColor(r, g, b);
         pdf.rect(margin, yPosition - 5, contentWidth, 12, 'F');
         
-        pdf.setTextColor(255, 255, 255);
+        setColor('onAccent');
         setFont('body');
         pdf.text('CLIENT ACCEPTANCE', margin + 5, yPosition + 2);
         
@@ -1163,8 +1167,8 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         pdf.setFillColor(r, g, b);
         pdf.rect(margin, yPosition - 5, contentWidth, 15, 'F');
         
-        // White text on teal background
-        pdf.setTextColor(255, 255, 255);
+        // Dark text on teal background for better contrast
+        setColor('onAccent');
         setFont('h2');
         pdf.text('PRODUCT RENDERINGS', margin + 5, yPosition + 5);
         
@@ -1250,7 +1254,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         pdf.setFillColor(r, g, b);
         pdf.rect(margin, yPosition - 8, contentWidth, 18, 'F');
         
-        pdf.setTextColor(255, 255, 255);
+        setColor('onAccent');
         setFont('h2');
         pdf.text('CONTRACT TERMS & CONDITIONS', margin + 5, yPosition + 2);
         
