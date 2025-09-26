@@ -1094,7 +1094,13 @@ export class DatabaseStorage implements IStorage {
 
   async getGroupsByQuoteId(quoteId: number): Promise<Group[]> {
     return await db
-      .select()
+      .select({
+        id: groups.id,
+        quoteId: groups.quoteId,
+        title: groups.title,
+        position: groups.position,
+        isCollapsed: groups.isCollapsed,
+      })
       .from(groups)
       .where(eq(groups.quoteId, quoteId))
       .orderBy(groups.position);
