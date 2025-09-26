@@ -2398,11 +2398,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const { moves, quoteId } = validatedData.data;
-      const success = await storage.reorderLineItems(moves, quoteId);
-      
-      if (!success) {
-        return res.status(500).json({ message: "Failed to reorder line items" });
-      }
+      await storage.reorderLineItems(quoteId, moves);
 
       res.json({ success: true });
     } catch (error) {
@@ -2532,11 +2528,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const { quoteId, groupPositions } = validatedData.data;
-      const success = await storage.reorderGroups(quoteId, groupPositions);
-      
-      if (!success) {
-        return res.status(500).json({ message: "Failed to reorder groups" });
-      }
+      await storage.reorderGroups(quoteId, groupPositions);
 
       res.json({ success: true });
     } catch (error) {
