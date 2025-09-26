@@ -332,7 +332,7 @@ export const groupIdParamSchema = z.object({
 export const reorderLineItemsSchema = z.object({
   moves: z.array(z.object({
     id: z.number().int().positive("Line item ID must be a positive integer"),
-    groupId: z.string().nullable().optional(),
+    groupId: z.string().nullable(),
     position: z.number().int().min(0, "Position must be non-negative")
   })).min(1, "At least one move is required"),
   quoteId: z.number().int().positive("Quote ID must be a positive integer")
