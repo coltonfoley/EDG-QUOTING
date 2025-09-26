@@ -1113,8 +1113,8 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
       };
       
       const drawSignatureSection = () => {
-        // Check if we need a new page for acceptance section
-        const acceptanceHeight = 80; // Estimated height needed for acceptance section
+        // Check if we need a new page for acceptance section  
+        const acceptanceHeight = 120; // Estimated height needed for acceptance section (header + 3 signature fields + spacing)
         if (checkPageBreak(acceptanceHeight)) {
           // Add new page and reset position if not enough space
           addNewPage();
