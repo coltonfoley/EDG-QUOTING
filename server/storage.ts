@@ -714,6 +714,8 @@ export class DatabaseStorage implements IStorage {
         configData: lineItems.configData,
         baseProductId: lineItems.baseProductId,
         isAccessory: lineItems.isAccessory,
+        groupId: lineItems.groupId,
+        position: lineItems.position,
         productManufacturer: products.manufacturer,
       })
       .from(lineItems)
@@ -736,6 +738,8 @@ export class DatabaseStorage implements IStorage {
       configData: item.configData,
       baseProductId: item.baseProductId,
       isAccessory: item.isAccessory,
+      groupId: item.groupId,
+      position: item.position,
       manufacturer: item.productManufacturer || "Uncategorized",
     }));
 
@@ -783,6 +787,8 @@ export class DatabaseStorage implements IStorage {
             configData: lineItems.configData,
             baseProductId: lineItems.baseProductId,
             isAccessory: lineItems.isAccessory,
+            groupId: lineItems.groupId,
+            position: lineItems.position,
             productManufacturer: products.manufacturer,
           })
           .from(lineItems)
@@ -805,6 +811,8 @@ export class DatabaseStorage implements IStorage {
           configData: item.configData,
           baseProductId: item.baseProductId,
           isAccessory: item.isAccessory,
+          groupId: item.groupId,
+          position: item.position,
           manufacturer: item.productManufacturer || "Uncategorized",
         }));
 
