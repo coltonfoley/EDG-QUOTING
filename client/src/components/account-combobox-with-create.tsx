@@ -41,8 +41,8 @@ interface Account {
 }
 
 interface AccountComboboxWithCreateProps {
-  value?: number;
-  onValueChange: (accountId: number | undefined) => void;
+  value?: number | null;
+  onValueChange: (accountId: number | null | undefined) => void;
   placeholder?: string;
 }
 
@@ -228,8 +228,8 @@ export function AccountComboboxWithCreate({
                 <CommandGroup>
                   <CommandItem
                     onSelect={() => {
-                      console.log("🗑️ Removing account link - calling onValueChange(undefined)");
-                      onValueChange(undefined);
+                      console.log("🗑️ Removing account link - calling onValueChange(null)");
+                      onValueChange(null);
                       setOpen(false);
                       toast({
                         title: "Account unlinked",

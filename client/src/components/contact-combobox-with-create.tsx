@@ -47,8 +47,8 @@ interface Account {
 }
 
 interface ContactComboboxWithCreateProps {
-  value?: number;
-  onValueChange: (contactId: number | undefined) => void;
+  value?: number | null;
+  onValueChange: (contactId: number | null | undefined) => void;
   placeholder?: string;
 }
 

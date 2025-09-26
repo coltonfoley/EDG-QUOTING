@@ -25,8 +25,8 @@ import { AccountComboboxWithCreate } from "@/components/account-combobox-with-cr
 
 const quoteFormSchema = insertQuoteSchema.extend({
   quoteNumber: z.string().optional(), // Auto-generated on server
-  accountId: z.number().optional(),
-  contactId: z.number().optional(),
+  accountId: z.number().nullable().optional(),
+  contactId: z.number().nullable().optional(),
   dealStage: z.string().default("new_lead"),
 });
 
@@ -61,8 +61,8 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
       taxRate: quote?.taxRate || "0",
       discount: quote?.discount || "0",
       shipping: quote?.shipping || "0",
-      accountId: quote?.accountId || undefined,
-      contactId: quote?.contactId || undefined,
+      accountId: quote?.accountId ?? null,
+      contactId: quote?.contactId ?? null,
     },
   });
 
@@ -81,8 +81,8 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
         taxRate: quote.taxRate || "0",
         discount: quote.discount || "0",
         shipping: quote.shipping || "0",
-        accountId: quote.accountId || undefined,
-        contactId: quote.contactId || undefined,
+        accountId: quote.accountId ?? null,
+        contactId: quote.contactId ?? null,
       });
     }
   }, [quote, form]);
