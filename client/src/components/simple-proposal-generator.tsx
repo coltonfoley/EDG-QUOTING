@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { FileText, Upload, X, Download, Loader2, Eye, Image, Camera } from 'lucide-react';
 import { formatCurrency, calculateQuoteTotals, calculateLineItemTotal } from '@/lib/utils';
-import { ensureSpace } from '@/lib/pdf-utils';
+import { ensureSpace, measureAcceptanceBlock } from '@/lib/pdf-utils';
 import { getProxiedImageUrl } from '@/lib/image-utils';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import type { QuoteWithDetails, QuoteCoverPhoto, QuoteProductRendering } from '@shared/schema';
@@ -1114,8 +1114,23 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
       };
       
       const drawSignatureSection = () => {
-        // Bulletproof page break check using precise space calculation
-        const acceptanceHeight = 55; // ~2 inches: header + 3 signature fields + reasonable spacing
+        // Measure actual acceptance block height using current fonts and spacing
+        const acceptanceHeight = measureAcceptanceBlock(pdf, {
+          heading: "CLIENT ACCEPTANCE",
+          width: contentWidth,
+          headingFontSizePt: fonts.body.size, // 10pt
+          bodyFontSizePt: fonts.body.size,   // 10pt
+          spacingTop: spacing.lg,            // 24mm spacing before acceptance
+          spacingAfterHeading: spacing.lg,   // 24mm after header
+          fieldGap: spacing.md,              // 18mm between signature fields  
+          labelGap: spacing.xs,              // 6mm from label to line
+          bottomPadding: spacing.xl,         // 30mm final spacing
+          fields: [
+            {label: "Signature:", lineWidthMm: 120},
+            {label: "Date:", lineWidthMm: 120},
+            {label: "Print Name:", lineWidthMm: 120}
+          ]
+        });
         
         yPosition = ensureSpace(pdf, yPosition, acceptanceHeight, {
           marginTop: margin + spacing.lg, // top margin + header space
