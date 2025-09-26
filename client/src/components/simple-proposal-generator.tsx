@@ -1215,8 +1215,9 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
                 imageWidth = imageHeight * aspectRatio;
               }
               
-              // Check if image will fit on current page
-              const remainingSpace = pageHeight - yPosition - margin;
+              // Check if image will fit on current page (reserve space for footer)
+              const footerReserve = 20; // 20mm for footer space
+              const remainingSpace = pageHeight - yPosition - margin - footerReserve;
               if (imageHeight > remainingSpace && imagesOnCurrentPage > 0) {
                 // Image won't fit, start new page
                 addNewPage();
