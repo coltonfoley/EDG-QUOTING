@@ -1113,8 +1113,23 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
       };
       
       const drawSignatureSection = () => {
-        // Check if we need a new page for acceptance section  
-        const acceptanceHeight = 90; // Estimated height needed for acceptance section (header + 3 signature fields + spacing)
+        // Calculate actual space needed for acceptance section dynamically
+        const spacing = {
+          xs: 6,    // 6mm
+          md: 18,   // 18mm
+          lg: 24,   // 24mm  
+          xl: 30    // 30mm
+        };
+        
+        const acceptanceHeight = 
+          spacing.lg +    // spacing before acceptance (24mm)
+          12 +           // header height (12mm)
+          spacing.lg +    // spacing after header (24mm)
+          (8 * 3) +      // 3 text labels (8mm each)
+          (spacing.xs * 3) + // 3 line spacings (6mm each)
+          (spacing.md * 2) + // 2 between-field spacings (18mm each)
+          spacing.xl;     // final spacing (30mm)
+        
         if (checkPageBreak(acceptanceHeight)) {
           // Add new page and reset position if not enough space
           addNewPage();
