@@ -1293,8 +1293,9 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                   const groupItems = groupedLineItems.grouped[group.id] || [];
                   
                   return (
-                    <React.Fragment key={group.id}>
+                    <>
                       <GroupHeader
+                        key={group.id}
                         group={group}
                         lineItems={groupItems}
                         onToggleCollapse={handleToggleGroupCollapse}
@@ -1327,7 +1328,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                           onAddItem={() => setShowNewItemForm(true)}
                         />
                       )}
-                    </React.Fragment>
+                    </>
                   );
                 })}
 
