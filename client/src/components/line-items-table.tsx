@@ -766,17 +766,52 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
       }
     }
 
-    // Only proceed if there's a change
-    if (activeItem.groupId === targetGroupId && activeItem.position === targetPosition) {
+    // Only proceed if there's a change in group or position
+    const isSameGroup = activeItem.groupId === targetGroupId;
+    const currentPosition = isSameGroup ? 
+      (targetGroupId ? groupedLineItems.grouped[targetGroupId] || [] : groupedLineItems.ungrouped)
+        .findIndex(item => item.id === activeItemId) : -1;
+    
+    if (isSameGroup && currentPosition === targetPosition) {
       return;
     }
 
-    // Create the move operation
-    const moves = [{
-      id: activeItemId,
-      groupId: targetGroupId,
-      position: targetPosition
-    }];
+    // Create moves for all affected items to ensure proper positioning
+    const moves: { id: number; groupId: string | null; position: number }[] = [];
+    
+    // Get all items in the target group (excluding the active item)
+    const targetGroupItems = targetGroupId 
+      ? (groupedLineItems.grouped[targetGroupId] || []).filter(item => item.id !== activeItemId)
+      : groupedLineItems.ungrouped.filter(item => item.id !== activeItemId);
+    
+    // If moving to a different group, also update positions in the source group
+    if (!isSameGroup && activeItem.groupId) {
+      const sourceGroupItems = activeItem.groupId 
+        ? (groupedLineItems.grouped[activeItem.groupId] || []).filter(item => item.id !== activeItemId)
+        : groupedLineItems.ungrouped.filter(item => item.id !== activeItemId);
+      
+      // Reposition items in source group
+      sourceGroupItems.forEach((item, index) => {
+        moves.push({
+          id: item.id,
+          groupId: activeItem.groupId,
+          position: index
+        });
+      });
+    }
+    
+    // Insert the active item at the target position and adjust other items
+    const newTargetGroupItems = [...targetGroupItems];
+    newTargetGroupItems.splice(targetPosition, 0, activeItem);
+    
+    // Create moves for all items in target group
+    newTargetGroupItems.forEach((item, index) => {
+      moves.push({
+        id: item.id,
+        groupId: targetGroupId,
+        position: index
+      });
+    });
 
     reorderLineItemsMutation.mutate(moves);
   };
