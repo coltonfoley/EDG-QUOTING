@@ -1183,84 +1183,64 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         const maxImageHeight = (pageHeight - margin * 2 - 50) * 0.75; // 75% of available page height
         const maxImageWidth = contentWidth;
         
-        // Show 1-2 large images per page
-        const imagesPerPage = 2;
+        // Show 1 large image per page for maximum showcase impact
+        const imagesPerPage = 1;
         let imageIndex = 0;
         
-        while (imageIndex < productRenderings.length) {
-          let imagesOnCurrentPage = 0;
-          const startingY = yPosition;
+        // Process each image on its own page
+        for (let i = 0; i < productRenderings.length; i++) {
+          const rendering = productRenderings[i];
           
-          // Place up to 2 images on current page
-          for (let i = 0; i < imagesPerPage && imageIndex < productRenderings.length; i++) {
-            const rendering = productRenderings[imageIndex];
+          try {
+            const { dataUrl, format } = await getImageDataForPDF(rendering);
             
-            try {
-              const { dataUrl, format } = await getImageDataForPDF(rendering);
-              
-              // Calculate actual image dimensions maintaining aspect ratio
-              const img = document.createElement('img') as HTMLImageElement;
-              img.src = dataUrl;
-              await img.decode();
-              
-              const aspectRatio = img.width / img.height;
-              
-              // Size image to fit within max dimensions while maintaining aspect ratio
-              let imageWidth = maxImageWidth;
-              let imageHeight = imageWidth / aspectRatio;
-              
-              // If height exceeds max, scale down to fit height
-              if (imageHeight > maxImageHeight) {
-                imageHeight = maxImageHeight;
-                imageWidth = imageHeight * aspectRatio;
-              }
-              
-              // Check if image will fit on current page (reserve space for footer)
-              const footerReserve = 20; // 20mm for footer space
-              const remainingSpace = pageHeight - yPosition - margin - footerReserve;
-              if (imageHeight > remainingSpace && imagesOnCurrentPage > 0) {
-                // Image won't fit, start new page
-                addNewPage();
-                
-                // Add gallery header to new page
-                pdf.setFillColor(r, g, b);
-                pdf.rect(margin, yPosition - 8, contentWidth, 18, 'F');
-                
-                setColor('onAccent');
-                setFont('h2');
-                pdf.text('PRODUCT RENDERINGS (CONTINUED)', margin + 5, yPosition + 2);
-                
-                setColor('primary');
-                addSpace('lg'); // 24mm space after header
-                
-                imagesOnCurrentPage = 0; // Reset counter for new page
-              }
-              
-              // Center image horizontally
-              const imageX = margin + (contentWidth - imageWidth) / 2;
-              
-              // Add image to PDF
-              pdf.addImage(dataUrl, format, imageX, yPosition, imageWidth, imageHeight);
-              
-              // Move position for next image
-              yPosition += imageHeight + spacing.lg; // 24mm spacing between images
-              imagesOnCurrentPage++;
-              
-              // Clean up converted image URL if different from original
-              if (dataUrl !== rendering.preview) {
-                URL.revokeObjectURL(dataUrl);
-              }
-              
-            } catch (e) {
-              console.warn(`Could not add rendering ${imageIndex} to PDF:`, e);
-              // Add some space even if image fails
-              addSpace('xl'); // 30mm
+            // Calculate actual image dimensions maintaining aspect ratio
+            const img = document.createElement('img') as HTMLImageElement;
+            img.src = dataUrl;
+            await img.decode();
+            
+            const aspectRatio = img.width / img.height;
+            
+            // Size image to fit within max dimensions while maintaining aspect ratio
+            let imageWidth = maxImageWidth;
+            let imageHeight = imageWidth / aspectRatio;
+            
+            // If height exceeds max, scale down to fit height
+            if (imageHeight > maxImageHeight) {
+              imageHeight = maxImageHeight;
+              imageWidth = imageHeight * aspectRatio;
             }
             
-            imageIndex++;
+            // Center image horizontally
+            const imageX = margin + (contentWidth - imageWidth) / 2;
+            
+            // Add image to PDF
+            pdf.addImage(dataUrl, format, imageX, yPosition, imageWidth, imageHeight);
+            
+            // Clean up converted image URL if different from original
+            if (dataUrl !== rendering.preview) {
+              URL.revokeObjectURL(dataUrl);
+            }
+            
+            // Start new page for next image (except for the last one)
+            if (i < productRenderings.length - 1) {
+              addNewPage();
+              
+              // Add gallery header to continuation page
+              pdf.setFillColor(r, g, b);
+              pdf.rect(margin, yPosition - 8, contentWidth, 18, 'F');
+              
+              setColor('onAccent');
+              setFont('h2');
+              pdf.text('PRODUCT RENDERINGS (CONTINUED)', margin + 5, yPosition + 2);
+              
+              setColor('primary');
+              addSpace('lg'); // 24mm space after header
+            }
+            
+          } catch (e) {
+            console.warn(`Could not add rendering ${i} to PDF:`, e);
           }
-          
-          // Page break logic is now handled inside the loop
         }
         
         // Ensure we have proper spacing at the end
