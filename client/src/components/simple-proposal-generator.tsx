@@ -1221,23 +1221,30 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         // Simple clean design - single teal bar
         
         // Add logo to cover page header
+        const logoY = 8;
+        const logoHeight = 15;
+        let logoWidth = 0;
+        
         if (logoData) {
-          const logoHeight = 15;
-          const logoWidth = (logoData.width / logoData.height) * logoHeight;
+          logoWidth = (logoData.width / logoData.height) * logoHeight;
           try {
-            pdf.addImage(logoData.dataUrl, 'PNG', margin, 8, logoWidth, logoHeight);
+            pdf.addImage(logoData.dataUrl, 'PNG', margin, logoY, logoWidth, logoHeight);
           } catch (e) {
             console.warn('Could not add logo to cover:', e);
           }
         }
         
-        // Contact info integrated into header
+        // Contact info vertically aligned with logo center
+        const logoCenterY = logoY + logoHeight / 2; // Center of logo = 8 + 7.5 = 15.5mm
+        const lineSpacing = 4; // 4mm between contact lines
+        const contactStartY = logoCenterY - lineSpacing; // Start 4mm above center = 11.5mm
+        
         const rightX = pageWidth - margin;
         setFont('small');
         setColor('onAccent'); // Dark text on teal background
-        pdf.text('www.edgpatioshade.com', rightX, 16, { align: 'right' });
-        pdf.text('+1 (815) 581-0138', rightX, 22, { align: 'right' });
-        pdf.text('info@edgpatioshade.com', rightX, 28, { align: 'right' });
+        pdf.text('www.edgpatioshade.com', rightX, contactStartY + lineSpacing, { align: 'right' }); // 15.5mm
+        pdf.text('+1 (815) 581-0138', rightX, contactStartY + (lineSpacing * 2), { align: 'right' }); // 19.5mm  
+        pdf.text('info@edgpatioshade.com', rightX, contactStartY + (lineSpacing * 3), { align: 'right' }); // 23.5mm
         
         // 2. Dramatic Title Section with branded styling
         yPosition = brandBarHeight + 45;
