@@ -1307,7 +1307,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
       // Step 4: Signature section
       drawSignatureSection();
       
-      // Enhanced Terms & Conditions section
+      // Terms & Conditions section
       if (includeContract && hasContractData) {
         // Always start terms on a new page for clarity
         addNewPage();
@@ -1324,15 +1324,14 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         setColor('primary');
         addSpace('md'); // 18mm
         
-        // Optional summary box at top
+        // Summary box at top
         const summaryText = `You're agreeing to professional installation services, payment terms, and warranty coverage as outlined below. Please review all terms carefully before signing.`;
         
         // Summary box styling
-        pdf.setFillColor(248, 248, 248); // Light gray background
+        pdf.setFillColor(248, 248, 248);
         const summaryHeight = 25;
         pdf.roundedRect(margin, yPosition - 3, contentWidth, summaryHeight, 2, 2, 'F');
         
-        // Summary box border
         pdf.setDrawColor(200, 200, 200);
         pdf.setLineWidth(0.5);
         pdf.roundedRect(margin, yPosition - 3, contentWidth, summaryHeight, 2, 2, 'S');
@@ -1345,133 +1344,63 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
           pdf.text(summaryLines[i], margin + 6, yPosition + 3 + (i * 5));
         }
         
-        yPosition += summaryHeight + spacing.sm; // Move past summary box
-        
-        // Helper function to draw bullet icons
-        const drawBulletIcon = (x: number, y: number, type: 'payment' | 'change' | 'warranty') => {
-          pdf.setDrawColor(r, g, b);
-          pdf.setFillColor(r, g, b);
-          
-          switch (type) {
-            case 'payment':
-              // Dollar sign bullet
-              pdf.circle(x, y - 1, 2, 'F');
-              setColor('onAccent');
-              pdf.setFontSize(8);
-              pdf.text('$', x - 1, y + 1, { align: 'center' });
-              break;
-            case 'change':
-              // Edit/change bullet
-              pdf.circle(x, y - 1, 2, 'F');
-              setColor('onAccent');
-              pdf.setFontSize(8);
-              pdf.text('∆', x - 1, y + 1, { align: 'center' });
-              break;
-            case 'warranty':
-              // Shield/warranty bullet
-              pdf.circle(x, y - 1, 2, 'F');
-              setColor('onAccent');
-              pdf.setFontSize(8);
-              pdf.text('✓', x - 1, y + 1, { align: 'center' });
-              break;
-          }
-          setColor('primary');
-        };
+        yPosition += summaryHeight + spacing.sm;
         
         // Get contract content
         const contractContent = quote.contractTemplate?.terms || quote.customContractTerms || '';
         
         if (contractContent.trim()) {
-          // Process enhanced contract content
           const lines = contractContent.split('\n');
-          let currentColumn = 1; // 1 = left, 2 = right
-          const columnWidth = (contentWidth - spacing.sm) / 2; // Two-column layout
-          let leftColumnStartY = yPosition;
-          let rightColumnStartY = yPosition;
           
-          for (let i = 0; i < lines.length; i++) {
-            const line = lines[i].trim();
+          for (const line of lines) {
+            const trimmedLine = line.trim();
             
-            if (!line) {
+            if (!trimmedLine) {
               addSpace('xs'); // 6mm for empty lines
               continue;
             }
             
-            // Detect section headers (numbered sections or ALL CAPS headers)
-            const isNumberedSection = /^\d+\./.test(line);
-            const isAllCapsHeader = line === line.toUpperCase() && line.length > 5;
-            const isKeySection = /payment|change order|warranty/i.test(line);
-            
             // Check for page break
             checkPageBreak(spacing.md);
             
-            if (isNumberedSection || isAllCapsHeader) {
-              // Major section header - full width, bold
-              if (currentColumn === 2) {
-                // Reset to single column for headers
-                currentColumn = 1;
-                yPosition = Math.max(leftColumnStartY, rightColumnStartY) + spacing.sm;
-              }
-              
-              addSpace('sm'); // 12mm before section
+            // Detect section headers (numbered sections)
+            const isNumberedSection = /^\d+\./.test(trimmedLine);
+            const isKeySection = /payment|change order|warranty/i.test(trimmedLine);
+            
+            if (isNumberedSection) {
+              // Section header with proper spacing
+              addSpace('sm'); // 12mm before sections
               setFont('h3');
               setColor('primary');
               
               if (isKeySection) {
-                // Add bullet icon for key sections
-                let iconType: 'payment' | 'change' | 'warranty' = 'payment';
-                if (/change order/i.test(line)) iconType = 'change';
-                if (/warranty/i.test(line)) iconType = 'warranty';
-                
-                drawBulletIcon(margin + 2, yPosition, iconType);
-                pdf.text(line, margin + 10, yPosition);
+                // Simple bullet for key sections
+                pdf.setFillColor(r, g, b);
+                pdf.circle(margin + 3, yPosition - 1, 1.5, 'F');
+                pdf.text(trimmedLine, margin + 8, yPosition);
               } else {
-                pdf.text(line, margin, yPosition);
+                pdf.text(trimmedLine, margin, yPosition);
               }
-              
               addSpace('xs'); // 6mm after header
-              leftColumnStartY = yPosition;
-              rightColumnStartY = yPosition;
               
             } else {
-              // Regular content - use two-column layout for dense sections
+              // Regular content with consistent formatting
               setFont('body');
               setColor('primary');
               
-              const textWidth = currentColumn === 1 ? columnWidth : columnWidth;
-              const textX = currentColumn === 1 ? margin : margin + columnWidth + spacing.sm;
-              
-              // Increased line height for better readability
-              const wrappedLines = pdf.splitTextToSize(line, textWidth - 4);
+              const wrappedLines = pdf.splitTextToSize(trimmedLine, contentWidth - 4);
               
               for (let j = 0; j < wrappedLines.length; j++) {
-                pdf.text(wrappedLines[j], textX, yPosition);
-                addSpace('xs'); // 6mm line height (increased from default)
+                pdf.text(wrappedLines[j], margin, yPosition);
+                addSpace('xs'); // 6mm line height for readability
               }
               
               addSpace('xs'); // Extra spacing between paragraphs
-              
-              // Update column tracking
-              if (currentColumn === 1) {
-                leftColumnStartY = yPosition;
-                // Switch to right column for next content
-                if (i < lines.length - 1 && lines[i + 1].trim() && 
-                    !(/^\d+\./.test(lines[i + 1]) || lines[i + 1] === lines[i + 1].toUpperCase())) {
-                  currentColumn = 2;
-                  yPosition = rightColumnStartY;
-                }
-              } else {
-                rightColumnStartY = yPosition;
-                // Switch back to left column
-                currentColumn = 1;
-                yPosition = leftColumnStartY;
-              }
             }
           }
-          
-          // Ensure we end with proper spacing
-          yPosition = Math.max(leftColumnStartY, rightColumnStartY) + spacing.lg;
         }
+        
+        addSpace('lg'); // Final spacing
       }
       
       // Add footers to all pages after content is generated
