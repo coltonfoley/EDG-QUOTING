@@ -478,7 +478,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
       const pageHeight = 279.4; // Letter height in mm
       const margin = 19; // Professional margins (3/4 inch)
       const contentWidth = pageWidth - (2 * margin);
-      let yPosition = margin;
+      let yPosition = margin + 25; // Leave space for header with logo and title
       let currentPage = 1;
       
       // Professional typography scale and brand tokens
@@ -535,11 +535,11 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
       const addNewPage = () => {
         pdf.addPage();
         currentPage++;
-        yPosition = margin + 20; // Leave space for header
+        yPosition = margin + 25; // Leave space for new header with logo and title
         drawHeader();
       };
       
-      const drawHeader = () => {
+      const stampHeader = (pageTitle: string, projectName: string) => {
         // Skip header on cover page - cover has its own branding
         if (includeCoverPage && currentPage === 1) return;
         
@@ -550,36 +550,41 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         pdf.setFillColor(r, g, b);
         pdf.rect(0, 0, pageWidth, 4, 'F'); // Teal strip at very top
         
+        // Add logo to header if available
+        if (logoData) {
+          const logoHeight = 12;
+          const logoWidth = (logoData.width / logoData.height) * logoHeight;
+          try {
+            pdf.addImage(logoData.dataUrl, 'PNG', margin, headerY, logoWidth, logoHeight);
+          } catch (e) {
+            console.warn('Could not add logo to header:', e);
+          }
+        }
         
-        // Company name with stronger branding
+        // Page title and project name in center
         setFont('subheading');
         setColor('primary');
-        pdf.text(company.name.toUpperCase(), margin, headerY + 2);
+        const centerX = pageWidth / 2;
+        pdf.text(pageTitle.toUpperCase(), centerX, headerY + 4, { align: 'center' });
         
-        // Professional contact layout
-        setFont('caption');
+        setFont('body');
         setColor('darkGray');
-        pdf.text(company.address1 + ' • ' + company.address2, margin, headerY + 6);
-        
-        // Right-aligned contact with teal accents
-        const rightX = pageWidth - margin;
-        setColor('primary');
-        pdf.text(company.phone, rightX, headerY + 2, { align: 'right' });
-        setColor('darkGray');
-        pdf.text(company.email + ' • ' + company.website, rightX, headerY + 6, { align: 'right' });
+        pdf.text(projectName, centerX, headerY + 9, { align: 'center' });
         
         // Branded bottom border
         pdf.setDrawColor(r, g, b);
         pdf.setLineWidth(1);
-        pdf.line(margin, headerY + 10, pageWidth - margin, headerY + 10);
-        
-        // Clean professional design
+        pdf.line(margin, headerY + 12, pageWidth - margin, headerY + 12);
+      };
+
+      const drawHeader = () => {
+        stampHeader('Project Proposal', quote.projectName || 'Outdoor Living Project');
       };
       
-      const drawFooter = () => {
-        // ABSOLUTELY NO PAGE NUMBERS ON COVER PAGE - SKIP ENTIRELY
+      const stampFooter = (pageNumber: number, pageCount: number) => {
+        // Skip footer on cover page - cover has its own custom footer
         if (includeCoverPage && currentPage === 1) {
-          return; // Cover page has its own custom footer band
+          return;
         }
         
         const footerY = pageHeight - margin + 2;
@@ -590,21 +595,22 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         pdf.setLineWidth(2);
         pdf.line(margin, footerY - 8, pageWidth - margin, footerY - 8);
         
-        
         // Company name on left
         setFont('caption');
         setColor('primary');
         pdf.text(company.name, margin, footerY - 2, { align: 'left' });
         
         // Page numbers in center
-        const totalPages = pdf.getNumberOfPages();
-        pdf.text(`PAGE ${currentPage} OF ${totalPages}`, pageWidth / 2, footerY - 2, { align: 'center' });
+        pdf.text(`page ${pageNumber} of ${pageCount}`, pageWidth / 2, footerY - 2, { align: 'center' });
         
         // Contact info on right
         setColor('darkGray');
         pdf.text(`${company.phone}  •  ${company.email}`, pageWidth - margin, footerY - 2, { align: 'right' });
-        
-        // Clean footer design
+      };
+
+      const drawFooter = () => {
+        const totalPages = pdf.getNumberOfPages();
+        stampFooter(currentPage, totalPages);
       };
       
       const drawEstimateHeader = () => {
@@ -1144,7 +1150,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         // Add new page for main content (this will be page 2)
         pdf.addPage();
         currentPage++;
-        yPosition = margin + 20; // Leave space for header
+        yPosition = margin + 25; // Leave space for header with logo and title
         drawHeader(); // This runs on page 2
       };
 
