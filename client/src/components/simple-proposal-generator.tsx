@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { FileText, Upload, X, Download, Loader2, Eye, Image, Camera } from 'lucide-react';
 import { formatCurrency, calculateQuoteTotals, calculateLineItemTotal } from '@/lib/utils';
+import { ensureSpace } from '@/lib/pdf-utils';
 import { getProxiedImageUrl } from '@/lib/image-utils';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import type { QuoteWithDetails, QuoteCoverPhoto, QuoteProductRendering } from '@shared/schema';
@@ -1113,14 +1114,15 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
       };
       
       const drawSignatureSection = () => {
-        // Simple, pragmatic page break check - ~55mm covers signature section without being overly conservative
+        // Bulletproof page break check using precise space calculation
         const acceptanceHeight = 55; // ~2 inches: header + 3 signature fields + reasonable spacing
         
-        if (checkPageBreak(acceptanceHeight)) {
-          // Add new page and reset position if not enough space
-          addNewPage();
-          drawHeader(); // Add header to new page
-        }
+        yPosition = ensureSpace(pdf, yPosition, acceptanceHeight, {
+          marginTop: margin + spacing.lg, // top margin + header space
+          marginBottom: margin,
+          footerReserve: 15, // matches actual footer reserve
+          onNewPage: drawHeader
+        });
         
         addSpace('lg'); // 24mm spacing before acceptance
         
