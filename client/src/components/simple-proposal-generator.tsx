@@ -1069,18 +1069,19 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         setFont('body');
         setColor('primary');
         
-        // Check if we have tax or discounts that make total different from subtotal
-        const hasTaxOrDiscounts = totals.taxAmount > 0 || totals.discountAmount > 0;
+        // Check if we have shipping, tax, or discounts that make total different from subtotal
+        const hasBreakdownItems = totals.shippingAmount > 0 || totals.taxAmount > 0 || totals.discountAmount > 0;
         
         // Calculate total box height based on content
         const baseHeight = 15; // Height for TOTAL row
         const itemHeight = 8; // Height per subtotal item
         let totalBoxHeight = baseHeight;
         
-        if (hasTaxOrDiscounts) {
+        if (hasBreakdownItems) {
           totalBoxHeight += itemHeight; // Subtotal
-          if (totals.taxAmount > 0) totalBoxHeight += itemHeight; // Tax
+          if (totals.shippingAmount > 0) totalBoxHeight += itemHeight; // Shipping
           if (totals.discountAmount > 0) totalBoxHeight += itemHeight; // Discount
+          if (totals.taxAmount > 0) totalBoxHeight += itemHeight; // Tax
         }
         
         // Draw light gray background box for entire totals section
@@ -1096,7 +1097,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         pdf.setLineWidth(0.5);
         pdf.roundedRect(boxLeft, yPosition - 5, boxWidth, totalBoxHeight + 10, 3, 3, 'S');
         
-        if (hasTaxOrDiscounts) {
+        if (hasBreakdownItems) {
           // Subtotal
           setFont('body');
           setColor('primary');
@@ -1104,10 +1105,10 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
           pdf.text(formatCurrency(totals.subtotal), totalsX + totalsWidth, yPosition, { align: 'right' });
           addSpace('xs'); // 6mm
           
-          // Sales tax
-          if (totals.taxAmount > 0) {
-            pdf.text('Sales tax:', labelsX, yPosition, { align: 'right' });
-            pdf.text(formatCurrency(totals.taxAmount), totalsX + totalsWidth, yPosition, { align: 'right' });
+          // Shipping
+          if (totals.shippingAmount > 0) {
+            pdf.text('Shipping:', labelsX, yPosition, { align: 'right' });
+            pdf.text(formatCurrency(totals.shippingAmount), totalsX + totalsWidth, yPosition, { align: 'right' });
             addSpace('xs'); // 6mm
           }
           
@@ -1115,6 +1116,13 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
           if (totals.discountAmount > 0) {
             pdf.text('Discount:', labelsX, yPosition, { align: 'right' });
             pdf.text(`-${formatCurrency(totals.discountAmount)}`, totalsX + totalsWidth, yPosition, { align: 'right' });
+            addSpace('xs'); // 6mm
+          }
+          
+          // Sales tax
+          if (totals.taxAmount > 0) {
+            pdf.text('Sales tax:', labelsX, yPosition, { align: 'right' });
+            pdf.text(formatCurrency(totals.taxAmount), totalsX + totalsWidth, yPosition, { align: 'right' });
             addSpace('xs'); // 6mm
           }
           
