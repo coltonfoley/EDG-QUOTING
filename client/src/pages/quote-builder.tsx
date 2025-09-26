@@ -75,24 +75,12 @@ export default function QuoteBuilder() {
     mutationFn: async (data: any) => {
       if (!quoteId) throw new Error("No quote ID");
       
-      // Update account first (check both quote.account and quote.customer for backward compatibility)
-      const accountId = quote?.account?.id || quote?.customer?.id;
-      if (accountId) {
-        await apiRequest("PUT", `/api/accounts/${accountId}`, {
-          name: data.customerName,
-          email: data.customerEmail,
-          phone: data.customerPhone,
-          company: data.customerCompany || null,
-        });
-      }
-
-      // Update quote
+      // Now we support changing the account relationship directly via accountId
+      // No need to update account details here since we're selecting from existing accounts
+      
+      // Update quote with the new data (including accountId if changed)
       const quoteData = { ...data };
-      delete quoteData.customerName;
-      delete quoteData.customerEmail;
-      delete quoteData.customerPhone;
-      delete quoteData.customerCompany;
-
+      
       const response = await apiRequest("PUT", `/api/quotes/${quoteId}`, quoteData);
       return response.json();
     },
@@ -117,16 +105,9 @@ export default function QuoteBuilder() {
   const handleUpdateQuote = (field: string, value: any) => {
     if (!quote || !quoteId) return;
     
-    // Use account data if available, fall back to customer for backward compatibility
-    const customerData = quote.account || quote.customer;
-    
     // Only send the specific field being updated, not the entire quote object
     updateQuoteMutation.mutate({
       [field]: value,
-      customerName: customerData.name,
-      customerEmail: customerData.email,
-      customerPhone: customerData.phone,
-      customerCompany: customerData.company || "",
     });
   };
 
