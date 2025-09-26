@@ -69,8 +69,8 @@ export const contacts = pgTable("contacts", {
 export const quotes = pgTable("quotes", {
   id: serial("id").primaryKey(),
   quoteNumber: text("quote_number").notNull().unique(),
-  accountId: integer("account_id"), // Reference to accounts table
-  contactId: integer("contact_id"), // Optional reference to contacts table
+  accountId: integer("account_id").references(() => accounts.id, { onDelete: "set null" }), // Reference to accounts table
+  contactId: integer("contact_id").references(() => contacts.id, { onDelete: "set null" }), // Optional reference to contacts table
   projectName: text("project_name"),
   projectAddress: text("project_address"),
   jobsiteAddress: text("jobsite_address"), // if different from project address
@@ -495,8 +495,8 @@ export type InsertQuoteProductRendering = z.infer<typeof insertQuoteProductRende
 export type InsertIssueReport = z.infer<typeof insertIssueReportSchema>;
 
 export type QuoteWithDetails = Quote & {
-  account: Account;
-  customer: Account; // Legacy alias for backward compatibility
+  account?: Account; // Optional since accountId can be null
+  customer?: Account; // Legacy alias for backward compatibility - also optional
   lineItems: (LineItem & { manufacturer?: string })[];
   contractTemplate?: ContractTemplate;
   proposalTemplate?: ProposalTemplate;
