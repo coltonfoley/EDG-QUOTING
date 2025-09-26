@@ -165,8 +165,13 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
   });
 
   // Fetch groups for this quote
-  const { data: groups = [] } = useQuery<Group[]>({
+  const { data: groups = [], isLoading: groupsLoading, error: groupsError } = useQuery<Group[]>({
     queryKey: ["/api/quotes", quoteId, "groups"],
+    queryFn: async () => {
+      const response = await fetch(`/api/quotes/${quoteId}/groups`);
+      if (!response.ok) throw new Error('Failed to fetch groups');
+      return response.json();
+    },
     enabled: !isUnsavedQuote
   });
 
