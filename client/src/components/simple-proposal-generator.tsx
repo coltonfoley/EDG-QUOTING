@@ -994,9 +994,13 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
       };
       
       const drawSignatureSection = () => {
-        checkPageBreak(50);
+        // Check if we need a new page for acceptance section
+        const acceptanceHeight = 80; // Estimated height needed for acceptance section
+        if (checkPageBreak(acceptanceHeight)) {
+          // Push to new page if table runs long
+        }
         
-        addSpace('md'); // 18mm
+        addSpace('lg'); // 24mm spacing before acceptance
         
         // Branded signature section header
         const [r, g, b] = colors.accent;
@@ -1008,34 +1012,39 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         pdf.text('CLIENT ACCEPTANCE', margin + 5, yPosition + 2);
         
         setColor('primary');
-        addSpace('md'); // 18mm
+        addSpace('lg'); // 24mm after header
         
-        // Professional signature boxes
-        const leftSigX = margin;
-        const rightSigX = margin + (contentWidth / 2);
+        // Professional signature lines with labels
+        const lineLength = 120; // Length of signature lines
+        const lineX = margin + 20; // Indent signature lines slightly
         
-        // Left signature box
-        pdf.setDrawColor(r, g, b);
-        pdf.setLineWidth(1);
-        pdf.rect(leftSigX, yPosition, 70, 25, 'S');
-        
-        setFont('small');
-        setColor('gray');
-        pdf.text('ACCEPTED DATE', leftSigX + 2, yPosition + 5);
+        // Signature line
+        setFont('body');
         setColor('primary');
-        pdf.text('Date:', leftSigX + 2, yPosition + 15);
+        pdf.text('Signature:', lineX, yPosition);
         
-        // Right signature box
-        pdf.setDrawColor(r, g, b);
-        pdf.rect(rightSigX, yPosition, 90, 25, 'S');
+        addSpace('xs'); // 6mm spacing
+        pdf.setDrawColor(60, 60, 60); // Dark gray line
+        pdf.setLineWidth(0.5);
+        pdf.line(lineX, yPosition, lineX + lineLength, yPosition); // Signature line
         
-        setColor('gray');
-        pdf.text('CLIENT SIGNATURE', rightSigX + 2, yPosition + 5);
-        setColor('primary');
-        pdf.text('Signature:', rightSigX + 2, yPosition + 15);
-        pdf.text('Print Name:', rightSigX + 2, yPosition + 20);
+        addSpace('md'); // 18mm between signature lines
         
-        addSpace('xxl'); // 36mm
+        // Date line
+        pdf.text('Date:', lineX, yPosition);
+        
+        addSpace('xs'); // 6mm spacing
+        pdf.line(lineX, yPosition, lineX + lineLength, yPosition); // Date line
+        
+        addSpace('md'); // 18mm between signature lines
+        
+        // Print Name line
+        pdf.text('Print Name:', lineX, yPosition);
+        
+        addSpace('xs'); // 6mm spacing
+        pdf.line(lineX, yPosition, lineX + lineLength, yPosition); // Print name line
+        
+        addSpace('xl'); // 30mm final spacing
       };
 
       const drawProfessionalCoverPage = async () => {
