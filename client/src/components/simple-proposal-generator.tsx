@@ -1446,7 +1446,8 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         pdf.text('CONTRACT TERMS & CONDITIONS', margin + 5, yPosition + 2);
         
         setColor('primary');
-        addSpace('md'); // 18mm
+        // Advance yPosition to clear the header box (18mm height) plus proper spacing
+        yPosition += 18 + spacing.sm; // Clear header box (18mm) + additional spacing (12mm) = 30mm total
         
         // Summary box at top
         const summaryText = `You're agreeing to professional installation services, payment terms, and warranty coverage as outlined below. Please review all terms carefully before signing.`;
