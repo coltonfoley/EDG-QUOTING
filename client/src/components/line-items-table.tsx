@@ -441,7 +441,12 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
       queryClient.invalidateQueries({ queryKey: ["/api/quotes"] });
       queryClient.invalidateQueries({ queryKey: ["/api/quotes", quoteId, "groups"] });
     },
-    onError: () => {
+    onError: (error: any) => {
+      // Check if the error is due to abort and handle gracefully
+      if (error?.name === 'AbortError' || error?.message?.includes('aborted') || error?.message?.includes('signal is aborted')) {
+        // Silent abort - don't show error toast for user-initiated cancellations
+        return;
+      }
       toast({ title: "Error", description: "Failed to reorder items", variant: "destructive" });
     },
   });
@@ -457,7 +462,12 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/quotes", quoteId, "groups"] });
     },
-    onError: () => {
+    onError: (error: any) => {
+      // Check if the error is due to abort and handle gracefully
+      if (error?.name === 'AbortError' || error?.message?.includes('aborted') || error?.message?.includes('signal is aborted')) {
+        // Silent abort - don't show error toast for user-initiated cancellations
+        return;
+      }
       toast({ title: "Error", description: "Failed to reorder groups", variant: "destructive" });
     },
   });
