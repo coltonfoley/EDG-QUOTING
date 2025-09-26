@@ -820,7 +820,6 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
           
           // Check for page break and redraw header if needed
           if (checkPageBreak(actualRowHeight + spacing.xs)) {
-            addNewPage();
             drawTableHeader();
           }
           
@@ -828,8 +827,8 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
           const cellBottom = cellTop + actualRowHeight;
           
           // Zebra striping for better readability
-          if (index % 2 === 1) {
-            pdf.setFillColor(250, 250, 250); // Very light gray for alternate rows
+          if (index % 2 === 0) {
+            pdf.setFillColor(248, 248, 248); // Very light gray for alternate rows
             pdf.rect(tableX, cellTop, contentWidth, actualRowHeight, 'F');
           }
           
