@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Check, ChevronsUpDown, Plus, Building } from "lucide-react";
+import { Check, ChevronsUpDown, Plus, Building, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
@@ -232,8 +232,10 @@ export function AccountComboboxWithCreate({
                       setOpen(false);
                     }}
                     data-testid="clear-account-option"
+                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
                   >
-                    <span className="text-red-500">Clear selection</span>
+                    <X className="mr-2 h-4 w-4" />
+                    Remove account link
                   </CommandItem>
                 </CommandGroup>
               )}
