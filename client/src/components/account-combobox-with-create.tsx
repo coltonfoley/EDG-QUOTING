@@ -228,8 +228,13 @@ export function AccountComboboxWithCreate({
                 <CommandGroup>
                   <CommandItem
                     onSelect={() => {
+                      console.log("🗑️ Removing account link - calling onValueChange(undefined)");
                       onValueChange(undefined);
                       setOpen(false);
+                      toast({
+                        title: "Account unlinked",
+                        description: "Click 'Save Quote' to persist changes",
+                      });
                     }}
                     data-testid="clear-account-option"
                     className="text-red-600 hover:text-red-700 hover:bg-red-50"
