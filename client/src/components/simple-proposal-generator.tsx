@@ -620,7 +620,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
           return;
         }
         
-        const footerY = pageHeight - margin + 2;
+        const footerY = pageHeight - 15 + 2; // Use same 15mm reserve as ensureSpace
         const [r, g, b] = colors.accent;
         
         // Branded footer with teal accent line
@@ -760,10 +760,10 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         });
         ungrouped.sort((a: any, b: any) => (a.position ?? Number.MAX_SAFE_INTEGER) - (b.position ?? Number.MAX_SAFE_INTEGER));
         
-        // Padding constants and layout metrics
-        const lineHeight = 4;
-        const padX = 3;
-        const padY = 3;
+        // Padding constants and layout metrics - all in mm
+        const lineHeight = spacing.xs * 0.67; // ~4mm, grid-aligned
+        const padX = spacing.xs * 0.5; // 3mm
+        const padY = spacing.xs * 0.5; // 3mm
         const rowHeight = 14;
         const headerHeight = 12;
         
@@ -1135,7 +1135,10 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         // Reset font and color
         setColor('primary');
         setFont('body'); // Reset to body font
-        addSpace('md'); // 18mm
+        
+        // Advance yPosition to include totals box outer padding (bottom padding of 5mm)
+        yPosition += 5; // Account for bottom padding of rounded box
+        addSpace('md'); // 18mm additional spacing
       };
       
       const drawSignatureSection = () => {
@@ -1517,7 +1520,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
                 pdf.text(wrappedLines[j], margin, yPosition);
                 if (j < wrappedLines.length - 1) {
                   // Only add line spacing between wrapped lines, not after
-                  addCustomSpace(4); // 6mm line height (rounded to grid)
+                  addCustomSpace(spacing.xs * 0.67); // ~4mm line height (grid-aligned)
                 }
               }
               
