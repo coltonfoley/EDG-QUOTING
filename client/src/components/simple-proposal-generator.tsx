@@ -753,7 +753,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         if (quote.lineItems.length === 0) return;
         
         // Build grouped line items structure
-        const orderedGroups = [...groups].sort((a: any, b: any) => a.position - b.position);
+        const orderedGroups = [...groups].sort((a: any, b: any) => (a.position ?? Number.MAX_SAFE_INTEGER) - (b.position ?? Number.MAX_SAFE_INTEGER));
         const itemsByGroup = new Map<string, any[]>();
         orderedGroups.forEach(g => itemsByGroup.set(g.id, []));
 
@@ -768,9 +768,9 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
 
         // Sort within groups by position
         itemsByGroup.forEach((arr, gid) => {
-          arr.sort((a: any, b: any) => (a.position ?? 0) - (b.position ?? 0));
+          arr.sort((a: any, b: any) => (a.position ?? Number.MAX_SAFE_INTEGER) - (b.position ?? Number.MAX_SAFE_INTEGER));
         });
-        ungrouped.sort((a: any, b: any) => (a.position ?? 0) - (b.position ?? 0));
+        ungrouped.sort((a: any, b: any) => (a.position ?? Number.MAX_SAFE_INTEGER) - (b.position ?? Number.MAX_SAFE_INTEGER));
         
         // Padding constants and layout metrics
         const lineHeight = 4;
@@ -931,23 +931,15 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         // Draw table header
         drawTableHeader();
         
-        // Draw table rows in grouped order
-        let itemIndex = 0;
+        // Build flattened, grouped order of line items
+        const itemsOrdered = [
+          ...ungrouped,
+          ...orderedGroups.flatMap(g => itemsByGroup.get(g.id) ?? [])
+        ];
         
-        // First draw ungrouped items
-        ungrouped.forEach((item) => {
-          drawTableRow(item, itemIndex++);
-        });
-        
-        // Then draw grouped items
-        orderedGroups.forEach(group => {
-          const groupItems = itemsByGroup.get(group.id) || [];
-          if (groupItems.length > 0) {
-            // TODO: Add group header row if needed
-            groupItems.forEach((item) => {
-              drawTableRow(item, itemIndex++);
-            });
-          }
+        // Draw table rows in proper grouped order
+        itemsOrdered.forEach((item, index) => {
+          drawTableRow(item, index);
         });
         
         addSpace('sm'); // 12mm
