@@ -1486,8 +1486,10 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
             }
             
             // Check for page break with contract-specific header handling
+            // Calculate marginTop to include space for contract header
+            const contractHeaderHeight = spacing.lg + 18 + spacing.sm; // header position + header height + spacing
             yPosition = ensureSpace(pdf, yPosition, spacing.md, {
-              marginTop: margin,
+              marginTop: margin + contractHeaderHeight, // This ensures correct return position
               marginBottom: margin,
               footerReserve: 15,
               onNewPage: () => {
@@ -1500,8 +1502,6 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
                 setFont('h2');
                 pdf.text('CONTRACT TERMS & CONDITIONS (CONTINUED)', margin + 5, margin + spacing.lg + 2);
                 setColor('primary');
-                // Set yPosition to start after the contract header
-                yPosition = margin + spacing.lg + 18 + spacing.sm;
               }
             });
             
