@@ -1101,6 +1101,22 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         setColor('darkGray');
         pdf.text((quote.projectName || 'Outdoor Living Project').toUpperCase(), margin, yPosition);
         
+        // Clean project details below title (no box)
+        addSpace('sm'); // 12mm
+        setFont('body');
+        setColor('darkGray');
+        
+        const customer = quote.account ?? quote.customer;
+        const currentDate = new Date().toLocaleDateString('en-US', { 
+          year: 'numeric', month: 'long', day: 'numeric' 
+        });
+        
+        // Two simple lines with project details
+        if (customer.name) {
+          pdf.text(`Client: ${customer.name}`, margin, yPosition);
+          addSpace('xs'); // 6mm
+        }
+        pdf.text(`Date: ${currentDate}`, margin, yPosition);
         
         // 3. Hero Cover Image (if provided)
         addSpace('lg'); // 24mm
@@ -1137,74 +1153,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
           }
         }
         
-        // 4. Professional Metadata Panel (positioned to avoid overlap)
-        const panelHeight = 85;
-        
-        let metadataY;
-        let rectTop;
-        
-        // Position metadata panel to overlay the bottom-right of the cover image
-        metadataY = imageStartY + 60; // Position in lower part of image area
-        rectTop = metadataY - 5;
-        const panelWidth = 85;
-        const panelX = pageWidth - margin - panelWidth;
-        const customer = quote.account ?? quote.customer;
-        
-        // Subtle white box with 1pt gray border
-        pdf.setFillColor(255, 255, 255); // White background
-        pdf.roundedRect(panelX - 5, rectTop, panelWidth + 10, panelHeight, 3, 3, 'F');
-        
-        // 1pt gray border
-        pdf.setDrawColor(153, 153, 153); // Gray
-        pdf.setLineWidth(0.35); // 1pt line
-        pdf.roundedRect(panelX - 5, rectTop, panelWidth + 10, panelHeight, 3, 3, 'S');
-        
-        // Metadata content
-        let metaY = metadataY + 5;
-        setFont('small');
-        setColor('gray');
-        
-        // Project Name
-        setFont('small');
-        setColor('gray');
-        pdf.text('PROJECT', panelX, metaY);
-        metaY += 6;
-        setFont('small');
-        setColor('primary');
-        const projectLines = pdf.splitTextToSize(quote.projectName || 'Untitled Project', panelWidth - 5);
-        projectLines.forEach((line: string) => {
-          pdf.text(line, panelX, metaY);
-          metaY += 5;
-        });
-        metaY += 7;
-        
-        // Customer Name
-        if (customer.name) {
-          setFont('small');
-          setColor('gray');
-          pdf.text('CUSTOMER', panelX, metaY);
-          metaY += 6;
-          setFont('small');
-          setColor('primary');
-          const nameLines = pdf.splitTextToSize(customer.name, panelWidth - 5);
-          nameLines.forEach((line: string) => {
-            pdf.text(line, panelX, metaY);
-            metaY += 5;
-          });
-          metaY += 7;
-        }
-        
-        // Date
-        setFont('small');
-        setColor('gray');
-        pdf.text('DATE', panelX, metaY);
-        metaY += 6;
-        setFont('small');
-        setColor('primary');
-        const currentDate = new Date().toLocaleDateString('en-US', { 
-          year: 'numeric', month: 'long', day: 'numeric' 
-        });
-        pdf.text(currentDate, panelX, metaY);
+        // Clean, minimalist design - no overlay box needed
         
         
         // Add new page for main content (this will be page 2)
