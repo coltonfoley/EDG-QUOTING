@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { FileText, Upload, X, Download, Loader2, Eye, Image, Camera } from 'lucide-react';
 import { formatCurrency, calculateQuoteTotals, calculateLineItemTotal } from '@/lib/utils';
@@ -17,6 +18,8 @@ import type { QuoteWithDetails, QuoteCoverPhoto, QuoteProductRendering } from '@
 import jsPDF from 'jspdf';
 import logoPath from '@assets/Logo_Full Color_Black_1758731429139.png';
 import { barlowRegularBase64, barlowSemiBoldBase64 } from '@/lib/fonts';
+import { generateBrandedSequencePDF } from '@/lib/pdf-branded-sequence';
+import { normalizeImageToDataUrl } from '@/lib/pdf-image-pipeline';
 
 interface SimpleProposalGeneratorProps {
   quote: QuoteWithDetails;
@@ -54,6 +57,7 @@ interface DisplayImage {
 export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimpleProposalGeneratorProps) {
   const [showPricing, setShowPricing] = useState(true);
   const [includeCoverPage, setIncludeCoverPage] = useState(false);
+  const [layoutMode, setLayoutMode] = useState<'classic' | 'branded-sequence'>('classic');
   
   // Temporary uploads (local files before uploading to server)
   const [tempCoverPhoto, setTempCoverPhoto] = useState<UploadedFile | null>(null);
@@ -524,11 +528,9 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
     }
   };
 
-  const generatePDF = async () => {
-    setIsGenerating(true);
-    try {
-      // Load logo for use throughout PDF
-      const logoData = await loadLogo();
+  const generateClassicPDF = async () => {
+    // Load logo for use throughout PDF
+    const logoData = await loadLogo();
       // Baseline grid system for consistent spacing
       const BASELINE = 6; // 6mm baseline grid
       
@@ -1650,7 +1652,76 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         title: "PDF Generated Successfully",
         description: `Professional proposal downloaded as ${filename}. You can also view it using the buttons below.`,
       });
-      
+  };
+
+  const generatePDF = async () => {
+    setIsGenerating(true);
+    try {
+      if (layoutMode === 'branded-sequence') {
+        // Create new PDF instance
+        const pdf = new jsPDF({ unit: 'mm', format: 'letter' });
+        
+        // Add Barlow fonts to PDF (register with exact family names to match section renderers)
+        pdf.addFileToVFS('Barlow-Regular.ttf', barlowRegularBase64);
+        pdf.addFont('Barlow-Regular.ttf', 'Barlow-Regular', 'normal');
+        pdf.addFileToVFS('Barlow-SemiBold.ttf', barlowSemiBoldBase64);
+        pdf.addFont('Barlow-SemiBold.ttf', 'Barlow-SemiBold', 'normal');
+
+        // Normalize render images for PDF
+        const normalizedImages = await Promise.all(
+          productRenderings.map(async (rendering) => {
+            return await normalizeImageToDataUrl(rendering.preview);
+          })
+        );
+
+        // Prepare company info
+        const company = {
+          name: 'EDG Patio & Shade',
+          address: '1802 Holian Drive, Spring Grove, IL 60081',
+          phone: '+1 (815) 581-0138',
+          email: 'info@edgpatioshade.com'
+        };
+
+        // Get contract text (only if includeContract is enabled)
+        const contractText = includeContract ? (quote.contractTemplate?.terms || quote.customContractTerms || '') : '';
+
+        // Generate Branded Sequence PDF
+        await generateBrandedSequencePDF({
+          pdf,
+          company,
+          quote,
+          renderImages: normalizedImages,
+          contractText,
+          showPricing
+        });
+
+        // Save the PDF
+        const pdfBlob = pdf.output('blob');
+        const timestamp = new Date().toISOString().slice(0, 19).replace(/[-:]/g, '');
+        const customer = (quote.account ?? quote.customer)!;
+        const filename = `${customer.name.replace(/[^a-zA-Z0-9]/g, '_')}_Proposal_Branded_${timestamp}.pdf`;
+        
+        // Create download link and store URL for viewing
+        const url = URL.createObjectURL(pdfBlob);
+        
+        // Store the PDF URL for viewing functionality
+        setGeneratedPdfUrl(url);
+        
+        // Auto-download the PDF
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        toast({
+          title: "PDF Generated Successfully",
+          description: `Branded proposal downloaded as ${filename}. You can also view it using the buttons below.`,
+        });
+      } else {
+        await generateClassicPDF();
+      }
     } catch (error) {
       console.error('Error generating PDF:', error);
       toast({
@@ -1680,6 +1751,19 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
               <CardTitle className="text-lg">PDF Options</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="layout-mode">Layout</Label>
+                <Select value={layoutMode} onValueChange={(value: 'classic' | 'branded-sequence') => setLayoutMode(value)}>
+                  <SelectTrigger id="layout-mode" className="w-[200px]" data-testid="select-layout-mode">
+                    <SelectValue placeholder="Select layout" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="classic" data-testid="option-classic">Classic</SelectItem>
+                    <SelectItem value="branded-sequence" data-testid="option-branded-sequence">Branded Sequence</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
               <div className="flex items-center justify-between">
                 <Label htmlFor="show-pricing">Include Pricing</Label>
                 <Switch 

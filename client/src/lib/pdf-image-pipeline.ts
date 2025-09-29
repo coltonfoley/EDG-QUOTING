@@ -1,0 +1,153 @@
+// PDF Image Pipeline with GIF conversion and caching
+
+// In-memory cache for normalized images
+const imageCache = new Map<string, { dataUrl: string; format: 'PNG' | 'JPEG' }>();
+
+/**
+ * Normalizes an image to a data URL suitable for PDF generation.
+ * - Fetches image data if needed
+ * - Converts GIF to PNG (since jsPDF doesn't support GIF reliably)
+ * - Caches results to avoid re-processing
+ * 
+ * @param src - Image source URL (can be blob URL, data URL, or http URL)
+ * @returns Promise with data URL and format
+ */
+export async function normalizeImageToDataUrl(src: string): Promise<{ dataUrl: string; format: 'PNG' | 'JPEG' }> {
+  // Check cache first
+  if (imageCache.has(src)) {
+    return imageCache.get(src)!;
+  }
+
+  try {
+    // Fetch the image as a blob
+    const response = await fetch(src, {
+      credentials: 'include',
+      headers: {
+        'Accept': 'image/*',
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch image: ${response.status}`);
+    }
+
+    const blob = await response.blob();
+    const mimeType = blob.type.toLowerCase();
+
+    // Determine if we need to convert
+    let targetFormat: 'PNG' | 'JPEG' = 'JPEG';
+    let needsConversion = false;
+
+    if (mimeType === 'image/gif') {
+      // GIF needs conversion to PNG to preserve quality
+      targetFormat = 'PNG';
+      needsConversion = true;
+    } else if (mimeType === 'image/png') {
+      targetFormat = 'PNG';
+      needsConversion = false; // PNG is already compatible
+    } else if (mimeType === 'image/jpeg' || mimeType === 'image/jpg') {
+      targetFormat = 'JPEG';
+      needsConversion = false; // JPEG is already compatible
+    } else {
+      // Unknown format - convert to JPEG as fallback
+      targetFormat = 'JPEG';
+      needsConversion = true;
+    }
+
+    let dataUrl: string;
+
+    if (needsConversion) {
+      // Convert image via canvas
+      dataUrl = await convertImageViaCanvas(blob, targetFormat);
+    } else {
+      // Just convert blob to data URL
+      dataUrl = await blobToDataUrl(blob);
+    }
+
+    const result = { dataUrl, format: targetFormat };
+    
+    // Cache the result
+    imageCache.set(src, result);
+    
+    return result;
+  } catch (error) {
+    console.error('Error normalizing image:', error);
+    throw new Error(`Failed to normalize image: ${error}`);
+  }
+}
+
+/**
+ * Converts a blob to a data URL
+ */
+function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(new Error('Failed to read blob as data URL'));
+    reader.readAsDataURL(blob);
+  });
+}
+
+/**
+ * Converts an image to a specific format using canvas
+ */
+function convertImageViaCanvas(blob: Blob, targetFormat: 'PNG' | 'JPEG'): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+
+    if (!ctx) {
+      reject(new Error('Failed to get canvas context'));
+      return;
+    }
+
+    img.onload = () => {
+      canvas.width = img.width;
+      canvas.height = img.height;
+
+      // For JPEG, fill white background (JPEG doesn't support transparency)
+      if (targetFormat === 'JPEG') {
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      }
+
+      ctx.drawImage(img, 0, 0);
+
+      const mimeType = targetFormat === 'PNG' ? 'image/png' : 'image/jpeg';
+      const quality = targetFormat === 'JPEG' ? 0.92 : undefined;
+
+      canvas.toBlob((convertedBlob) => {
+        if (convertedBlob) {
+          blobToDataUrl(convertedBlob).then(resolve).catch(reject);
+        } else {
+          reject(new Error('Failed to convert image'));
+        }
+      }, mimeType, quality);
+      
+      // Clean up
+      URL.revokeObjectURL(img.src);
+    };
+
+    img.onerror = () => {
+      URL.revokeObjectURL(img.src);
+      reject(new Error('Failed to load image for conversion'));
+    };
+
+    img.src = URL.createObjectURL(blob);
+  });
+}
+
+/**
+ * Clears the image cache (useful for memory management)
+ */
+export function clearImageCache(): void {
+  imageCache.clear();
+}
+
+/**
+ * Gets the current cache size
+ */
+export function getImageCacheSize(): number {
+  return imageCache.size;
+}
