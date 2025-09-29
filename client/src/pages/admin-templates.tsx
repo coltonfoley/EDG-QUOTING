@@ -763,7 +763,7 @@ function TemplateForm({
                   name="defaultContent.proposalIntro"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Project Scope Template</FormLabel>
+                      <FormLabel>Proposal Introduction Template</FormLabel>
                       <FormControl>
                         <Textarea {...field} rows={3} data-testid="textarea-project-scope" />
                       </FormControl>
@@ -794,6 +794,49 @@ function TemplateForm({
                       <FormLabel>Payment Terms</FormLabel>
                       <FormControl>
                         <Textarea {...field} rows={2} data-testid="textarea-payment-terms" />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="defaultContent.estimatedStartDate"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Project Timeline Template</FormLabel>
+                      <FormControl>
+                        <Textarea {...field} rows={2} data-testid="textarea-timeline" />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+                
+                <FormField
+                  control={form.control}
+                  name="defaultContent.qualifications"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Company Qualifications</FormLabel>
+                      <FormControl>
+                        <Textarea {...field} rows={2} data-testid="textarea-qualifications" />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+              </div>
+              
+              <div className="grid grid-cols-1 gap-4">
+                <FormField
+                  control={form.control}
+                  name="defaultContent.additionalNotes"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Additional Terms & Notes</FormLabel>
+                      <FormControl>
+                        <Textarea {...field} rows={2} data-testid="textarea-additional-notes" />
                       </FormControl>
                     </FormItem>
                   )}
