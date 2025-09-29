@@ -92,9 +92,9 @@ export default function Quotes() {
     const term = searchTerm.toLowerCase();
     return quotes.filter(quote => 
       quote.quoteNumber.toLowerCase().includes(term) ||
-      quote.customer.name.toLowerCase().includes(term) ||
-      quote.customer.email.toLowerCase().includes(term) ||
-      (quote.customer.company && quote.customer.company.toLowerCase().includes(term)) ||
+      (quote.customer && quote.customer.name.toLowerCase().includes(term)) ||
+      (quote.customer && quote.customer.email.toLowerCase().includes(term)) ||
+      (quote.customer?.company && quote.customer.company.toLowerCase().includes(term)) ||
       (quote.projectName && quote.projectName.toLowerCase().includes(term)) ||
       (quote.projectAddress && quote.projectAddress.toLowerCase().includes(term))
     );
@@ -260,7 +260,7 @@ export default function Quotes() {
                 <Users className="h-8 w-8 text-edg-teal" />
                 <div className="ml-4">
                   <p className="text-sm font-medium text-edg-grey">Active Customers</p>
-                  <p className="text-2xl font-bold text-edg-black">{new Set(quotes?.map(q => q.customer.id)).size || 0}</p>
+                  <p className="text-2xl font-bold text-edg-black">{new Set(quotes?.filter(q => q.customer).map(q => q.customer!.id)).size || 0}</p>
                 </div>
               </div>
             </CardContent>
@@ -374,8 +374,8 @@ export default function Quotes() {
                           </td>
                           <td className="px-6 py-4 text-sm text-edg-black">
                             <div>
-                              <div className="font-medium">{quote.customer.name}</div>
-                              {quote.customer.company && (
+                              <div className="font-medium">{quote.customer?.name || 'Unassigned Quote'}</div>
+                              {quote.customer?.company && (
                                 <div className="text-xs text-edg-grey">{quote.customer.company}</div>
                               )}
                             </div>
