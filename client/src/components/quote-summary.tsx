@@ -19,7 +19,6 @@ interface QuoteSummaryProps {
 }
 
 export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
-  const [issuerSignatureInput, setIssuerSignatureInput] = useState("");
   const [localTaxRate, setLocalTaxRate] = useState<string>("");
   const [localDiscount, setLocalDiscount] = useState<string>("");
   const [localShipping, setLocalShipping] = useState<string>("");
@@ -33,40 +32,8 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
     queryKey: ["/api/contract-templates"],
   });
 
-  const signIssuerMutation = useMutation({
-    mutationFn: async ({ signature }: { signature: string }) => {
-      const response = await fetch(`/api/quotes/${quote.id}/sign-issuer`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ signature }),
-      });
-      
-      if (!response.ok) {
-        throw new Error('Failed to sign quote');
-      }
-      
-      return response.json();
-    },
-    onSuccess: () => {
-      toast({ title: "Quote signed successfully" });
-      queryClient.invalidateQueries({ queryKey: [`/api/quotes/${quote.id}`] });
-    },
-    onError: () => {
-      toast({ 
-        title: "Error", 
-        description: "Failed to sign quote", 
-        variant: "destructive" 
-      });
-    },
-  });
 
 
-  // Simple save functions - no auto-save, manual button click only
-  const handleSaveIssuerSignature = () => {
-    if (issuerSignatureInput.trim()) {
-      signIssuerMutation.mutate({ signature: issuerSignatureInput.trim() });
-    }
-  };
 
   const updateContractMutation = useMutation({
     mutationFn: async (data: { contractTemplateId?: number | null; customContractTerms?: string | null }) => {
@@ -341,64 +308,7 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
         {/* Action Buttons */}
         <div className="space-y-3">
 
-          {/* Signature Status */}
-          <div className="p-3 bg-gray-50 rounded">
-            <div className="text-sm text-center">
-              <span className="font-medium">Signature Status: </span>
-              <span className={`capitalize ${
-                quote.signatureStatus === 'signed' ? 'text-green-600 font-semibold' :
-                quote.signatureStatus === 'unsigned' ? 'text-red-600' :
-                'text-blue-600'
-              }`}>
-                {quote.signatureStatus === 'signed' ? 'Signed by EDG' : 
-                 quote.signatureStatus === 'unsigned' ? 'Unsigned' : 
-                 quote.signatureStatus?.replace('_', ' ')}
-              </span>
-            </div>
-            {quote.issuerSignature && (
-              <div className="text-xs text-gray-600 mt-1">
-                Issuer: {quote.issuerSignature} {quote.issuerSignatureDate && 
-                  `(${new Date(quote.issuerSignatureDate).toLocaleDateString()})`
-                }
-              </div>
-            )}
-            {quote.customerSignature && (
-              <div className="text-xs text-gray-600">
-                Client: {quote.customerSignature} {quote.customerSignatureDate && 
-                  `(${new Date(quote.customerSignatureDate).toLocaleDateString()})`
-                }
-              </div>
-            )}
-          </div>
 
-          {/* Signature Actions */}
-          {!quote.issuerSignature && (
-            <div className="space-y-3">
-              <Label htmlFor="issuerSignature" className="text-sm font-medium">Sign as EDG</Label>
-              <div className="flex gap-2">
-                <Input
-                  id="issuerSignature"
-                  placeholder="Enter your name to sign..."
-                  value={issuerSignatureInput}
-                  onChange={(e) => setIssuerSignatureInput(e.target.value)}
-                  disabled={signIssuerMutation.isPending}
-                  className="flex-1"
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && issuerSignatureInput.trim()) {
-                      handleSaveIssuerSignature();
-                    }
-                  }}
-                />
-                <Button
-                  onClick={handleSaveIssuerSignature}
-                  disabled={!issuerSignatureInput.trim() || signIssuerMutation.isPending}
-                  className="bg-edg-teal hover:bg-edg-teal/90 text-white"
-                >
-                  {signIssuerMutation.isPending ? "Saving..." : "Sign"}
-                </Button>
-              </div>
-            </div>
-          )}
 
           <Button
             variant="outline"
