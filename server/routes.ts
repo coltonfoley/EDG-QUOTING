@@ -4,7 +4,7 @@ import { storage } from "./storage";
 import { z } from "zod";
 import { setupAuth, isAuthenticated, isAuthenticatedOrApiKey } from "./replitAuth";
 import { db } from "./db";
-import { accounts, contacts, products } from "@shared/schema";
+import { accounts, contacts, products, insertWebhookSchema } from "@shared/schema";
 import { eq, or, ilike, and } from "drizzle-orm";
 import {
   insertAccountSchema,
@@ -143,6 +143,66 @@ const rateLimitPDFProcessing = (req: any, res: any, next: any) => {
  * Helper function to strip internal validation metadata from API responses
  * Removes any internal metadata fields that shouldn't be returned to clients
  */
+/**
+ * Webhook notification system for real-time updates
+ */
+async function triggerWebhooks(eventType: string, data: any) {
+  try {
+    // Get webhooks that are registered for this event type
+    const webhooks = await storage.getWebhooksByEvent(eventType);
+    
+    if (webhooks.length === 0) {
+      return; // No webhooks registered for this event
+    }
+
+    // Prepare the payload
+    const payload = {
+      event: eventType,
+      timestamp: new Date().toISOString(),
+      data: data
+    };
+
+    // Send webhooks asynchronously (don't block the main response)
+    const webhookPromises = webhooks.map(async (webhook) => {
+      try {
+        const crypto = await import('crypto');
+        const signature = crypto.createHmac('sha256', webhook.secret)
+          .update(JSON.stringify(payload))
+          .digest('hex');
+
+        const response = await fetch(webhook.url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Webhook-Signature': `sha256=${signature}`,
+            'X-Webhook-Event': eventType,
+            'User-Agent': 'QuotingApp-Webhook/1.0'
+          },
+          body: JSON.stringify(payload),
+          // Timeout after 10 seconds
+          signal: AbortSignal.timeout(10000)
+        });
+
+        if (response.ok) {
+          // Update last triggered timestamp
+          await storage.updateWebhookLastTriggered(webhook.id);
+          console.log(`✅ Webhook ${webhook.name} triggered successfully for ${eventType}`);
+        } else {
+          console.warn(`⚠️ Webhook ${webhook.name} returned ${response.status} for ${eventType}`);
+        }
+      } catch (error) {
+        console.error(`❌ Failed to trigger webhook ${webhook.name} for ${eventType}:`, error);
+      }
+    });
+
+    // Execute all webhook calls in parallel but don't wait for them
+    Promise.allSettled(webhookPromises);
+    
+  } catch (error) {
+    console.error("Error in webhook trigger system:", error);
+  }
+}
+
 function stripValidationMetadata(obj: any): any {
   if (Array.isArray(obj)) {
     return obj.map(stripValidationMetadata);
@@ -1306,6 +1366,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       };
       
       const quote = await storage.createQuote(quoteData);
+      
+      // Trigger webhook for quote creation
+      triggerWebhooks('quote.created', {
+        id: quote.id,
+        quoteNumber: quote.quoteNumber,
+        projectName: quote.projectName,
+        dealStage: quote.dealStage,
+        accountId: quote.accountId,
+        createdAt: quote.createdAt
+      });
+      
       res.status(201).json(quote);
     } catch (error: any) {
       if (error instanceof z.ZodError) {
@@ -1829,6 +1900,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!quote) {
         return res.status(404).json({ message: "Quote not found" });
       }
+      
+      // Trigger webhook for quote update
+      triggerWebhooks('quote.updated', {
+        id: quote.id,
+        quoteNumber: quote.quoteNumber,
+        projectName: quote.projectName,
+        dealStage: quote.dealStage,
+        accountId: quote.accountId,
+        updatedAt: quote.updatedAt,
+        changes: {
+          dealStageChanged: originalQuote.dealStage !== quote.dealStage,
+          previousDealStage: originalQuote.dealStage,
+          newDealStage: quote.dealStage
+        }
+      });
       
       res.json(quote);
     } catch (error: any) {
@@ -3403,6 +3489,83 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching operations projects:", error);
       res.status(500).json({ message: "Failed to fetch projects data" });
+    }
+  });
+
+  // Webhook management routes
+  app.post('/api/webhooks', isAuthenticatedOrApiKey, async (req: any, res) => {
+    try {
+      const currentUser = await storage.getUser(req.user?.id);
+      if (currentUser?.role !== 'admin' && !req.isApiKeyAuth) {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+
+      const webhookData = insertWebhookSchema.parse(req.body);
+      
+      // Add created by user if authenticated via session
+      const webhookToCreate = {
+        ...webhookData,
+        createdBy: req.user?.id || null
+      };
+
+      const newWebhook = await storage.createWebhook(webhookToCreate);
+      
+      // Don't return the secret in the response for security
+      const { secret, ...webhookResponse } = newWebhook;
+      
+      res.json({
+        webhook: webhookResponse,
+        secret: secret.substring(0, 8) + '...' // Show only first 8 chars for confirmation
+      });
+    } catch (error) {
+      console.error("Error creating webhook:", error);
+      res.status(500).json({ message: "Failed to create webhook" });
+    }
+  });
+
+  app.get('/api/webhooks', isAuthenticatedOrApiKey, async (req: any, res) => {
+    try {
+      const currentUser = await storage.getUser(req.user?.id);
+      if (currentUser?.role !== 'admin' && !req.isApiKeyAuth) {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+
+      const webhooks = await storage.getAllWebhooks();
+      
+      // Remove secrets from response for security
+      const sanitizedWebhooks = webhooks.map(webhook => {
+        const { secret, ...webhookData } = webhook;
+        return {
+          ...webhookData,
+          secretPreview: secret.substring(0, 8) + '...'
+        };
+      });
+
+      res.json({ webhooks: sanitizedWebhooks });
+    } catch (error) {
+      console.error("Error fetching webhooks:", error);
+      res.status(500).json({ message: "Failed to fetch webhooks" });
+    }
+  });
+
+  app.delete('/api/webhooks/:id', isAuthenticatedOrApiKey, async (req: any, res) => {
+    try {
+      const currentUser = await storage.getUser(req.user?.id);
+      if (currentUser?.role !== 'admin' && !req.isApiKeyAuth) {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+
+      const id = parseInt(req.params.id);
+      const success = await storage.deleteWebhook(id);
+      
+      if (success) {
+        res.json({ message: "Webhook deleted successfully" });
+      } else {
+        res.status(404).json({ message: "Webhook not found" });
+      }
+    } catch (error) {
+      console.error("Error deleting webhook:", error);
+      res.status(500).json({ message: "Failed to delete webhook" });
     }
   });
 

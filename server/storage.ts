@@ -1,4 +1,4 @@
-import { accounts, customers, contacts, quotes, lineItems, groups, products, users, apiKeys, contractTemplates, proposalTemplates, pricingTables, productAccessories, quoteCoverPhotos, quoteProductRenderings, issueReports, type Account, type Customer, type Contact, type Quote, type LineItem, type Group, type Product, type User, type ApiKey, type ContractTemplate, type ProposalTemplate, type PricingTable, type ProductAccessory, type QuoteCoverPhoto, type QuoteProductRendering, type IssueReport, type InsertAccount, type InsertCustomer, type InsertContact, type InsertQuote, type InsertLineItem, type InsertGroup, type InsertProduct, type InsertUser, type InsertApiKey, type InsertContractTemplate, type InsertProposalTemplate, type InsertPricingTable, type InsertProductAccessory, type InsertQuoteCoverPhoto, type InsertQuoteProductRendering, type InsertIssueReport, type QuoteWithDetails, type ProductWithDetails } from "@shared/schema";
+import { accounts, customers, contacts, quotes, lineItems, groups, products, users, apiKeys, webhooks, contractTemplates, proposalTemplates, pricingTables, productAccessories, quoteCoverPhotos, quoteProductRenderings, issueReports, type Account, type Customer, type Contact, type Quote, type LineItem, type Group, type Product, type User, type ApiKey, type Webhook, type ContractTemplate, type ProposalTemplate, type PricingTable, type ProductAccessory, type QuoteCoverPhoto, type QuoteProductRendering, type IssueReport, type InsertAccount, type InsertCustomer, type InsertContact, type InsertQuote, type InsertLineItem, type InsertGroup, type InsertProduct, type InsertUser, type InsertApiKey, type InsertWebhook, type InsertContractTemplate, type InsertProposalTemplate, type InsertPricingTable, type InsertProductAccessory, type InsertQuoteCoverPhoto, type InsertQuoteProductRendering, type InsertIssueReport, type QuoteWithDetails, type ProductWithDetails } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, inArray, sql, and, ne, or, ilike } from "drizzle-orm";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
@@ -178,6 +178,15 @@ export interface IStorage {
   updateApiKey(id: number, apiKey: Partial<InsertApiKey>): Promise<ApiKey | undefined>;
   updateApiKeyLastUsed(keyHash: string): Promise<void>;
   deleteApiKey(id: number): Promise<boolean>;
+
+  // Webhook methods
+  createWebhook(webhook: InsertWebhook): Promise<Webhook>;
+  getWebhook(id: number): Promise<Webhook | undefined>;
+  getAllWebhooks(): Promise<Webhook[]>;
+  getWebhooksByEvent(eventType: string): Promise<Webhook[]>;
+  updateWebhook(id: number, webhook: Partial<InsertWebhook>): Promise<Webhook | undefined>;
+  updateWebhookLastTriggered(id: number): Promise<void>;
+  deleteWebhook(id: number): Promise<boolean>;
 }
 
 export class MemStorage {
@@ -1284,6 +1293,61 @@ export class DatabaseStorage implements IStorage {
 
   async deleteApiKey(id: number): Promise<boolean> {
     const result = await db.delete(apiKeys).where(eq(apiKeys.id, id));
+    return (result.rowCount || 0) > 0;
+  }
+
+  // Webhook methods
+  async createWebhook(webhook: InsertWebhook): Promise<Webhook> {
+    // Generate a secure secret for webhook verification
+    const secret = randomBytes(32).toString('hex');
+    
+    const webhookData = {
+      ...webhook,
+      secret,
+    };
+
+    const [newWebhook] = await db.insert(webhooks).values(webhookData).returning();
+    return newWebhook;
+  }
+
+  async getWebhook(id: number): Promise<Webhook | undefined> {
+    const result = await db.select().from(webhooks).where(eq(webhooks.id, id));
+    return result[0];
+  }
+
+  async getAllWebhooks(): Promise<Webhook[]> {
+    return await db.select().from(webhooks).orderBy(desc(webhooks.createdAt));
+  }
+
+  async getWebhooksByEvent(eventType: string): Promise<Webhook[]> {
+    // Find active webhooks that are configured for this event type
+    const allWebhooks = await db.select().from(webhooks).where(eq(webhooks.isActive, true));
+    
+    // Filter by event type in the events JSON array
+    return allWebhooks.filter(webhook => {
+      const events = webhook.events as string[];
+      return events.includes(eventType) || events.includes('*'); // Support wildcard events
+    });
+  }
+
+  async updateWebhook(id: number, webhook: Partial<InsertWebhook>): Promise<Webhook | undefined> {
+    const [updatedWebhook] = await db
+      .update(webhooks)
+      .set({ ...webhook, updatedAt: new Date() })
+      .where(eq(webhooks.id, id))
+      .returning();
+    return updatedWebhook;
+  }
+
+  async updateWebhookLastTriggered(id: number): Promise<void> {
+    await db
+      .update(webhooks)
+      .set({ lastTriggered: new Date() })
+      .where(eq(webhooks.id, id));
+  }
+
+  async deleteWebhook(id: number): Promise<boolean> {
+    const result = await db.delete(webhooks).where(eq(webhooks.id, id));
     return (result.rowCount || 0) > 0;
   }
 
