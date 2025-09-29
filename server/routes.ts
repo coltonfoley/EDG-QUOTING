@@ -751,13 +751,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const accountData = insertAccountSchema.parse(req.body);
       
-      // Options for duplicate handling
+      // Options for duplicate handling and contact creation
       const allowDuplicate = req.body.allowDuplicate === true;
       const updateIfExists = req.body.updateIfExists !== false; // Default to true
+      const createPrimaryContact = req.body.createPrimaryContact !== false; // Default to true
       
       const account = await storage.createAccount(accountData, {
         allowDuplicate,
-        updateIfExists
+        updateIfExists,
+        createPrimaryContact
       });
       
       // Check if this was an update of existing account or new creation
@@ -789,13 +791,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const customerData = insertCustomerSchema.parse(req.body);
       
-      // Options for duplicate handling
+      // Options for duplicate handling and contact creation
       const allowDuplicate = req.body.allowDuplicate === true;
       const updateIfExists = req.body.updateIfExists !== false; // Default to true
+      const createPrimaryContact = req.body.createPrimaryContact !== false; // Default to true
       
       const customer = await storage.createCustomer(customerData, {
         allowDuplicate,
-        updateIfExists
+        updateIfExists,
+        createPrimaryContact
       });
       
       // Check if this was an update of existing customer or new creation
