@@ -119,3 +119,61 @@ export function isAuthenticated(req: any, res: any, next: any) {
   }
   res.status(401).json({ message: "Unauthorized" });
 }
+
+// Enhanced authentication that supports both session and API key auth
+export async function isAuthenticatedOrApiKey(req: any, res: any, next: any) {
+  // Check for session authentication first
+  if (req.isAuthenticated()) {
+    return next();
+  }
+
+  // Check for API key authentication
+  const apiKey = req.headers['x-api-key'];
+  if (apiKey) {
+    try {
+      // Find API key by comparing against all active keys
+      const allApiKeys = await storage.getAllApiKeys();
+      const activeKeys = allApiKeys.filter(key => key.isActive);
+      
+      let validApiKey = null;
+      for (const storedKey of activeKeys) {
+        if (await compareApiKeys(apiKey, storedKey.keyHash)) {
+          validApiKey = storedKey;
+          break;
+        }
+      }
+      
+      if (!validApiKey) {
+        return res.status(401).json({ message: "Invalid API key" });
+      }
+
+      // Check if API key has expired
+      if (validApiKey.expiresAt && new Date() > validApiKey.expiresAt) {
+        return res.status(401).json({ message: "API key has expired" });
+      }
+
+      // Update last used timestamp
+      await storage.updateApiKeyLastUsed(validApiKey.keyHash);
+
+      // Set API key context on request
+      req.apiKey = validApiKey;
+      req.isApiKeyAuth = true;
+
+      return next();
+    } catch (error) {
+      console.error("API key validation error:", error);
+      return res.status(500).json({ message: "Authentication error" });
+    }
+  }
+
+  // No valid authentication found
+  res.status(401).json({ message: "Unauthorized - Please provide valid session or API key" });
+}
+
+// Helper function to compare API key with stored hash
+async function compareApiKeys(supplied: string, stored: string): Promise<boolean> {
+  const [hashed, salt] = stored.split(".");
+  const hashedBuf = Buffer.from(hashed, "hex");
+  const suppliedBuf = (await scryptAsync(supplied, salt, 64)) as Buffer;
+  return timingSafeEqual(hashedBuf, suppliedBuf);
+}
