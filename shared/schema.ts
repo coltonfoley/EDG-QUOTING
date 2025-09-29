@@ -302,7 +302,18 @@ export const insertAccountSchema = createInsertSchema(accounts).omit({
   createdAt: true,
   updatedAt: true,
 }).extend({
-  accountType: z.enum(["general_contractor", "homeowner", "commercial"]).default("homeowner"),
+  accountType: z.enum([
+    "homeowner", 
+    "general_contractor", 
+    "commercial", 
+    "property_manager",
+    "architect", 
+    "developer",
+    "subcontractor",
+    "government",
+    "nonprofit",
+    "other"
+  ]).default("homeowner"),
   paymentTerms: z.string().optional().nullable(),
   billingAddress: z.string().optional().nullable(),
 });

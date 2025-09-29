@@ -18,7 +18,18 @@ const accountFormSchema = insertAccountSchema.extend({
   email: z.string().email("Valid email is required"),
   phone: z.string().min(10, "Valid phone number is required"),
   company: z.string().optional(),
-  accountType: z.enum(["homeowner", "general_contractor", "commercial"]),
+  accountType: z.enum([
+    "homeowner", 
+    "general_contractor", 
+    "commercial", 
+    "property_manager",
+    "architect", 
+    "developer",
+    "subcontractor",
+    "government",
+    "nonprofit",
+    "other"
+  ]),
   paymentTerms: z.string().optional(),
   billingAddress: z.string().optional()
 });
@@ -41,7 +52,7 @@ export function AccountForm({ account, onSuccess, onCancel }: AccountFormProps) 
       email: account?.email || "",
       phone: account?.phone || "",
       company: account?.company || "",
-      accountType: (account?.accountType as "homeowner" | "general_contractor" | "commercial") || "homeowner",
+      accountType: (account?.accountType as "homeowner" | "general_contractor" | "commercial" | "property_manager" | "architect" | "developer" | "subcontractor" | "government" | "nonprofit" | "other") || "homeowner",
       paymentTerms: account?.paymentTerms || "net_30",
       billingAddress: account?.billingAddress || ""
     }
@@ -176,6 +187,13 @@ export function AccountForm({ account, onSuccess, onCancel }: AccountFormProps) 
                     <SelectItem value="homeowner">Homeowner</SelectItem>
                     <SelectItem value="general_contractor">General Contractor</SelectItem>
                     <SelectItem value="commercial">Commercial</SelectItem>
+                    <SelectItem value="property_manager">Property Manager</SelectItem>
+                    <SelectItem value="architect">Architect</SelectItem>
+                    <SelectItem value="developer">Developer</SelectItem>
+                    <SelectItem value="subcontractor">Subcontractor</SelectItem>
+                    <SelectItem value="government">Government</SelectItem>
+                    <SelectItem value="nonprofit">Nonprofit</SelectItem>
+                    <SelectItem value="other">Other</SelectItem>
                   </SelectContent>
                 </Select>
                 <FormMessage />
@@ -202,8 +220,14 @@ export function AccountForm({ account, onSuccess, onCancel }: AccountFormProps) 
                     <SelectItem value="due_on_receipt">Due on Receipt</SelectItem>
                     <SelectItem value="net_15">Net 15</SelectItem>
                     <SelectItem value="net_30">Net 30</SelectItem>
+                    <SelectItem value="net_45">Net 45</SelectItem>
                     <SelectItem value="net_60">Net 60</SelectItem>
                     <SelectItem value="net_90">Net 90</SelectItem>
+                    <SelectItem value="50_percent_down">50% Down, Balance Due on Completion</SelectItem>
+                    <SelectItem value="progress_payments">Progress Payments</SelectItem>
+                    <SelectItem value="2_10_net_30">2/10 Net 30 (2% discount if paid within 10 days)</SelectItem>
+                    <SelectItem value="cog">COG (Cash on Delivery)</SelectItem>
+                    <SelectItem value="prepaid">Prepaid</SelectItem>
                   </SelectContent>
                 </Select>
                 <FormMessage />
