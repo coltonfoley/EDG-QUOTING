@@ -139,7 +139,17 @@ export function ContactComboboxWithCreate({
     },
   });
 
-  const selectedContact = contacts.find((contact: Contact) => contact.id === value);
+  // Query for getting current contact if value is set
+  const { data: currentContact } = useQuery({
+    queryKey: [`/api/contacts/${value}`],
+    queryFn: async () => {
+      const response = await apiRequest("GET", `/api/contacts/${value}`);
+      return response.json();
+    },
+    enabled: !!value,
+  });
+
+  const selectedContact = currentContact || contacts.find((contact: Contact) => contact.id === value);
 
   const handleCreateContact = () => {
     if (!newContact.firstName || !newContact.lastName || !newContact.email) {
@@ -196,7 +206,7 @@ export function ContactComboboxWithCreate({
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-full p-0" data-testid="contact-combobox-content">
-          <Command>
+          <Command shouldFilter={false}>
             <CommandInput
               placeholder="Search contacts..."
               value={searchQuery}
