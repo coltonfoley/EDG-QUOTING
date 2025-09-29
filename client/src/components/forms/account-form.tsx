@@ -7,9 +7,11 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { z } from "zod";
+import { User, Info } from "lucide-react";
 
 const accountFormSchema = insertAccountSchema.extend({
   name: z.string().min(1, "Name is required"),
@@ -39,7 +41,7 @@ export function AccountForm({ account, onSuccess, onCancel }: AccountFormProps) 
       email: account?.email || "",
       phone: account?.phone || "",
       company: account?.company || "",
-      accountType: account?.accountType || "homeowner",
+      accountType: (account?.accountType as "homeowner" | "general_contractor" | "commercial") || "homeowner",
       paymentTerms: account?.paymentTerms || "net_30",
       billingAddress: account?.billingAddress || ""
     }
@@ -71,13 +73,23 @@ export function AccountForm({ account, onSuccess, onCancel }: AccountFormProps) 
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+        {!account && (
+          <Alert className="bg-blue-50 border-blue-200">
+            <Info className="h-4 w-4 text-blue-600" />
+            <AlertDescription className="text-blue-800">
+              <strong>Creating a new account</strong> will automatically create a primary contact using the information below. 
+              You can add additional contacts to this account later.
+            </AlertDescription>
+          </Alert>
+        )}
+        
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <FormField
             control={form.control}
             name="name"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Contact Name *</FormLabel>
+                <FormLabel>Account Holder Name *</FormLabel>
                 <FormControl>
                   <Input 
                     placeholder="John Doe" 
