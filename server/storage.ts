@@ -1,4 +1,4 @@
-import { accounts, customers, contacts, quotes, lineItems, groups, products, users, contractTemplates, proposalTemplates, pricingTables, productAccessories, quoteCoverPhotos, quoteProductRenderings, issueReports, type Account, type Customer, type Contact, type Quote, type LineItem, type Group, type Product, type User, type ContractTemplate, type ProposalTemplate, type PricingTable, type ProductAccessory, type QuoteCoverPhoto, type QuoteProductRendering, type IssueReport, type InsertAccount, type InsertCustomer, type InsertContact, type InsertQuote, type InsertLineItem, type InsertGroup, type InsertProduct, type InsertUser, type InsertContractTemplate, type InsertProposalTemplate, type InsertPricingTable, type InsertProductAccessory, type InsertQuoteCoverPhoto, type InsertQuoteProductRendering, type InsertIssueReport, type QuoteWithDetails, type ProductWithDetails } from "@shared/schema";
+import { accounts, customers, contacts, quotes, lineItems, groups, products, users, contractTemplates, pricingTables, productAccessories, quoteCoverPhotos, quoteProductRenderings, issueReports, type Account, type Customer, type Contact, type Quote, type LineItem, type Group, type Product, type User, type ContractTemplate, type PricingTable, type ProductAccessory, type QuoteCoverPhoto, type QuoteProductRendering, type IssueReport, type InsertAccount, type InsertCustomer, type InsertContact, type InsertQuote, type InsertLineItem, type InsertGroup, type InsertProduct, type InsertUser, type InsertContractTemplate, type InsertPricingTable, type InsertProductAccessory, type InsertQuoteCoverPhoto, type InsertQuoteProductRendering, type InsertIssueReport, type QuoteWithDetails, type ProductWithDetails } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, inArray, sql, and, ne, or, ilike } from "drizzle-orm";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
@@ -133,15 +133,6 @@ export interface IStorage {
   deleteContractTemplate(id: number): Promise<boolean>;
   getDefaultContractTemplate(): Promise<ContractTemplate | undefined>;
 
-  // Proposal template methods
-  getAllProposalTemplates(includeInactive?: boolean): Promise<ProposalTemplate[]>;
-  getProposalTemplate(id: number): Promise<ProposalTemplate | undefined>;
-  createProposalTemplate(template: InsertProposalTemplate): Promise<ProposalTemplate>;
-  updateProposalTemplate(id: number, template: Partial<InsertProposalTemplate>): Promise<ProposalTemplate | undefined>;
-  deleteProposalTemplate(id: number): Promise<boolean>;
-  getDefaultProposalTemplate(): Promise<ProposalTemplate | undefined>;
-  getDefaultProposalTemplateByCategory(category: string): Promise<ProposalTemplate | undefined>;
-  getProposalTemplatesByCategory(category: string, includeInactive?: boolean): Promise<ProposalTemplate[]>;
 
   
   
@@ -1415,116 +1406,6 @@ export class DatabaseStorage implements IStorage {
     return template || undefined;
   }
 
-  // Proposal template methods
-  async getAllProposalTemplates(includeInactive?: boolean): Promise<ProposalTemplate[]> {
-    // Build query conditionally to avoid type issues
-    if (!includeInactive) {
-      return await db
-        .select()
-        .from(proposalTemplates)
-        .where(eq(proposalTemplates.isActive, true))
-        .orderBy(proposalTemplates.name);
-    }
-    
-    return await db
-      .select()
-      .from(proposalTemplates)
-      .orderBy(proposalTemplates.name);
-  }
-
-  async getProposalTemplate(id: number): Promise<ProposalTemplate | undefined> {
-    const [template] = await db.select().from(proposalTemplates).where(eq(proposalTemplates.id, id));
-    return template || undefined;
-  }
-
-  async createProposalTemplate(insertTemplate: InsertProposalTemplate): Promise<ProposalTemplate> {
-    // If this template is being set as default, first unset all other defaults in the same category
-    if (insertTemplate.isDefault && insertTemplate.category) {
-      await db
-        .update(proposalTemplates)
-        .set({ isDefault: false })
-        .where(
-          and(
-            eq(proposalTemplates.isDefault, true),
-            eq(proposalTemplates.category, insertTemplate.category)
-          )
-        );
-    }
-    
-    const [template] = await db
-      .insert(proposalTemplates)
-      .values(insertTemplate)
-      .returning();
-    return template;
-  }
-
-  async updateProposalTemplate(id: number, templateData: Partial<InsertProposalTemplate>): Promise<ProposalTemplate | undefined> {
-    // If this template is being set as default, first unset all other defaults in the same category
-    if (templateData.isDefault) {
-      // Get the current template to determine its category
-      const currentTemplate = await this.getProposalTemplate(id);
-      if (currentTemplate) {
-        // Use the category from template data if provided, otherwise use current template's category
-        const targetCategory = templateData.category || currentTemplate.category;
-        
-        await db
-          .update(proposalTemplates)
-          .set({ isDefault: false })
-          .where(
-            and(
-              eq(proposalTemplates.isDefault, true),
-              eq(proposalTemplates.category, targetCategory),
-              ne(proposalTemplates.id, id) // Don't unset itself
-            )
-          );
-      }
-    }
-    
-    const [updated] = await db
-      .update(proposalTemplates)
-      .set(templateData)
-      .where(eq(proposalTemplates.id, id))
-      .returning();
-    return updated || undefined;
-  }
-
-  async deleteProposalTemplate(id: number): Promise<boolean> {
-    const result = await db.delete(proposalTemplates).where(eq(proposalTemplates.id, id));
-    return (result.rowCount || 0) > 0;
-  }
-
-  async getDefaultProposalTemplate(): Promise<ProposalTemplate | undefined> {
-    const [template] = await db.select().from(proposalTemplates).where(eq(proposalTemplates.isDefault, true));
-    return template || undefined;
-  }
-
-  async getDefaultProposalTemplateByCategory(category: string): Promise<ProposalTemplate | undefined> {
-    const [template] = await db
-      .select()
-      .from(proposalTemplates)
-      .where(
-        and(
-          eq(proposalTemplates.isDefault, true),
-          eq(proposalTemplates.category, category),
-          eq(proposalTemplates.isActive, true)
-        )
-      );
-    return template || undefined;
-  }
-
-  async getProposalTemplatesByCategory(category: string, includeInactive?: boolean): Promise<ProposalTemplate[]> {
-    const conditions = [eq(proposalTemplates.category, category)];
-    
-    if (!includeInactive) {
-      conditions.push(eq(proposalTemplates.isActive, true));
-    }
-    
-    return await db
-      .select()
-      .from(proposalTemplates)
-      .where(and(...conditions))
-      .orderBy(desc(proposalTemplates.isDefault), proposalTemplates.name);
-  }
 
   // Enhanced product method with details
   async getProductWithDetails(id: number): Promise<ProductWithDetails | undefined> {

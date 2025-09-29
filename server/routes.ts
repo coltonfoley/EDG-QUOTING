@@ -20,7 +20,6 @@ import {
   reorderGroupsSchema,
   insertProductSchema,
   insertContractTemplateSchema,
-  insertProposalTemplateSchema,
   insertPricingTableSchema,
   insertProductAccessorySchema,
   createUserSchema,
