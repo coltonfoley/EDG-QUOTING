@@ -200,7 +200,7 @@ export function ContactComboboxWithCreate({
             data-testid="contact-combobox-trigger"
           >
             {selectedContact
-              ? `${selectedContact.firstName} ${selectedContact.lastName} — ${selectedContact.accountName}`
+              ? `${selectedContact.firstName} ${selectedContact.lastName}${selectedContact.accountName ? ` — ${selectedContact.accountName}` : ''}`
               : placeholder}
             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
           </Button>
