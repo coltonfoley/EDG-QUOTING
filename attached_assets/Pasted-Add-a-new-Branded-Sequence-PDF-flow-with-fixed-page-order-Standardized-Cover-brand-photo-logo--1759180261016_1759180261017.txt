@@ -1,0 +1,215 @@
+Add a new Branded Sequence PDF flow with fixed page order:
+
+Standardized Cover (brand photo + logo)
+
+Project Details
+
+Gallery (auto-paginate)
+
+Line Items (auto-paginate, optional pricing)
+
+Contract Terms (auto-paginate)
+
+Branded Back Page
+Keep the current Classic generator fully intact and default.
+
+Tasks (Do in Order)
+0) Safeguards (non-breaking)
+
+ Duplicate current generator to preserve behavior:
+
+Create generateClassicPDF() by copying the entire current generatePDF() body (no logic changes).
+
+Add wrapper:
+
+async function generatePDF() {
+  const pdf = new jsPDF({ unit:'mm', format:'letter' });
+  if (layoutMode === 'branded-sequence') {
+    await generateBrandedSequencePDF({ pdf, company, quote, renderImages, contractText, showPricing });
+  } else {
+    await generateClassicPDF({ pdf, company, quote, renderImages, contractText, showPricing });
+  }
+  const blob = pdf.output('blob');
+  const url = URL.createObjectURL(blob);
+  setGeneratedPdfUrl(url);
+}
+
+
+ Default: layoutMode = 'classic'.
+
+1) UI toggle
+
+File: client/src/components/SimpleProposalGenerator.tsx
+
+ Add state:
+
+const [layoutMode, setLayoutMode] = useState<'classic'|'branded-sequence'>('classic');
+
+
+ Add a small “Layout” <select> near existing toggles:
+
+Options: Classic (default), Branded Sequence.
+
+2) Brand assets
+
+File: client/src/lib/pdf-brand-assets.ts (new)
+
+ Export placeholders (replace later with real base64s or an asset loader):
+
+export const BRAND_COVER_JPG = 'data:image/jpeg;base64,REPLACE';
+export const BRAND_LOGO_PNG  = 'data:image/png;base64,REPLACE';
+
+
+ If you prefer loading files: create a small loader that fetches once and caches a dataURL.
+
+3) Image pipeline hardening
+
+File: client/src/lib/pdf-utils.ts (or local to the component)
+
+ Add/confirm a single function:
+
+export async function normalizeImageToDataUrl(src:string): Promise<{dataUrl:string, format:'PNG'|'JPEG'}> {
+  // fetch → blob → dataURL; if GIF, rasterize to PNG via canvas; return {dataUrl, format}
+}
+
+
+ Add an in-memory Map<string, {dataUrl, format}> cache to avoid re-reading images on repeat generations.
+
+4) New generator & sections
+
+File: client/src/lib/pdf-sections.ts (new)
+Create pure, parameterized renderers (no external state):
+
+ drawStandardCover(pdf, { coverDataUrl, logoDataUrl, company, title, subtitle, pageW, pageH })
+
+Full-bleed cover image, semi-transparent bottom band, logo on left, title/subtitle on right. No header/footer.
+
+ drawProjectDetailsPage(pdf, { company, quote, margin, contentW, pageW, pageH, showPricing })
+
+“Project Details” header; two columns (Client/Project/Address vs Date/Rep/Email); Snapshot bullets; Investment Summary (Subtotal/Tax/Shipping?/Total); Acceptance block using measureAcceptanceBlock → ensureSpace → drawAcceptanceBlock.
+
+ drawRenderingsPages(pdf, { images, margin, contentW, pageW, pageH })
+
+Title “Renderings”; 2×2 grid; on new page use “Renderings (cont.)”; detect PNG/JPEG from dataURL.
+
+ drawLineItemsSection(pdf, { quote, showPricing, margin, contentW, pageW, pageH })
+
+New page; Title “Line Items”; columns:
+
+showPricing=true: Description / Qty / Price / Total
+
+false: Description / Qty
+
+Build rows from quote.items with unit price derived from the same math as totals (e.g., calculateLineItemTotal(li)/qty).
+
+ensureSpace each row; on new page, stamp “Line Items (cont.)” and redraw table header.
+
+ drawContractSection(pdf, { contractText, margin, contentW, pageW, pageH })
+
+New page; Title “Terms & Conditions”; split paragraphs on blank lines; wrap with splitTextToSize; paginate with ensureSpace; on new page title “(cont.)”.
+
+ drawBrandedBackPage(pdf, { company, pageW, pageH, margin })
+
+Full dark background, centered logo, company name, contact lines. No header/footer.
+
+5) Orchestrator
+
+File: client/src/lib/pdf-branded-sequence.ts (new)
+
+ Implement:
+
+export async function generateBrandedSequencePDF({ pdf, company, quote, renderImages, contractText, showPricing }) {
+  const pageW = pdf.internal.pageSize.getWidth();
+  const pageH = pdf.internal.pageSize.getHeight();
+  const margin = 19;
+  const contentW = pageW - margin*2;
+
+  drawStandardCover(pdf, { coverDataUrl: BRAND_COVER_JPG, logoDataUrl: BRAND_LOGO_PNG,
+    company, title: quote?.projectName || 'Project Proposal', subtitle: quote?.account?.name || '', pageW, pageH });
+
+  pdf.addPage();
+  drawProjectDetailsPage(pdf, { company, quote, margin, contentW, pageW, pageH, showPricing });
+
+  if (renderImages?.length) {
+    drawRenderingsPages(pdf, { images: renderImages, margin, contentW, pageW, pageH });
+  }
+
+  if ((quote?.items?.length ?? 0) > 0) {
+    drawLineItemsSection(pdf, { quote, showPricing, margin, contentW, pageW, pageH });
+  }
+
+  if (contractText?.trim()) {
+    drawContractSection(pdf, { contractText, margin, contentW, pageW, pageH });
+  }
+
+  pdf.addPage();
+  drawBrandedBackPage(pdf, { company, pageW, pageH, margin });
+}
+
+6) Hook up button
+
+File: client/src/components/SimpleProposalGenerator.tsx
+
+ In the generate handler:
+
+Build pdf = new jsPDF({ unit:'mm', format:'letter' }).
+
+Resolve gallery images to dataURLs via normalizeImageToDataUrl.
+
+Route to generateBrandedSequencePDF or generateClassicPDF based on layoutMode.
+
+Produce Blob + Object URL; set generatedPdfUrl; revoke on unmount.
+
+7) Headers/Footers policy
+
+ Ensure no headers/footers on Cover & Back pages.
+
+ Optional: stamp header/footer on middle pages if the app historically does; if so, call them inside each onNewPage.
+
+8) Pricing toggle
+
+ showPricing=false removes Price/Total columns in Line Items.
+
+ Keep Investment Summary on the details page in all cases.
+
+9) Edge cases
+
+ If no images, skip Gallery.
+
+ If no items, skip Line Items.
+
+ If no contract text, skip Contract.
+
+ Wrap long text (splitTextToSize) for titles, names, addresses, terms.
+
+10) QA checklist (must pass)
+
+ Classic path output unchanged vs pre-change sample (visual check).
+
+ Branded Sequence: 0, 1, and 8+ images (pagination correct, “(cont.)” titles present).
+
+ 0 items and 100+ items (table paginates; headers repeat).
+
+ Pricing on/off (columns adapt; totals consistent with calculateQuoteTotals).
+
+ GIF uploads convert to PNG and embed successfully.
+
+ Contract paragraphs paginate cleanly.
+
+ Blob URL preview & download; URL revoked on dialog close.
+
+11) Flags & rollback
+
+ Keep layoutMode default = 'classic'.
+
+ Optional feature flag to hide the dropdown in production until approved.
+
+ Rollback = set default to 'classic' or hide dropdown; no code reversion required.
+
+Acceptance Criteria
+
+Current (“Classic”) PDF generation is identical to before.
+
+New “Branded Sequence” is available via layout dropdown and follows the exact page order.
+
+All QA checks pass; no console errors; no broken images; pdfs open in common viewers.
