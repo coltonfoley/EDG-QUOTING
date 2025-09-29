@@ -46,7 +46,7 @@ export interface IStorage {
   getAllAccounts(): Promise<Account[]>;
   getAccountWithDetails(id: number): Promise<any>;
   deleteAccount(id: number): Promise<boolean>;
-  createAccount(account: InsertAccount, options?: { allowDuplicate?: boolean; updateIfExists?: boolean }): Promise<Account>;
+  createAccount(account: InsertAccount, options?: { allowDuplicate?: boolean; updateIfExists?: boolean; createPrimaryContact?: boolean }): Promise<Account>;
   updateAccount(id: number, account: Partial<InsertAccount>): Promise<Account | undefined>;
   
   // Legacy customer methods (backward compatibility)
@@ -54,7 +54,7 @@ export interface IStorage {
   getCustomerByEmail(email: string): Promise<Customer | undefined>;
   findDuplicateCustomer(customer: InsertCustomer): Promise<Customer | undefined>;
   searchCustomers(searchTerm: string): Promise<Customer[]>;
-  createCustomer(customer: InsertCustomer, options?: { allowDuplicate?: boolean; updateIfExists?: boolean }): Promise<Customer>;
+  createCustomer(customer: InsertCustomer, options?: { allowDuplicate?: boolean; updateIfExists?: boolean; createPrimaryContact?: boolean }): Promise<Customer>;
   updateCustomer(id: number, customer: Partial<InsertCustomer>): Promise<Customer | undefined>;
   
   // Contact methods
@@ -199,7 +199,7 @@ export class MemStorage {
     return Array.from(this.customers.values()).find(customer => customer.email === email);
   }
 
-  async createCustomer(insertCustomer: InsertCustomer): Promise<Customer> {
+  async createCustomer(insertCustomer: InsertCustomer, options?: { allowDuplicate?: boolean; updateIfExists?: boolean; createPrimaryContact?: boolean }): Promise<Customer> {
     const id = this.currentCustomerId++;
     const customer: Customer = { 
       ...insertCustomer, 
@@ -212,6 +212,12 @@ export class MemStorage {
       updatedAt: new Date()
     };
     this.customers.set(id, customer);
+    
+    // Note: MemStorage doesn't implement contact creation, this is for interface compatibility
+    if (options?.createPrimaryContact) {
+      console.log(`MemStorage: Would create primary contact for customer ${id} if contact storage was implemented`);
+    }
+    
     return customer;
   }
 
