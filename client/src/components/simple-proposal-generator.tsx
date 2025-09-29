@@ -16,6 +16,7 @@ import { apiRequest, queryClient } from '@/lib/queryClient';
 import type { QuoteWithDetails, QuoteCoverPhoto, QuoteProductRendering } from '@shared/schema';
 import jsPDF from 'jspdf';
 import logoPath from '@assets/Logo_Full Color_Black_1758731429139.png';
+import { barlowRegularBase64, barlowSemiBoldBase64 } from '@/lib/fonts';
 
 interface SimpleProposalGeneratorProps {
   quote: QuoteWithDetails;
@@ -543,6 +544,13 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
 
       // Professional document setup - US Letter size
       const pdf = new jsPDF('p', 'mm', 'letter');
+      
+      // Add Barlow fonts to PDF
+      pdf.addFileToVFS('Barlow-Regular.ttf', barlowRegularBase64);
+      pdf.addFont('Barlow-Regular.ttf', 'Barlow', 'normal');
+      pdf.addFileToVFS('Barlow-SemiBold.ttf', barlowSemiBoldBase64);
+      pdf.addFont('Barlow-SemiBold.ttf', 'Barlow', 'bold');
+      
       const pageWidth = 215.9; // Letter width in mm
       const pageHeight = 279.4; // Letter height in mm
       const margin = 19; // Professional margins (3/4 inch)
@@ -584,7 +592,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
       // Professional drawing utilities
       const setFont = (type: keyof typeof fonts) => {
         pdf.setFontSize(fonts[type].size);
-        pdf.setFont('helvetica', fonts[type].weight as any);
+        pdf.setFont('Barlow', fonts[type].weight as any);
       };
       
       const setColor = (colorKey: keyof typeof colors) => {
@@ -1186,7 +1194,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         
         // Bold TOTAL with increased font size
         pdf.setFontSize(fonts.h2.size + 2); // Increase by 2pts (15pt -> 17pt)
-        pdf.setFont('helvetica', 'bold');
+        pdf.setFont('Barlow', 'bold');
         setColor('primary');
         pdf.text('TOTAL:', labelsX, yPosition, { align: 'right' });
         pdf.text(formatCurrency(totals.total), totalsX + totalsWidth, yPosition, { align: 'right' });
@@ -1236,7 +1244,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         yPosition += cfg.spacingTop;
 
         // Header (no teal fill; make legal/contract look distinct)
-        pdf.setFont("helvetica", "bold");
+        pdf.setFont("Barlow", "bold");
         pdf.setFontSize(cfg.headingFontSizePt);
         pdf.text(cfg.heading, margin, yPosition);
         yPosition += cfg.headingFontSizePt * 0.352778 * 1.2; // advance by heading line-height
@@ -1247,7 +1255,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         yPosition += cfg.spacingAfterHeading;
 
         // Body labels + lines
-        pdf.setFont("helvetica", "normal");
+        pdf.setFont("Barlow", "normal");
         pdf.setFontSize(cfg.bodyFontSizePt);
 
         const drawField = (label: string, lineWidthMm: number) => {
@@ -1311,7 +1319,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         
         // Massive impact title
         pdf.setFontSize(32);
-        pdf.setFont('helvetica', 'bold');
+        pdf.setFont('Barlow', 'bold');
         pdf.text('PROJECT PROPOSAL', margin, yPosition);
         
         // Thin left-aligned rule under title
