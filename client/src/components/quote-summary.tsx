@@ -364,7 +364,7 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
             )}
             {quote.customerSignature && (
               <div className="text-xs text-gray-600">
-                Customer: {quote.customerSignature} {quote.customerSignatureDate && 
+                Client: {quote.customerSignature} {quote.customerSignatureDate && 
                   `(${new Date(quote.customerSignatureDate).toLocaleDateString()})`
                 }
               </div>

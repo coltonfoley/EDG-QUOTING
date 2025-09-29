@@ -39,10 +39,10 @@ export default function QuoteBuilder() {
     mutationFn: async (data: any) => {
       // First create or get account (using accounts endpoint)
       const accountResponse = await apiRequest("POST", "/api/accounts", {
-        name: data.customerName,
-        email: data.customerEmail,
-        phone: data.customerPhone,
-        company: data.customerCompany || null,
+        name: data.accountName,
+        email: data.accountEmail,
+        phone: data.accountPhone,
+        company: data.accountCompany || null,
       });
       const account = await accountResponse.json();
 
@@ -52,10 +52,10 @@ export default function QuoteBuilder() {
         accountId: account.id,
         quoteNumber: generateQuoteNumber(),
       };
-      delete quoteData.customerName;
-      delete quoteData.customerEmail;
-      delete quoteData.customerPhone;
-      delete quoteData.customerCompany;
+      delete quoteData.accountName;
+      delete quoteData.accountEmail;
+      delete quoteData.accountPhone;
+      delete quoteData.accountCompany;
 
       const quoteResponse = await apiRequest("POST", "/api/quotes", quoteData);
       return quoteResponse.json();

@@ -44,7 +44,7 @@ export function PipelineCard({ quote, isDragging }: PipelineCardProps) {
                 {quote.projectName || quote.quoteNumber}
               </h4>
               <p className="text-xs text-muted-foreground mt-1 truncate" data-testid={`text-account-${quote.id}`}>
-                {quote.customer?.company || quote.customer?.name}
+                {quote.account?.company || quote.account?.name}
               </p>
             </div>
             <Badge className={getDealStageColor(quote.dealStage || 'new_lead')} data-testid={`badge-stage-${quote.id}`}>
@@ -71,7 +71,7 @@ export function PipelineCard({ quote, isDragging }: PipelineCardProps) {
             <div className="flex items-center text-xs text-muted-foreground">
               <Building2 className="h-3 w-3 mr-1" />
               <span className="capitalize">
-                {quote.customer?.accountType?.replace('_', ' ') || 'N/A'}
+                {quote.account?.accountType?.replace('_', ' ') || 'N/A'}
               </span>
             </div>
 

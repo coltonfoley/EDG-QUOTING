@@ -92,9 +92,9 @@ export default function Quotes() {
     const term = searchTerm.toLowerCase();
     return quotes.filter(quote => 
       quote.quoteNumber.toLowerCase().includes(term) ||
-      (quote.customer && quote.customer.name.toLowerCase().includes(term)) ||
-      (quote.customer && quote.customer.email.toLowerCase().includes(term)) ||
-      (quote.customer?.company && quote.customer.company.toLowerCase().includes(term)) ||
+      (quote.account && quote.account.name.toLowerCase().includes(term)) ||
+      (quote.account && quote.account.email.toLowerCase().includes(term)) ||
+      (quote.account?.company && quote.account.company.toLowerCase().includes(term)) ||
       (quote.projectName && quote.projectName.toLowerCase().includes(term)) ||
       (quote.projectAddress && quote.projectAddress.toLowerCase().includes(term))
     );
@@ -188,7 +188,7 @@ export default function Quotes() {
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-edg-grey h-4 w-4" />
               <Input
-                placeholder="Search quotes, customers, projects..."
+                placeholder="Search quotes, accounts, projects..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-10 w-full sm:w-80"
@@ -245,8 +245,8 @@ export default function Quotes() {
               <div className="flex items-center">
                 <Users className="h-8 w-8 text-edg-teal" />
                 <div className="ml-4">
-                  <p className="text-sm font-medium text-edg-grey">Active Customers</p>
-                  <p className="text-2xl font-bold text-edg-black">{new Set(quotes?.filter(q => q.customer).map(q => q.customer?.id).filter(Boolean)).size || 0}</p>
+                  <p className="text-sm font-medium text-edg-grey">Active Accounts</p>
+                  <p className="text-2xl font-bold text-edg-black">{new Set(quotes?.filter(q => q.account).map(q => q.account?.id).filter(Boolean)).size || 0}</p>
                 </div>
               </div>
             </CardContent>
@@ -319,7 +319,7 @@ export default function Quotes() {
                         Quote #
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-edg-grey uppercase tracking-wider">
-                        Customer
+                        Account
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-edg-grey uppercase tracking-wider">
                         Project
@@ -360,9 +360,9 @@ export default function Quotes() {
                           </td>
                           <td className="px-6 py-4 text-sm text-edg-black">
                             <div>
-                              <div className="font-medium">{quote.customer?.name || 'Unassigned Quote'}</div>
-                              {quote.customer?.company && (
-                                <div className="text-xs text-edg-grey">{quote.customer.company}</div>
+                              <div className="font-medium">{quote.account?.name || 'Unassigned Quote'}</div>
+                              {quote.account?.company && (
+                                <div className="text-xs text-edg-grey">{quote.account.company}</div>
                               )}
                             </div>
                           </td>
