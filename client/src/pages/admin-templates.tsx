@@ -760,7 +760,7 @@ function TemplateForm({
                 
                 <FormField
                   control={form.control}
-                  name="defaultContent.projectScope"
+                  name="defaultContent.proposalIntro"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Project Scope Template</FormLabel>
@@ -1155,10 +1155,10 @@ function TemplatePreview({ template }: { template: ProposalTemplate }) {
             </div>
           </div>
 
-          {content.projectScope && (
+          {content.proposalIntro && (
             <div>
-              <h3 className="font-semibold mb-1" style={{ color: branding.accentColor }}>Project Scope</h3>
-              <p className="text-sm">{content.projectScope}</p>
+              <h3 className="font-semibold mb-1" style={{ color: branding.accentColor }}>Proposal Introduction</h3>
+              <p className="text-sm">{content.proposalIntro}</p>
             </div>
           )}
 
