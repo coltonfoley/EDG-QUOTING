@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { z } from "zod";
-import { setupAuth, isAuthenticated } from "./replitAuth";
+import { setupAuth, isAuthenticated, isAuthenticatedOrApiKey } from "./replitAuth";
 import { db } from "./db";
 import { accounts, contacts, products } from "@shared/schema";
 import { eq, or, ilike, and } from "drizzle-orm";
@@ -3201,6 +3201,208 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error deleting API key:", error);
       res.status(500).json({ message: "Failed to delete API key" });
+    }
+  });
+
+  // Operations Portal API endpoints - optimized for project management and customer service
+  app.get('/api/operations/dashboard', isAuthenticatedOrApiKey, async (req: any, res) => {
+    try {
+      // Aggregate dashboard data for operations teams
+      const [allQuotes, allAccounts] = await Promise.all([
+        storage.getAllQuotes(),
+        storage.getAllAccounts()
+      ]);
+
+      // Calculate key metrics
+      const totalQuotes = allQuotes.length;
+      const quotesByStage = allQuotes.reduce((acc: any, quote) => {
+        acc[quote.dealStage || 'unknown'] = (acc[quote.dealStage || 'unknown'] || 0) + 1;
+        return acc;
+      }, {});
+
+      const totalRevenue = allQuotes
+        .filter(quote => quote.dealStage === 'closed_won')
+        .reduce((sum, quote) => {
+          const quoteTotal = quote.lineItems?.reduce((lineSum: number, item: any) => {
+            const itemTotal = parseFloat(item.unitPrice || 0) * parseFloat(item.quantity || 0);
+            return lineSum + itemTotal;
+          }, 0) || 0;
+          return sum + quoteTotal;
+        }, 0);
+
+      const recentQuotes = allQuotes
+        .sort((a, b) => {
+          const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+          const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          return dateB - dateA;
+        })
+        .slice(0, 10);
+
+      const accountsByType = allAccounts.reduce((acc: any, account) => {
+        acc[account.accountType || 'unknown'] = (acc[account.accountType || 'unknown'] || 0) + 1;
+        return acc;
+      }, {});
+
+      res.json({
+        summary: {
+          totalQuotes,
+          totalAccounts: allAccounts.length,
+          totalRevenue,
+          quotesByStage,
+          accountsByType
+        },
+        recentQuotes: recentQuotes.slice(0, 5), // Just basic info for recent quotes
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error("Error fetching operations dashboard:", error);
+      res.status(500).json({ message: "Failed to fetch dashboard data" });
+    }
+  });
+
+  app.get('/api/operations/customer-service/:accountId', isAuthenticatedOrApiKey, async (req: any, res) => {
+    try {
+      const accountId = parseInt(req.params.accountId);
+      
+      // Get comprehensive customer service view
+      const [account, contacts, quotes] = await Promise.all([
+        storage.getAccount(accountId),
+        storage.getContactsByAccountId(accountId),
+        storage.getAllQuotes()
+      ]);
+
+      if (!account) {
+        return res.status(404).json({ message: "Account not found" });
+      }
+
+      // Filter quotes for this account
+      const accountQuotes = quotes.filter(quote => quote.accountId === accountId);
+      
+      // Calculate customer metrics
+      const totalQuotes = accountQuotes.length;
+      const totalValue = accountQuotes.reduce((sum, quote) => {
+        const quoteTotal = quote.lineItems?.reduce((lineSum: number, item: any) => {
+          const itemTotal = parseFloat(item.unitPrice || 0) * parseFloat(item.quantity || 0);
+          return lineSum + itemTotal;
+        }, 0) || 0;
+        return sum + quoteTotal;
+      }, 0);
+
+      const lastQuoteDate = accountQuotes.length > 0 
+        ? accountQuotes.sort((a, b) => {
+            const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+            const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+            return dateB - dateA;
+          })[0].createdAt
+        : null;
+
+      res.json({
+        account: {
+          ...account,
+          customerSince: account.createdAt
+        },
+        contacts,
+        projectHistory: {
+          totalQuotes,
+          totalValue,
+          lastQuoteDate,
+          quotes: accountQuotes.map(quote => ({
+            id: quote.id,
+            quoteNumber: quote.quoteNumber,
+            projectName: quote.projectName,
+            dealStage: quote.dealStage,
+            createdAt: quote.createdAt,
+            estimatedValue: quote.lineItems?.reduce((sum: number, item: any) => {
+              const itemTotal = parseFloat(item.unitPrice || 0) * parseFloat(item.quantity || 0);
+              return sum + itemTotal;
+            }, 0) || 0
+          }))
+        },
+        summary: {
+          accountType: account.accountType,
+          paymentTerms: account.paymentTerms,
+          totalContacts: contacts.length,
+          primaryContact: contacts.find(c => c.isPrimary)
+        }
+      });
+    } catch (error) {
+      console.error("Error fetching customer service data:", error);
+      res.status(500).json({ message: "Failed to fetch customer service data" });
+    }
+  });
+
+  app.get('/api/operations/projects', isAuthenticatedOrApiKey, async (req: any, res) => {
+    try {
+      // Get all quotes with enhanced project management view
+      const allQuotes = await storage.getAllQuotes();
+      
+      // Add filtering options
+      const stage = req.query.stage as string;
+      const accountType = req.query.accountType as string;
+      const limit = parseInt(req.query.limit as string) || 50;
+      const offset = parseInt(req.query.offset as string) || 0;
+
+      let filteredQuotes = allQuotes;
+      
+      if (stage) {
+        filteredQuotes = filteredQuotes.filter(quote => quote.dealStage === stage);
+      }
+      
+      if (accountType) {
+        filteredQuotes = filteredQuotes.filter(quote => quote.account?.accountType === accountType);
+      }
+
+      // Sort by most recent first
+      filteredQuotes.sort((a, b) => {
+        const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return dateB - dateA;
+      });
+
+      // Apply pagination
+      const paginatedQuotes = filteredQuotes.slice(offset, offset + limit);
+
+      // Enhance with project management data
+      const projectsData = paginatedQuotes.map(quote => ({
+        id: quote.id,
+        quoteNumber: quote.quoteNumber,
+        projectName: quote.projectName || 'Untitled Project',
+        customer: {
+          id: quote.account?.id,
+          name: quote.account?.name,
+          company: quote.account?.company,
+          accountType: quote.account?.accountType
+        },
+        status: quote.dealStage,
+        estimatedValue: quote.lineItems?.reduce((sum: number, item: any) => {
+          const itemTotal = parseFloat(item.unitPrice || 0) * parseFloat(item.quantity || 0);
+          return sum + itemTotal;
+        }, 0) || 0,
+        estimatedStartDate: quote.estimatedStartDate,
+        createdAt: quote.createdAt,
+        updatedAt: quote.updatedAt,
+        projectAddress: quote.projectAddress,
+        lineItemCount: quote.lineItems?.length || 0,
+        signatureStatus: quote.signatureStatus,
+        notes: quote.notes
+      }));
+
+      res.json({
+        projects: projectsData,
+        pagination: {
+          total: filteredQuotes.length,
+          limit,
+          offset,
+          hasMore: offset + limit < filteredQuotes.length
+        },
+        filters: {
+          stage,
+          accountType
+        }
+      });
+    } catch (error) {
+      console.error("Error fetching operations projects:", error);
+      res.status(500).json({ message: "Failed to fetch projects data" });
     }
   });
 
