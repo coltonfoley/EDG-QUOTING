@@ -37,21 +37,29 @@ export default function QuoteBuilder() {
 
   const createQuoteMutation = useMutation({
     mutationFn: async (data: any) => {
-      // First create or get account (using accounts endpoint)
-      const accountResponse = await apiRequest("POST", "/api/accounts", {
-        name: data.accountName,
-        email: data.accountEmail,
-        phone: data.accountPhone,
-        company: data.accountCompany || null,
-      });
-      const account = await accountResponse.json();
+      // Check if accountId is already provided (existing account selected)
+      let accountId = data.accountId;
+      
+      // Only create new account if no accountId is provided
+      if (!accountId && (data.accountName || data.accountEmail)) {
+        const accountResponse = await apiRequest("POST", "/api/accounts", {
+          name: data.accountName,
+          email: data.accountEmail,
+          phone: data.accountPhone,
+          company: data.accountCompany || null,
+        });
+        const account = await accountResponse.json();
+        accountId = account.id;
+      }
 
-      // Then create quote with accountId
+      // Create quote with accountId (either existing or newly created)
       const quoteData = {
         ...data,
-        accountId: account.id,
+        accountId,
         quoteNumber: generateQuoteNumber(),
       };
+      
+      // Clean up account creation fields
       delete quoteData.accountName;
       delete quoteData.accountEmail;
       delete quoteData.accountPhone;
