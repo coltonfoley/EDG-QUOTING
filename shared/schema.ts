@@ -28,6 +28,23 @@ export const users = pgTable("users", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// API Keys table for external access
+export const apiKeys = pgTable("api_keys", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(), // Descriptive name for the API key
+  keyHash: text("key_hash").notNull().unique(), // Hashed version of the API key
+  permissions: jsonb("permissions").notNull().default('["read"]'), // Array of permissions: read, write, admin
+  isActive: boolean("is_active").notNull().default(true),
+  lastUsed: timestamp("last_used"),
+  expiresAt: timestamp("expires_at"), // Optional expiration
+  createdBy: integer("created_by").references(() => users.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_api_keys_key_hash").on(table.keyHash),
+  index("idx_api_keys_active").on(table.isActive),
+]);
+
 // Accounts table (formerly customers) - represents business entities
 export const accounts = pgTable("accounts", {
   id: serial("id").primaryKey(),
@@ -598,6 +615,17 @@ export const insertUserSchema = createInsertSchema(users).omit({
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
+
+export const insertApiKeySchema = createInsertSchema(apiKeys).omit({
+  id: true,
+  keyHash: true, // This will be generated
+  lastUsed: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertApiKey = z.infer<typeof insertApiKeySchema>;
+export type ApiKey = typeof apiKeys.$inferSelect;
 
 // Utility function for manufacturer field
 export const getProductManufacturer = (product: { manufacturer: string | null }) => {

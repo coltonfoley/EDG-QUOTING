@@ -3120,6 +3120,90 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // API Key Management routes (Admin only)
+  app.get('/api/admin/api-keys', isAuthenticated, async (req: any, res) => {
+    try {
+      const currentUser = await storage.getUser(req.user?.id);
+      if (currentUser?.role !== 'admin') {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+
+      const apiKeys = await storage.getAllApiKeys();
+      // Remove sensitive data from response
+      const safeApiKeys = apiKeys.map(key => {
+        const { keyHash, ...safeKey } = key;
+        return {
+          ...safeKey,
+          keyPreview: key.keyHash.substring(0, 8) + '...'
+        };
+      });
+      
+      res.json(safeApiKeys);
+    } catch (error) {
+      console.error("Error fetching API keys:", error);
+      res.status(500).json({ message: "Failed to fetch API keys" });
+    }
+  });
+
+  app.post('/api/admin/api-keys', isAuthenticated, async (req: any, res) => {
+    try {
+      const currentUser = await storage.getUser(req.user?.id);
+      if (currentUser?.role !== 'admin') {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+
+      const { name, permissions, expiresAt } = req.body;
+      
+      if (!name || typeof name !== 'string') {
+        return res.status(400).json({ message: "API key name is required" });
+      }
+
+      const apiKeyData = {
+        name: name.trim(),
+        permissions: permissions || ["read"],
+        expiresAt: expiresAt ? new Date(expiresAt) : null,
+        createdBy: currentUser.id,
+        isActive: true
+      };
+
+      const newApiKey = await storage.createApiKey(apiKeyData);
+      
+      res.status(201).json({
+        id: newApiKey.id,
+        name: newApiKey.name,
+        permissions: newApiKey.permissions,
+        rawKey: (newApiKey as any).rawKey,
+        createdAt: newApiKey.createdAt,
+        expiresAt: newApiKey.expiresAt,
+        message: "API key created successfully. Save this key as it won't be shown again."
+      });
+    } catch (error) {
+      console.error("Error creating API key:", error);
+      res.status(500).json({ message: "Failed to create API key" });
+    }
+  });
+
+  app.delete('/api/admin/api-keys/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const currentUser = await storage.getUser(req.user?.id);
+      if (currentUser?.role !== 'admin') {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+
+      const id = parseInt(req.params.id);
+      const success = await storage.deleteApiKey(id);
+      
+      if (!success) {
+        return res.status(404).json({ message: "API key not found" });
+      }
+
+      res.json({ message: "API key deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting API key:", error);
+      res.status(500).json({ message: "Failed to delete API key" });
+    }
+  });
+
   // Price list upload endpoint
   app.post('/api/admin/upload-price-list', isAuthenticated, upload.single('file'), async (req: any, res) => {
     try {
