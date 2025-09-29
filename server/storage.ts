@@ -1345,7 +1345,6 @@ export class DatabaseStorage implements IStorage {
       // but remove the foreign key reference
       await tx.execute(sql`UPDATE activities SET assigned_to = NULL WHERE assigned_to = ${id}`);
       await tx.execute(sql`UPDATE tasks SET assigned_to = NULL WHERE assigned_to = ${id}`);
-      await tx.execute(sql`UPDATE opportunities SET assigned_to = NULL WHERE assigned_to = ${id}`);
       
       // Now safely delete the user
       await tx.delete(users).where(eq(users.id, id));
