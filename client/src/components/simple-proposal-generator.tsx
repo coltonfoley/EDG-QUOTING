@@ -869,7 +869,14 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         // Enhanced drawTableRow helper with zebra striping and pagination
         const drawTableRow = (item: any, index: number) => {
           const qty = parseFloat(item.quantity.toString());
-          const price = parseFloat(item.unitPrice.toString());
+          const cost = parseFloat(item.unitPrice.toString());
+          
+          // Calculate the actual selling price (cost + markup)
+          const markupValue = parseFloat(item.markupValue?.toString() || '0');
+          const markupType = item.markupType || 'percentage';
+          const sellingPrice = markupType === 'percentage' 
+            ? cost * (1 + markupValue / 100)
+            : cost + markupValue;
           
           // Use shared calculation helper to ensure consistency
           const total = calculateLineItemTotal(
@@ -914,7 +921,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
           const rowData = [
             item.description, // Full description (multi-line)
             qty.toString(),
-            formatCurrency(price),
+            formatCurrency(sellingPrice), // Show the markup-adjusted selling price, not cost
             formatCurrency(total)
           ];
           
@@ -1066,7 +1073,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
 
         // Ungrouped (if any)
         if (ungrouped.length > 0) {
-          drawGroupHeader('Additional Items');
+          // Don't add a group header for ungrouped items - show them directly
           let ungroupedSubtotal = 0;
           ungrouped.forEach((item, idx) => { 
             // Check page break before first data row to keep it with header
