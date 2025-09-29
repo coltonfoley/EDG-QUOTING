@@ -549,8 +549,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Account routes (formerly customer routes)
   app.get("/api/accounts", isAuthenticated, async (req, res) => {
     try {
-      const accounts = await storage.getAllAccounts();
-      res.json(accounts);
+      const searchTerm = req.query.search as string;
+      
+      if (searchTerm && searchTerm.length > 0) {
+        // Search functionality
+        console.log(`[SEARCH] Account search request: search="${searchTerm}"`);
+        const term = searchTerm.toLowerCase();
+        
+        // Search accounts directly
+        const accountResults = await db
+          .select()
+          .from(accounts)
+          .where(
+            or(
+              ilike(accounts.name, `%${term}%`),
+              ilike(accounts.email, `%${term}%`),
+              ilike(accounts.company, `%${term}%`)
+            )
+          )
+          .limit(10);
+        
+        console.log(`[SEARCH] Found ${accountResults.length} accounts for term "${term}"`);
+        res.json(accountResults);
+      } else {
+        // Return all accounts when no search term
+        const accounts = await storage.getAllAccounts();
+        res.json(accounts);
+      }
     } catch (error) {
       console.error("Error fetching accounts:", error);
       res.status(500).json({ message: "Internal server error" });
