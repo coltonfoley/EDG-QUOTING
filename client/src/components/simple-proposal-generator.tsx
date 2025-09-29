@@ -130,8 +130,8 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
     onSuccess: (_, file) => {
       queryClient.invalidateQueries({ queryKey: [`/api/quotes/${quote.id}/product-renderings`] });
       toast({
-        title: "Product rendering saved",
-        description: "Your product rendering has been added to the quote",
+        title: "Visual asset saved",
+        description: "Your visual asset has been added to the quote",
       });
       // Clear the temp rendering that was just uploaded
       setTempProductRenderings(prev => prev.filter(temp => temp.file !== file));
@@ -139,7 +139,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
     onError: (error: any) => {
       toast({
         title: "Upload failed",
-        description: error.message || "Failed to save product rendering",
+        description: error.message || "Failed to save visual asset",
         variant: "destructive"
       });
     }
@@ -166,7 +166,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
     }
   });
 
-  // Mutation for deleting product renderings
+  // Mutation for deleting visual assets
   const deleteProductRenderingMutation = useMutation({
     mutationFn: async (imageId: number) => {
       return await apiRequest('DELETE', `/api/quote-images/product-rendering/${imageId}`);
@@ -174,14 +174,14 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/quotes/${quote.id}/product-renderings`] });
       toast({
-        title: "Product rendering deleted",
-        description: "The product rendering has been permanently removed",
+        title: "Visual asset deleted",
+        description: "The visual asset has been permanently removed",
       });
     },
     onError: (error: any) => {
       toast({
         title: "Delete failed",
-        description: error.message || "Failed to delete product rendering",
+        description: error.message || "Failed to delete visual asset",
         variant: "destructive"
       });
     }
@@ -256,7 +256,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
     return null;
   };
 
-  // Helper function to get effective product renderings (persistent + temp)
+  // Helper function to get effective visual assets (persistent + temp)
   const getEffectiveProductRenderings = (): DisplayImage[] => {
     const persistent = persistentProductRenderings.map(persistentToDisplayImage);
     const temp = tempProductRenderings.map(tempToDisplayImage);
@@ -1762,12 +1762,12 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
             </Card>
           )}
 
-          {/* Product Renderings Upload */}
+          {/* Visuals & Details Upload */}
           <Card>
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
                 <Image className="w-5 h-5" />
-                Product Renderings
+                Visuals & Details
                 <Badge variant="outline">{productRenderings.length}/5</Badge>
               </CardTitle>
             </CardHeader>
@@ -1778,7 +1778,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
                   onClick={() => renderingsRef.current?.click()}
                 >
                   <Upload className="w-8 h-8 mx-auto mb-2 text-gray-400" />
-                  <p className="text-sm text-gray-600">Click to upload product renderings</p>
+                  <p className="text-sm text-gray-600">Click to upload visual assets (renderings, photos, details)</p>
                   <p className="text-xs text-gray-500">PNG, JPG up to 100MB each (max 5 images)</p>
                 </div>
               ) : (
@@ -1788,7 +1788,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
                       <div key={rendering.id} className="relative">
                         <img 
                           src={rendering.preview} 
-                          alt="Product rendering" 
+                          alt="Visual asset" 
                           className="w-full h-32 object-cover rounded-lg"
                         />
                         <Button
