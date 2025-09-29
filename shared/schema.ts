@@ -28,40 +28,6 @@ export const users = pgTable("users", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-// API Keys table for external access
-export const apiKeys = pgTable("api_keys", {
-  id: serial("id").primaryKey(),
-  name: text("name").notNull(), // Descriptive name for the API key
-  keyHash: text("key_hash").notNull().unique(), // Hashed version of the API key
-  permissions: jsonb("permissions").notNull().default('["read"]'), // Array of permissions: read, write, admin
-  isActive: boolean("is_active").notNull().default(true),
-  lastUsed: timestamp("last_used"),
-  expiresAt: timestamp("expires_at"), // Optional expiration
-  createdBy: integer("created_by").references(() => users.id, { onDelete: "set null" }),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-}, (table) => [
-  index("idx_api_keys_key_hash").on(table.keyHash),
-  index("idx_api_keys_active").on(table.isActive),
-]);
-
-// Webhooks table for real-time updates between systems
-export const webhooks = pgTable("webhooks", {
-  id: serial("id").primaryKey(),
-  name: text("name").notNull(), // Descriptive name for the webhook
-  url: text("url").notNull(), // Endpoint URL to call
-  events: jsonb("events").notNull().default('["quote.created"]'), // Array of events to listen for
-  secret: text("secret").notNull(), // Secret for HMAC verification
-  isActive: boolean("is_active").notNull().default(true),
-  lastTriggered: timestamp("last_triggered"),
-  createdBy: varchar("created_by").references(() => users.id, { onDelete: "cascade" }),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-}, (table) => [
-  index("idx_webhooks_url").on(table.url),
-  index("idx_webhooks_active").on(table.isActive),
-]);
-
 // Accounts table (formerly customers) - represents business entities
 export const accounts = pgTable("accounts", {
   id: serial("id").primaryKey(),
@@ -632,28 +598,6 @@ export const insertUserSchema = createInsertSchema(users).omit({
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
-
-export const insertApiKeySchema = createInsertSchema(apiKeys).omit({
-  id: true,
-  keyHash: true, // This will be generated
-  lastUsed: true,
-  createdAt: true,
-  updatedAt: true,
-});
-
-export type InsertApiKey = z.infer<typeof insertApiKeySchema>;
-export type ApiKey = typeof apiKeys.$inferSelect;
-
-export const insertWebhookSchema = createInsertSchema(webhooks).omit({
-  id: true,
-  secret: true, // This will be generated
-  lastTriggered: true,
-  createdAt: true,
-  updatedAt: true,
-});
-
-export type InsertWebhook = z.infer<typeof insertWebhookSchema>;
-export type Webhook = typeof webhooks.$inferSelect;
 
 // Utility function for manufacturer field
 export const getProductManufacturer = (product: { manufacturer: string | null }) => {
