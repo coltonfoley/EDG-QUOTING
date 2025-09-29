@@ -18,7 +18,6 @@ import Landing from "@/pages/landing";
 import Home from "@/pages/home";
 import AuthPage from "@/pages/auth-page";
 import AdminPage from "@/pages/admin";
-import AdminTemplatesPage from "@/pages/admin-templates";
 import ContractsPage from "@/pages/contracts";
 import Accounts from "@/pages/accounts";
 import AccountDetail from "@/pages/account-detail";
@@ -103,7 +102,6 @@ function Router() {
             <Redirect to="/admin/contracts" />
           </Route>
           <Route path="/admin" component={AdminPage} />
-          <Route path="/admin/templates" component={AdminTemplatesPage} />
           <Route path="/admin/contracts" component={ContractsPage} />
         </>
       )}
