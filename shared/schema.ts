@@ -81,14 +81,9 @@ export const quotes = pgTable("quotes", {
   shipping: decimal("shipping", { precision: 10, scale: 2 }).default("0"),
   dealStage: text("deal_stage").notNull().default("new_lead"), // new_lead, qualifying, consultation_scheduled, building_estimate, quote_sent, closed_won, closed_lost, on_hold
   lostReason: text("lost_reason"), // price, timeline, competitor, no_budget, etc.
-  // Contract and signature fields
+  // Contract fields
   contractTemplateId: integer("contract_template_id"), // reference to contract template
   customContractTerms: text("custom_contract_terms"), // custom contract text for this quote
-  issuerSignature: text("issuer_signature"), // issuer signature (name)
-  issuerSignatureDate: timestamp("issuer_signature_date"),
-  customerSignature: text("customer_signature"), // customer signature (name)
-  customerSignatureDate: timestamp("customer_signature_date"),
-  signatureStatus: text("signature_status").notNull().default("unsigned"), // unsigned, signed
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => [
