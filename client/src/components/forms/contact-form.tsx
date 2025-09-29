@@ -1,15 +1,17 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { insertContactSchema, type Contact, type InsertContact } from "@shared/schema";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { z } from "zod";
+import { UserPlus, Info } from "lucide-react";
 
 const contactFormSchema = insertContactSchema.extend({
   firstName: z.string().min(1, "First name is required"),
@@ -31,6 +33,12 @@ interface ContactFormProps {
 
 export function ContactForm({ accountId, contact, onSuccess, onCancel }: ContactFormProps) {
   const { toast } = useToast();
+  
+  // Fetch account information to show context
+  const { data: account } = useQuery<{ id: number; name: string; company?: string }>({
+    queryKey: [`/api/accounts/${accountId}`],
+    enabled: !!accountId
+  });
   
   const form = useForm<ContactFormData>({
     resolver: zodResolver(contactFormSchema),
@@ -71,6 +79,16 @@ export function ContactForm({ accountId, contact, onSuccess, onCancel }: Contact
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+        {!contact && account && (
+          <Alert className="bg-green-50 border-green-200">
+            <UserPlus className="h-4 w-4 text-green-600" />
+            <AlertDescription className="text-green-800">
+              <strong>Adding contact to "{account.name}"</strong> - This contact will be added as an additional team member for this account. 
+              {account.company && ` (${account.company})`}
+            </AlertDescription>
+          </Alert>
+        )}
+        
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <FormField
             control={form.control}
