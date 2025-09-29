@@ -587,13 +587,14 @@ export interface BrandingSettings {
 }
 
 export interface DefaultContent {
-  companyDescription?: string;
-  projectScope?: string;
-  timeline?: string;
-  credentials?: string;
-  warranty?: string;
-  paymentTerms?: string;
-  additionalTerms?: string;
+  // EDG-specific business content that maps to actual data fields
+  companyDescription?: string;     // EDG business description
+  proposalIntro?: string;          // Maps to quote.notes or intro text  
+  estimatedStartDate?: string;     // Maps to quote.estimatedStartDate
+  qualifications?: string;         // EDG credentials and experience
+  warranty?: string;               // Maps to QUOTE_TERMS.warranty
+  paymentTerms?: string;           // Maps to QUOTE_TERMS.paymentTerms or account.paymentTerms  
+  additionalNotes?: string;        // Maps to QUOTE_TERMS.additionalNotes
 }
 
 export const insertUserSchema = createInsertSchema(users).omit({

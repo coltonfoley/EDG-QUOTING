@@ -77,54 +77,54 @@ const templateFormSchema = insertProposalTemplateSchema.extend({
     })
   }),
   defaultContent: z.object({
+    // EDG-specific business content that maps to actual data
     companyDescription: z.string().optional(),
-    projectScope: z.string().optional(),
-    timeline: z.string().optional(),
-    credentials: z.string().optional(),
-    warranty: z.string().optional(),
-    paymentTerms: z.string().optional(),
-    additionalTerms: z.string().optional()
+    proposalIntro: z.string().optional(),        // Maps to quote.notes or intro text
+    estimatedStartDate: z.string().optional(),   // Maps to quote.estimatedStartDate
+    qualifications: z.string().optional(),       // EDG credentials and experience
+    warranty: z.string().optional(),             // Maps to QUOTE_TERMS.warranty
+    paymentTerms: z.string().optional(),         // Maps to QUOTE_TERMS.paymentTerms or account.paymentTerms
+    additionalNotes: z.string().optional()       // Maps to QUOTE_TERMS.additionalNotes
   })
 });
 
 type TemplateFormData = z.infer<typeof templateFormSchema>;
 
-// Default template configuration
-const getDefaultTemplateConfig = (manufacturer: string): Partial<TemplateFormData> => ({
+// Default template configuration - aligned with EDG Patio & Shade business model
+const getDefaultTemplateConfig = (category: string): Partial<TemplateFormData> => ({
   sections: [
-    { id: 'header', name: 'Header & Company Info', order: 1, required: true, defaultContent: '' },
-    { id: 'customer', name: 'Customer Information', order: 2, required: true, defaultContent: '' },
-    { id: 'project', name: 'Project Details', order: 3, required: true, defaultContent: '' },
-    { id: 'scope', name: 'Project Scope', order: 4, required: false, defaultContent: '' },
-    { id: 'timeline', name: 'Timeline & Schedule', order: 5, required: false, defaultContent: '' },
-    { id: 'lineItems', name: 'Products & Services', order: 6, required: true, defaultContent: '' },
-    { id: 'totals', name: 'Pricing Summary', order: 7, required: true, defaultContent: '' },
-    { id: 'terms', name: 'Terms & Conditions', order: 8, required: false, defaultContent: '' },
-    { id: 'signature', name: 'Signature Block', order: 9, required: false, defaultContent: '' }
+    { id: 'cover', name: 'Cover Page', order: 1, required: false, defaultContent: 'Optional branded cover page with project images' },
+    { id: 'header', name: 'Company Header', order: 2, required: true, defaultContent: 'EDG Patio & Shade branding and contact information' },
+    { id: 'customer', name: 'Customer Information', order: 3, required: true, defaultContent: 'Account holder and project contact details' },
+    { id: 'project', name: 'Project Details', order: 4, required: true, defaultContent: 'Project name, address, and jobsite location' },
+    { id: 'lineItems', name: 'Products & Services', order: 5, required: true, defaultContent: 'Detailed breakdown of patio and shade products' },
+    { id: 'totals', name: 'Pricing Summary', order: 6, required: true, defaultContent: 'Subtotal, tax, discounts, shipping, and total' },
+    { id: 'terms', name: 'Contract Terms', order: 7, required: true, defaultContent: 'Payment terms, warranty, and service agreement' },
+    { id: 'acceptance', name: 'Client Acceptance', order: 8, required: true, defaultContent: 'Signature block for client approval' }
   ],
   brandingSettings: {
-    primaryColor: '#1f2937',
-    accentColor: '#3b82f6',
-    textColor: '#374151',
-    backgroundColor: '#ffffff',
+    primaryColor: '#3c3c3c',     // Dark gray for professional text
+    accentColor: '#42ffc1',      // EDG signature teal
+    textColor: '#3c3c3c',        // Dark gray for body text
+    backgroundColor: '#ffffff',   // Clean white background
     logoSize: 'medium' as const,
     headerStyle: 'standard' as const,
     footerStyle: 'standard' as const
   },
   layoutSettings: {
-    pageSize: 'A4' as const,
-    margins: { top: 20, bottom: 20, left: 15, right: 15 },
-    spacing: { sectionGap: 16, paragraphGap: 8 },
-    pageBreaks: { beforeSections: [], avoidBreakInSections: ['totals', 'signature'] }
+    pageSize: 'letter' as const,  // US Letter size (EDG standard)
+    margins: { top: 19, bottom: 19, left: 19, right: 19 }, // Professional 3/4 inch margins
+    spacing: { sectionGap: 18, paragraphGap: 12 },         // Grid-based spacing (6mm baseline)
+    pageBreaks: { beforeSections: ['totals'], avoidBreakInSections: ['acceptance', 'customer'] }
   },
   defaultContent: {
-    companyDescription: 'Professional services provider delivering exceptional results.',
-    projectScope: 'Comprehensive project scope will be defined based on your specific requirements.',
-    timeline: 'Project timeline will be established upon contract execution.',
-    credentials: 'Our team brings years of experience and proven expertise.',
-    warranty: 'All work is backed by our comprehensive warranty program.',
-    paymentTerms: 'Payment terms: Net 30 days from invoice date.',
-    additionalTerms: 'Additional terms and conditions apply as outlined in our service agreement.'
+    companyDescription: 'EDG Patio & Shade specializes in premium outdoor living solutions, including retractable awnings, pergolas, and custom shade structures.',
+    proposalIntro: 'This proposal outlines the recommended patio and shade solutions for your outdoor living space.',
+    estimatedStartDate: 'Project timeline will be established upon contract execution. Typical installations are completed within 2-3 weeks.',
+    qualifications: 'EDG Patio & Shade brings years of experience in outdoor living solutions with a focus on quality craftsmanship and customer satisfaction.',
+    warranty: '1 year limited warranty on workmanship',
+    paymentTerms: '50% deposit, 50% on completion',
+    additionalNotes: 'Materials subject to availability. Permit costs not included.'
   }
 });
 
