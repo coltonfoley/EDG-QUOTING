@@ -1391,7 +1391,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         // Cover page complete - next content will start on a new page when needed
       };
 
-      const drawProductRenderingsSection = async () => {
+      const drawVisualsDetailsSection = async () => {
         if (productRenderings.length === 0) return;
         
         // === DEDICATED FULL-PAGE GALLERY ===
@@ -1408,7 +1408,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         
         setColor('onAccent');
         setFont('h2');
-        pdf.text('PRODUCT RENDERINGS', margin + 5, yPosition + 2);
+        pdf.text('VISUALS & DETAILS', margin + 5, yPosition + 2);
         
         setColor('primary');
         addSpace('lg'); // 24mm space after header
@@ -1468,7 +1468,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
               
               setColor('onAccent');
               setFont('h2');
-              pdf.text('PRODUCT RENDERINGS (CONTINUED)', margin + 5, yPosition + 2);
+              pdf.text('VISUALS & DETAILS (CONTINUED)', margin + 5, yPosition + 2);
               
               setColor('primary');
               addSpace('lg'); // 24mm space after header
@@ -1488,8 +1488,8 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
       // Step 1: Professional cover page (if enabled)
       await drawProfessionalCoverPage();
       
-      // Step 2: Add product renderings (if uploaded) - on their own page(s)
-      await drawProductRenderingsSection();
+      // Step 2: Add visuals & details (if uploaded) - on their own page(s)
+      await drawVisualsDetailsSection();
       
       // Step 3: Generate main estimate page
       pdf.addPage();
