@@ -138,26 +138,6 @@ export const contractTemplates = pgTable("contract_templates", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-// Proposal templates for different proposal layouts and content structures
-export const proposalTemplates = pgTable("proposal_templates", {
-  id: serial("id").primaryKey(),
-  name: text("name").notNull(),
-  description: text("description"),
-  category: text("category").notNull(), // basic_quote, full_proposal, executive_summary, technical_spec
-  templateType: text("template_type").notNull().default("pdf"), // pdf, html, email
-  // Layout configuration  
-  sections: jsonb("sections").notNull(), // Array of section configurations
-  layoutSettings: jsonb("layout_settings"), // Layout preferences, spacing, page settings
-  // Visual settings
-  brandingSettings: jsonb("branding_settings"), // Colors, logos, fonts
-  // Default content
-  defaultContent: jsonb("default_content"), // Default text and placeholders for sections
-  // Template status
-  isActive: boolean("is_active").default(true),
-  isDefault: boolean("is_default").default(false),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-});
 
 export const products = pgTable("products", {
   id: serial("id").primaryKey(),
@@ -429,18 +409,6 @@ export const insertContractTemplateSchema = createInsertSchema(contractTemplates
   updatedAt: true,
 });
 
-export const insertProposalTemplateSchema = createInsertSchema(proposalTemplates).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-}).extend({
-  category: z.enum(['basic_quote', 'full_proposal', 'executive_summary', 'technical_spec'], {
-    errorMap: () => ({ message: "Category must be one of: basic_quote, full_proposal, executive_summary, technical_spec" }),
-  }),
-  templateType: z.enum(['pdf', 'html', 'email'], {
-    errorMap: () => ({ message: "Template type must be one of: pdf, html, email" }),
-  }).default('pdf'),
-});
 
 export const insertQuoteCoverPhotoSchema = createInsertSchema(quoteCoverPhotos).omit({
   id: true,
@@ -478,7 +446,6 @@ export type Product = typeof products.$inferSelect;
 export type LineItem = typeof lineItems.$inferSelect;
 export type Group = typeof groups.$inferSelect;
 export type ContractTemplate = typeof contractTemplates.$inferSelect;
-export type ProposalTemplate = typeof proposalTemplates.$inferSelect;
 export type PricingTable = typeof pricingTables.$inferSelect;
 export type ProductAccessory = typeof productAccessories.$inferSelect;
 export type QuoteCoverPhoto = typeof quoteCoverPhotos.$inferSelect;
@@ -493,7 +460,6 @@ export type InsertProduct = z.infer<typeof insertProductSchema>;
 export type InsertLineItem = z.infer<typeof insertLineItemSchema>;
 export type InsertGroup = z.infer<typeof insertGroupSchema>;
 export type InsertContractTemplate = z.infer<typeof insertContractTemplateSchema>;
-export type InsertProposalTemplate = z.infer<typeof insertProposalTemplateSchema>;
 export type InsertPricingTable = z.infer<typeof insertPricingTableSchema>;
 export type InsertProductAccessory = z.infer<typeof insertProductAccessorySchema>;
 export type InsertQuoteCoverPhoto = z.infer<typeof insertQuoteCoverPhotoSchema>;
@@ -505,7 +471,6 @@ export type QuoteWithDetails = Quote & {
   customer?: Account; // Legacy alias for backward compatibility - also optional
   lineItems: (LineItem & { manufacturer?: string })[];
   contractTemplate?: ContractTemplate;
-  proposalTemplate?: ProposalTemplate;
   contacts?: Contact[]; // Associated contacts for the project
   coverPhoto?: QuoteCoverPhoto; // Cover page image
   productRenderings?: QuoteProductRendering[]; // Product rendering images
@@ -549,53 +514,6 @@ export interface ProductImage extends ImageMetadata {
   displayOrder?: number;
 }
 
-// Template configuration types
-export interface TemplateSection {
-  id: string;
-  name: string;
-  order: number;
-  required: boolean;
-  defaultContent?: string;
-}
-
-export interface LayoutSettings {
-  pageSize: 'A4' | 'letter';
-  margins: {
-    top: number;
-    bottom: number;
-  left: number;
-    right: number;
-  };
-  spacing: {
-    sectionGap: number;
-    paragraphGap: number;
-  };
-  pageBreaks: {
-    beforeSections: string[];
-    avoidBreakInSections: string[];
-  };
-}
-
-export interface BrandingSettings {
-  primaryColor: string;
-  accentColor: string;
-  textColor: string;
-  backgroundColor: string;
-  logoSize: 'small' | 'medium' | 'large';
-  headerStyle: 'minimal' | 'standard' | 'formal';
-  footerStyle: 'minimal' | 'standard' | 'detailed';
-}
-
-export interface DefaultContent {
-  // EDG-specific business content that maps to actual data fields
-  companyDescription?: string;     // EDG business description
-  proposalIntro?: string;          // Maps to quote.notes or intro text  
-  estimatedStartDate?: string;     // Maps to quote.estimatedStartDate
-  qualifications?: string;         // EDG credentials and experience
-  warranty?: string;               // Maps to QUOTE_TERMS.warranty
-  paymentTerms?: string;           // Maps to QUOTE_TERMS.paymentTerms or account.paymentTerms  
-  additionalNotes?: string;        // Maps to QUOTE_TERMS.additionalNotes
-}
 
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
