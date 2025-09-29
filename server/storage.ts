@@ -298,11 +298,6 @@ export class MemStorage {
       lostReason: insertQuote.lostReason || null,
       contractTemplateId: insertQuote.contractTemplateId || null,
       customContractTerms: insertQuote.customContractTerms || null,
-      issuerSignature: insertQuote.issuerSignature || null,
-      issuerSignatureDate: insertQuote.issuerSignatureDate || null,
-      customerSignature: insertQuote.customerSignature || null,
-      customerSignatureDate: insertQuote.customerSignatureDate || null,
-      signatureStatus: insertQuote.signatureStatus || "unsigned",
       createdAt: new Date(),
       updatedAt: new Date()
     };
