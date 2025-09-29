@@ -253,17 +253,21 @@ export class MemStorage {
     
     for (const quote of Array.from(this.quotes.values())) {
       const accountIdToUse = quote.accountId;
-      if (!accountIdToUse) continue;
-      const customer = this.customers.get(accountIdToUse);
-      if (customer) {
-        const quoteLineItems = Array.from(this.lineItems.values()).filter(item => item.quoteId === quote.id);
-        result.push({
-          ...quote,
-          account: customer, // Use customer as account for QuoteWithDetails
-          customer, // Legacy alias for backward compatibility
-          lineItems: quoteLineItems,
-        });
+      let customer = null;
+      
+      // Get customer if accountId exists
+      if (accountIdToUse) {
+        customer = this.customers.get(accountIdToUse) || null;
       }
+      
+      // Include quote even if no customer (for unassigned quotes)
+      const quoteLineItems = Array.from(this.lineItems.values()).filter(item => item.quoteId === quote.id);
+      result.push({
+        ...quote,
+        account: customer, // Use customer as account for QuoteWithDetails
+        customer, // Legacy alias for backward compatibility
+        lineItems: quoteLineItems,
+      });
     }
 
     return result.sort((a, b) => new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime());
@@ -768,11 +772,20 @@ export class DatabaseStorage implements IStorage {
 
     for (const quote of allQuotes) {
       const accountIdToUse = quote.accountId;
-      if (!accountIdToUse) continue;
-      const [account] = await db.select().from(accounts).where(eq(accounts.id, accountIdToUse));
-      if (account) {
-        // Join line items with products to get manufacturer data
-        const quoteLineItemsWithProducts = await db
+      let account = null;
+      let projectContacts: any[] = [];
+      
+      // Get account and contacts if accountId exists
+      if (accountIdToUse) {
+        [account] = await db.select().from(accounts).where(eq(accounts.id, accountIdToUse));
+        if (account) {
+          projectContacts = await db.select().from(contacts).where(eq(contacts.accountId, accountIdToUse));
+        }
+      }
+      
+      // Process quote even if no account (for unassigned quotes)
+      // Join line items with products to get manufacturer data
+      const quoteLineItemsWithProducts = await db
           .select({
             id: lineItems.id,
             quoteId: lineItems.quoteId,
@@ -817,23 +830,20 @@ export class DatabaseStorage implements IStorage {
           manufacturer: item.productManufacturer || "Uncategorized",
         }));
 
-        const projectContacts = await db.select().from(contacts).where(eq(contacts.accountId, accountIdToUse));
-        
-        // Get contract template if referenced
-        let contractTemplate: ContractTemplate | undefined;
-        if (quote.contractTemplateId) {
-          [contractTemplate] = await db.select().from(contractTemplates).where(eq(contractTemplates.id, quote.contractTemplateId));
-        }
-        
-        result.push({
-          ...quote,
-          account,
-          customer: account, // Legacy alias for backward compatibility
-          lineItems: quoteLineItems,
-          contractTemplate,
-          contacts: projectContacts,
-        });
+      // Get contract template if referenced
+      let contractTemplate: ContractTemplate | undefined;
+      if (quote.contractTemplateId) {
+        [contractTemplate] = await db.select().from(contractTemplates).where(eq(contractTemplates.id, quote.contractTemplateId));
       }
+      
+      result.push({
+        ...quote,
+        account: account || null,
+        customer: account || null, // Legacy alias for backward compatibility
+        lineItems: quoteLineItems,
+        contractTemplate,
+        contacts: projectContacts,
+      });
     }
 
     return result.sort((a, b) => new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime());
