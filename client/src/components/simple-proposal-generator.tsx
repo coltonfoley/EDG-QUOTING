@@ -732,7 +732,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         addSpace('xs'); // 6mm
         
         setFont('body');
-        const customer = quote.account ?? quote.customer;
+        const customer = (quote.account ?? quote.customer)!;
         pdf.text(customer.name, leftCol, yPosition);
         addSpace('xs'); // 6mm
         if (customer.company) {
@@ -1338,7 +1338,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         setFont('body');
         setColor('darkGray');
         
-        const customer = quote.account ?? quote.customer;
+        const customer = (quote.account ?? quote.customer)!;
         const currentDate = new Date().toLocaleDateString('en-US', { 
           year: 'numeric', month: 'long', day: 'numeric' 
         });
@@ -1628,7 +1628,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
       // Save the PDF
       const pdfBlob = pdf.output('blob');
       const timestamp = new Date().toISOString().slice(0, 19).replace(/[-:]/g, '');
-      const customer = quote.account ?? quote.customer;
+      const customer = (quote.account ?? quote.customer)!;
       const filename = `${customer.name.replace(/[^a-zA-Z0-9]/g, '_')}_Estimate_${timestamp}.pdf`;
       
       // Create download link and store URL for viewing
