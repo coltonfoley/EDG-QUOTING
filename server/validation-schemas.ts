@@ -193,9 +193,6 @@ export const insertQuoteSchema = baseQuoteSchema.extend({
       const num = parseFloat(val);
       return !isNaN(num) && num >= 0 && num <= 1000000;
     }, "Shipping must be between 0 and 1,000,000"),
-  signatureStatus: z.enum(['unsigned', 'signed'], {
-    errorMap: () => ({ message: "Signature status must be one of: unsigned, signed" })
-  }).optional(),
   contractTemplateId: z.number().int().positive().optional().nullable(),
   customContractTerms: z.string().max(10000, "Custom contract terms are too long").optional().nullable()
 }).refine((data) => {
@@ -306,9 +303,6 @@ export const updateQuoteSchema = z.object({
       return !isNaN(num) && num >= 0 && num <= 1000000;
     }, "Shipping must be between 0 and 1,000,000")
     .optional(),
-  signatureStatus: z.enum(['unsigned', 'signed'], {
-    errorMap: () => ({ message: "Signature status must be one of: unsigned, signed" })
-  }).optional(),
   contractTemplateId: z.number().int().positive().optional().nullable(),
   customContractTerms: z.string().max(10000, "Custom contract terms are too long").optional().nullable()
 }).refine((data) => {
