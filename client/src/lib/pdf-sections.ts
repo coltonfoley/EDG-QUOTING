@@ -65,9 +65,10 @@ export function drawStandardCover(pdf: jsPDF, opts: DrawStandardCoverOpts): void
   const bandH = 50;
   const bandY = pageH - bandH;
   pdf.setFillColor(0, 0, 0);
-  pdf.setGState({ opacity: 0.7 } as any);
+  pdf.saveGraphicsState();
+  pdf.setGState(new (pdf as any).GState({ opacity: 0.7 }));
   pdf.rect(0, bandY, pageW, bandH, 'F');
-  pdf.setGState({ opacity: 1 } as any);
+  pdf.restoreGraphicsState();
 
   const logoW = 40;
   const logoH = 15;
