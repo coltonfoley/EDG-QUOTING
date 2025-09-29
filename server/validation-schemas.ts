@@ -8,7 +8,6 @@ import {
   insertGroupSchema as baseGroupSchema,
   insertProductSchema as baseProductSchema,
   insertContractTemplateSchema as baseContractTemplateSchema,
-  insertProposalTemplateSchema as baseProposalTemplateSchema,
   insertPricingTableSchema as basePricingTableSchema,
   insertProductAccessorySchema as baseProductAccessorySchema,
   insertUserSchema as baseUserSchema,
@@ -787,23 +786,6 @@ export const insertContractTemplateSchema = baseContractTemplateSchema.extend({
   isDefault: z.boolean().optional()
 });
 
-// Proposal template validation (reuse from base)
-export const insertProposalTemplateSchema = baseProposalTemplateSchema.extend({
-  name: z.string().min(1, "Name is required").max(255, "Name is too long"),
-  description: z.string().max(1000, "Description is too long").optional(),
-  category: z.enum(['basic_quote', 'full_proposal', 'executive_summary', 'technical_spec'], {
-    errorMap: () => ({ message: "Category must be one of: basic_quote, full_proposal, executive_summary, technical_spec" })
-  }),
-  templateType: z.enum(['pdf', 'html', 'email'], {
-    errorMap: () => ({ message: "Template type must be one of: pdf, html, email" })
-  }),
-  sections: z.any(),
-  layoutSettings: z.any().optional(),
-  brandingSettings: z.any().optional(),
-  defaultContent: z.any().optional(),
-  isActive: z.boolean().optional(),
-  isDefault: z.boolean().optional()
-});
 
 // Product accessory validation (reuse from base)
 export const insertProductAccessorySchema = baseProductAccessorySchema.extend({
