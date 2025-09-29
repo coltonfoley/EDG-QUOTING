@@ -109,7 +109,7 @@ export const quoteCoverPhotos = pgTable("quote_cover_photos", {
   index("idx_quote_cover_photos_active").on(table.isActive),
 ]);
 
-// Quote product renderings - stores metadata for product rendering images
+// Quote visuals and details - stores metadata for project visual assets
 export const quoteProductRenderings = pgTable("quote_product_renderings", {
   id: serial("id").primaryKey(),
   quoteId: integer("quote_id").notNull(),
@@ -473,7 +473,7 @@ export type QuoteWithDetails = Quote & {
   contractTemplate?: ContractTemplate;
   contacts?: Contact[]; // Associated contacts for the project
   coverPhoto?: QuoteCoverPhoto; // Cover page image
-  productRenderings?: QuoteProductRendering[]; // Product rendering images
+  productRenderings?: QuoteProductRendering[]; // Visual assets and details
 };
 
 // DTO types for API responses that include calculated fields
