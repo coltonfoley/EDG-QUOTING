@@ -37,7 +37,18 @@ export const insertAccountSchema = baseAccountSchema.extend({
     .max(20, "Phone number is too long")
     .regex(/^[\d\s\-\+\(\)]+$/, "Phone number contains invalid characters"),
   company: z.string().max(255, "Company name is too long").optional().nullable(),
-  accountType: z.enum(["general_contractor", "homeowner", "commercial"]).default("homeowner"),
+  accountType: z.enum([
+    "homeowner", 
+    "general_contractor", 
+    "commercial", 
+    "property_manager",
+    "architect", 
+    "developer",
+    "subcontractor",
+    "government",
+    "nonprofit",
+    "other"
+  ]).default("homeowner"),
   paymentTerms: z.string().max(100, "Payment terms are too long").optional().nullable(),
   billingAddress: z.string().max(500, "Billing address is too long").optional().nullable()
 });
@@ -64,7 +75,18 @@ export const updateAccountSchema = z.object({
     (v) => (v === "" ? null : v),
     z.string().max(255, "Company name is too long").optional().nullable()
   ),
-  accountType: z.enum(["general_contractor", "homeowner", "commercial"]).optional(),
+  accountType: z.enum([
+    "homeowner", 
+    "general_contractor", 
+    "commercial", 
+    "property_manager",
+    "architect", 
+    "developer",
+    "subcontractor",
+    "government",
+    "nonprofit",
+    "other"
+  ]).optional(),
   paymentTerms: z.preprocess(
     (v) => (v === "" ? null : v),
     z.string().max(100, "Payment terms are too long").optional().nullable()
