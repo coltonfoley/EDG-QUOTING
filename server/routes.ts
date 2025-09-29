@@ -749,6 +749,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/accounts", isAuthenticated, async (req, res) => {
     try {
+      console.log("Account creation request body:", JSON.stringify(req.body, null, 2));
       const accountData = insertAccountSchema.parse(req.body);
       
       // Options for duplicate handling and contact creation
@@ -779,6 +780,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     } catch (error) {
       if (error instanceof z.ZodError) {
+        console.error("Account validation error:", JSON.stringify(error.errors, null, 2));
         return res.status(400).json({ message: "Invalid account data", errors: error.errors });
       }
       console.error("Account creation error:", error);
