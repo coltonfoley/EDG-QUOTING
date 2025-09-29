@@ -144,6 +144,48 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
     }
   });
 
+  // Mutation for deleting cover photos
+  const deleteCoverPhotoMutation = useMutation({
+    mutationFn: async (imageId: number) => {
+      return await apiRequest('DELETE', `/api/quote-images/cover-photo/${imageId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/quotes/${quote.id}/cover-photos`] });
+      toast({
+        title: "Cover photo deleted",
+        description: "The cover photo has been permanently removed",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Delete failed",
+        description: error.message || "Failed to delete cover photo",
+        variant: "destructive"
+      });
+    }
+  });
+
+  // Mutation for deleting product renderings
+  const deleteProductRenderingMutation = useMutation({
+    mutationFn: async (imageId: number) => {
+      return await apiRequest('DELETE', `/api/quote-images/product-rendering/${imageId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/quotes/${quote.id}/product-renderings`] });
+      toast({
+        title: "Product rendering deleted",
+        description: "The product rendering has been permanently removed",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Delete failed",
+        description: error.message || "Failed to delete product rendering",
+        variant: "destructive"
+      });
+    }
+  });
+
   // Load existing images into state when data is available
   useEffect(() => {
     if (existingCoverPhotos && existingCoverPhotos.length > 0) {
@@ -421,7 +463,8 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         }
         setTempCoverPhoto(null);
       } else if (persistentCoverPhoto && persistentCoverPhoto.id === id) {
-        // TODO: Add API call to delete persistent cover photo
+        // Delete persistent cover photo from database and object storage
+        deleteCoverPhotoMutation.mutate(persistentCoverPhoto.id as number);
         setPersistentCoverPhoto(null);
       }
     } else {
@@ -441,7 +484,8 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
       setPersistentProductRenderings(prev => {
         const found = prev.find(img => img.id === id);
         if (found) {
-          // TODO: Add API call to delete persistent rendering
+          // Delete persistent product rendering from database and object storage
+          deleteProductRenderingMutation.mutate(found.id as number);
           return prev.filter(img => img.id !== id);
         }
         return prev;
