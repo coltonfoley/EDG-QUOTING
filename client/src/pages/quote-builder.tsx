@@ -186,11 +186,6 @@ export default function QuoteBuilder() {
     lostReason: null,
     contractTemplateId: null,
     customContractTerms: null,
-    issuerSignature: null,
-    issuerSignatureDate: null,
-    customerSignature: null,
-    customerSignatureDate: null,
-    signatureStatus: "unsigned" as const,
     createdAt: new Date(),
     updatedAt: new Date(),
     account: { 
