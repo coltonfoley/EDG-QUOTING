@@ -74,7 +74,9 @@ export function AccountComboboxWithCreate({
     queryFn: async () => {
       if (!debouncedSearchQuery.trim()) return [];
       const response = await apiRequest("GET", `/api/accounts?search=${encodeURIComponent(debouncedSearchQuery)}`);
-      return response.json();
+      const result = await response.json();
+      console.log("Search results for", debouncedSearchQuery, ":", result);
+      return result;
     },
     enabled: debouncedSearchQuery.trim().length > 0,
   });
