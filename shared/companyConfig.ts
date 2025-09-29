@@ -12,11 +12,11 @@ export interface CompanyInfo {
 }
 
 export const COMPANY_INFO: CompanyInfo = {
-  name: "Rainmaker, by EDG",
-  address: "123 Patio Drive, Shade City, SC 12345",
-  phone: "(555) 123-4567",
-  email: "info@edgpatioandshade.com",
-  license: "License #SC-12345",
+  name: "EDG Patio & Shade",
+  address: "1802 Holian Drive, Spring Grove, IL 60081",
+  phone: "+1 (815) 581-0138",
+  email: "info@edgpatioshade.com",
+  license: "Licensed & Insured",
 } as const;
 
 export const QUOTE_TERMS = {
