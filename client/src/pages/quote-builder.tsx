@@ -71,8 +71,8 @@ export default function QuoteBuilder() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/quotes"] });
       toast({ title: "Quote created successfully" });
-      // Navigate to the new quote
-      window.history.replaceState(null, "", `/quotes/${data.id}`);
+      // Navigate to the new quote edit page
+      window.history.replaceState(null, "", `/quotes/${data.id}/edit`);
     },
     onError: () => {
       toast({ title: "Error", description: "Failed to create quote", variant: "destructive" });
