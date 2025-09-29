@@ -3558,62 +3558,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Quote signature routes
-  app.post('/api/quotes/:id/sign-issuer', isAuthenticated, async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      const { signature } = req.body;
-      
-      if (!signature) {
-        return res.status(400).json({ message: "Signature name required" });
-      }
-
-      const quote = await storage.updateQuote(id, {
-        issuerSignature: signature,
-        issuerSignatureDate: new Date(),
-        signatureStatus: 'signed'
-      });
-
-      if (!quote) {
-        return res.status(404).json({ message: "Quote not found" });
-      }
-
-      res.json(quote);
-    } catch (error) {
-      console.error("Error signing quote as issuer:", error);
-      res.status(500).json({ message: "Failed to sign quote" });
-    }
-  });
-
-  app.post('/api/quotes/:id/sign-customer', async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      const { signature } = req.body;
-      
-      if (!signature) {
-        return res.status(400).json({ message: "Signature name required" });
-      }
-
-      // Get current quote to check issuer signature status
-      const currentQuote = await storage.getQuote(id);
-      if (!currentQuote) {
-        return res.status(404).json({ message: "Quote not found" });
-      }
-
-      const newSignatureStatus = currentQuote.issuerSignature ? 'fully_signed' : 'customer_signed';
-
-      const quote = await storage.updateQuote(id, {
-        customerSignature: signature,
-        customerSignatureDate: new Date(),
-        signatureStatus: newSignatureStatus
-      });
-
-      res.json(quote);
-    } catch (error) {
-      console.error("Error signing quote as customer:", error);
-      res.status(500).json({ message: "Failed to sign quote" });
-    }
-  });
 
   // Issue Report routes
   app.post('/api/issue-reports', async (req, res) => {
