@@ -521,9 +521,9 @@ export class DatabaseStorage implements IStorage {
     return this.searchAccounts(searchTerm);
   }
 
-  async createAccount(insertAccount: InsertAccount, options?: { allowDuplicate?: boolean; updateIfExists?: boolean }): Promise<Account> {
+  async createAccount(insertAccount: InsertAccount, options?: { allowDuplicate?: boolean; updateIfExists?: boolean; createPrimaryContact?: boolean }): Promise<Account> {
     // Set default options
-    const { allowDuplicate = false, updateIfExists = true } = options || {};
+    const { allowDuplicate = false, updateIfExists = true, createPrimaryContact = true } = options || {};
     
     // Check for duplicates unless explicitly allowed
     if (!allowDuplicate) {
@@ -554,17 +554,43 @@ export class DatabaseStorage implements IStorage {
     }
     
     // No duplicate found or duplicates allowed, create new account
-    const [account] = await db
-      .insert(accounts)
-      .values(insertAccount)
-      .returning();
+    // Use transaction to create account and optionally primary contact atomically
+    const result = await db.transaction(async (tx) => {
+      const [account] = await tx
+        .insert(accounts)
+        .values(insertAccount)
+        .returning();
+      
+      // Create primary contact if requested (default true)
+      if (createPrimaryContact) {
+        // Extract first and last name from account name
+        const nameParts = insertAccount.name.trim().split(' ');
+        const firstName = nameParts[0] || '';
+        const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : '';
+        
+        const primaryContact = {
+          accountId: account.id,
+          firstName,
+          lastName: lastName || firstName, // If no last name, use first name
+          email: insertAccount.email,
+          phone: insertAccount.phone || null,
+          role: 'primary_contact',
+          isPrimary: true
+        };
+        
+        await tx.insert(contacts).values(primaryContact);
+        console.log(`Created primary contact for account ${account.id}`);
+      }
+      
+      return account;
+    });
     
-    console.log(`Created new account ${account.id}`);
-    return account;
+    console.log(`Created new account ${result.id}`);
+    return result;
   }
 
   // Legacy method for backward compatibility
-  async createCustomer(insertCustomer: InsertCustomer, options?: { allowDuplicate?: boolean; updateIfExists?: boolean }): Promise<Customer> {
+  async createCustomer(insertCustomer: InsertCustomer, options?: { allowDuplicate?: boolean; updateIfExists?: boolean; createPrimaryContact?: boolean }): Promise<Customer> {
     return this.createAccount(insertCustomer as InsertAccount, options);
   }
 
