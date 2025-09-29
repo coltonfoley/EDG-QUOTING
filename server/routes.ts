@@ -2002,7 +2002,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const renderings = await storage.getQuoteProductRenderings(params.data.quoteId);
       res.json(renderings);
     } catch (error) {
-      console.error("Error getting quote product renderings:", error);
+      console.error("Error getting quote visuals & details:", error);
       res.status(500).json({ message: "Internal server error" });
     }
   });
@@ -2133,7 +2133,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const file = req.file;
       const objectStorageService = new ObjectStorageService();
       
-      // Create a custom path for the product rendering
+      // Create a custom path for the visual asset
       const sanitizedFilename = file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
       const timestamp = Date.now();
       const customPath = `product-renderings/${timestamp}-${sanitizedFilename}`;
@@ -2173,11 +2173,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       };
       
       const rendering = await storage.createQuoteProductRendering(renderingData);
-      console.log(`✅ Product rendering saved: ${rendering.filename}`);
+      console.log(`✅ Visual asset saved: ${rendering.filename}`);
       res.status(201).json(rendering);
     } catch (error) {
-      console.error("Error uploading product rendering:", error);
-      res.status(500).json({ message: "Failed to upload product rendering" });
+      console.error("Error uploading visual asset:", error);
+      res.status(500).json({ message: "Failed to upload visual asset" });
     }
   });
 
@@ -2225,12 +2225,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const updatedRendering = await storage.updateQuoteProductRendering(params.data.imageId, updateData);
       
       if (!updatedRendering) {
-        return res.status(404).json({ message: "Product rendering not found" });
+        return res.status(404).json({ message: "Visual asset not found" });
       }
 
       res.json(updatedRendering);
     } catch (error) {
-      console.error("Error updating quote product rendering:", error);
+      console.error("Error updating quote visual asset:", error);
       if (error instanceof z.ZodError) {
         return res.status(400).json({ 
           message: "Invalid request data", 
@@ -2275,12 +2275,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const deleted = await storage.deleteQuoteProductRendering(params.data.imageId);
       if (!deleted) {
-        return res.status(404).json({ message: "Product rendering not found" });
+        return res.status(404).json({ message: "Visual asset not found" });
       }
 
       res.status(204).send();
     } catch (error) {
-      console.error("Error deleting quote product rendering:", error);
+      console.error("Error deleting quote visual asset:", error);
       res.status(500).json({ message: "Internal server error" });
     }
   });
