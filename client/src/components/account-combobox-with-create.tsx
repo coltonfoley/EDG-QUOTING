@@ -180,7 +180,7 @@ export function AccountComboboxWithCreate({
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-full p-0" data-testid="account-combobox-content">
-          <Command>
+          <Command shouldFilter={false}>
             <CommandInput
               placeholder="Search accounts..."
               value={searchQuery}
