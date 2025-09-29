@@ -1724,9 +1724,14 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
       }
     } catch (error) {
       console.error('Error generating PDF:', error);
+      console.error('Error details:', {
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        name: error instanceof Error ? error.name : undefined
+      });
       toast({
         title: "Error Generating PDF",
-        description: "There was an error creating the PDF. Please try again.",
+        description: error instanceof Error ? error.message : "There was an error creating the PDF. Please try again.",
         variant: "destructive"
       });
     } finally {
