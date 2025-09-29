@@ -214,7 +214,7 @@ export default function AdminPage() {
       <div className="max-w-6xl mx-auto px-4 py-8">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Administration</h1>
-          <p className="text-gray-600">Manage system settings, users, and templates</p>
+          <p className="text-gray-600">Manage system settings and users</p>
           
           {/* Admin Navigation Tabs */}
           <div className="flex space-x-1 mt-6 border-b">
@@ -224,14 +224,6 @@ export default function AdminPage() {
             >
               Users & Access
             </button>
-            <Link 
-              href="/admin/templates"
-              className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-edg-black hover:border-b-2 hover:border-gray-300 transition-colors"
-              data-testid="link-admin-templates"
-            >
-              <FileText className="inline mr-2 h-4 w-4" />
-              Templates
-            </Link>
             <Link 
               href="/admin/contracts"
               className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-edg-black hover:border-b-2 hover:border-gray-300 transition-colors"
