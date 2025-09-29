@@ -171,9 +171,6 @@ export const insertQuoteSchema = baseQuoteSchema.extend({
       const num = parseFloat(val);
       return !isNaN(num) && num >= 0 && num <= 1000000;
     }, "Shipping must be between 0 and 1,000,000"),
-  status: z.enum(['draft', 'sent', 'approved', 'rejected'], {
-    errorMap: () => ({ message: "Status must be one of: draft, sent, approved, rejected" })
-  }).optional(),
   signatureStatus: z.enum(['unsigned', 'signed'], {
     errorMap: () => ({ message: "Signature status must be one of: unsigned, signed" })
   }).optional(),
@@ -287,9 +284,6 @@ export const updateQuoteSchema = z.object({
       return !isNaN(num) && num >= 0 && num <= 1000000;
     }, "Shipping must be between 0 and 1,000,000")
     .optional(),
-  status: z.enum(['draft', 'sent', 'approved', 'rejected'], {
-    errorMap: () => ({ message: "Status must be one of: draft, sent, approved, rejected" })
-  }).optional(),
   signatureStatus: z.enum(['unsigned', 'signed'], {
     errorMap: () => ({ message: "Signature status must be one of: unsigned, signed" })
   }).optional(),

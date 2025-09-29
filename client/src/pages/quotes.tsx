@@ -100,20 +100,6 @@ export default function Quotes() {
     );
   }, [quotes, searchTerm]);
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "draft":
-        return "bg-yellow-100 text-yellow-800";
-      case "sent":
-        return "bg-blue-100 text-blue-800";
-      case "approved":
-        return "bg-green-100 text-green-800";
-      case "rejected":
-        return "bg-red-100 text-red-800";
-      default:
-        return "bg-gray-100 text-gray-800";
-    }
-  };
 
   const totalQuotes = quotes?.length || 0;
   const totalValue = quotes?.reduce((sum, quote) => {
@@ -260,7 +246,7 @@ export default function Quotes() {
                 <Users className="h-8 w-8 text-edg-teal" />
                 <div className="ml-4">
                   <p className="text-sm font-medium text-edg-grey">Active Customers</p>
-                  <p className="text-2xl font-bold text-edg-black">{new Set(quotes?.filter(q => q.customer).map(q => q.customer!.id)).size || 0}</p>
+                  <p className="text-2xl font-bold text-edg-black">{new Set(quotes?.filter(q => q.customer).map(q => q.customer?.id).filter(Boolean)).size || 0}</p>
                 </div>
               </div>
             </CardContent>

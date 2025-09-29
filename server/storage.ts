@@ -264,8 +264,8 @@ export class MemStorage {
       const quoteLineItems = Array.from(this.lineItems.values()).filter(item => item.quoteId === quote.id);
       result.push({
         ...quote,
-        account: customer, // Use customer as account for QuoteWithDetails
-        customer, // Legacy alias for backward compatibility
+        account: customer || undefined, // Use customer as account for QuoteWithDetails
+        customer: customer || undefined, // Legacy alias for backward compatibility
         lineItems: quoteLineItems,
       });
     }
@@ -838,8 +838,8 @@ export class DatabaseStorage implements IStorage {
       
       result.push({
         ...quote,
-        account: account || null,
-        customer: account || null, // Legacy alias for backward compatibility
+        account: account || undefined,
+        customer: account || undefined, // Legacy alias for backward compatibility
         lineItems: quoteLineItems,
         contractTemplate,
         contacts: projectContacts,
