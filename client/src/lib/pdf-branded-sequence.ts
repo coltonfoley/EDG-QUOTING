@@ -10,7 +10,8 @@ import {
   drawRenderingsPages,
   drawLineItemsSection,
   drawContractSection,
-  drawBrandedBackPage
+  drawBrandedBackPage,
+  drawBrandedFooter
 } from './pdf-sections';
 
 interface BrandedSequenceOptions {
@@ -56,9 +57,11 @@ export async function generateBrandedSequencePDF(options: BrandedSequenceOptions
     pageH
   });
 
-  // 2. Project Details Page (section handles its own page creation)
-  // Use client logo if provided, otherwise use brand cover as fallback
-  drawProjectDetailsPage(pdf, {
+  // 2. Project Details Page
+  const hasLineItems = quote?.lineItems && quote.lineItems.length > 0;
+  
+  // First, draw without footer to check if line items can fit
+  let currentY = drawProjectDetailsPage(pdf, {
     company,
     quote,
     coverDataUrl: clientLogoDataUrl || BRAND_COVER_JPG,
@@ -67,10 +70,32 @@ export async function generateBrandedSequencePDF(options: BrandedSequenceOptions
     contentW,
     pageW,
     pageH,
-    showPricing
+    showPricing,
+    drawFooter: false // Temporarily don't draw footer
   });
 
-  // 3. Gallery / Renderings (if images provided) (section handles its own page creation)
+  // Check if line items can fit on same page
+  let lineItemsOnSamePage = false;
+  if (hasLineItems) {
+    const footerSpace = 30;
+    const spaceNeeded = 50;
+    const spaceAvailable = pageH - currentY - footerSpace;
+    lineItemsOnSamePage = spaceAvailable >= spaceNeeded;
+  }
+
+  // If no line items or they won't fit on same page, draw footer now
+  if (!hasLineItems || !lineItemsOnSamePage) {
+    drawBrandedFooter({
+      pdf,
+      logoDataUrl: BRAND_LOGO_PNG,
+      company,
+      pageW,
+      pageH,
+      margin
+    });
+  }
+
+  // 3. Gallery / Renderings (if images provided)
   if (renderImages && renderImages.length > 0) {
     drawRenderingsPages(pdf, {
       images: renderImages,
@@ -83,8 +108,10 @@ export async function generateBrandedSequencePDF(options: BrandedSequenceOptions
     });
   }
 
-  // 4. Line Items Section (if items exist) (section handles its own page creation)
-  if (quote?.lineItems && quote.lineItems.length > 0) {
+  // 4. Line Items Section - continue on same page if space allows
+  if (hasLineItems) {
+    const startY = lineItemsOnSamePage ? currentY + 15 : undefined;
+    
     drawLineItemsSection(pdf, {
       quote,
       showPricing,
@@ -93,7 +120,8 @@ export async function generateBrandedSequencePDF(options: BrandedSequenceOptions
       margin,
       contentW,
       pageW,
-      pageH
+      pageH,
+      startY
     });
   }
 
