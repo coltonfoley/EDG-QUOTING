@@ -92,8 +92,7 @@ interface DrawContractSectionOpts {
 }
 
 interface DrawBrandedBackPageOpts {
-  company: { name: string; address: string; phone: string; email: string };
-  logoDataUrl: string;
+  backPageDataUrl: string;
   pageW: number;
   pageH: number;
   margin: number;
@@ -501,36 +500,10 @@ export function drawContractSection(pdf: jsPDF, opts: DrawContractSectionOpts): 
 }
 
 export function drawBrandedBackPage(pdf: jsPDF, opts: DrawBrandedBackPageOpts): void {
-  const { company, logoDataUrl, pageW, pageH, margin } = opts;
+  const { backPageDataUrl, pageW, pageH } = opts;
 
   pdf.addPage();
 
-  // White background for logo visibility
-  pdf.setFillColor(255, 255, 255);
-  pdf.rect(0, 0, pageW, pageH, 'F');
-
-  const logoW = 60;
-  const logoH = 25;
-  const logoX = (pageW - logoW) / 2;
-  const logoY = pageH / 2 - 40;
-
-  pdf.addImage(logoDataUrl, 'PNG', logoX, logoY, logoW, logoH);
-
-  let y = logoY + logoH + 20;
-
-  pdf.setFont('Barlow-SemiBold', 'normal');
-  pdf.setFontSize(16);
-  pdf.setTextColor(0, 0, 0); // Dark text on white background
-  pdf.text(company.name, pageW / 2, y, { align: 'center' });
-  y += 10;
-
-  pdf.setFont('Barlow-Regular', 'normal');
-  pdf.setFontSize(11);
-  pdf.text(company.address, pageW / 2, y, { align: 'center' });
-  y += 7;
-
-  pdf.text(company.phone, pageW / 2, y, { align: 'center' });
-  y += 7;
-
-  pdf.text(company.email, pageW / 2, y, { align: 'center' });
+  // Display the custom back page image full-page
+  pdf.addImage(backPageDataUrl, 'PNG', 0, 0, pageW, pageH);
 }

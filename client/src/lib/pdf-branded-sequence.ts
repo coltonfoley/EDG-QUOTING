@@ -3,7 +3,7 @@
 
 import jsPDF from 'jspdf';
 import type { QuoteWithDetails } from '@shared/schema';
-import { BRAND_COVER_JPG, BRAND_LOGO_PNG } from './pdf-brand-assets';
+import { BRAND_COVER_JPG, BRAND_LOGO_PNG, BRAND_BACK_PAGE_PNG } from './pdf-brand-assets';
 import {
   drawStandardCover,
   drawProjectDetailsPage,
@@ -112,8 +112,7 @@ export async function generateBrandedSequencePDF(options: BrandedSequenceOptions
 
   // 6. Branded Back Page (section handles its own page creation)
   drawBrandedBackPage(pdf, {
-    company,
-    logoDataUrl: BRAND_LOGO_PNG,
+    backPageDataUrl: BRAND_BACK_PAGE_PNG,
     pageW,
     pageH,
     margin
