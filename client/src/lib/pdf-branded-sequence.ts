@@ -25,6 +25,7 @@ interface BrandedSequenceOptions {
   renderImages: Array<{ dataUrl: string; format: 'PNG' | 'JPEG' }>;
   contractText: string;
   showPricing: boolean;
+  clientLogoDataUrl: string | null;
 }
 
 /**
@@ -37,7 +38,7 @@ interface BrandedSequenceOptions {
  * 6. Branded Back Page
  */
 export async function generateBrandedSequencePDF(options: BrandedSequenceOptions): Promise<void> {
-  const { pdf, company, quote, renderImages, contractText, showPricing } = options;
+  const { pdf, company, quote, renderImages, contractText, showPricing, clientLogoDataUrl } = options;
 
   const pageW = pdf.internal.pageSize.getWidth();
   const pageH = pdf.internal.pageSize.getHeight();
@@ -56,10 +57,11 @@ export async function generateBrandedSequencePDF(options: BrandedSequenceOptions
   });
 
   // 2. Project Details Page (section handles its own page creation)
+  // Use client logo if provided, otherwise use brand cover as fallback
   drawProjectDetailsPage(pdf, {
     company,
     quote,
-    coverDataUrl: BRAND_COVER_JPG,
+    coverDataUrl: clientLogoDataUrl || BRAND_COVER_JPG,
     margin,
     contentW,
     pageW,

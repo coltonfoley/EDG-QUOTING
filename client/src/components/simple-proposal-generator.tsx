@@ -1685,6 +1685,14 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         // Get contract text (only if includeContract is enabled)
         const contractText = includeContract ? (quote.contractTemplate?.terms || quote.customContractTerms || '') : '';
 
+        // Get client logo (from "Cover Photo" section)
+        const clientLogoImage = getEffectiveCoverPhoto();
+        let clientLogoDataUrl: string | null = null;
+        if (clientLogoImage) {
+          const normalized = await normalizeImageToDataUrl(clientLogoImage.preview);
+          clientLogoDataUrl = normalized.dataUrl;
+        }
+
         // Generate Branded Sequence PDF
         await generateBrandedSequencePDF({
           pdf,
@@ -1692,7 +1700,8 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
           quote,
           renderImages: normalizedImages,
           contractText,
-          showPricing
+          showPricing,
+          clientLogoDataUrl
         });
 
         // Save the PDF
@@ -1800,13 +1809,13 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
             </CardContent>
           </Card>
 
-          {/* Cover Photo Upload */}
+          {/* Client Logo Upload */}
           {includeCoverPage && (
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg flex items-center gap-2">
                   <Camera className="w-5 h-5" />
-                  Cover Photo
+                  Client Logo
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -1816,7 +1825,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
                     onClick={() => coverPhotoRef.current?.click()}
                   >
                     <Upload className="w-8 h-8 mx-auto mb-2 text-gray-400" />
-                    <p className="text-sm text-gray-600">Click to upload cover photo</p>
+                    <p className="text-sm text-gray-600">Click to upload client's company logo</p>
                     <p className="text-xs text-gray-500">PNG, JPG up to 100MB</p>
                   </div>
                 ) : (

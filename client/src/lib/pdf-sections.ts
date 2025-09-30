@@ -124,7 +124,7 @@ export function drawProjectDetailsPage(pdf: jsPDF, opts: DrawProjectDetailsPageO
 
   y += 10;
   
-  // Add cover photo instead of Project Overview
+  // Add client logo image
   const imgW = contentW;
   const imgH = imgW * 0.6;
   pdf.addImage(coverDataUrl, 'PNG', margin, y, imgW, imgH);
