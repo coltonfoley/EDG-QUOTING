@@ -17,14 +17,14 @@ function drawBrandedFooter(opts: BrandedFooterOpts): void {
   const { pdf, logoDataUrl, company, pageW, pageH, margin } = opts;
   
   const footerY = pageH - 15;
-  const lineY = footerY - 8;
+  const lineY = footerY - 12; // Moved line up for more space
   
   // Draw teal line
   pdf.setDrawColor(66, 255, 193);
   pdf.setLineWidth(1);
   pdf.line(margin, lineY, pageW - margin, lineY);
   
-  // Add small logo on the left
+  // Add small logo on the left (with more space below the line)
   const logoW = 25;
   const logoH = 10;
   pdf.addImage(logoDataUrl, 'PNG', margin, footerY - logoH + 2, logoW, logoH);
