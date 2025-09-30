@@ -59,6 +59,7 @@ export async function generateBrandedSequencePDF(options: BrandedSequenceOptions
   drawProjectDetailsPage(pdf, {
     company,
     quote,
+    coverDataUrl: BRAND_COVER_JPG,
     margin,
     contentW,
     pageW,

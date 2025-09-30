@@ -17,6 +17,7 @@ interface DrawStandardCoverOpts {
 interface DrawProjectDetailsPageOpts {
   company: { name: string; address: string; phone: string; email: string };
   quote: any;
+  coverDataUrl: string;
   margin: number;
   contentW: number;
   pageW: number;
@@ -65,7 +66,7 @@ export function drawStandardCover(pdf: jsPDF, opts: DrawStandardCoverOpts): void
 }
 
 export function drawProjectDetailsPage(pdf: jsPDF, opts: DrawProjectDetailsPageOpts): void {
-  const { company, quote, margin, contentW, pageW, pageH, showPricing } = opts;
+  const { company, quote, coverDataUrl, margin, contentW, pageW, pageH, showPricing } = opts;
 
   pdf.addPage();
   let y = margin;
@@ -122,24 +123,12 @@ export function drawProjectDetailsPage(pdf: jsPDF, opts: DrawProjectDetailsPageO
   y += Math.max(5 + addressLines.length * 5, 15);
 
   y += 10;
-  pdf.setFont('Barlow-SemiBold', 'normal');
-  pdf.setFontSize(14);
-  pdf.text('Project Overview', margin, y);
-  y += 8;
-
-  pdf.setFont('Barlow-Regular', 'normal');
-  pdf.setFontSize(11);
-  const bullets = [
-    'Custom designed outdoor living solution',
-    'Professional installation included',
-    'Premium materials and craftsmanship'
-  ];
-
-  bullets.forEach(bullet => {
-    pdf.circle(margin + 2, y - 1.5, 1, 'F');
-    pdf.text(bullet, margin + 6, y);
-    y += 6;
-  });
+  
+  // Add cover photo instead of Project Overview
+  const imgW = contentW;
+  const imgH = imgW * 0.6;
+  pdf.addImage(coverDataUrl, 'PNG', margin, y, imgW, imgH);
+  y += imgH;
 
   // Investment Summary - Always visible (per spec)
   y += 10;
