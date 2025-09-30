@@ -203,9 +203,9 @@ export function drawProjectDetailsPage(pdf: jsPDF, opts: DrawProjectDetailsPageO
   const bottomMargin = 10;
   const disclaimerY = pageH - bottomMargin;
   
-  pdf.setFont('Barlow-Regular', 'italic');
+  pdf.setFont('Barlow-Regular', 'normal');
   pdf.setFontSize(8);
-  pdf.setTextColor(100, 100, 100); // Gray color for subtlety
+  pdf.setTextColor(120, 120, 120); // Gray color for subtlety
   
   const lines = pdf.splitTextToSize(disclaimerText, contentW);
   const textHeight = lines.length * 3;
@@ -270,37 +270,34 @@ export function drawRenderingsPages(pdf: jsPDF, opts: DrawRenderingsPagesOpts): 
   pdf.setFont('Barlow-SemiBold', 'normal');
   pdf.setFontSize(18);
   pdf.setTextColor(0, 0, 0);
-  pdf.text('Renderings', margin, y);
+  pdf.text('Visuals & Details', margin, y);
   y += 15;
 
-  const gridCols = 2;
-  const gridRows = 2;
-  const gap = 5;
-  const imgW = (contentW - gap) / gridCols;
-  const imgH = imgW * 0.75;
+  const imagesPerPage = 2;
+  const gap = 10;
+  const imgW = contentW;
+  const imgH = imgW * 0.6; // Slightly wider aspect ratio for larger display
 
   let currentPage = 0;
   let imgIndex = 0;
 
   while (imgIndex < images.length) {
-    if (imgIndex > 0 && imgIndex % (gridCols * gridRows) === 0) {
+    if (imgIndex > 0 && imgIndex % imagesPerPage === 0) {
       pdf.addPage();
       y = margin;
 
       pdf.setFont('Barlow-SemiBold', 'normal');
       pdf.setFontSize(18);
-      pdf.text('Renderings (cont.)', margin, y);
+      pdf.text('Visuals & Details (cont.)', margin, y);
       y += 15;
       currentPage++;
     }
 
-    const pageStartIndex = currentPage * (gridCols * gridRows);
+    const pageStartIndex = currentPage * imagesPerPage;
     const relativeIndex = imgIndex - pageStartIndex;
-    const row = Math.floor(relativeIndex / gridCols);
-    const col = relativeIndex % gridCols;
 
-    const imgX = margin + col * (imgW + gap);
-    const imgY = y + row * (imgH + gap);
+    const imgX = margin;
+    const imgY = y + relativeIndex * (imgH + gap);
 
     const img = images[imgIndex];
     const format = detectImageFormat(img.dataUrl);
