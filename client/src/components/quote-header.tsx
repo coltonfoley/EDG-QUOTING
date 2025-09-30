@@ -56,7 +56,6 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
       projectName: quote?.projectName || "",
       projectAddress: quote?.projectAddress || "",
       estimatedStartDate: quote?.estimatedStartDate || "",
-      notes: quote?.notes || "",
       dealStage: quote?.dealStage || "new_lead",
       taxRate: quote?.taxRate || "0",
       discount: quote?.discount || "0",
@@ -76,7 +75,6 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
         projectName: quote.projectName || "",
         projectAddress: quote.projectAddress || "",
         estimatedStartDate: quote.estimatedStartDate || "",
-        notes: quote.notes || "",
         dealStage: quote.dealStage || "new_lead",
         taxRate: quote.taxRate || "0",
         discount: quote.discount || "0",
@@ -320,19 +318,6 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
                         <FormLabel>Estimated Start Date</FormLabel>
                         <FormControl>
                           <Input type="date" {...field} value={field.value || ""} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="notes"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Additional Notes (Optional)</FormLabel>
-                        <FormControl>
-                          <Textarea rows={3} placeholder="Any additional notes or requirements" {...field} value={field.value || ""} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
