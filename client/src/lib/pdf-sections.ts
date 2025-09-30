@@ -428,21 +428,19 @@ export function drawContractSection(pdf: jsPDF, opts: DrawContractSectionOpts): 
 
     const lines = pdf.splitTextToSize(trimmed, contentW);
     const paraHeight = lines.length * 5 + 5;
+    const headerHeight = 12; // Height of continuation header
 
-    y = ensureSpace(pdf, y, paraHeight, {
-      marginTop: margin,
-      marginBottom: margin,
-      footerReserve: 0,
-      onNewPage: () => {
-        y = margin;
-        pdf.setFont('Barlow-SemiBold', 'normal');
-        pdf.setFontSize(18);
-        pdf.text('Terms & Conditions (cont.)', margin, y);
-        y += 12;
-        pdf.setFont('Barlow-Regular', 'normal');
-        pdf.setFontSize(10);
-      },
-    });
+    // Check if we need a new page (including space for header if it's a new page)
+    if (y + paraHeight > pageH - margin) {
+      pdf.addPage();
+      y = margin;
+      pdf.setFont('Barlow-SemiBold', 'normal');
+      pdf.setFontSize(18);
+      pdf.text('Terms & Conditions (cont.)', margin, y);
+      y += headerHeight;
+      pdf.setFont('Barlow-Regular', 'normal');
+      pdf.setFontSize(10);
+    }
 
     pdf.text(lines, margin, y);
     y += lines.length * 5 + 5;
