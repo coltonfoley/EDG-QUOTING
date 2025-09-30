@@ -62,6 +62,7 @@ export async function generateBrandedSequencePDF(options: BrandedSequenceOptions
     company,
     quote,
     coverDataUrl: clientLogoDataUrl || BRAND_COVER_JPG,
+    logoDataUrl: BRAND_LOGO_PNG,
     margin,
     contentW,
     pageW,
@@ -73,6 +74,8 @@ export async function generateBrandedSequencePDF(options: BrandedSequenceOptions
   if (renderImages && renderImages.length > 0) {
     drawRenderingsPages(pdf, {
       images: renderImages,
+      logoDataUrl: BRAND_LOGO_PNG,
+      company,
       margin,
       contentW,
       pageW,
@@ -85,6 +88,8 @@ export async function generateBrandedSequencePDF(options: BrandedSequenceOptions
     drawLineItemsSection(pdf, {
       quote,
       showPricing,
+      logoDataUrl: BRAND_LOGO_PNG,
+      company,
       margin,
       contentW,
       pageW,
@@ -96,6 +101,8 @@ export async function generateBrandedSequencePDF(options: BrandedSequenceOptions
   if (contractText && contractText.trim()) {
     drawContractSection(pdf, {
       contractText,
+      logoDataUrl: BRAND_LOGO_PNG,
+      company,
       margin,
       contentW,
       pageW,

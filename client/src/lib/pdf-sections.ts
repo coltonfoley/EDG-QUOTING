@@ -4,6 +4,40 @@ import { formatCurrency, calculateLineItemTotal } from '@/lib/utils';
 
 const EDG_TEAL = [66, 255, 193] as const;
 
+interface BrandedFooterOpts {
+  pdf: jsPDF;
+  logoDataUrl: string;
+  company: { name: string; address: string; phone: string; email: string };
+  pageW: number;
+  pageH: number;
+  margin: number;
+}
+
+function drawBrandedFooter(opts: BrandedFooterOpts): void {
+  const { pdf, logoDataUrl, company, pageW, pageH, margin } = opts;
+  
+  const footerY = pageH - 15;
+  const lineY = footerY - 8;
+  
+  // Draw teal line
+  pdf.setDrawColor(66, 255, 193);
+  pdf.setLineWidth(1);
+  pdf.line(margin, lineY, pageW - margin, lineY);
+  
+  // Add small logo on the left
+  const logoW = 25;
+  const logoH = 10;
+  pdf.addImage(logoDataUrl, 'PNG', margin, footerY - logoH + 2, logoW, logoH);
+  
+  // Add company info on the right
+  pdf.setFont('Barlow-Regular', 'normal');
+  pdf.setFontSize(7);
+  pdf.setTextColor(100, 100, 100);
+  
+  const infoText = `${company.name} | ${company.phone} | ${company.email}`;
+  pdf.text(infoText, pageW - margin, footerY, { align: 'right' });
+}
+
 interface DrawStandardCoverOpts {
   coverDataUrl: string;
   logoDataUrl: string;
@@ -18,6 +52,7 @@ interface DrawProjectDetailsPageOpts {
   company: { name: string; address: string; phone: string; email: string };
   quote: any;
   coverDataUrl: string;
+  logoDataUrl: string;
   margin: number;
   contentW: number;
   pageW: number;
@@ -27,6 +62,8 @@ interface DrawProjectDetailsPageOpts {
 
 interface DrawRenderingsPagesOpts {
   images: Array<{ dataUrl: string; format: string }>;
+  logoDataUrl: string;
+  company: { name: string; address: string; phone: string; email: string };
   margin: number;
   contentW: number;
   pageW: number;
@@ -36,6 +73,8 @@ interface DrawRenderingsPagesOpts {
 interface DrawLineItemsSectionOpts {
   quote: any;
   showPricing: boolean;
+  logoDataUrl: string;
+  company: { name: string; address: string; phone: string; email: string };
   margin: number;
   contentW: number;
   pageW: number;
@@ -44,6 +83,8 @@ interface DrawLineItemsSectionOpts {
 
 interface DrawContractSectionOpts {
   contractText: string;
+  logoDataUrl: string;
+  company: { name: string; address: string; phone: string; email: string };
   margin: number;
   contentW: number;
   pageW: number;
@@ -66,7 +107,7 @@ export function drawStandardCover(pdf: jsPDF, opts: DrawStandardCoverOpts): void
 }
 
 export function drawProjectDetailsPage(pdf: jsPDF, opts: DrawProjectDetailsPageOpts): void {
-  const { company, quote, coverDataUrl, margin, contentW, pageW, pageH, showPricing } = opts;
+  const { company, quote, coverDataUrl, logoDataUrl, margin, contentW, pageW, pageH, showPricing } = opts;
 
   pdf.addPage();
   let y = margin;
@@ -199,6 +240,9 @@ export function drawProjectDetailsPage(pdf: jsPDF, opts: DrawProjectDetailsPageO
   const lines = pdf.splitTextToSize(disclaimerText, contentW);
   const textHeight = lines.length * 3;
   pdf.text(lines, pageW / 2, disclaimerY - textHeight, { align: 'center' });
+
+  // Add branded footer
+  drawBrandedFooter({ pdf, logoDataUrl, company, pageW, pageH, margin });
 }
 
 function calculateInvestmentTotals(quote: any) {
@@ -249,7 +293,7 @@ function drawAcceptanceBlock(pdf: jsPDF, x: number, y: number, width: number): v
 }
 
 export function drawRenderingsPages(pdf: jsPDF, opts: DrawRenderingsPagesOpts): void {
-  const { images, margin, contentW, pageW, pageH } = opts;
+  const { images, logoDataUrl, company, margin, contentW, pageW, pageH } = opts;
 
   if (images.length === 0) return;
 
@@ -295,6 +339,9 @@ export function drawRenderingsPages(pdf: jsPDF, opts: DrawRenderingsPagesOpts): 
 
     imgIndex++;
   }
+
+  // Add branded footer to the last page
+  drawBrandedFooter({ pdf, logoDataUrl, company, pageW, pageH, margin });
 }
 
 function detectImageFormat(dataUrl: string): 'PNG' | 'JPEG' {
@@ -303,7 +350,7 @@ function detectImageFormat(dataUrl: string): 'PNG' | 'JPEG' {
 }
 
 export function drawLineItemsSection(pdf: jsPDF, opts: DrawLineItemsSectionOpts): void {
-  const { quote, showPricing, margin, contentW, pageW, pageH } = opts;
+  const { quote, showPricing, logoDataUrl, company, margin, contentW, pageW, pageH } = opts;
 
   const lineItems = quote.lineItems || [];
   if (lineItems.length === 0) return;
@@ -397,10 +444,13 @@ export function drawLineItemsSection(pdf: jsPDF, opts: DrawLineItemsSectionOpts)
 
     y += rowHeight + 2;
   });
+
+  // Add branded footer
+  drawBrandedFooter({ pdf, logoDataUrl, company, pageW, pageH, margin });
 }
 
 export function drawContractSection(pdf: jsPDF, opts: DrawContractSectionOpts): void {
-  const { contractText, margin, contentW, pageW, pageH } = opts;
+  const { contractText, logoDataUrl, company, margin, contentW, pageW, pageH } = opts;
 
   if (!contractText || contractText.trim() === '') return;
 
@@ -445,6 +495,9 @@ export function drawContractSection(pdf: jsPDF, opts: DrawContractSectionOpts): 
     pdf.text(lines, margin, y);
     y += lines.length * 5 + 5;
   });
+
+  // Add branded footer to the last page
+  drawBrandedFooter({ pdf, logoDataUrl, company, pageW, pageH, margin });
 }
 
 export function drawBrandedBackPage(pdf: jsPDF, opts: DrawBrandedBackPageOpts): void {
