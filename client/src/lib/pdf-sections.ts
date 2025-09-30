@@ -374,6 +374,93 @@ export function drawLineItemsSection(pdf: jsPDF, opts: DrawLineItemsSectionOpts)
     y += rowHeight + 2;
   });
 
+  // Calculate footer reserve height to prevent overlap
+  const disclaimerText = 'This quote is for estimation purposes and is not a guarantee of cost for services. Quote is based on current information from manufacturer about the project requirements. Actual cost may change once project elements are finalized. Client will be notified of any changes in cost prior to them being incurred.';
+  pdf.setFont('Barlow-Regular', 'normal');
+  pdf.setFontSize(8);
+  const disclaimerLines = pdf.splitTextToSize(disclaimerText, contentW);
+  const disclaimerHeight = disclaimerLines.length * 3;
+  const footerReserveHeight = 25 + disclaimerHeight + 5; // Footer + disclaimer + gap
+
+  // Investment Summary - Always visible (per spec)
+  y += 10;
+  pdf.setFont('Barlow-SemiBold', 'normal');
+  pdf.setFontSize(14);
+  
+  y = ensureSpace(pdf, y, 60, {
+    marginTop: margin,
+    marginBottom: margin,
+    footerReserve: footerReserveHeight,
+    onNewPage: () => {
+      y = margin;
+    },
+  });
+  
+  pdf.text('Investment Summary', margin, y);
+  y += 8;
+
+  const totals = calculateInvestmentTotals(quote);
+
+  pdf.setFont('Barlow-Regular', 'normal');
+  pdf.setFontSize(11);
+
+  const summaryItems = [
+    { label: 'Subtotal', value: totals.subtotal },
+    { label: 'Tax', value: totals.tax },
+    { label: 'Shipping', value: totals.shipping },
+  ];
+
+  summaryItems.forEach(item => {
+    pdf.text(item.label, margin, y);
+    pdf.text(formatCurrency(item.value), margin + contentW - 30, y, { align: 'right' });
+    y += 6;
+  });
+
+  y += 2;
+  pdf.setFont('Barlow-SemiBold', 'normal');
+  pdf.setFontSize(12);
+  pdf.text('Total', margin, y);
+  pdf.text(formatCurrency(totals.total), margin + contentW - 30, y, { align: 'right' });
+  y += 10;
+
+  // Client Acceptance Block
+  const acceptanceH = measureAcceptanceBlock(pdf, {
+    heading: 'CLIENT ACCEPTANCE',
+    width: contentW,
+    headingFontSizePt: 14,
+    bodyFontSizePt: 11,
+    spacingTop: 10,
+    spacingAfterHeading: 8,
+    fieldGap: 8,
+    labelGap: 2,
+    bottomPadding: 5,
+    fields: [
+      { label: 'Signature', lineWidthMm: contentW * 0.6 },
+      { label: 'Print Name', lineWidthMm: contentW * 0.6 },
+      { label: 'Date', lineWidthMm: 50 },
+    ],
+  });
+
+  y = ensureSpace(pdf, y, acceptanceH, {
+    marginTop: margin,
+    marginBottom: margin,
+    footerReserve: footerReserveHeight,
+    onNewPage: () => {
+      y = margin;
+    },
+  });
+
+  drawAcceptanceBlock(pdf, margin, y, contentW);
+
+  // Add disclaimer text above the footer
+  const disclaimerY = pageH - 25 - 5; // Footer height + gap
+  
+  pdf.setFont('Barlow-Regular', 'normal');
+  pdf.setFontSize(8);
+  pdf.setTextColor(120, 120, 120);
+  
+  pdf.text(disclaimerLines, pageW / 2, disclaimerY - disclaimerHeight, { align: 'center' });
+
   // Add branded footer
   drawBrandedFooter({ pdf, logoDataUrl, company, pageW, pageH, margin });
 }
