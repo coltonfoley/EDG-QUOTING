@@ -60,8 +60,23 @@ interface DrawBrandedBackPageOpts {
 export function drawStandardCover(pdf: jsPDF, opts: DrawStandardCoverOpts): void {
   const { coverDataUrl, pageW, pageH } = opts;
 
-  // Simply add the cover image as a full-page background
+  // Add the cover image as a full-page background
   pdf.addImage(coverDataUrl, 'PNG', 0, 0, pageW, pageH);
+
+  // Add disclaimer text at the bottom
+  const disclaimerText = 'This quote is for estimation purposes and is not a guarantee of cost for services. Quote is based on current information from manufacturer about the project requirements. Actual cost may change once project elements are finalized. Client will be notified of any changes in cost prior to them being incurred.';
+  
+  const margin = 15;
+  const bottomMargin = 10;
+  const disclaimerY = pageH - bottomMargin;
+  
+  pdf.setFont('Barlow-Regular', 'italic');
+  pdf.setFontSize(8);
+  pdf.setTextColor(100, 100, 100); // Gray color for subtlety
+  
+  const lines = pdf.splitTextToSize(disclaimerText, pageW - (margin * 2));
+  const textHeight = lines.length * 3;
+  pdf.text(lines, pageW / 2, disclaimerY - textHeight, { align: 'center' });
 }
 
 export function drawProjectDetailsPage(pdf: jsPDF, opts: DrawProjectDetailsPageOpts): void {
