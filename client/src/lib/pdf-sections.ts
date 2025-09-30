@@ -13,7 +13,7 @@ interface BrandedFooterOpts {
   margin: number;
 }
 
-function drawBrandedFooter(opts: BrandedFooterOpts): void {
+export function drawBrandedFooter(opts: BrandedFooterOpts): void {
   const { pdf, logoDataUrl, company, pageW, pageH, margin } = opts;
   
   const footerY = pageH - 15;
@@ -58,6 +58,8 @@ interface DrawProjectDetailsPageOpts {
   pageW: number;
   pageH: number;
   showPricing: boolean;
+  startY?: number; // Optional: continue from this Y position instead of adding new page
+  drawFooter?: boolean; // Optional: whether to draw footer (default true)
 }
 
 interface DrawRenderingsPagesOpts {
@@ -79,6 +81,7 @@ interface DrawLineItemsSectionOpts {
   contentW: number;
   pageW: number;
   pageH: number;
+  startY?: number; // Optional: continue from this Y position instead of adding new page
 }
 
 interface DrawContractSectionOpts {
@@ -105,11 +108,13 @@ export function drawStandardCover(pdf: jsPDF, opts: DrawStandardCoverOpts): void
   pdf.addImage(coverDataUrl, 'PNG', 0, 0, pageW, pageH);
 }
 
-export function drawProjectDetailsPage(pdf: jsPDF, opts: DrawProjectDetailsPageOpts): void {
-  const { company, quote, coverDataUrl, logoDataUrl, margin, contentW, pageW, pageH, showPricing } = opts;
+export function drawProjectDetailsPage(pdf: jsPDF, opts: DrawProjectDetailsPageOpts): number {
+  const { company, quote, coverDataUrl, logoDataUrl, margin, contentW, pageW, pageH, showPricing, startY, drawFooter = true } = opts;
 
-  pdf.addPage();
-  let y = margin;
+  if (startY === undefined) {
+    pdf.addPage();
+  }
+  let y = startY !== undefined ? startY : margin;
 
   pdf.setFont('Barlow-SemiBold', 'normal');
   pdf.setFontSize(18);
@@ -240,8 +245,12 @@ export function drawProjectDetailsPage(pdf: jsPDF, opts: DrawProjectDetailsPageO
   const textHeight = lines.length * 3;
   pdf.text(lines, pageW / 2, disclaimerY - textHeight, { align: 'center' });
 
-  // Add branded footer
-  drawBrandedFooter({ pdf, logoDataUrl, company, pageW, pageH, margin });
+  // Add branded footer (if requested)
+  if (drawFooter) {
+    drawBrandedFooter({ pdf, logoDataUrl, company, pageW, pageH, margin });
+  }
+  
+  return y; // Return final Y position
 }
 
 function calculateInvestmentTotals(quote: any) {
@@ -348,14 +357,16 @@ function detectImageFormat(dataUrl: string): 'PNG' | 'JPEG' {
   return 'JPEG';
 }
 
-export function drawLineItemsSection(pdf: jsPDF, opts: DrawLineItemsSectionOpts): void {
-  const { quote, showPricing, logoDataUrl, company, margin, contentW, pageW, pageH } = opts;
+export function drawLineItemsSection(pdf: jsPDF, opts: DrawLineItemsSectionOpts): number | undefined {
+  const { quote, showPricing, logoDataUrl, company, margin, contentW, pageW, pageH, startY } = opts;
 
   const lineItems = quote.lineItems || [];
-  if (lineItems.length === 0) return;
+  if (lineItems.length === 0) return undefined;
 
-  pdf.addPage();
-  let y = margin;
+  if (startY === undefined) {
+    pdf.addPage();
+  }
+  let y = startY !== undefined ? startY : margin;
 
   const drawHeader = (title: string) => {
     pdf.setFont('Barlow-SemiBold', 'normal');
@@ -446,6 +457,8 @@ export function drawLineItemsSection(pdf: jsPDF, opts: DrawLineItemsSectionOpts)
 
   // Add branded footer
   drawBrandedFooter({ pdf, logoDataUrl, company, pageW, pageH, margin });
+  
+  return y; // Return final Y position
 }
 
 export function drawContractSection(pdf: jsPDF, opts: DrawContractSectionOpts): void {
