@@ -58,35 +58,10 @@ interface DrawBrandedBackPageOpts {
 }
 
 export function drawStandardCover(pdf: jsPDF, opts: DrawStandardCoverOpts): void {
-  const { coverDataUrl, logoDataUrl, company, title, subtitle, pageW, pageH } = opts;
+  const { coverDataUrl, pageW, pageH } = opts;
 
-  pdf.addImage(coverDataUrl, 'JPEG', 0, 0, pageW, pageH);
-
-  const bandH = 50;
-  const bandY = pageH - bandH;
-  pdf.setFillColor(0, 0, 0);
-  pdf.saveGraphicsState();
-  pdf.setGState(new (pdf as any).GState({ opacity: 0.7 }));
-  pdf.rect(0, bandY, pageW, bandH, 'F');
-  pdf.restoreGraphicsState();
-
-  const logoW = 40;
-  const logoH = 15;
-  const logoX = 20;
-  const logoY = bandY + (bandH - logoH) / 2;
-  pdf.addImage(logoDataUrl, 'PNG', logoX, logoY, logoW, logoH);
-
-  const textX = logoX + logoW + 10;
-  const textY = bandY + 15;
-
-  pdf.setFont('Barlow-SemiBold', 'normal');
-  pdf.setFontSize(20);
-  pdf.setTextColor(255, 255, 255);
-  pdf.text(title, textX, textY);
-
-  pdf.setFont('Barlow-Regular', 'normal');
-  pdf.setFontSize(14);
-  pdf.text(subtitle, textX, textY + 10);
+  // Simply add the cover image as a full-page background
+  pdf.addImage(coverDataUrl, 'PNG', 0, 0, pageW, pageH);
 }
 
 export function drawProjectDetailsPage(pdf: jsPDF, opts: DrawProjectDetailsPageOpts): void {
