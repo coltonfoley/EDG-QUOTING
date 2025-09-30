@@ -505,7 +505,8 @@ export function drawBrandedBackPage(pdf: jsPDF, opts: DrawBrandedBackPageOpts): 
 
   pdf.addPage();
 
-  pdf.setFillColor(26, 26, 26);
+  // White background for logo visibility
+  pdf.setFillColor(255, 255, 255);
   pdf.rect(0, 0, pageW, pageH, 'F');
 
   const logoW = 60;
@@ -519,7 +520,7 @@ export function drawBrandedBackPage(pdf: jsPDF, opts: DrawBrandedBackPageOpts): 
 
   pdf.setFont('Barlow-SemiBold', 'normal');
   pdf.setFontSize(16);
-  pdf.setTextColor(255, 255, 255);
+  pdf.setTextColor(0, 0, 0); // Dark text on white background
   pdf.text(company.name, pageW / 2, y, { align: 'center' });
   y += 10;
 
