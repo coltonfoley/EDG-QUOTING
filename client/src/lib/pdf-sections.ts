@@ -227,11 +227,11 @@ export function drawProjectDetailsPage(pdf: jsPDF, opts: DrawProjectDetailsPageO
 
   drawAcceptanceBlock(pdf, margin, y, contentW);
 
-  // Add disclaimer text at the bottom of the page
+  // Add disclaimer text above the footer
   const disclaimerText = 'This quote is for estimation purposes and is not a guarantee of cost for services. Quote is based on current information from manufacturer about the project requirements. Actual cost may change once project elements are finalized. Client will be notified of any changes in cost prior to them being incurred.';
   
-  const bottomMargin = 10;
-  const disclaimerY = pageH - bottomMargin;
+  const footerReserveHeight = 25; // Space reserved for footer (line + logo + text)
+  const disclaimerY = pageH - footerReserveHeight - 5; // 5mm gap above footer
   
   pdf.setFont('Barlow-Regular', 'normal');
   pdf.setFontSize(8);
