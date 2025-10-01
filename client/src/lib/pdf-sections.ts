@@ -217,7 +217,7 @@ function drawAcceptanceBlock(pdf: jsPDF, x: number, y: number, width: number): v
     pdf.text(field.label, x, y);
     y += 3;
     pdf.line(x, y, x + field.lineWidth, y);
-    y += 10;
+    y += 12;
   });
 }
 
