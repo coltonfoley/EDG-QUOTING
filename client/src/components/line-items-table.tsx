@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Badge } from "@/components/ui/badge";
 import { Trash2, Plus, Package, Search, Filter, X, FileText, Loader2, GripVertical } from "lucide-react";
 import { formatCurrency, calculateLineItemTotal, calculateLineItemMargin, applyDiscountToPrice, isValidNumber, clampValue, roundCurrency, generateGroupId } from "@/lib/utils";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, NavigationAbortError } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { LineItem, Product } from "@shared/schema";
 import { 
@@ -72,6 +72,9 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
   // Debounced save timeout refs
   const debounceTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   
+  // AbortController for cancelling requests on unmount
+  const abortController = useRef<AbortController>(new AbortController());
+  
   // Refs for tracking pending mutations to cancel them on unmount
   const pendingMutations = useRef<{
     create: any;
@@ -103,6 +106,9 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
     return () => {
       // Clear debounce timers
       Object.values(debounceTimers.current).forEach(timer => clearTimeout(timer));
+      
+      // Abort all pending API requests
+      abortController.current.abort();
       
       // Cancel all pending mutations using React Query's built-in cancellation
       try {
@@ -320,7 +326,9 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
 
   const createLineItemMutation = useMutation({
     mutationFn: async (data: any) => {
-      const response = await apiRequest("POST", `/api/quotes/${quoteId}/line-items`, data);
+      const response = await apiRequest("POST", `/api/quotes/${quoteId}/line-items`, data, {
+        signal: abortController.current.signal
+      });
       return response.json();
     },
     onSuccess: () => {
@@ -347,7 +355,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
       pendingMutations.current.create = null;
       
       // Check if the error is due to abort and handle gracefully
-      if (error?.name === 'AbortError' || error?.message?.includes('aborted') || error?.message?.includes('signal is aborted')) {
+      if (error instanceof NavigationAbortError || error?.name === 'AbortError' || error?.message?.includes('aborted') || error?.message?.includes('signal is aborted')) {
         // Silent abort - don't show error toast for user-initiated cancellations
         return;
       }
@@ -357,7 +365,9 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
 
   const updateLineItemMutation = useMutation({
     mutationFn: async ({ id, data, skipInvalidation }: { id: number; data: any; skipInvalidation?: boolean }) => {
-      const response = await apiRequest("PUT", `/api/line-items/${id}`, data);
+      const response = await apiRequest("PUT", `/api/line-items/${id}`, data, {
+        signal: abortController.current.signal
+      });
       return { ...response.json(), skipInvalidation };
     },
     onSuccess: (result, { id }) => {
@@ -388,7 +398,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
       delete pendingMutations.current.update[updateKey];
       
       // Check if the error is due to abort and handle gracefully
-      if (error?.name === 'AbortError' || error?.message?.includes('aborted') || error?.message?.includes('signal is aborted')) {
+      if (error instanceof NavigationAbortError || error?.name === 'AbortError' || error?.message?.includes('aborted') || error?.message?.includes('signal is aborted')) {
         // Silent abort - don't show error toast for user-initiated cancellations
         return;
       }
@@ -399,34 +409,50 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
   // Group mutations
   const createGroupMutation = useMutation({
     mutationFn: async (data: { id: string; title: string; quoteId: number; position?: number }) => {
-      const response = await apiRequest("POST", `/api/quotes/${quoteId}/groups`, data);
+      const response = await apiRequest("POST", `/api/quotes/${quoteId}/groups`, data, {
+        signal: abortController.current.signal
+      });
       return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/quotes", quoteId, "groups"] });
       toast({ title: "Group created successfully" });
     },
-    onError: () => {
+    onError: (error: any) => {
+      // Check if the error is due to abort and handle gracefully
+      if (error instanceof NavigationAbortError || error?.name === 'AbortError' || error?.message?.includes('aborted') || error?.message?.includes('signal is aborted')) {
+        // Silent abort - don't show error toast for user-initiated cancellations
+        return;
+      }
       toast({ title: "Error", description: "Failed to create group", variant: "destructive" });
     },
   });
 
   const updateGroupMutation = useMutation({
     mutationFn: async ({ groupId, data }: { groupId: string; data: Partial<Group> }) => {
-      const response = await apiRequest("PUT", `/api/groups/${groupId}`, data);
+      const response = await apiRequest("PUT", `/api/groups/${groupId}`, data, {
+        signal: abortController.current.signal
+      });
       return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/quotes", quoteId, "groups"] });
     },
-    onError: () => {
+    onError: (error: any) => {
+      // Check if the error is due to abort and handle gracefully
+      if (error instanceof NavigationAbortError || error?.name === 'AbortError' || error?.message?.includes('aborted') || error?.message?.includes('signal is aborted')) {
+        // Silent abort - don't show error toast for user-initiated cancellations
+        return;
+      }
       toast({ title: "Error", description: "Failed to update group", variant: "destructive" });
     },
   });
 
   const deleteGroupMutation = useMutation({
     mutationFn: async (groupId: string) => {
-      await apiRequest("DELETE", `/api/groups/${groupId}`);
+      await apiRequest("DELETE", `/api/groups/${groupId}`, undefined, {
+        signal: abortController.current.signal
+      });
       return groupId;
     },
     onSuccess: () => {
@@ -434,7 +460,12 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
       queryClient.invalidateQueries({ queryKey: ["/api/quotes"] });
       toast({ title: "Group deleted successfully" });
     },
-    onError: () => {
+    onError: (error: any) => {
+      // Check if the error is due to abort and handle gracefully
+      if (error instanceof NavigationAbortError || error?.name === 'AbortError' || error?.message?.includes('aborted') || error?.message?.includes('signal is aborted')) {
+        // Silent abort - don't show error toast for user-initiated cancellations
+        return;
+      }
       toast({ title: "Error", description: "Failed to delete group", variant: "destructive" });
     },
   });
@@ -444,6 +475,8 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
       const response = await apiRequest("PATCH", "/api/line-items/reorder", {
         moves,
         quoteId
+      }, {
+        signal: abortController.current.signal
       });
       return response.json();
     },
@@ -454,7 +487,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
     },
     onError: (error: any) => {
       // Check if the error is due to abort and handle gracefully
-      if (error?.name === 'AbortError' || error?.message?.includes('aborted') || error?.message?.includes('signal is aborted')) {
+      if (error instanceof NavigationAbortError || error?.name === 'AbortError' || error?.message?.includes('aborted') || error?.message?.includes('signal is aborted')) {
         // Silent abort - don't show error toast for user-initiated cancellations
         return;
       }
@@ -467,6 +500,8 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
       const response = await apiRequest("PATCH", "/api/groups/reorder", {
         quoteId,
         groupPositions
+      }, {
+        signal: abortController.current.signal
       });
       return response.json();
     },
@@ -475,7 +510,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
     },
     onError: (error: any) => {
       // Check if the error is due to abort and handle gracefully
-      if (error?.name === 'AbortError' || error?.message?.includes('aborted') || error?.message?.includes('signal is aborted')) {
+      if (error instanceof NavigationAbortError || error?.name === 'AbortError' || error?.message?.includes('aborted') || error?.message?.includes('signal is aborted')) {
         // Silent abort - don't show error toast for user-initiated cancellations
         return;
       }
@@ -485,7 +520,9 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
 
   const deleteLineItemMutation = useMutation({
     mutationFn: async (id: number) => {
-      await apiRequest("DELETE", `/api/line-items/${id}`);
+      await apiRequest("DELETE", `/api/line-items/${id}`, undefined, {
+        signal: abortController.current.signal
+      });
     },
     onSuccess: () => {
       // Clear the pending mutation reference
@@ -500,7 +537,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
       pendingMutations.current.delete = null;
       
       // Check if the error is due to abort and handle gracefully
-      if (error?.name === 'AbortError' || error?.message?.includes('aborted') || error?.message?.includes('signal is aborted')) {
+      if (error instanceof NavigationAbortError || error?.name === 'AbortError' || error?.message?.includes('aborted') || error?.message?.includes('signal is aborted')) {
         // Silent abort - don't show error toast for user-initiated cancellations
         return;
       }
@@ -510,7 +547,9 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
 
   const calculatePricingMutation = useMutation({
     mutationFn: async (data: { productId: number; length: number; width: number }) => {
-      const response = await apiRequest("POST", "/api/calculate-price", data);
+      const response = await apiRequest("POST", "/api/calculate-price", data, {
+        signal: abortController.current.signal
+      });
       return response.json();
     },
     onSuccess: (data) => {
@@ -531,7 +570,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
       pendingMutations.current.calculate = null;
       
       // Check if the error is due to abort and handle gracefully
-      if (error?.name === 'AbortError' || error?.message?.includes('aborted') || error?.message?.includes('signal is aborted')) {
+      if (error instanceof NavigationAbortError || error?.name === 'AbortError' || error?.message?.includes('aborted') || error?.message?.includes('signal is aborted')) {
         // Silent abort - don't show error toast for user-initiated cancellations
         return;
       }

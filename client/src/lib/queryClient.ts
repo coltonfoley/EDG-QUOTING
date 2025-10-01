@@ -35,14 +35,42 @@ async function throwIfResNotOk(res: Response) {
   }
 }
 
+export class NavigationAbortError extends Error {
+  constructor(message = 'Request cancelled due to navigation') {
+    super(message);
+    this.name = 'NavigationAbortError';
+  }
+}
+
 export async function apiRequest(
   method: string,
   url: string,
   data?: unknown | undefined,
-  options?: { timeout?: number },
+  options?: { timeout?: number; signal?: AbortSignal },
 ): Promise<Response> {
   // Handle FormData differently - don't set Content-Type and don't stringify
   const isFormData = data instanceof FormData;
+  
+  // Track timeout state to distinguish timeout vs navigation aborts
+  let timeoutId: number | undefined;
+  let didTimeout = false;
+  const timeoutMs = options?.timeout || 30000;
+  
+  // Create abort controller that combines external signal with timeout
+  const controller = new AbortController();
+  
+  // Set up timeout
+  timeoutId = window.setTimeout(() => {
+    didTimeout = true;
+    controller.abort();
+  }, timeoutMs);
+  
+  // Listen to external signal (from React Query or component unmount)
+  if (options?.signal) {
+    options.signal.addEventListener('abort', () => {
+      controller.abort();
+    }, { once: true });
+  }
   
   try {
     const res = await fetch(url, {
@@ -50,15 +78,23 @@ export async function apiRequest(
       headers: isFormData ? {} : (data ? { "Content-Type": "application/json" } : {}),
       body: isFormData ? data : (data ? JSON.stringify(data) : undefined),
       credentials: "include",
-      signal: AbortSignal.timeout(options?.timeout || 30000), // Default 30 second timeout, customizable
+      signal: controller.signal,
     });
 
+    clearTimeout(timeoutId);
     await throwIfResNotOk(res);
     return res;
   } catch (error: any) {
-    // Handle network errors
+    clearTimeout(timeoutId);
+    
+    // Handle abort errors
     if (error.name === 'AbortError') {
-      throw new Error(ERROR_MESSAGES.NETWORK_TIMEOUT);
+      // If it was a timeout, throw timeout error
+      if (didTimeout) {
+        throw new Error(ERROR_MESSAGES.NETWORK_TIMEOUT);
+      }
+      // If it was navigation/unmount, throw navigation error (will be silenced)
+      throw new NavigationAbortError();
     }
     
     // Handle offline
@@ -141,6 +177,11 @@ export const queryClient = new QueryClient({
     },
     mutations: {
       retry: (failureCount, error: any) => {
+        // Don't retry navigation aborts
+        if (error instanceof NavigationAbortError) {
+          return false;
+        }
+        
         // Don't retry auth or validation errors
         if (isAuthError(error) || (error instanceof ApiError && error.statusCode === 400)) {
           return false;
@@ -151,6 +192,11 @@ export const queryClient = new QueryClient({
       },
       retryDelay: 1000,
       onError: (error: any) => {
+        // Silently ignore navigation aborts (user navigated away)
+        if (error instanceof NavigationAbortError) {
+          return;
+        }
+        
         // Global mutation error handler
         const appError = parseError(error);
         
