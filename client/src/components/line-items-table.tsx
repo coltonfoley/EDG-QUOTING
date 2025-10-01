@@ -326,12 +326,27 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
 
   const createLineItemMutation = useMutation({
     mutationFn: async (data: any) => {
-      const response = await apiRequest("POST", `/api/quotes/${quoteId}/line-items`, data, {
-        signal: abortController.current.signal
-      });
-      return response.json();
+      try {
+        const response = await apiRequest("POST", `/api/quotes/${quoteId}/line-items`, data, {
+          signal: abortController.current.signal
+        });
+        return response.json();
+      } catch (error: any) {
+        // If this is an abort error, don't let it become an unhandled rejection
+        if (error instanceof NavigationAbortError || error?.name === 'AbortError' || error?.message?.includes('aborted') || error?.message?.includes('signal is aborted')) {
+          // Return a special marker that onSuccess can ignore
+          return { __aborted: true };
+        }
+        // Re-throw other errors so onError can handle them
+        throw error;
+      }
     },
-    onSuccess: () => {
+    onSuccess: (result: any) => {
+      // Check if this was an aborted mutation
+      if (result?.__aborted) {
+        return;
+      }
+      
       // Clear the pending mutation reference
       pendingMutations.current.create = null;
       
@@ -365,12 +380,27 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
 
   const updateLineItemMutation = useMutation({
     mutationFn: async ({ id, data, skipInvalidation }: { id: number; data: any; skipInvalidation?: boolean }) => {
-      const response = await apiRequest("PUT", `/api/line-items/${id}`, data, {
-        signal: abortController.current.signal
-      });
-      return { ...response.json(), skipInvalidation };
+      try {
+        const response = await apiRequest("PUT", `/api/line-items/${id}`, data, {
+          signal: abortController.current.signal
+        });
+        return { ...response.json(), skipInvalidation };
+      } catch (error: any) {
+        // If this is an abort error, don't let it become an unhandled rejection
+        if (error instanceof NavigationAbortError || error?.name === 'AbortError' || error?.message?.includes('aborted') || error?.message?.includes('signal is aborted')) {
+          // Return a special marker that onSuccess can ignore
+          return { __aborted: true };
+        }
+        // Re-throw other errors so onError can handle them
+        throw error;
+      }
     },
     onSuccess: (result, { id }) => {
+      // Check if this was an aborted mutation
+      if (result?.__aborted) {
+        return;
+      }
+      
       // Clear the pending mutation reference
       const updateKey = `update-${id}`;
       delete pendingMutations.current.update[updateKey];
@@ -409,12 +439,26 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
   // Group mutations
   const createGroupMutation = useMutation({
     mutationFn: async (data: { id: string; title: string; quoteId: number; position?: number }) => {
-      const response = await apiRequest("POST", `/api/quotes/${quoteId}/groups`, data, {
-        signal: abortController.current.signal
-      });
-      return response.json();
+      try {
+        const response = await apiRequest("POST", `/api/quotes/${quoteId}/groups`, data, {
+          signal: abortController.current.signal
+        });
+        return response.json();
+      } catch (error: any) {
+        // If this is an abort error, don't let it become an unhandled rejection
+        if (error instanceof NavigationAbortError || error?.name === 'AbortError' || error?.message?.includes('aborted') || error?.message?.includes('signal is aborted')) {
+          // Return a special marker that onSuccess can ignore
+          return { __aborted: true };
+        }
+        // Re-throw other errors so onError can handle them
+        throw error;
+      }
     },
-    onSuccess: () => {
+    onSuccess: (result: any) => {
+      // Check if this was an aborted mutation
+      if (result?.__aborted) {
+        return;
+      }
       queryClient.invalidateQueries({ queryKey: ["/api/quotes", quoteId, "groups"] });
       toast({ title: "Group created successfully" });
     },
@@ -430,12 +474,26 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
 
   const updateGroupMutation = useMutation({
     mutationFn: async ({ groupId, data }: { groupId: string; data: Partial<Group> }) => {
-      const response = await apiRequest("PUT", `/api/groups/${groupId}`, data, {
-        signal: abortController.current.signal
-      });
-      return response.json();
+      try {
+        const response = await apiRequest("PUT", `/api/groups/${groupId}`, data, {
+          signal: abortController.current.signal
+        });
+        return response.json();
+      } catch (error: any) {
+        // If this is an abort error, don't let it become an unhandled rejection
+        if (error instanceof NavigationAbortError || error?.name === 'AbortError' || error?.message?.includes('aborted') || error?.message?.includes('signal is aborted')) {
+          // Return a special marker that onSuccess can ignore
+          return { __aborted: true };
+        }
+        // Re-throw other errors so onError can handle them
+        throw error;
+      }
     },
-    onSuccess: () => {
+    onSuccess: (result: any) => {
+      // Check if this was an aborted mutation
+      if (result?.__aborted) {
+        return;
+      }
       queryClient.invalidateQueries({ queryKey: ["/api/quotes", quoteId, "groups"] });
     },
     onError: (error: any) => {
@@ -450,12 +508,26 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
 
   const deleteGroupMutation = useMutation({
     mutationFn: async (groupId: string) => {
-      await apiRequest("DELETE", `/api/groups/${groupId}`, undefined, {
-        signal: abortController.current.signal
-      });
-      return groupId;
+      try {
+        await apiRequest("DELETE", `/api/groups/${groupId}`, undefined, {
+          signal: abortController.current.signal
+        });
+        return groupId;
+      } catch (error: any) {
+        // If this is an abort error, don't let it become an unhandled rejection
+        if (error instanceof NavigationAbortError || error?.name === 'AbortError' || error?.message?.includes('aborted') || error?.message?.includes('signal is aborted')) {
+          // Return a special marker that onSuccess can ignore
+          return { __aborted: true };
+        }
+        // Re-throw other errors so onError can handle them
+        throw error;
+      }
     },
-    onSuccess: () => {
+    onSuccess: (result: any) => {
+      // Check if this was an aborted mutation
+      if (result?.__aborted) {
+        return;
+      }
       queryClient.invalidateQueries({ queryKey: ["/api/quotes", quoteId, "groups"] });
       queryClient.invalidateQueries({ queryKey: ["/api/quotes"] });
       toast({ title: "Group deleted successfully" });
@@ -472,15 +544,29 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
 
   const reorderLineItemsMutation = useMutation({
     mutationFn: async (moves: { id: number; groupId: string | null; position: number }[]) => {
-      const response = await apiRequest("PATCH", "/api/line-items/reorder", {
-        moves,
-        quoteId
-      }, {
-        signal: abortController.current.signal
-      });
-      return response.json();
+      try {
+        const response = await apiRequest("PATCH", "/api/line-items/reorder", {
+          moves,
+          quoteId
+        }, {
+          signal: abortController.current.signal
+        });
+        return response.json();
+      } catch (error: any) {
+        // If this is an abort error, don't let it become an unhandled rejection
+        if (error instanceof NavigationAbortError || error?.name === 'AbortError' || error?.message?.includes('aborted') || error?.message?.includes('signal is aborted')) {
+          // Return a special marker that onSuccess can ignore
+          return { __aborted: true };
+        }
+        // Re-throw other errors so onError can handle them
+        throw error;
+      }
     },
-    onSuccess: () => {
+    onSuccess: (result: any) => {
+      // Check if this was an aborted mutation
+      if (result?.__aborted) {
+        return;
+      }
       // Only invalidate the specific quote and its groups to avoid cancel storms
       queryClient.invalidateQueries({ queryKey: [`/api/quotes/${quoteId}`] });
       queryClient.invalidateQueries({ queryKey: ["/api/quotes", quoteId, "groups"] });
@@ -520,11 +606,26 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
 
   const deleteLineItemMutation = useMutation({
     mutationFn: async (id: number) => {
-      await apiRequest("DELETE", `/api/line-items/${id}`, undefined, {
-        signal: abortController.current.signal
-      });
+      try {
+        await apiRequest("DELETE", `/api/line-items/${id}`, undefined, {
+          signal: abortController.current.signal
+        });
+      } catch (error: any) {
+        // If this is an abort error, don't let it become an unhandled rejection
+        if (error instanceof NavigationAbortError || error?.name === 'AbortError' || error?.message?.includes('aborted') || error?.message?.includes('signal is aborted')) {
+          // Return null to signal abort
+          return null;
+        }
+        // Re-throw other errors so onError can handle them
+        throw error;
+      }
     },
-    onSuccess: () => {
+    onSuccess: (result: any) => {
+      // Check if this was an aborted mutation  
+      if (result === null) {
+        return;
+      }
+      
       // Clear the pending mutation reference
       pendingMutations.current.delete = null;
       
@@ -547,12 +648,27 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
 
   const calculatePricingMutation = useMutation({
     mutationFn: async (data: { productId: number; length: number; width: number }) => {
-      const response = await apiRequest("POST", "/api/calculate-price", data, {
-        signal: abortController.current.signal
-      });
-      return response.json();
+      try {
+        const response = await apiRequest("POST", "/api/calculate-price", data, {
+          signal: abortController.current.signal
+        });
+        return response.json();
+      } catch (error: any) {
+        // If this is an abort error, don't let it become an unhandled rejection
+        if (error instanceof NavigationAbortError || error?.name === 'AbortError' || error?.message?.includes('aborted') || error?.message?.includes('signal is aborted')) {
+          // Return a special marker that onSuccess can ignore
+          return { __aborted: true };
+        }
+        // Re-throw other errors so onError can handle them
+        throw error;
+      }
     },
-    onSuccess: (data) => {
+    onSuccess: (data: any) => {
+      // Check if this was an aborted mutation
+      if (data?.__aborted) {
+        return;
+      }
+      
       // Clear the pending mutation reference
       pendingMutations.current.calculate = null;
       
