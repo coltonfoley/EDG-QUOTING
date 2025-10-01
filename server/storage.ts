@@ -1,6 +1,6 @@
 import { accounts, customers, contacts, quotes, lineItems, groups, products, users, contractTemplates, pricingTables, productAccessories, quoteCoverPhotos, quoteProductRenderings, issueReports, type Account, type Customer, type Contact, type Quote, type LineItem, type Group, type Product, type User, type ContractTemplate, type PricingTable, type ProductAccessory, type QuoteCoverPhoto, type QuoteProductRendering, type IssueReport, type InsertAccount, type InsertCustomer, type InsertContact, type InsertQuote, type InsertLineItem, type InsertGroup, type InsertProduct, type InsertUser, type InsertContractTemplate, type InsertPricingTable, type InsertProductAccessory, type InsertQuoteCoverPhoto, type InsertQuoteProductRendering, type InsertIssueReport, type QuoteWithDetails, type ProductWithDetails } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, inArray, sql, and, ne, or, ilike } from "drizzle-orm";
+import { eq, desc, asc, inArray, sql, and, ne, or, ilike } from "drizzle-orm";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 import connectPg from "connect-pg-simple";
@@ -750,7 +750,8 @@ export class DatabaseStorage implements IStorage {
       })
       .from(lineItems)
       .leftJoin(products, eq(lineItems.productId, products.id))
-      .where(eq(lineItems.quoteId, id));
+      .where(eq(lineItems.quoteId, id))
+      .orderBy(asc(lineItems.position));
     
     // Add manufacturer field to line items using fallback logic
     const quoteLineItems = quoteLineItemsWithProducts.map(item => ({
@@ -830,7 +831,8 @@ export class DatabaseStorage implements IStorage {
           })
           .from(lineItems)
           .leftJoin(products, eq(lineItems.productId, products.id))
-          .where(eq(lineItems.quoteId, quote.id));
+          .where(eq(lineItems.quoteId, quote.id))
+          .orderBy(asc(lineItems.position));
         
         // Add manufacturer field to line items using fallback logic
         const quoteLineItems = quoteLineItemsWithProducts.map(item => ({
