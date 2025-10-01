@@ -2,7 +2,7 @@ import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
 import { Express } from "express";
 import session from "express-session";
-import { scrypt, randomBytes, timingSafeEqual } from "crypto";
+import { scrypt, randomBytes, timingSafeEqual, createHash } from "crypto";
 import { promisify } from "util";
 import { storage } from "./storage";
 import connectPg from "connect-pg-simple";
@@ -52,6 +52,10 @@ export function setupAuth(app: Express) {
   app.use(session(sessionSettings));
   app.use(passport.initialize());
   app.use(passport.session());
+  
+  // Add API key validation middleware globally
+  // This runs after session middleware and checks for API keys
+  app.use(validateApiKey);
 
   passport.use(
     new LocalStrategy(async (username, password, done) => {
@@ -113,8 +117,52 @@ export function setupAuth(app: Express) {
 
 }
 
+// Helper function to hash API keys using SHA-256 (deterministic)
+export function hashApiKey(apiKey: string): string {
+  return createHash('sha256').update(apiKey).digest('hex');
+}
+
+// Middleware to validate API keys for app-to-app authentication
+export async function validateApiKey(req: any, res: any, next: any) {
+  const authHeader = req.headers.authorization;
+  
+  // If no Authorization header, skip API key validation
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return next();
+  }
+
+  try {
+    // Extract the API key from the Authorization header
+    const apiKey = authHeader.substring(7); // Remove 'Bearer ' prefix
+    
+    // Hash the provided key using SHA-256 (deterministic, not salted)
+    const keyHash = hashApiKey(apiKey);
+    
+    // Look up the key in the database
+    const storedKey = await storage.getApiKeyByHash(keyHash);
+    
+    if (storedKey) {
+      // API key is valid - mark request as authenticated
+      req.apiKeyAuthenticated = true;
+      req.apiKey = storedKey;
+      
+      // Update last used timestamp (don't await, fire and forget)
+      storage.updateApiKeyLastUsed(storedKey.id).catch(err => 
+        console.error('Failed to update API key last used:', err)
+      );
+    }
+    
+    next();
+  } catch (error) {
+    console.error('API key validation error:', error);
+    // Continue to next middleware even on error - don't block the request
+    next();
+  }
+}
+
 export function isAuthenticated(req: any, res: any, next: any) {
-  if (req.isAuthenticated()) {
+  // Accept EITHER session authentication OR API key authentication
+  if (req.isAuthenticated() || req.apiKeyAuthenticated) {
     return next();
   }
   res.status(401).json({ message: "Unauthorized" });
