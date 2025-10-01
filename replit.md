@@ -95,6 +95,8 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+- October 1, 2025: Implemented seamless navigation and auto-save error handling - eliminated error modals during normal navigation by distinguishing timeout aborts from user-initiated cancellations, added NavigationAbortError class, fixed event listener memory leaks, and updated all mutation error handlers to silently ignore navigation-triggered aborts
+- October 1, 2025: Fixed quote loading bug - quotes without assigned accounts (NULL accountId) now load properly instead of returning 404 errors
 - September 25, 2025: Fixed PDF import validation failures - resolved "ZodError: customer field Required" by making Zod schema fields optional/nullable and improved OpenAI prompts to return null instead of omitting fields
 - September 25, 2025: Enhanced error handling for PDF processing with better Zod validation logging and user-friendly API error messages  
 - September 17, 2025: Updated terminology from "Projects" to "Quotes" throughout application - we now manage quotes for projects, not projects directly
