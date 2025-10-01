@@ -142,6 +142,11 @@ export function drawProjectDetailsPage(pdf: jsPDF, opts: DrawProjectDetailsPageO
   pdf.setFont('Barlow-Regular', 'normal');
   pdf.text(quote.projectName || 'N/A', col1X, y + 5);
 
+  pdf.setFont('Barlow-SemiBold', 'normal');
+  pdf.text('Email', col2X, y);
+  pdf.setFont('Barlow-Regular', 'normal');
+  pdf.text(company.email, col2X, y + 5);
+
   y += 15;
 
   pdf.setFont('Barlow-SemiBold', 'normal');
@@ -149,11 +154,6 @@ export function drawProjectDetailsPage(pdf: jsPDF, opts: DrawProjectDetailsPageO
   pdf.setFont('Barlow-Regular', 'normal');
   const addressLines = pdf.splitTextToSize(quote.projectAddress || 'N/A', colW);
   pdf.text(addressLines, col1X, y + 5);
-
-  pdf.setFont('Barlow-SemiBold', 'normal');
-  pdf.text('Email', col2X, y);
-  pdf.setFont('Barlow-Regular', 'normal');
-  pdf.text(company.email, col2X, y + 5);
 
   y += Math.max(5 + addressLines.length * 5, 15);
 
