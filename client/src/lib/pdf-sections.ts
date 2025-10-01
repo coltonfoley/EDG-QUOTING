@@ -142,11 +142,6 @@ export function drawProjectDetailsPage(pdf: jsPDF, opts: DrawProjectDetailsPageO
   pdf.setFont('Barlow-Regular', 'normal');
   pdf.text(quote.projectName || 'N/A', col1X, y + 5);
 
-  pdf.setFont('Barlow-SemiBold', 'normal');
-  pdf.text('Representative', col2X, y);
-  pdf.setFont('Barlow-Regular', 'normal');
-  pdf.text(company.name, col2X, y + 5);
-
   y += 15;
 
   pdf.setFont('Barlow-SemiBold', 'normal');
