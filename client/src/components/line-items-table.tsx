@@ -128,6 +128,11 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
 
   // Initialize local values when lineItems change
   useEffect(() => {
+    // Don't reset if there are pending saves
+    if (Object.keys(debounceTimers.current).length > 0) {
+      return;
+    }
+    
     const newLocalValues: Record<string, { 
       description: string; 
       quantity: string; 
