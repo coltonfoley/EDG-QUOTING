@@ -716,9 +716,16 @@ export class DatabaseStorage implements IStorage {
     if (!quote) return undefined;
 
     const accountIdToUse = quote.accountId;
-    if (!accountIdToUse) return undefined;
-    const [account] = await db.select().from(accounts).where(eq(accounts.id, accountIdToUse));
-    if (!account) return undefined;
+    let account = undefined;
+    let projectContacts: any[] = [];
+    
+    // Get account and contacts if accountId exists
+    if (accountIdToUse) {
+      [account] = await db.select().from(accounts).where(eq(accounts.id, accountIdToUse));
+      if (account) {
+        projectContacts = await db.select().from(contacts).where(eq(contacts.accountId, accountIdToUse));
+      }
+    }
 
     // Join line items with products to get manufacturer data
     const quoteLineItemsWithProducts = await db
@@ -765,8 +772,6 @@ export class DatabaseStorage implements IStorage {
       position: item.position,
       manufacturer: item.productManufacturer || "Uncategorized",
     }));
-
-    const projectContacts = await db.select().from(contacts).where(eq(contacts.accountId, accountIdToUse));
 
     // Get contract template if referenced
     let contractTemplate: ContractTemplate | undefined;
