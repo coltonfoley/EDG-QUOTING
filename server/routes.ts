@@ -3410,7 +3410,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Get user ID from session if authenticated
       if (req.user?.id) {
-        validatedData.userId = req.user.id;
+        validatedData.userId = typeof req.user.id === 'string' ? parseInt(req.user.id) : req.user.id;
       }
       
       const issueReport = await storage.createIssueReport(validatedData);
