@@ -408,8 +408,9 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
       const updateKey = `update-${id}`;
       delete pendingMutations.current.update[updateKey];
       
-      // Only invalidate if not skipping (batch operations will handle invalidation separately)
-      if (!result.skipInvalidation) {
+      // Don't invalidate queries for field updates - local state is already updated
+      // Only invalidate if explicitly requested (for batch operations)
+      if (result.skipInvalidation === false) {
         queryClient.invalidateQueries({ queryKey: ["/api/quotes"] });
         queryClient.invalidateQueries({ queryKey: [`/api/quotes/${quoteId}`] });
       }
