@@ -283,7 +283,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
         } finally {
           delete debounceTimers.current[key];
         }
-      }, 300);
+      }, 1000);
     }
   }, []);
   
