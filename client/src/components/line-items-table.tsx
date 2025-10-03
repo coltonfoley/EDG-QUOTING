@@ -97,6 +97,9 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
     markupValue: string; 
   }>>({});
   
+  // Track which fields are actively being edited (have focus)
+  const activeInputs = useRef<Set<string>>(new Set());
+  
   // Validation error states
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
   const [newItemErrors, setNewItemErrors] = useState<Record<string, string>>({});
@@ -134,8 +137,8 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
 
   // Initialize local values when lineItems change
   useEffect(() => {
-    // Don't reset if there are pending saves
-    if (Object.keys(debounceTimers.current).length > 0) {
+    // Don't reset if there are pending saves or active inputs
+    if (Object.keys(debounceTimers.current).length > 0 || activeInputs.current.size > 0) {
       return;
     }
     
@@ -1057,6 +1060,8 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
             value={getCurrentValue(item.id, 'description')}
             onChange={(e) => handleFieldChange(item.id, "description", e.target.value)}
             onKeyDown={(e) => handleKeyDown(e, rowIndex, 'description')}
+            onFocus={() => activeInputs.current.add(`${item.id}-description`)}
+            onBlur={() => activeInputs.current.delete(`${item.id}-description`)}
             className="border-0 bg-transparent p-1 text-sm focus:ring-1 focus:ring-blue-500"
             data-testid={`input-description-${item.id}`}
           />
@@ -1071,6 +1076,8 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
             value={getCurrentValue(item.id, 'quantity')}
             onChange={(e) => handleFieldChange(item.id, "quantity", e.target.value)}
             onKeyDown={(e) => handleKeyDown(e, rowIndex, 'quantity')}
+            onFocus={() => activeInputs.current.add(`${item.id}-quantity`)}
+            onBlur={() => activeInputs.current.delete(`${item.id}-quantity`)}
             className="border-0 bg-transparent p-1 text-center text-sm focus:ring-1 focus:ring-blue-500"
             data-testid={`input-quantity-${item.id}`}
           />
@@ -1085,6 +1092,8 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
             value={getCurrentValue(item.id, 'unitPrice')}
             onChange={(e) => handleFieldChange(item.id, "unitPrice", e.target.value)}
             onKeyDown={(e) => handleKeyDown(e, rowIndex, 'unitPrice')}
+            onFocus={() => activeInputs.current.add(`${item.id}-unitPrice`)}
+            onBlur={() => activeInputs.current.delete(`${item.id}-unitPrice`)}
             className="border-0 bg-transparent p-1 text-center text-sm focus:ring-1 focus:ring-blue-500"
             data-testid={`input-unit-price-${item.id}`}
           />
@@ -1100,6 +1109,8 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
               value={getCurrentValue(item.id, 'markupValue')}
               onChange={(e) => handleFieldChange(item.id, "markupValue", e.target.value)}
               onKeyDown={(e) => handleKeyDown(e, rowIndex, 'markupValue')}
+              onFocus={() => activeInputs.current.add(`${item.id}-markupValue`)}
+              onBlur={() => activeInputs.current.delete(`${item.id}-markupValue`)}
               className="border-0 bg-transparent p-1 text-center text-sm focus:ring-1 focus:ring-blue-500 flex-1"
               data-testid={`input-markup-value-${item.id}`}
             />
