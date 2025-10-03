@@ -882,6 +882,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             ilike(contacts.firstName, `%${term}%`),
             ilike(contacts.lastName, `%${term}%`),
             ilike(contacts.email, `%${term}%`),
+            ilike(contacts.phone, `%${term}%`),
             ilike(accounts.name, `%${term}%`)
           )
         )
