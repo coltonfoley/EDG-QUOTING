@@ -265,30 +265,45 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
       return newErrors;
     });
     
-    // Only proceed with save if no validation error
-    if (!validationError) {
-      // Set new timer for debounced save
-      debounceTimers.current[key] = setTimeout(() => {
-        try {
-          let updateData;
-          if (field === "quantity" || field === "unitPrice" || field === "markupValue") {
-            updateData = { [field]: parseFloat(value) || 0 };
-          } else {
-            updateData = { [field]: value };
-          }
-          updateLineItemMutation.mutate({ id: itemId, data: updateData });
-        } catch (error) {
-          // Handle any synchronous errors during mutation
-          const err = error as Error;
-          if (err?.name !== 'AbortError' && !err?.message?.includes('aborted') && !err?.message?.includes('signal is aborted')) {
-            console.error('Error in debounced save:', error);
-          }
-        } finally {
-          delete debounceTimers.current[key];
-        }
-      }, 1000);
-    }
+    // Don't set up debounced save - we'll save on blur instead
+    // This prevents the save from firing while the user is still typing
   }, []);
+  
+  // Save field on blur (when user moves away from the field)
+  const handleFieldBlur = useCallback((itemId: number, field: 'description' | 'quantity' | 'unitPrice' | 'markupType' | 'markupValue') => {
+    const key = `${itemId}-${field}`;
+    const value = localValues[itemId]?.[field];
+    
+    // Remove from active inputs
+    activeInputs.current.delete(key);
+    
+    // Clear any pending timer
+    if (debounceTimers.current[key]) {
+      clearTimeout(debounceTimers.current[key]);
+      delete debounceTimers.current[key];
+    }
+    
+    // Check if there's a validation error
+    if (validationErrors[key]) {
+      return; // Don't save if there's a validation error
+    }
+    
+    // Save immediately on blur
+    try {
+      let updateData;
+      if (field === "quantity" || field === "unitPrice" || field === "markupValue") {
+        updateData = { [field]: parseFloat(value) || 0 };
+      } else {
+        updateData = { [field]: value };
+      }
+      updateLineItemMutation.mutate({ id: itemId, data: updateData });
+    } catch (error) {
+      const err = error as Error;
+      if (err?.name !== 'AbortError' && !err?.message?.includes('aborted') && !err?.message?.includes('signal is aborted')) {
+        console.error('Error saving on blur:', error);
+      }
+    }
+  }, [localValues, validationErrors]);
   
   // Keyboard navigation helper
   const handleKeyDown = useCallback((e: React.KeyboardEvent, rowIndex: number, column: 'description' | 'quantity' | 'unitPrice' | 'markupValue') => {
@@ -1062,7 +1077,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
             onChange={(e) => handleFieldChange(item.id, "description", e.target.value)}
             onKeyDown={(e) => handleKeyDown(e, rowIndex, 'description')}
             onFocus={() => activeInputs.current.add(`${item.id}-description`)}
-            onBlur={() => activeInputs.current.delete(`${item.id}-description`)}
+            onBlur={() => handleFieldBlur(item.id, "description")}
             className="border-0 bg-transparent p-1 text-sm focus:ring-1 focus:ring-blue-500"
             data-testid={`input-description-${item.id}`}
           />
@@ -1078,7 +1093,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
             onChange={(e) => handleFieldChange(item.id, "quantity", e.target.value)}
             onKeyDown={(e) => handleKeyDown(e, rowIndex, 'quantity')}
             onFocus={() => activeInputs.current.add(`${item.id}-quantity`)}
-            onBlur={() => activeInputs.current.delete(`${item.id}-quantity`)}
+            onBlur={() => handleFieldBlur(item.id, "quantity")}
             className="border-0 bg-transparent p-1 text-center text-sm focus:ring-1 focus:ring-blue-500"
             data-testid={`input-quantity-${item.id}`}
           />
@@ -1094,7 +1109,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
             onChange={(e) => handleFieldChange(item.id, "unitPrice", e.target.value)}
             onKeyDown={(e) => handleKeyDown(e, rowIndex, 'unitPrice')}
             onFocus={() => activeInputs.current.add(`${item.id}-unitPrice`)}
-            onBlur={() => activeInputs.current.delete(`${item.id}-unitPrice`)}
+            onBlur={() => handleFieldBlur(item.id, "unitPrice")}
             className="border-0 bg-transparent p-1 text-center text-sm focus:ring-1 focus:ring-blue-500"
             data-testid={`input-unit-price-${item.id}`}
           />
@@ -1111,7 +1126,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
               onChange={(e) => handleFieldChange(item.id, "markupValue", e.target.value)}
               onKeyDown={(e) => handleKeyDown(e, rowIndex, 'markupValue')}
               onFocus={() => activeInputs.current.add(`${item.id}-markupValue`)}
-              onBlur={() => activeInputs.current.delete(`${item.id}-markupValue`)}
+              onBlur={() => handleFieldBlur(item.id, "markupValue")}
               className="border-0 bg-transparent p-1 text-center text-sm focus:ring-1 focus:ring-blue-500 flex-1"
               data-testid={`input-markup-value-${item.id}`}
             />
