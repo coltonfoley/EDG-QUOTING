@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback, useRef } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef, memo } from "react";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -1003,8 +1003,8 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
     reorderLineItemsMutation.mutate(moves);
   };
 
-  // Sortable Line Item Row Component
-  const SortableLineItemRow = ({ item, rowIndex }: { item: LineItem; rowIndex: number }) => {
+  // Sortable Line Item Row Component (memoized to prevent focus loss)
+  const SortableLineItemRow = memo(({ item, rowIndex }: { item: LineItem; rowIndex: number }) => {
     const {
       attributes,
       listeners,
@@ -1177,7 +1177,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
         </td>
       </tr>
     );
-  };
+  });
 
   // Clean descriptions function to remove PDF filename prefixes
   const cleanDescriptions = async () => {
