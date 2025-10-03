@@ -708,15 +708,18 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
       errors.description = "Description is required";
     }
     
-    if (!newItem.quantity || parseFloat(newItem.quantity) <= 0) {
+    const quantity = parseFloat(newItem.quantity);
+    if (isNaN(quantity) || quantity <= 0) {
       errors.quantity = "Quantity must be greater than 0";
     }
     
-    if (!newItem.unitPrice || parseFloat(newItem.unitPrice) < 0) {
+    const unitPrice = parseFloat(newItem.unitPrice);
+    if (isNaN(unitPrice) || unitPrice < 0) {
       errors.unitPrice = "Unit price must be a valid positive number";
     }
     
-    if (!newItem.markupValue || parseFloat(newItem.markupValue) < 0) {
+    const markupValue = parseFloat(newItem.markupValue || "0");
+    if (isNaN(markupValue) || markupValue < 0) {
       errors.markupValue = "Markup value must be a valid positive number";
     }
     
@@ -732,9 +735,9 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
       quantity: parseFloat(newItem.quantity),
       unitPrice: parseFloat(newItem.unitPrice),
       markupType: newItem.markupType,
-      markupValue: parseFloat(newItem.markupValue),
+      markupValue: parseFloat(newItem.markupValue || "0"),
       discountType: newItem.discountType,
-      discountValue: parseFloat(newItem.discountValue),
+      discountValue: parseFloat(newItem.discountValue || "0"),
       retailPrice: newItem.retailPrice ? parseFloat(newItem.retailPrice) : null,
     };
     
