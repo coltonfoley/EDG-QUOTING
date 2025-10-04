@@ -33,6 +33,9 @@ export default function QuoteBuilder() {
   const { data: quote, isLoading, error } = useQuery<QuoteWithDetails>({
     queryKey: [`/api/quotes/${quoteId}`],
     enabled: !isNewQuote,
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
 
   const createQuoteMutation = useMutation({
