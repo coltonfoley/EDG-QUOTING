@@ -27,7 +27,8 @@ function drawBrandedFooter(opts: BrandedFooterOpts): void {
   // Add small logo on the left (with more space below the line)
   const logoW = 25;
   const logoH = 10;
-  pdf.addImage(logoDataUrl, 'PNG', margin, footerY - logoH + 2, logoW, logoH);
+  const logoFormat = detectImageFormat(logoDataUrl);
+  pdf.addImage(logoDataUrl, logoFormat, margin, footerY - logoH + 2, logoW, logoH);
   
   // Add company info on the right
   pdf.setFont('Barlow-Regular', 'normal');
@@ -102,7 +103,8 @@ export function drawStandardCover(pdf: jsPDF, opts: DrawStandardCoverOpts): void
   const { coverDataUrl, pageW, pageH } = opts;
 
   // Add the cover image as a full-page background
-  pdf.addImage(coverDataUrl, 'PNG', 0, 0, pageW, pageH);
+  const format = detectImageFormat(coverDataUrl);
+  pdf.addImage(coverDataUrl, format, 0, 0, pageW, pageH);
 }
 
 export function drawProjectDetailsPage(pdf: jsPDF, opts: DrawProjectDetailsPageOpts): void {
@@ -162,7 +164,8 @@ export function drawProjectDetailsPage(pdf: jsPDF, opts: DrawProjectDetailsPageO
   // Add client logo image
   const imgW = contentW;
   const imgH = imgW * 0.6;
-  pdf.addImage(coverDataUrl, 'PNG', margin, y, imgW, imgH);
+  const imgFormat = detectImageFormat(coverDataUrl);
+  pdf.addImage(coverDataUrl, imgFormat, margin, y, imgW, imgH);
   y += imgH;
 
   // Add branded footer
@@ -517,5 +520,6 @@ export function drawBrandedBackPage(pdf: jsPDF, opts: DrawBrandedBackPageOpts): 
   pdf.addPage();
 
   // Display the custom back page image full-page
-  pdf.addImage(backPageDataUrl, 'PNG', 0, 0, pageW, pageH);
+  const format = detectImageFormat(backPageDataUrl);
+  pdf.addImage(backPageDataUrl, format, 0, 0, pageW, pageH);
 }
