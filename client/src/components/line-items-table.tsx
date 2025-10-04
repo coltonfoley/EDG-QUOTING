@@ -165,14 +165,21 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
     setLocalValues(newLocalValues);
   }, [lineItems]);
 
+  // Create a Map for O(1) line item lookups instead of O(n) array.find()
+  const itemById = useMemo(() => 
+    new Map(lineItems.map(i => [i.id, i])), 
+    [lineItems]
+  );
+
   // Helper function to get current value (local or from props)
   const getCurrentValue = (itemId: number, field: 'description' | 'quantity' | 'unitPrice' | 'markupType' | 'markupValue') => {
+    const item = itemById.get(itemId);
     return localValues[itemId]?.[field] ?? 
-      (field === 'description' ? lineItems.find(item => item.id === itemId)?.description || '' :
-       field === 'quantity' ? lineItems.find(item => item.id === itemId)?.quantity.toString() || '0' :
-       field === 'unitPrice' ? lineItems.find(item => item.id === itemId)?.unitPrice.toString() || '0' :
-       field === 'markupType' ? lineItems.find(item => item.id === itemId)?.markupType || 'percentage' :
-       lineItems.find(item => item.id === itemId)?.markupValue.toString() || '0');
+      (field === 'description' ? item?.description || '' :
+       field === 'quantity' ? item?.quantity.toString() || '0' :
+       field === 'unitPrice' ? item?.unitPrice.toString() || '0' :
+       field === 'markupType' ? item?.markupType || 'percentage' :
+       item?.markupValue.toString() || '0');
   };
 
   // Mark a field as active and capture caret position
