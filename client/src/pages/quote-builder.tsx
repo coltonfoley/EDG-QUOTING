@@ -97,13 +97,12 @@ export default function QuoteBuilder() {
       return response.json();
     },
     onSuccess: (updatedQuote) => {
-      // Use setQueryData instead of invalidateQueries to avoid refetch
+      // Use setQueryData to update the cache without triggering refetches
       queryClient.setQueryData([`/api/quotes/${quoteId}`], (oldData: any) => {
         if (!oldData) return oldData;
         return { ...oldData, ...updatedQuote };
       });
       
-      queryClient.invalidateQueries({ queryKey: ["/api/quotes"] });
       toast({ title: "Quote updated successfully" });
     },
     onError: () => {
