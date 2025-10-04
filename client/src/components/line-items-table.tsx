@@ -1132,7 +1132,17 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
             />
             <Select
               value={getCurrentValue(item.id, 'markupType')}
-              onValueChange={(value) => handleFieldChange(item.id, "markupType", value)}
+              onValueChange={(value) => {
+                activeInputs.current.delete(`${item.id}-markupType`);
+                handleFieldChange(item.id, "markupType", value);
+              }}
+              onOpenChange={(open) => {
+                if (open) {
+                  activeInputs.current.add(`${item.id}-markupType`);
+                } else {
+                  activeInputs.current.delete(`${item.id}-markupType`);
+                }
+              }}
             >
               <SelectTrigger className="w-12 h-6 border-0 bg-transparent p-0 text-xs" data-testid={`select-markup-type-${item.id}`}>
                 <SelectValue />
