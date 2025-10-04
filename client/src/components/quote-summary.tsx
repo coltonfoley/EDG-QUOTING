@@ -23,6 +23,7 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
   const [localDiscount, setLocalDiscount] = useState<string>("");
   const [localShipping, setLocalShipping] = useState<string>("");
   const [localNotes, setLocalNotes] = useState<string>("");
+  const [localCustomContractTerms, setLocalCustomContractTerms] = useState<string>("");
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -171,12 +172,16 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
                     <Textarea
                       id="customContractTerms"
                       rows={6}
-                      value={quote.customContractTerms ?? ""}
-                      onChange={(e) => {
-                        updateContractMutation.mutate({
-                          contractTemplateId: null,
-                          customContractTerms: e.target.value
-                        });
+                      value={localCustomContractTerms || (quote.customContractTerms ?? "")}
+                      onChange={(e) => setLocalCustomContractTerms(e.target.value)}
+                      onBlur={(e) => {
+                        if (localCustomContractTerms !== "" && localCustomContractTerms !== (quote.customContractTerms ?? "")) {
+                          updateContractMutation.mutate({
+                            contractTemplateId: null,
+                            customContractTerms: localCustomContractTerms
+                          });
+                        }
+                        setLocalCustomContractTerms("");
                       }}
                       placeholder="Enter custom contract terms and conditions..."
                       className="mt-1 text-sm"
