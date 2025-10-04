@@ -214,7 +214,8 @@ export default function Pipeline() {
       if (lostReason) {
         payload.lost_reason = lostReason;
       }
-      return await apiRequest("PATCH", `/api/quotes/${quoteId}/stage`, payload);
+      const response = await apiRequest("PATCH", `/api/quotes/${quoteId}/stage`, payload);
+      return response.json();
     },
     onMutate: async ({ quoteId, dealStage }) => {
       // Cancel any outgoing refetches
@@ -246,8 +247,17 @@ export default function Pipeline() {
         variant: "destructive",
       });
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/quotes"] });
+    onSuccess: (updatedQuote, { quoteId }) => {
+      // Merge server response into the cache to capture any server-side changes
+      queryClient.setQueryData<QuoteWithDetails[]>(["/api/quotes"], (old) => {
+        if (!old) return old;
+        return old.map(quote => 
+          quote.id === quoteId 
+            ? { ...quote, ...updatedQuote } 
+            : quote
+        );
+      });
+      
       toast({
         title: "Success",
         description: "Deal stage updated successfully.",
