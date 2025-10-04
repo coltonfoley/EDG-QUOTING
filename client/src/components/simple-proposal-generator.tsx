@@ -1688,7 +1688,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         const clientLogoImage = getEffectiveCoverPhoto();
         let clientLogoDataUrl: string | null = null;
         if (clientLogoImage) {
-          const normalized = await normalizeImageToDataUrl(clientLogoImage.preview);
+          const normalized = await normalizeImageToDataUrl(getProxiedImageUrl(clientLogoImage.preview));
           clientLogoDataUrl = normalized.dataUrl;
         }
 
