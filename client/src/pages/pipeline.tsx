@@ -276,9 +276,9 @@ export default function Pipeline() {
       const term = searchTerm.toLowerCase();
       filtered = filtered.filter(quote => 
         quote.quoteNumber.toLowerCase().includes(term) ||
-        quote.customer.name.toLowerCase().includes(term) ||
+        quote.customer?.name.toLowerCase().includes(term) ||
         quote.projectName?.toLowerCase().includes(term) ||
-        quote.customer.company?.toLowerCase().includes(term)
+        quote.customer?.company?.toLowerCase().includes(term)
       );
     }
 
@@ -322,7 +322,7 @@ export default function Pipeline() {
 
     // Account type filter
     if (filterAccountType !== "all") {
-      filtered = filtered.filter(quote => quote.customer.accountType === filterAccountType);
+      filtered = filtered.filter(quote => quote.customer?.accountType === filterAccountType);
     }
 
     return filtered;
