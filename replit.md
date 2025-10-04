@@ -95,6 +95,7 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+- October 4, 2025: Optimized React Query cache invalidation strategy - eliminated over-invalidation by using setQueryData to update both detail and list caches instead of broad query invalidations, significantly reducing unnecessary network requests while keeping all views (quote detail, pipeline, dashboard) perfectly synchronized
 - October 1, 2025: Implemented seamless navigation and auto-save error handling - eliminated error modals during normal navigation by distinguishing timeout aborts from user-initiated cancellations, added NavigationAbortError class, fixed event listener memory leaks, and updated all mutation error handlers to silently ignore navigation-triggered aborts
 - October 1, 2025: Fixed quote loading bug - quotes without assigned accounts (NULL accountId) now load properly instead of returning 404 errors
 - September 25, 2025: Fixed PDF import validation failures - resolved "ZodError: customer field Required" by making Zod schema fields optional/nullable and improved OpenAI prompts to return null instead of omitting fields
