@@ -1671,15 +1671,16 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
           productRenderings.map(async (rendering) => {
             // For temp images with files, read the file directly to avoid blob URL fetch issues
             if (!rendering.isPersistent && rendering.originalFile) {
+              const file = rendering.originalFile;
               return new Promise<{ dataUrl: string; format: 'PNG' | 'JPEG' }>((resolve, reject) => {
                 const reader = new FileReader();
                 reader.onload = () => {
                   const dataUrl = reader.result as string;
-                  const format = rendering.originalFile!.type.includes('png') ? 'PNG' : 'JPEG';
+                  const format = file.type.includes('png') ? 'PNG' : 'JPEG';
                   resolve({ dataUrl, format });
                 };
                 reader.onerror = () => reject(new Error('Failed to read file'));
-                reader.readAsDataURL(rendering.originalFile);
+                reader.readAsDataURL(file);
               });
             }
             // For persistent images, use the preview URL (already proxied at line 238)
