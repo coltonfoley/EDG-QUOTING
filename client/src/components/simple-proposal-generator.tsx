@@ -1666,27 +1666,29 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         pdf.addFileToVFS('Barlow-SemiBold.ttf', barlowSemiBoldBase64);
         pdf.addFont('Barlow-SemiBold.ttf', 'Barlow-SemiBold', 'normal');
 
-        // Normalize render images for PDF
-        const normalizedImages = await Promise.all(
-          productRenderings.map(async (rendering) => {
-            // For temp images with files, read the file directly to avoid blob URL fetch issues
-            if (!rendering.isPersistent && rendering.originalFile) {
-              const file = rendering.originalFile;
-              return new Promise<{ dataUrl: string; format: 'PNG' | 'JPEG' }>((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = () => {
-                  const dataUrl = reader.result as string;
-                  const format = file.type.includes('png') ? 'PNG' : 'JPEG';
-                  resolve({ dataUrl, format });
-                };
-                reader.onerror = () => reject(new Error('Failed to read file'));
-                reader.readAsDataURL(file);
-              });
-            }
-            // For persistent images, use the preview URL (already proxied at line 238)
-            return await normalizeImageToDataUrl(rendering.preview);
-          })
-        );
+        // Normalize render images for PDF - use allSettled to handle failures gracefully
+        const normalizedImages = (
+          await Promise.allSettled(
+            productRenderings.map(async (rendering) => {
+              // For temp images with files, read the file directly to avoid blob URL fetch issues
+              if (!rendering.isPersistent && rendering.originalFile) {
+                const file = rendering.originalFile;
+                return new Promise<{ dataUrl: string; format: 'PNG' | 'JPEG' }>((resolve, reject) => {
+                  const reader = new FileReader();
+                  reader.onload = () => {
+                    const dataUrl = reader.result as string;
+                    const format = file.type.includes('png') ? 'PNG' : 'JPEG';
+                    resolve({ dataUrl, format });
+                  };
+                  reader.onerror = () => reject(new Error('Failed to read file'));
+                  reader.readAsDataURL(file);
+                });
+              }
+              // For persistent images, use the preview URL (already proxied at line 238)
+              return await normalizeImageToDataUrl(rendering.preview);
+            })
+          )
+        ).flatMap(r => (r.status === 'fulfilled' ? [r.value] : []));
 
         // Prepare company info
         const company = {
@@ -1699,23 +1701,28 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         // Get contract text (only if includeContract is enabled)
         const contractText = includeContract ? (quote.contractTemplate?.terms || quote.customContractTerms || '') : '';
 
-        // Get client logo (from "Cover Photo" section)
+        // Get client logo (from "Cover Photo" section) - handle errors gracefully
         const clientLogoImage = getEffectiveCoverPhoto();
         let clientLogoDataUrl: string | null = null;
         if (clientLogoImage) {
-          // For temp images with files, read the file directly
-          if (!clientLogoImage.isPersistent && clientLogoImage.originalFile) {
-            const dataUrl = await new Promise<string>((resolve, reject) => {
-              const reader = new FileReader();
-              reader.onload = () => resolve(reader.result as string);
-              reader.onerror = () => reject(new Error('Failed to read file'));
-              reader.readAsDataURL(clientLogoImage.originalFile!);
-            });
-            clientLogoDataUrl = dataUrl;
-          } else {
-            // For persistent images, fetch through proxy
-            const normalized = await normalizeImageToDataUrl(clientLogoImage.preview);
-            clientLogoDataUrl = normalized.dataUrl;
+          try {
+            // For temp images with files, read the file directly
+            if (!clientLogoImage.isPersistent && clientLogoImage.originalFile) {
+              const dataUrl = await new Promise<string>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result as string);
+                reader.onerror = () => reject(new Error('Failed to read file'));
+                reader.readAsDataURL(clientLogoImage.originalFile!);
+              });
+              clientLogoDataUrl = dataUrl;
+            } else {
+              // For persistent images, fetch through proxy
+              const normalized = await normalizeImageToDataUrl(clientLogoImage.preview);
+              clientLogoDataUrl = normalized.dataUrl;
+            }
+          } catch (error) {
+            // If logo fails to load, continue without it rather than crashing
+            console.warn('Failed to load client logo for PDF:', error);
           }
         }
 
