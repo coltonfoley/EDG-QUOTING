@@ -1669,7 +1669,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         // Normalize render images for PDF
         const normalizedImages = await Promise.all(
           productRenderings.map(async (rendering) => {
-            return await normalizeImageToDataUrl(rendering.preview);
+            return await normalizeImageToDataUrl(getProxiedImageUrl(rendering.preview));
           })
         );
 
