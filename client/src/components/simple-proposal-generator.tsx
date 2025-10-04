@@ -1682,7 +1682,8 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
                 reader.readAsDataURL(rendering.originalFile);
               });
             }
-            // For persistent images, use the proxy URL
+            // For persistent images, use the preview URL (already proxied at line 238)
+            console.log('Fetching persistent image:', rendering.preview);
             return await normalizeImageToDataUrl(rendering.preview);
           })
         );
