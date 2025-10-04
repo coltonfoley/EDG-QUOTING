@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -20,7 +19,6 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
@@ -28,7 +26,6 @@ import { Loader2 } from "lucide-react";
 const issueReportSchema = z.object({
   description: z.string().min(1, "Description is required").max(5000, "Description is too long"),
   userAction: z.string().min(1, "What you were trying to do is required").max(1000, "Description is too long"),
-  userEmail: z.string().email("Invalid email format").optional().or(z.literal("")),
 });
 
 type IssueReportForm = z.infer<typeof issueReportSchema>;
@@ -106,7 +103,6 @@ export function ReportIssueDialog({ open, onOpenChange }: ReportIssueDialogProps
     defaultValues: {
       description: "",
       userAction: "",
-      userEmail: "",
     },
   });
 
@@ -118,7 +114,6 @@ export function ReportIssueDialog({ open, onOpenChange }: ReportIssueDialogProps
         description: data.description,
         userAction: data.userAction,
         location: window.location.pathname,
-        userEmail: data.userEmail || null,
         userAgent: navigator.userAgent,
         browserName: healthMetrics.browserName,
         browserVersion: healthMetrics.browserVersion,
@@ -192,25 +187,6 @@ export function ReportIssueDialog({ open, onOpenChange }: ReportIssueDialogProps
                       placeholder="Describe what you were trying to accomplish when the issue occurred..."
                       className="min-h-[80px]"
                       data-testid="textarea-user-action"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="userEmail"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Your email (optional)</FormLabel>
-                  <FormControl>
-                    <Input
-                      type="email"
-                      placeholder="your.email@example.com"
-                      data-testid="input-user-email"
                       {...field}
                     />
                   </FormControl>
