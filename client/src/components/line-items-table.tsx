@@ -419,8 +419,17 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
       // Clear the pending mutation reference
       pendingMutations.current.create = null;
       
-      queryClient.invalidateQueries({ queryKey: ["/api/quotes"] });
+      // Invalidate the specific quote to refetch it
       queryClient.invalidateQueries({ queryKey: [`/api/quotes/${quoteId}`] });
+      
+      // Also update the list cache by refetching and updating that specific quote
+      queryClient.fetchQuery({ queryKey: [`/api/quotes/${quoteId}`] }).then((updatedQuote) => {
+        queryClient.setQueryData(["/api/quotes"], (old: any) => {
+          if (!old) return old;
+          return old.map((q: any) => q.id === quoteId ? updatedQuote : q);
+        });
+      });
+      
       setNewItem({
         description: "",
         quantity: "1",
@@ -477,8 +486,15 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
       // Don't invalidate queries for field updates - local state is already updated
       // Only invalidate if explicitly requested (for batch operations)
       if (result.skipInvalidation === false) {
-        queryClient.invalidateQueries({ queryKey: ["/api/quotes"] });
         queryClient.invalidateQueries({ queryKey: [`/api/quotes/${quoteId}`] });
+        
+        // Also update the list cache by refetching and updating that specific quote
+        queryClient.fetchQuery({ queryKey: [`/api/quotes/${quoteId}`] }).then((updatedQuote) => {
+          queryClient.setQueryData(["/api/quotes"], (old: any) => {
+            if (!old) return old;
+            return old.map((q: any) => q.id === quoteId ? updatedQuote : q);
+          });
+        });
       }
       
       // Clear validation errors for this item on successful save
@@ -599,7 +615,6 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
         return;
       }
       queryClient.invalidateQueries({ queryKey: ["/api/quotes", quoteId, "groups"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/quotes"] });
       toast({ title: "Group deleted successfully" });
     },
     onError: (error: any) => {
@@ -699,8 +714,17 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
       // Clear the pending mutation reference
       pendingMutations.current.delete = null;
       
-      queryClient.invalidateQueries({ queryKey: ["/api/quotes"] });
+      // Invalidate the specific quote to refetch it
       queryClient.invalidateQueries({ queryKey: [`/api/quotes/${quoteId}`] });
+      
+      // Also update the list cache by refetching and updating that specific quote
+      queryClient.fetchQuery({ queryKey: [`/api/quotes/${quoteId}`] }).then((updatedQuote) => {
+        queryClient.setQueryData(["/api/quotes"], (old: any) => {
+          if (!old) return old;
+          return old.map((q: any) => q.id === quoteId ? updatedQuote : q);
+        });
+      });
+      
       toast({ title: "Line item deleted successfully" });
     },
     onError: (error: any) => {
@@ -1331,8 +1355,15 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
       }
 
       // Perform batch invalidation after all updates are complete
-      queryClient.invalidateQueries({ queryKey: ["/api/quotes"] });
       queryClient.invalidateQueries({ queryKey: [`/api/quotes/${quoteId}`] });
+      
+      // Also update the list cache by refetching and updating that specific quote
+      queryClient.fetchQuery({ queryKey: [`/api/quotes/${quoteId}`] }).then((updatedQuote) => {
+        queryClient.setQueryData(["/api/quotes"], (old: any) => {
+          if (!old) return old;
+          return old.map((q: any) => q.id === quoteId ? updatedQuote : q);
+        });
+      });
 
       // Show results
       if (successCount > 0 && errorCount === 0) {
