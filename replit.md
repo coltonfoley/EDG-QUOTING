@@ -95,6 +95,7 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+- October 4, 2025: Fixed PDF generation image fetch errors - resolved CORS failures by updating image normalizer to handle data:/blob: URLs without fetch, proxying all non-same-origin URLs through backend, and using Promise.allSettled for resilient image loading that won't crash if one image fails
 - October 4, 2025: Optimized line item rendering performance - replaced O(n) array.find() operations with O(1) Map lookups in LineItemsTable component, eliminating per-render O(n×fields) work for significant performance improvement with many line items
 - October 4, 2025: Optimized React Query cache invalidation strategy - eliminated over-invalidation by using setQueryData to update both detail and list caches instead of broad query invalidations, significantly reducing unnecessary network requests while keeping all views (quote detail, pipeline, dashboard) perfectly synchronized
 - October 1, 2025: Implemented seamless navigation and auto-save error handling - eliminated error modals during normal navigation by distinguishing timeout aborts from user-initiated cancellations, added NavigationAbortError class, fixed event listener memory leaks, and updated all mutation error handlers to silently ignore navigation-triggered aborts
