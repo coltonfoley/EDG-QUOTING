@@ -36,6 +36,7 @@ export default function QuoteBuilder() {
     staleTime: 60_000,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
+    placeholderData: (previousData) => previousData,
   });
 
   const createQuoteMutation = useMutation({
