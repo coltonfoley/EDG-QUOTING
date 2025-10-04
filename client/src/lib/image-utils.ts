@@ -25,9 +25,15 @@ export function getProxiedImageUrl(imageUrl: string): string {
     }
   }
   
-  // Proxy external Replit object storage URLs that have CORS issues in production
-  if (imageUrl.includes('storage.replit.com')) {
-    return `/api/image-proxy?url=${encodeURIComponent(imageUrl)}`;
+  // Proxy ANY non-same-origin absolute URL through our backend to avoid CORS
+  try {
+    const url = new URL(imageUrl);
+    const sameOrigin = typeof window !== 'undefined' && url.origin === window.location.origin;
+    if (!sameOrigin) {
+      return `/api/image-proxy?url=${encodeURIComponent(imageUrl)}`;
+    }
+  } catch {
+    // not an absolute URL → fall through
   }
   
   // Return original URL for other sources (assets, data URLs, etc.)
