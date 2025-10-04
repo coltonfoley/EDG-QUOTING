@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Trash2, Plus, Package, Search, Filter, X, FileText, Loader2, GripVertical } from "lucide-react";
-import { formatCurrency, calculateLineItemTotal, calculateLineItemMargin, applyDiscountToPrice, isValidNumber, clampValue, roundCurrency, generateGroupId } from "@/lib/utils";
+import { formatCurrency, calculateLineItemTotal, calculateLineItemMargin, applyDiscountToPrice, isValidNumber, clampValue, roundCurrency, generateGroupId, sanitizeNumberString } from "@/lib/utils";
 import { apiRequest, NavigationAbortError } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { LineItem, Product } from "@shared/schema";
@@ -275,14 +275,14 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
         validationError = "Description must be less than 500 characters";
       }
     } else if (field === "quantity") {
-      const num = parseFloat(value);
+      const num = parseFloat(sanitizeNumberString(value));
       if (!value || isNaN(num) || num <= 0) {
         validationError = "Quantity must be greater than 0";
       } else if (num > 999999) {
         validationError = "Quantity must be less than 999,999";
       }
     } else if (field === "unitPrice") {
-      const num = parseFloat(value);
+      const num = parseFloat(sanitizeNumberString(value));
       if (!value && value !== "0") {
         validationError = "Unit price is required";
       } else if (isNaN(num) || num < 0) {
@@ -291,7 +291,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
         validationError = "Unit price must be less than $10,000,000";
       }
     } else if (field === "markupValue") {
-      const num = parseFloat(value);
+      const num = parseFloat(sanitizeNumberString(value));
       if (!value && value !== "0") {
         validationError = "Markup value is required";
       } else if (isNaN(num) || num < 0) {
@@ -343,7 +343,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
     try {
       let updateData;
       if (field === "quantity" || field === "unitPrice" || field === "markupValue") {
-        updateData = { [field]: parseFloat(value) || 0 };
+        updateData = { [field]: parseFloat(sanitizeNumberString(value)) || 0 };
       } else {
         updateData = { [field]: value };
       }
