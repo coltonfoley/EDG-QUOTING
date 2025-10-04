@@ -234,7 +234,10 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
       if (!response.ok) throw new Error('Failed to fetch groups');
       return response.json();
     },
-    enabled: !isUnsavedQuote
+    enabled: !isUnsavedQuote,
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
 
   // Helper function to get product by ID
