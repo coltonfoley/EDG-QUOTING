@@ -342,7 +342,27 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
     try {
       let updateData;
       if (field === "quantity" || field === "unitPrice" || field === "markupValue") {
-        updateData = { [field]: parseFloat(sanitizeNumberString(value)) || 0 };
+        const sanitized = sanitizeNumberString(value);
+        const parsed = parseFloat(sanitized);
+        
+        // If the value is invalid or empty, revert to previous value instead of zero
+        if (sanitized === '' || isNaN(parsed)) {
+          const item = lineItems.find(item => item.id === itemId);
+          if (item) {
+            const previousValue = item[field];
+            // Revert local state to previous value
+            setLocalValues(prev => ({
+              ...prev,
+              [itemId]: {
+                ...prev[itemId],
+                [field]: previousValue.toString()
+              }
+            }));
+          }
+          return; // Don't save invalid input
+        }
+        
+        updateData = { [field]: parsed };
       } else {
         updateData = { [field]: value };
       }
@@ -353,7 +373,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
         console.error('Error saving on blur:', error);
       }
     }
-  }, [localValues, validationErrors]);
+  }, [localValues, validationErrors, lineItems]);
   
   // Keyboard navigation helper
   const handleKeyDown = useCallback((e: React.KeyboardEvent, rowIndex: number, column: 'description' | 'quantity' | 'unitPrice' | 'markupValue') => {
