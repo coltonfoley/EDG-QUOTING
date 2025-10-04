@@ -19,12 +19,33 @@ export async function normalizeImageToDataUrl(src: string): Promise<{ dataUrl: s
   }
 
   try {
-    // Fetch the image as a blob
+    // 0) Short-circuit for DATA URLs (no fetch at all)
+    if (src.startsWith('data:image/')) {
+      const isPng = src.startsWith('data:image/png');
+      const isJpeg = src.startsWith('data:image/jpeg') || src.startsWith('data:image/jpg');
+      const format: 'PNG' | 'JPEG' = isPng ? 'PNG' : 'JPEG';
+      const result = { dataUrl: src, format };
+      imageCache.set(src, result);
+      return result;
+    }
+
+    // 1) Handle BLOB URLs by reading the blob directly (no credentials, no CORS)
+    if (src.startsWith('blob:')) {
+      const blobResp = await fetch(src); // default credentials:'same-origin'
+      const blob = await blobResp.blob();
+      const dataUrl = await blobToDataUrl(blob);
+      const mime = blob.type.toLowerCase();
+      const format: 'PNG' | 'JPEG' =
+        mime === 'image/png' ? 'PNG' : 'JPEG';
+      const result = { dataUrl, format };
+      imageCache.set(src, result);
+      return result;
+    }
+
+    // 2) For HTTP(S) and relative paths: rely on same-origin cookies automatically.
+    // Avoid credentials:'include' which breaks when server replies with ACAO:'*'.
     const response = await fetch(src, {
-      credentials: 'include',
-      headers: {
-        'Accept': 'image/*',
-      },
+      headers: { 'Accept': 'image/*' },
     });
 
     if (!response.ok) {
