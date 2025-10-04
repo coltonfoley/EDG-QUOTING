@@ -1,4 +1,4 @@
-import { Bell, LogOut } from "lucide-react";
+import { Bell, LogOut, Construction } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { 
@@ -21,7 +21,14 @@ export function AppHeader() {
   };
   
   return (
-    <header className="bg-white shadow-sm border-b border-gray-200">
+    <>
+      <div className="bg-yellow-500 text-yellow-900 px-4 py-2">
+        <div className="max-w-7xl mx-auto flex items-center justify-center gap-2 text-sm font-medium">
+          <Construction className="h-4 w-4" />
+          <span>PDF generation is under construction</span>
+        </div>
+      </div>
+      <header className="bg-white shadow-sm border-b border-gray-200">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           <div className="flex items-center space-x-8">
@@ -146,7 +153,6 @@ export function AppHeader() {
         </div>
       </div>
     </header>
+    </>
   );
 }
-
-
