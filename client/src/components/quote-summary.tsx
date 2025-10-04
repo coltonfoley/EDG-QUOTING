@@ -40,9 +40,14 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
       const response = await apiRequest("PUT", `/api/quotes/${quote.id}`, data);
       return response.json();
     },
-    onSuccess: () => {
+    onSuccess: (updatedQuote) => {
       toast({ title: "Contract updated successfully" });
-      queryClient.invalidateQueries({ queryKey: [`/api/quotes/${quote.id}`] });
+      
+      // Use setQueryData instead of invalidateQueries to avoid refetch
+      queryClient.setQueryData([`/api/quotes/${quote.id}`], (oldData: any) => {
+        if (!oldData) return oldData;
+        return { ...oldData, ...updatedQuote };
+      });
     },
     onError: () => {
       toast({ 

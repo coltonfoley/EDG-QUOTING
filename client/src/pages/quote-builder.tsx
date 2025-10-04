@@ -95,8 +95,13 @@ export default function QuoteBuilder() {
       const response = await apiRequest("PUT", `/api/quotes/${quoteId}`, quoteData);
       return response.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`/api/quotes/${quoteId}`] });
+    onSuccess: (updatedQuote) => {
+      // Use setQueryData instead of invalidateQueries to avoid refetch
+      queryClient.setQueryData([`/api/quotes/${quoteId}`], (oldData: any) => {
+        if (!oldData) return oldData;
+        return { ...oldData, ...updatedQuote };
+      });
+      
       queryClient.invalidateQueries({ queryKey: ["/api/quotes"] });
       toast({ title: "Quote updated successfully" });
     },
