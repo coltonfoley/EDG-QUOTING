@@ -96,7 +96,14 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
       // Update form state to match the new dealStage
       form.setValue("dealStage", variables.dealStage);
       toast({ title: "Quote updated successfully" });
-      queryClient.invalidateQueries({ queryKey: [`/api/quotes/${quote?.id}`] });
+      
+      // Use setQueryData instead of invalidateQueries to avoid refetch
+      queryClient.setQueryData([`/api/quotes/${quote?.id}`], (oldData: any) => {
+        if (!oldData) return oldData;
+        return { ...oldData, dealStage: variables.dealStage };
+      });
+      
+      // Still invalidate the quotes list to update the dashboard
       queryClient.invalidateQueries({ queryKey: ["/api/quotes"] });
     },
     onError: (error: Error) => {
