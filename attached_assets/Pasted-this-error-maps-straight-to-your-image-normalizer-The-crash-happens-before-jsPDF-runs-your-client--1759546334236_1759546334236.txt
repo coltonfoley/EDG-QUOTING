@@ -1,0 +1,151 @@
+this error maps straight to your image normalizer. The crash happens before jsPDF runs: your client tries to fetch() an image URL and the request dies (TypeError: Failed to fetch), so the whole PDF step aborts.
+
+Root cause (why it’s failing)
+
+Your normalizer always does fetch(src, { credentials: 'include' }) for every image source (including data: and blob: URLs, and external object-storage URLs). That triggers CORS/preflight or unsupported-scheme failures, which surface as TypeError: Failed to fetch.
+
+In the branded generator flow you normalize gallery/cover images from preview (temp = blob:; persistent = proxied or absolute URL). The “persistent” path sometimes returns an absolute external URL that is not always proxied, so the browser blocks it on CORS during fetch. 
+
+simple-proposal-generator
+
+You do have a server-side image proxy (/api/image-proxy) to bypass CORS, but your getProxiedImageUrl only proxies storage.replit.com instead of “any non-same-origin URL,” so other hosts slip through and still get fetched cross-origin on the client.
+
+In at least one place you double-fetch persistent images in the React component (again with credentials: 'include') to turn them into data URLs, which can hit the same CORS issue. 
+
+simple-proposal-generator
+
+Below is a drop-in fix that makes the PDF generator resilient:
+
+🔧 3-file fix (copy/paste)
+1) Make the normalizer handle data:/blob:/same-origin correctly
+
+File: client/src/lib/pdf-image-pipeline.ts
+
+ export async function normalizeImageToDataUrl(src: string): Promise<{ dataUrl: string; format: 'PNG' | 'JPEG' }> {
+-  // Check cache first
++  // Check cache first
+   if (imageCache.has(src)) {
+     return imageCache.get(src)!;
+   }
+
+   try {
+-    // Fetch the image as a blob
+-    const response = await fetch(src, {
+-      credentials: 'include',
+-      headers: { 'Accept': 'image/*' },
+-    });
++    // 0) Short-circuit for DATA URLs (no fetch at all)
++    if (src.startsWith('data:image/')) {
++      const isPng = src.startsWith('data:image/png');
++      const isJpeg = src.startsWith('data:image/jpeg') || src.startsWith('data:image/jpg');
++      const format: 'PNG' | 'JPEG' = isPng ? 'PNG' : 'JPEG';
++      const result = { dataUrl: src, format };
++      imageCache.set(src, result);
++      return result;
++    }
++
++    // 1) Handle BLOB URLs by reading the blob directly (no credentials, no CORS)
++    if (src.startsWith('blob:')) {
++      const blobResp = await fetch(src); // default credentials:'same-origin'
++      const blob = await blobResp.blob();
++      const dataUrl = await blobToDataUrl(blob);
++      const mime = blob.type.toLowerCase();
++      const format: 'PNG' | 'JPEG' =
++        mime === 'image/png' ? 'PNG' : 'JPEG';
++      const result = { dataUrl, format };
++      imageCache.set(src, result);
++      return result;
++    }
++
++    // 2) For HTTP(S) and relative paths: rely on same-origin cookies automatically.
++    // Avoid credentials:'include' which breaks when server replies with ACAO:'*'.
++    const response = await fetch(src, {
++      headers: { 'Accept': 'image/*' },
++    });
+
+     if (!response.ok) {
+       throw new Error(`Failed to fetch image: ${response.status}`);
+     }
+
+     const blob = await response.blob();
+     const mimeType = blob.type.toLowerCase();
+
+
+…and keep the rest of the file the same. The key changes:
+
+No fetch for data: URLs.
+
+Allow blob: without forcing credentials.
+
+Use browser default (same-origin) for same-origin URLs; this still sends cookies to your own /objects/* or /api/image-proxy endpoints but doesn’t trip CORS for wildcard origins. 
+
+pdf-image-pipeline
+
+2) Always proxy non-same-origin image URLs
+
+File: client/src/lib/image-utils.ts
+
+ export function getProxiedImageUrl(imageUrl: string): string {
+   // Don't proxy relative URLs (they're already on our server)
+   if (imageUrl.startsWith('/')) {
+     return imageUrl;
+   }
+
+   // Don't proxy URLs that are already on our own domain (/quote-images/ endpoints)
+   if (imageUrl.includes('/quote-images/')) {
+     try {
+       const url = new URL(imageUrl);
+       return url.pathname;
+     } catch {
+       return imageUrl;
+     }
+   }
+ 
+-  // Proxy external Replit object storage URLs that have CORS issues in production
+-  if (imageUrl.includes('storage.replit.com')) {
+-    return `/api/image-proxy?url=${encodeURIComponent(imageUrl)}`;
+-  }
++  // Proxy ANY non-same-origin absolute URL through our backend to avoid CORS
++  try {
++    const url = new URL(imageUrl);
++    const sameOrigin = typeof window !== 'undefined' && url.origin === window.location.origin;
++    if (!sameOrigin) {
++      return `/api/image-proxy?url=${encodeURIComponent(imageUrl)}`;
++    }
++  } catch {
++    // not an absolute URL → fall through
++  }
+
+   // Return original URL for other sources (assets, data URLs, etc.)
+   return imageUrl;
+ }
+
+
+This ensures persistent images from any storage host are fetched via your /api/image-proxy, which already streams bytes back with permissive headers.
+
+3) Don’t let one bad image kill the whole PDF
+
+File: client/src/components/simple-proposal-generator.tsx
+In your generate handler (right before calling generateBrandedSequencePDF), normalize images like this:
+
+// Build renderImages for the branded flow, but don't crash if one fails
+const renderImages = (
+  await Promise.allSettled(
+    productRenderings.map(img => normalizeImageToDataUrl(img.preview))
+  )
+).flatMap(r => (r.status === 'fulfilled' ? [r.value] : []));
+
+
+Optionally show a soft toast when some images fail, but still generate the PDF. (Your component already imports normalizeImageToDataUrl; this is a small change in usage.) 
+
+simple-proposal-generator
+
+Why this fixes your exact error
+
+No more fetch(data:...) or credentialed cross-origin fetch → eliminates the TypeError: Failed to fetch path you hit during “normalize image.” 
+
+pdf-image-pipeline
+
+Every external image URL is now proxied via your backend endpoint, so the browser only does a same-origin request (no CORS drama).
+
+AllSettled guard makes the generator robust—broken image ≠ broken PDF.
