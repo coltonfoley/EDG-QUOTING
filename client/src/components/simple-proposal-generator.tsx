@@ -1683,7 +1683,6 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
               });
             }
             // For persistent images, use the preview URL (already proxied at line 238)
-            console.log('Fetching persistent image:', rendering.preview);
             return await normalizeImageToDataUrl(rendering.preview);
           })
         );
