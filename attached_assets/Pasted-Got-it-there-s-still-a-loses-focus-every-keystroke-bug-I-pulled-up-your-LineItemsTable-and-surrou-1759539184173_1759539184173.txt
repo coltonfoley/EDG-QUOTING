@@ -1,0 +1,163 @@
+Got it—there’s still a “loses focus every keystroke” bug. I pulled up your LineItemsTable and surrounding components and here’s what’s actually happening + a tight patch set that fixes it.
+
+What’s happening (why you must click back in)
+
+The input element is being remounted while you type, so it loses focus.
+You’ve already guarded against prop resets with activeInputs, and you added onFocus correctly. But the row (SortableLineItemRow) still gets recreated often enough that the input itself gets torn down and rebuilt, so focus disappears. This is likely due to a combination of:
+
+DnD kit useSortable attaching attributes to the <tr> (identity churn),
+
+parent/row re-renders while you type, so the input node identity changes.
+Your inputs do have onFocus/onBlur now, but nothing restores focus/caret when the DOM node momentarily changes. 
+
+line-items-table
+
+There are still background refetches that can cause list/row re-instantiation (even if values don’t reset).
+
+QuoteSummary’s Custom Contract Terms textarea still mutates on every onChange and invalidates /api/quotes/:id, which can ripple re-renders into the table if someone touches that area. (Even if not typing there now, it’s a known refetch source to tame.) 
+
+quote-summary
+
+ 
+
+quote-summary
+
+The main quote query in quote-builder.tsx uses the default React Query options (no staleTime, window-focus refetch), so it’s easy to refetch at inconvenient times. 
+
+quote-builder
+
+The fixes (small + surgical)
+A) Restore focus & caret after re-renders (bulletproof)
+
+Add a tiny focus-restorer that remembers the active field key and caret, then re-focuses after render if that field is still “active”.
+
+// in LineItemsTable
+const activeKeyRef = useRef<string | null>(null);
+const caretRef = useRef<number | null>(null);
+
+// Call this from every input's onFocus/onChange
+const markActive = (key: string, el: HTMLInputElement | null) => {
+  if (!el) return;
+  activeInputs.current.add(key);     // you already do this onFocus
+  activeKeyRef.current = key;
+  // capture caret
+  try { caretRef.current = el.selectionStart ?? null; } catch {}
+};
+
+// After render, if we have an active key, re-focus & restore caret
+useLayoutEffect(() => {
+  if (!activeKeyRef.current) return;
+  const key = activeKeyRef.current;
+  // Find the input that matches the key: `${item.id}-${field}`
+  const [id, field] = key.split("-");
+  const testId =
+    field === "unitPrice" ? `input-unit-price-${id}` :
+    field === "markupValue" ? `input-markup-value-${id}` :
+    field === "quantity" ? `input-quantity-${id}` :
+    field === "description" ? `input-description-${id}` :
+    null;
+
+  if (!testId) return;
+  const el = document.querySelector(`[data-testid="${testId}"]`) as HTMLInputElement | null;
+  if (el) {
+    el.focus();
+    if (caretRef.current != null) {
+      try { el.setSelectionRange(caretRef.current, caretRef.current); } catch {}
+    } else {
+      el.setSelectionRange(el.value.length, el.value.length);
+    }
+  }
+});
+
+
+Then wire it to each input:
+
+<Input
+  value={getCurrentValue(item.id, 'unitPrice')}
+  onChange={(e) => { handleFieldChange(item.id, "unitPrice", e.target.value); markActive(`${item.id}-unitPrice`, e.currentTarget); }}
+  onKeyDown={(e) => handleKeyDown(e, rowIndex, 'unitPrice')}
+  onFocus={(e) => { activeInputs.current.add(`${item.id}-unitPrice`); markActive(`${item.id}-unitPrice`, e.currentTarget); }}
+  onBlur={() => handleFieldBlur(item.id, "unitPrice")}
+  data-testid={`input-unit-price-${item.id}`}
+/>
+
+
+Do the same for description, quantity, and markupValue. This makes focus sticky even if the row is re-instantiated. Your table already uses stable data-testids per field, so this is simple. 
+
+line-items-table
+
+Optional but nice: add onPointerDown={(e) => e.stopPropagation()} to inputs so dnd-kit never competes for focus while you type.
+
+B) Stop background refetch churn that can steal focus
+
+Quote main query – make it calm by default:
+
+// client/src/pages/quote-builder.tsx
+const { data: quote } = useQuery<QuoteWithDetails>({
+  queryKey: [`/api/quotes/${quoteId}`],
+  enabled: !isNewQuote,
+  staleTime: 60_000,
+  refetchOnWindowFocus: false,
+  refetchOnReconnect: false,
+  keepPreviousData: true,
+});
+
+
+This prevents surprise refetches while editing and avoids a momentary unmount/remount of the table. 
+
+quote-builder
+
+Contract terms – change to save onBlur or debounced onChange (750–1000ms) and don’t invalidate immediately; use setQueryData instead, or defer invalidation until the user leaves the section.
+
+Current (fires per keystroke + invalidates): 
+
+quote-summary
+
+
+Proposed:
+
+// in quote-summary.tsx
+const updateContractMutation = useMutation({
+  mutationFn: async (data) => (await apiRequest("PUT", `/api/quotes/${quote.id}`, data)).json(),
+  onSuccess: (updated) => {
+    // Optimistically update cache without a refetch
+    queryClient.setQueryData([`/api/quotes/${quote.id}`], (prev: any) => ({ ...prev, ...updated }));
+    toast({ title: "Contract updated" });
+  }
+});
+
+// Textarea
+<Textarea
+  id="customContractTerms"
+  rows={6}
+  value={localTerms}
+  onChange={(e) => setLocalTerms(e.target.value)}     // local state only
+  onBlur={() => { if (localTerms !== (quote.customContractTerms ?? "")) updateContractMutation.mutate({ contractTemplateId: null, customContractTerms: localTerms }); }}
+/>
+
+
+This removes a very common refetch source while you’re editing line items. 
+
+quote-summary
+
+C) Minor: calm the groups query too
+
+They don’t need to refetch on window focus while typing:
+
+useQuery({
+  queryKey: ["/api/quotes", quoteId, "groups"],
+  queryFn: async () => (await fetch(`/api/quotes/${quoteId}/groups`)).json(),
+  enabled: !isUnsavedQuote,
+  staleTime: 60_000,
+  refetchOnWindowFocus: false,
+  refetchOnReconnect: false,
+});
+
+
+line-items-table
+
+Why this fixes your exact symptom
+
+The focus-restorer guarantees the cursor stays put even if React remounts the input node for a frame (which is what you’re feeling as “I have to click back in every keystroke”).
+
+Taming the quote and contract refetches eliminates the main sources of component re-instantiation during typing (less chance we even need to restore focus).
