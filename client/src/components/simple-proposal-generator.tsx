@@ -1669,6 +1669,20 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         // Normalize render images for PDF
         const normalizedImages = await Promise.all(
           productRenderings.map(async (rendering) => {
+            // For temp images with files, read the file directly to avoid blob URL fetch issues
+            if (!rendering.isPersistent && rendering.originalFile) {
+              return new Promise<{ dataUrl: string; format: 'PNG' | 'JPEG' }>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => {
+                  const dataUrl = reader.result as string;
+                  const format = rendering.originalFile!.type.includes('png') ? 'PNG' : 'JPEG';
+                  resolve({ dataUrl, format });
+                };
+                reader.onerror = () => reject(new Error('Failed to read file'));
+                reader.readAsDataURL(rendering.originalFile);
+              });
+            }
+            // For persistent images, use the proxy URL
             return await normalizeImageToDataUrl(rendering.preview);
           })
         );
@@ -1688,8 +1702,20 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         const clientLogoImage = getEffectiveCoverPhoto();
         let clientLogoDataUrl: string | null = null;
         if (clientLogoImage) {
-          const normalized = await normalizeImageToDataUrl(clientLogoImage.preview);
-          clientLogoDataUrl = normalized.dataUrl;
+          // For temp images with files, read the file directly
+          if (!clientLogoImage.isPersistent && clientLogoImage.originalFile) {
+            const dataUrl = await new Promise<string>((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = () => resolve(reader.result as string);
+              reader.onerror = () => reject(new Error('Failed to read file'));
+              reader.readAsDataURL(clientLogoImage.originalFile!);
+            });
+            clientLogoDataUrl = dataUrl;
+          } else {
+            // For persistent images, fetch through proxy
+            const normalized = await normalizeImageToDataUrl(clientLogoImage.preview);
+            clientLogoDataUrl = normalized.dataUrl;
+          }
         }
 
         // Generate Branded Sequence PDF
