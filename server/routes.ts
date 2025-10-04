@@ -446,6 +446,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Look for a file that ends with our filename
           const matchingFile = files.find(file => file.name.endsWith(filename));
           if (matchingFile) {
+            // Get file metadata for proper headers
+            const [metadata] = await matchingFile.getMetadata();
+            
+            // Set CORS and caching headers for PDF generation
+            res.setHeader('Content-Type', metadata.contentType || 'application/octet-stream');
+            res.setHeader('Access-Control-Allow-Origin', '*');
+            res.setHeader('Cache-Control', 'public, max-age=3600');
+            
             // Stream the file to the response
             const stream = matchingFile.createReadStream();
             stream.pipe(res);
