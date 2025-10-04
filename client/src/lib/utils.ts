@@ -30,10 +30,15 @@ export function roundCurrency(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
+// Sanitize number string by removing non-numeric characters (except digits, dots, and minus signs)
+export function sanitizeNumberString(value: string): string {
+  return value.replace(/[^0-9.-]/g, '');
+}
+
 // Validate numeric input
 export function isValidNumber(value: any): boolean {
   if (value === null || value === undefined || value === '') return false;
-  const num = typeof value === 'string' ? parseFloat(value) : value;
+  const num = typeof value === 'string' ? parseFloat(sanitizeNumberString(value)) : value;
   return !isNaN(num) && isFinite(num) && num >= 0;
 }
 
@@ -43,7 +48,7 @@ export function clampValue(value: number, min: number, max: number): number {
 }
 
 export function formatCurrency(value: number | string): string {
-  const num = typeof value === 'string' ? parseFloat(value) : value;
+  const num = typeof value === 'string' ? parseFloat(sanitizeNumberString(value)) : value;
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
@@ -86,10 +91,10 @@ export function calculateLineItemTotal(
   discountValue: number | string = 0
 ): number {
   // Safely parse and validate inputs
-  const qty = typeof quantity === 'string' ? parseFloat(quantity) : quantity;
-  const price = typeof unitPrice === 'string' ? parseFloat(unitPrice) : unitPrice;
-  const markup = typeof markupValue === 'string' ? parseFloat(markupValue) : markupValue;
-  const discount = typeof discountValue === 'string' ? parseFloat(discountValue) : discountValue;
+  const qty = typeof quantity === 'string' ? parseFloat(sanitizeNumberString(quantity)) : quantity;
+  const price = typeof unitPrice === 'string' ? parseFloat(sanitizeNumberString(unitPrice)) : unitPrice;
+  const markup = typeof markupValue === 'string' ? parseFloat(sanitizeNumberString(markupValue)) : markupValue;
+  const discount = typeof discountValue === 'string' ? parseFloat(sanitizeNumberString(discountValue)) : discountValue;
 
   // Validate inputs
   if (!isValidNumber(qty) || qty <= 0 || qty > 999999) return 0;
@@ -158,10 +163,10 @@ export function calculateLineItemMargin(
   discountValue: number | string = 0
 ): number {
   // Safely parse and validate inputs
-  const qty = typeof quantity === 'string' ? parseFloat(quantity) : quantity;
-  const price = typeof unitPrice === 'string' ? parseFloat(unitPrice) : unitPrice;
-  const markup = typeof markupValue === 'string' ? parseFloat(markupValue) : markupValue;
-  const discount = typeof discountValue === 'string' ? parseFloat(discountValue) : discountValue;
+  const qty = typeof quantity === 'string' ? parseFloat(sanitizeNumberString(quantity)) : quantity;
+  const price = typeof unitPrice === 'string' ? parseFloat(sanitizeNumberString(unitPrice)) : unitPrice;
+  const markup = typeof markupValue === 'string' ? parseFloat(sanitizeNumberString(markupValue)) : markupValue;
+  const discount = typeof discountValue === 'string' ? parseFloat(sanitizeNumberString(discountValue)) : discountValue;
 
   // Validate inputs
   if (!isValidNumber(qty) || qty <= 0 || qty > 999999) return 0;
@@ -227,9 +232,9 @@ export function calculateLineItemMargin(
  */
 export function calculateQuoteTotals(lineItems: any[], taxRate: number | string = 0, discount: number | string = 0, shipping: number | string = 0) {
   // Safely parse and validate inputs
-  const tax = typeof taxRate === 'string' ? parseFloat(taxRate) : taxRate;
-  const disc = typeof discount === 'string' ? parseFloat(discount) : discount;
-  const shippingAmount = typeof shipping === 'string' ? parseFloat(shipping) : shipping;
+  const tax = typeof taxRate === 'string' ? parseFloat(sanitizeNumberString(taxRate)) : taxRate;
+  const disc = typeof discount === 'string' ? parseFloat(sanitizeNumberString(discount)) : discount;
+  const shippingAmount = typeof shipping === 'string' ? parseFloat(sanitizeNumberString(shipping)) : shipping;
 
   // Validate and clamp inputs
   const safeTax = clampValue(tax || 0, 0, 100);
@@ -253,8 +258,8 @@ export function calculateQuoteTotals(lineItems: any[], taxRate: number | string 
   // Calculate base cost
   let baseCost = 0;
   for (const item of lineItems) {
-    const qty = typeof item.quantity === 'string' ? parseFloat(item.quantity) : item.quantity;
-    const price = typeof item.unitPrice === 'string' ? parseFloat(item.unitPrice) : item.unitPrice;
+    const qty = typeof item.quantity === 'string' ? parseFloat(sanitizeNumberString(item.quantity)) : item.quantity;
+    const price = typeof item.unitPrice === 'string' ? parseFloat(sanitizeNumberString(item.unitPrice)) : item.unitPrice;
     
     if (isValidNumber(qty) && isValidNumber(price)) {
       const safeQty = clampValue(qty, 0, 999999);
@@ -266,9 +271,9 @@ export function calculateQuoteTotals(lineItems: any[], taxRate: number | string 
   // Calculate total manufacturer discounts for display purposes
   let totalManufacturerDiscount = 0;
   for (const item of lineItems) {
-    const qty = typeof item.quantity === 'string' ? parseFloat(item.quantity) : item.quantity;
-    const price = typeof item.unitPrice === 'string' ? parseFloat(item.unitPrice) : item.unitPrice;
-    const discountValue = typeof item.discountValue === 'string' ? parseFloat(item.discountValue) : item.discountValue || 0;
+    const qty = typeof item.quantity === 'string' ? parseFloat(sanitizeNumberString(item.quantity)) : item.quantity;
+    const price = typeof item.unitPrice === 'string' ? parseFloat(sanitizeNumberString(item.unitPrice)) : item.unitPrice;
+    const discountValue = typeof item.discountValue === 'string' ? parseFloat(sanitizeNumberString(item.discountValue)) : item.discountValue || 0;
     const discountType = item.discountType || "percentage";
     
     if (isValidNumber(qty) && isValidNumber(price) && isValidNumber(discountValue) && discountValue > 0) {
@@ -313,8 +318,8 @@ export function applyDiscountToPrice(
   discountType: string,
   discountValue: number | string
 ): number {
-  const unitPrice = typeof price === 'string' ? parseFloat(price) : price;
-  const discount = typeof discountValue === 'string' ? parseFloat(discountValue) : discountValue;
+  const unitPrice = typeof price === 'string' ? parseFloat(sanitizeNumberString(price)) : price;
+  const discount = typeof discountValue === 'string' ? parseFloat(sanitizeNumberString(discountValue)) : discountValue;
 
   // Validate inputs
   if (!isValidNumber(unitPrice) || unitPrice < 0) return 0;
