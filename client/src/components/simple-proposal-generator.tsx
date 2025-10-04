@@ -93,9 +93,8 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
   // Fetch groups for this quote
   const { data: groups = [] } = useQuery({
     queryKey: ["/api/quotes", quote.id, "groups"],
-    queryFn: async () => {
-      const response = await fetch(`/api/quotes/${quote.id}/groups`);
-      if (!response.ok) throw new Error('Failed to fetch groups');
+    queryFn: async ({ signal }) => {
+      const response = await apiRequest('GET', `/api/quotes/${quote.id}/groups`, undefined, { signal });
       return response.json();
     },
     enabled: open && !!quote.id,
