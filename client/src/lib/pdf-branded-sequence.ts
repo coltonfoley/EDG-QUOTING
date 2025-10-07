@@ -57,11 +57,11 @@ export async function generateBrandedSequencePDF(options: BrandedSequenceOptions
   });
 
   // 2. Project Details Page (section handles its own page creation)
-  // Use client logo if provided, otherwise use brand cover as fallback
+  // Only use client logo if provided (no fallback)
   drawProjectDetailsPage(pdf, {
     company,
     quote,
-    coverDataUrl: clientLogoDataUrl || BRAND_COVER_JPG,
+    coverDataUrl: clientLogoDataUrl,
     logoDataUrl: BRAND_LOGO_PNG,
     margin,
     contentW,
