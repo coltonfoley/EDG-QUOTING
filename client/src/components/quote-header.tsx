@@ -301,9 +301,9 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
                     name="projectName"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Project Name (Optional)</FormLabel>
+                        <FormLabel>Project Name</FormLabel>
                         <FormControl>
-                          <Input placeholder="Enter project name" {...field} value={field.value || ""} />
+                          <Input placeholder="Enter project name" {...field} value={field.value || ""} data-testid="input-project-name" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
