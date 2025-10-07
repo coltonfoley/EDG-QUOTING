@@ -1823,7 +1823,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
               </div>
               
               <div className="flex items-center justify-between">
-                <Label htmlFor="include-cover">Include Cover Page</Label>
+                <Label htmlFor="include-cover">Include Project Cover</Label>
                 <Switch 
                   id="include-cover" 
                   checked={includeCoverPage} 
