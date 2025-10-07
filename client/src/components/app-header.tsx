@@ -22,7 +22,7 @@ export function AppHeader() {
   
   return (
     <>
-      <div className="bg-gradient-to-r from-edg-teal to-teal-400 text-white px-4 py-2">
+      <div className="bg-black text-edg-teal px-4 py-2">
         <div className="max-w-7xl mx-auto flex items-center justify-center gap-2 text-sm font-medium">
           <CloudRain className="h-4 w-4" />
           <span>Turn quotes into contracts - Make it rain! 💧</span>
