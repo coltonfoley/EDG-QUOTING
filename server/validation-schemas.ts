@@ -170,7 +170,7 @@ export const insertQuoteSchema = baseQuoteSchema.extend({
   dealStage: z.enum(["new_lead", "qualifying", "consultation_scheduled", "building_estimate", "quote_sent", "closed_won", "closed_lost", "on_hold"]).default("new_lead"),
   lostReason: z.string().max(500, "Lost reason is too long").optional().nullable(),
   jobsiteAddress: z.string().max(1000, "Jobsite address is too long").optional().nullable(),
-  projectName: z.string().max(500, "Project name is too long").optional(),
+  projectName: z.string().min(1, "Project name is required").max(500, "Project name is too long"),
   projectAddress: z.string().max(1000, "Project address is too long").optional(),
   estimatedStartDate: z.string().optional(),
   notes: z.string().max(5000, "Notes are too long").optional(),
@@ -219,7 +219,7 @@ export const createQuoteSchema = z.object({
   }).optional().nullable(),
   
   // Quote project details
-  projectName: z.string().max(500, "Project name is too long").optional(),
+  projectName: z.string().min(1, "Project name is required").max(500, "Project name is too long"),
   projectAddress: z.string().max(1000, "Project address is too long").optional(),
   jobsiteAddress: z.string().max(1000, "Jobsite address is too long").optional().nullable(),
   estimatedStartDate: z.string().optional(),
