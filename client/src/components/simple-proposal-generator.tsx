@@ -1844,13 +1844,13 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
             </CardContent>
           </Card>
 
-          {/* Client Logo Upload */}
+          {/* Project Cover Upload */}
           {includeCoverPage && (
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg flex items-center gap-2">
                   <Camera className="w-5 h-5" />
-                  Client Logo
+                  Project Cover
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -1860,7 +1860,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
                     onClick={() => coverPhotoRef.current?.click()}
                   >
                     <Upload className="w-8 h-8 mx-auto mb-2 text-gray-400" />
-                    <p className="text-sm text-gray-600">Click to upload client's company logo</p>
+                    <p className="text-sm text-gray-600">Click to upload project cover image</p>
                     <p className="text-xs text-gray-500">PNG, JPG up to 100MB</p>
                   </div>
                 ) : (
