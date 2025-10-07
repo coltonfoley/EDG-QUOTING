@@ -52,7 +52,7 @@ interface DrawStandardCoverOpts {
 interface DrawProjectDetailsPageOpts {
   company: { name: string; address: string; phone: string; email: string };
   quote: any;
-  coverDataUrl: string;
+  coverDataUrl: string | null;
   logoDataUrl: string;
   margin: number;
   contentW: number;
@@ -161,12 +161,14 @@ export function drawProjectDetailsPage(pdf: jsPDF, opts: DrawProjectDetailsPageO
 
   y += 10;
   
-  // Add client logo image
-  const imgW = contentW;
-  const imgH = imgW * 0.6;
-  const imgFormat = detectImageFormat(coverDataUrl);
-  pdf.addImage(coverDataUrl, imgFormat, margin, y, imgW, imgH);
-  y += imgH;
+  // Add client logo image only if provided
+  if (coverDataUrl) {
+    const imgW = contentW;
+    const imgH = imgW * 0.6;
+    const imgFormat = detectImageFormat(coverDataUrl);
+    pdf.addImage(coverDataUrl, imgFormat, margin, y, imgW, imgH);
+    y += imgH;
+  }
 
   // Add branded footer
   drawBrandedFooter({ pdf, logoDataUrl, company, pageW, pageH, margin });
