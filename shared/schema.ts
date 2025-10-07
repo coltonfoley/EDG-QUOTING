@@ -347,7 +347,7 @@ export const insertQuoteSchema = createInsertSchema(quotes).omit({
   projectAddress: z.union([z.string(), z.null()]).transform(val => val === null ? "" : val).optional(),
   jobsiteAddress: z.union([z.string(), z.null()]).transform(val => val === null ? "" : val).optional(),
   estimatedStartDate: z.union([z.string(), z.null()]).transform(val => val === null ? "" : val).optional(),
-  notes: z.union([z.string(), z.null()]).transform(val => val === null ? "" : val),
+  notes: z.union([z.string(), z.null()]).transform(val => val === null ? "" : val).optional(),
   dealStage: z.enum(["new_lead", "qualifying", "consultation_scheduled", "building_estimate", "quote_sent", "closed_won", "closed_lost", "on_hold"]).default("new_lead"),
   lostReason: z.string().optional().nullable(),
   // Contract template fields
