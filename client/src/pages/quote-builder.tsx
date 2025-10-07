@@ -247,10 +247,9 @@ export default function QuoteBuilder() {
           onUpdateQuote={handleUpdateQuote}
         />
 
-        {/* Action Buttons - Show for both new and existing quotes */}
-        <div className="flex justify-end gap-4 mt-8 pb-8">
-          {/* Generate Proposal Button - Only show for existing quotes with line items */}
-          {!isNewQuote && currentQuote.id && currentQuote.lineItems.length > 0 && (
+        {/* Action Buttons - Show for existing quotes with line items */}
+        {!isNewQuote && currentQuote.id && currentQuote.lineItems.length > 0 && (
+          <div className="flex justify-end gap-4 mt-8 pb-8">
             <Button 
               onClick={() => setProposalGeneratorOpen(true)}
               variant="outline"
@@ -260,27 +259,8 @@ export default function QuoteBuilder() {
               <FileText className="mr-2 h-5 w-5" />
               Generate Proposal
             </Button>
-          )}
-          
-          <Button 
-            type="submit" 
-            form="quote-form" 
-            className="bg-edg-black hover:bg-edg-grey text-edg-white px-8 py-3 text-lg"
-            disabled={createQuoteMutation.isPending || updateQuoteMutation.isPending}
-          >
-            {(createQuoteMutation.isPending || updateQuoteMutation.isPending) ? (
-              <>
-                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                Saving...
-              </>
-            ) : (
-              <>
-                <Save className="mr-2 h-5 w-5" />
-                {isNewQuote ? "Create Quote" : "Save Changes"}
-              </>
-            )}
-          </Button>
-        </div>
+          </div>
+        )}
 
         {/* Simple Proposal Generator Dialog */}
         {!isNewQuote && currentQuote.id && (
