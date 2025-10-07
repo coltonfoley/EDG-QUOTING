@@ -419,7 +419,7 @@ export function drawLineItemsSection(pdf: jsPDF, opts: DrawLineItemsSectionOpts)
   pdf.setFontSize(12);
   pdf.text('Total', margin, y);
   pdf.text(formatCurrency(totals.total), margin + contentW - 30, y, { align: 'right' });
-  y += 10;
+  y += 18;
 
   // Client Acceptance Block
   const acceptanceH = measureAcceptanceBlock(pdf, {
