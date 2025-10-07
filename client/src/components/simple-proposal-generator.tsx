@@ -1740,8 +1740,9 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         // Save the PDF
         const pdfBlob = pdf.output('blob');
         const timestamp = new Date().toISOString().slice(0, 19).replace(/[-:]/g, '');
-        const customer = (quote.account ?? quote.customer)!;
-        const filename = `${customer.name.replace(/[^a-zA-Z0-9]/g, '_')}_Proposal_Branded_${timestamp}.pdf`;
+        const customer = (quote.account ?? quote.customer);
+        const customerName = customer?.name ?? 'Customer';
+        const filename = `${customerName.replace(/[^a-zA-Z0-9]/g, '_')}_Proposal_Branded_${timestamp}.pdf`;
         
         // Create download link and store URL for viewing
         const url = URL.createObjectURL(pdfBlob);
