@@ -474,6 +474,36 @@ export function drawLineItemsSection(pdf: jsPDF, opts: DrawLineItemsSectionOpts)
   });
 
   drawAcceptanceBlock(pdf, margin, y, contentW);
+  y += acceptanceH + 10; // Add spacing between client and company signatures
+
+  // Company Acceptance Block
+  const companyAcceptanceH = measureAcceptanceBlock(pdf, {
+    heading: 'EDG PATIO & SHADE ACCEPTANCE',
+    width: contentW,
+    headingFontSizePt: 14,
+    bodyFontSizePt: 11,
+    spacingTop: 10,
+    spacingAfterHeading: 8,
+    fieldGap: 8,
+    labelGap: 2,
+    bottomPadding: 5,
+    fields: [
+      { label: 'Signature', lineWidthMm: contentW * 0.6 },
+      { label: 'Print Name', lineWidthMm: contentW * 0.6 },
+      { label: 'Date', lineWidthMm: 50 },
+    ],
+  });
+
+  y = ensureSpace(pdf, y, companyAcceptanceH, {
+    marginTop: margin,
+    marginBottom: margin,
+    footerReserve: footerReserveHeight,
+    onNewPage: () => {
+      y = margin;
+    },
+  });
+
+  drawCompanyAcceptanceBlock(pdf, margin, y, contentW);
 
   // Add disclaimer text above the footer
   const disclaimerY = pageH - 25 - 5; // Footer height + gap
