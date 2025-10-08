@@ -1,0 +1,102 @@
+ased on your app’s current codebase (EDG-QUOTING repo), here’s how taxable vs. non-taxable line items can be handled when importing quote data:
+
+🧩 Current Behavior (as implemented)
+
+The calculation pipeline is clearly defined across the client/src/lib/utils.ts and server/routes.ts files:
+
+Tax is applied at the quote level, not per line item.
+
+Order of operations:
+
+Subtotal → Quote Discount → Shipping → Tax
+
+
+Tax is calculated on (discounted subtotal + shipping)
+
+CALCULATION_VERIFICATION_REPORT
+
+.
+
+Each line item supports:
+
+quantity, unitPrice
+
+markupType and markupValue
+
+discountType and discountValue
+
+But currently no field explicitly indicates if an item is taxable or not
+
+utils
+
+routes
+
+.
+
+When a quote’s total tax is calculated, the app assumes the entire subtotal is taxable (minus any discounts and plus shipping).
+
+💡 How to Add Taxable vs. Non-Taxable Support
+
+You can extend your import logic and totals calculation with minimal changes:
+
+1. Extend the Line Item Model
+
+Add a new boolean field:
+
+isTaxable: boolean | null;
+
+
+Update both your client and server models:
+
+InsertLineItem type
+
+Database schema (Drizzle ORM)
+
+storage.ts line-item creation defaults (similar to isAccessory: false)
+
+storage
+
+:
+
+isTaxable: insertLineItem.isTaxable ?? true,
+
+2. Modify the Quote Total Function
+
+In calculateQuoteTotals() (client-side) and mirrored in server validation logic:
+
+let taxableSubtotal = 0;
+
+for (const item of lineItems) {
+  const lineTotal = calculateLineItemTotal(...);
+  subtotal = safeAdd(subtotal, lineTotal);
+  if (item.isTaxable !== false) {
+    taxableSubtotal = safeAdd(taxableSubtotal, lineTotal);
+  }
+}
+
+// Then replace tax calculation:
+const beforeTax = safeAdd(afterDiscount, safeShipping);
+const taxAmount = safeMultiply(taxableSubtotal + safeShipping, safeDivide(safeTax, 100));
+
+
+This ensures only taxable items contribute to the taxable base.
+
+3. Import Mapping
+
+When parsing imported PDFs or JSON (see extractQuoteDataFromPDF() in server/extraction logic)
+
+Pasted-You-don-t-need-to-conver…
+
+:
+
+Add a rule:
+Detect “tax-exempt”, “labor”, or “non-taxable” flags in line descriptions and map those lines as isTaxable: false.
+
+4. Server Verification
+
+Update the verifyLineItemCalculation() and quote verification endpoints to include:
+
+if (item.isTaxable) taxableSubtotal += lineTotal;
+
+
+and use taxableSubtotal instead of total subtotal for tax computation.
