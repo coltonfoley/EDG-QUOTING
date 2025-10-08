@@ -65,6 +65,7 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
       unitPrice: item.unitPrice,
       markupType: item.markupType,
       markupValue: item.markupValue,
+      isTaxable: item.isTaxable,
     })),
     quote.taxRate ?? 0,
     quote.discount ?? 0,
