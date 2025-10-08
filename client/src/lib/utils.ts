@@ -212,19 +212,22 @@ export function calculateLineItemMargin(
  * 
  * Order of Operations:
  * 1. Calculate subtotal: sum of all line items (with their individual markups/discounts)
- * 2. Apply quote-level discount to subtotal
- * 3. Add shipping costs
- * 4. Calculate tax on (discounted subtotal + shipping)
- * 5. Calculate final total: discounted subtotal + shipping + tax
+ * 2. Track taxable vs non-taxable items separately
+ * 3. Apply quote-level discount to subtotal (proportionally to taxable items)
+ * 4. Add shipping costs
+ * 5. Calculate tax on (discounted taxable subtotal + shipping)
+ * 6. Calculate final total: discounted subtotal + shipping + tax
  * 
  * Business Rules:
- * - Tax is calculated on the total taxable amount (after discount + shipping)
- * - Quote-level discounts apply to merchandise only, not shipping
+ * - Tax is only calculated on taxable line items (isTaxable !== false)
+ * - Non-taxable items (e.g., labor) are excluded from tax calculation
+ * - Quote-level discounts apply proportionally to taxable and non-taxable items
+ * - Shipping is always included in the taxable base
  * - All percentages are clamped to 0-100%
  * - All amounts are rounded to 2 decimal places for currency
  * - Safe math operations prevent overflow/underflow
  * 
- * @param lineItems - Array of line items with quantity, unitPrice, markup, etc.
+ * @param lineItems - Array of line items with quantity, unitPrice, markup, isTaxable, etc.
  * @param taxRate - Tax percentage (0-100)
  * @param discount - Quote-level discount percentage (0-100)
  * @param shipping - Fixed shipping amount (0-1,000,000)
@@ -241,8 +244,9 @@ export function calculateQuoteTotals(lineItems: any[], taxRate: number | string 
   const safeDiscount = clampValue(disc || 0, 0, 100);
   const safeShipping = clampValue(shippingAmount || 0, 0, 1000000);
 
-  // Calculate subtotal with overflow protection
+  // Calculate subtotal and taxable subtotal with overflow protection
   let subtotal = 0;
+  let taxableSubtotal = 0;
   for (const item of lineItems) {
     const lineTotal = calculateLineItemTotal(
       item.quantity,
@@ -253,6 +257,11 @@ export function calculateQuoteTotals(lineItems: any[], taxRate: number | string 
       item.discountValue || 0
     );
     subtotal = safeAdd(subtotal, lineTotal);
+    
+    // Only add to taxable base if item is taxable (default to true if not specified)
+    if (item.isTaxable !== false) {
+      taxableSubtotal = safeAdd(taxableSubtotal, lineTotal);
+    }
   }
 
   // Calculate base cost
@@ -296,8 +305,17 @@ export function calculateQuoteTotals(lineItems: any[], taxRate: number | string 
   const totalMarkup = Math.max(0, subtotal - baseCost + totalManufacturerDiscount);
   const discountAmount = safeDiscount > 0 ? safeMultiply(subtotal, safeDivide(safeDiscount, 100)) : 0;
   const afterDiscount = Math.max(0, subtotal - discountAmount);
+  
+  // Calculate proportional discount for taxable items
+  const taxableDiscountRatio = subtotal > 0 ? safeDivide(taxableSubtotal, subtotal) : 0;
+  const taxableDiscountAmount = safeMultiply(discountAmount, taxableDiscountRatio);
+  const taxableAfterDiscount = Math.max(0, taxableSubtotal - taxableDiscountAmount);
+  
+  // Tax calculation: (taxable subtotal after discount + shipping)
+  const taxableBase = safeAdd(taxableAfterDiscount, safeShipping);
+  const taxAmount = safeMultiply(taxableBase, safeDivide(safeTax, 100));
+  
   const beforeTax = safeAdd(afterDiscount, safeShipping);
-  const taxAmount = safeMultiply(beforeTax, safeDivide(safeTax, 100));
   const total = safeAdd(beforeTax, taxAmount);
   const margin = baseCost > 0 ? safeDivide(safeMultiply(totalMarkup, 100), baseCost) : 0;
 

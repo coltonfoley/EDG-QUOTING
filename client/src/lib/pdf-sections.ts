@@ -177,6 +177,7 @@ export function drawProjectDetailsPage(pdf: jsPDF, opts: DrawProjectDetailsPageO
 function calculateInvestmentTotals(quote: any) {
   const lineItems = quote.lineItems || [];
   let subtotal = 0;
+  let taxableSubtotal = 0;
 
   lineItems.forEach((item: any) => {
     const total = calculateLineItemTotal(
@@ -188,14 +189,31 @@ function calculateInvestmentTotals(quote: any) {
       item.discountValue || 0
     );
     subtotal += total;
+    
+    // Only add to taxable base if item is taxable (default to true if not specified)
+    if (item.isTaxable !== false) {
+      taxableSubtotal += total;
+    }
   });
 
   const taxRate = parseFloat(quote.taxRate || '0');
+  const discount = parseFloat(quote.discount || '0');
   const shipping = parseFloat(quote.shipping || '0');
-  const tax = (subtotal * taxRate) / 100;
-  const total = subtotal + tax + shipping;
+  
+  // Apply quote-level discount proportionally to taxable items
+  const discountAmount = (subtotal * discount) / 100;
+  const taxableDiscountRatio = subtotal > 0 ? taxableSubtotal / subtotal : 0;
+  const taxableDiscountAmount = discountAmount * taxableDiscountRatio;
+  const taxableAfterDiscount = taxableSubtotal - taxableDiscountAmount;
+  
+  // Tax only on discounted taxable items + shipping
+  const tax = ((taxableAfterDiscount + shipping) * taxRate) / 100;
+  
+  // Final total: discounted subtotal + shipping + tax
+  const afterDiscount = subtotal - discountAmount;
+  const total = afterDiscount + shipping + tax;
 
-  return { subtotal, tax, shipping, total };
+  return { subtotal, taxableSubtotal, discountAmount, tax, shipping, total };
 }
 
 function drawAcceptanceBlock(pdf: jsPDF, x: number, y: number, width: number): void {
@@ -429,9 +447,17 @@ export function drawLineItemsSection(pdf: jsPDF, opts: DrawLineItemsSectionOpts)
 
   const summaryItems = [
     { label: 'Subtotal', value: totals.subtotal },
-    { label: 'Tax', value: totals.tax },
-    { label: 'Shipping', value: totals.shipping },
   ];
+  
+  // Add discount if it exists
+  if (totals.discountAmount > 0) {
+    summaryItems.push({ label: 'Discount', value: -totals.discountAmount });
+  }
+  
+  summaryItems.push(
+    { label: 'Shipping', value: totals.shipping },
+    { label: 'Tax', value: totals.tax }
+  );
 
   summaryItems.forEach(item => {
     pdf.text(item.label, margin, y);

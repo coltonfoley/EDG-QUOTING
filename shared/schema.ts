@@ -239,6 +239,7 @@ export const lineItems = pgTable("line_items", {
   configData: jsonb("config_data"), // JSON object storing configuration values (dimensions, options, etc.)
   baseProductId: integer("base_product_id"), // reference to base product for accessories
   isAccessory: boolean("is_accessory").default(false),
+  isTaxable: boolean("is_taxable").default(true), // whether this line item is subject to sales tax
   // Grouping and ordering fields
   groupId: text("group_id"), // nullable = ungrouped items
   position: integer("position").notNull().default(0), // sortable index within its group
