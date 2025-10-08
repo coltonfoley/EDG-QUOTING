@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Trash2, Plus, Package, Search, Filter, X, FileText, Loader2, GripVertical } from "lucide-react";
 import { formatCurrency, calculateLineItemTotal, calculateLineItemMargin, applyDiscountToPrice, isValidNumber, clampValue, roundCurrency, generateGroupId, sanitizeNumberString } from "@/lib/utils";
 import { apiRequest, NavigationAbortError } from "@/lib/queryClient";
@@ -1310,6 +1311,23 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
           {formatCurrency(total)}
         </td>
 
+        {/* Taxable - Always visible */}
+        <td className="border-r border-gray-300 px-2 py-1 text-center">
+          <div className="flex justify-center">
+            <Checkbox
+              checked={item.isTaxable !== false}
+              onCheckedChange={(checked) => {
+                updateLineItemMutation.mutate({ 
+                  id: item.id, 
+                  data: { isTaxable: checked === true },
+                  skipInvalidation: false
+                });
+              }}
+              data-testid={`checkbox-taxable-${item.id}`}
+            />
+          </div>
+        </td>
+
         {/* Actions - Always visible */}
         <td className="px-3 py-1 text-center">
           <Button
@@ -1620,13 +1638,14 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
             <table className="w-full border border-gray-300 divide-y divide-gray-300">
               <colgroup>
                 <col style={{width: '40px'}} /> {/* Drag Handle */}
-                <col style={{width: '28%'}} /> {/* Description */}
+                <col style={{width: '26%'}} /> {/* Description */}
                 <col style={{width: '80px'}} /> {/* Quantity */}
                 <col style={{width: '100px'}} /> {/* Cost */}
                 <col style={{width: '80px'}} /> {/* Markup% */}
                 <col style={{width: '120px'}} /> {/* Price */}
                 <col style={{width: '100px'}} /> {/* Margin$ */}
                 <col style={{width: '140px'}} /> {/* Total */}
+                <col style={{width: '70px'}} /> {/* Taxable */}
                 <col style={{width: '80px'}} /> {/* Actions */}
               </colgroup>
               <thead>
@@ -1654,6 +1673,9 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                   </th>
                   <th className="border-r border-gray-300 px-3 py-2 text-center text-sm font-medium text-gray-700">
                     Total
+                  </th>
+                  <th className="border-r border-gray-300 px-2 py-2 text-center text-sm font-medium text-gray-700">
+                    Taxable
                   </th>
                   <th className="px-3 py-2 text-center text-sm font-medium text-gray-700">
                     Actions
