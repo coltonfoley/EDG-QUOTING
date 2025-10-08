@@ -221,6 +221,29 @@ function drawAcceptanceBlock(pdf: jsPDF, x: number, y: number, width: number): v
   });
 }
 
+function drawCompanyAcceptanceBlock(pdf: jsPDF, x: number, y: number, width: number): void {
+  pdf.setFont('Barlow-SemiBold', 'normal');
+  pdf.setFontSize(14);
+  pdf.text('EDG PATIO & SHADE ACCEPTANCE', x, y);
+  y += 8;
+
+  pdf.setFont('Barlow-Regular', 'normal');
+  pdf.setFontSize(11);
+
+  const fields = [
+    { label: 'Signature', lineWidth: width * 0.6 },
+    { label: 'Print Name', lineWidth: width * 0.6 },
+    { label: 'Date', lineWidth: 50 },
+  ];
+
+  fields.forEach(field => {
+    pdf.text(field.label, x, y);
+    y += 3;
+    pdf.line(x, y, x + field.lineWidth, y);
+    y += 12;
+  });
+}
+
 export function drawRenderingsPages(pdf: jsPDF, opts: DrawRenderingsPagesOpts): void {
   const { images, logoDataUrl, company, margin, contentW, pageW, pageH } = opts;
 
