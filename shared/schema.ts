@@ -89,7 +89,6 @@ export const quotes = pgTable("quotes", {
   id: serial("id").primaryKey(),
   quoteNumber: text("quote_number").notNull().unique(),
   accountId: integer("account_id").references(() => accounts.id, { onDelete: "set null" }), // Reference to accounts table
-  contactId: integer("contact_id").references(() => contacts.id, { onDelete: "set null" }), // Optional reference to contacts table
   projectName: text("project_name"),
   projectAddress: text("project_address"),
   jobsiteAddress: text("jobsite_address"), // if different from project address
@@ -108,7 +107,6 @@ export const quotes = pgTable("quotes", {
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => [
   index("idx_quotes_account_id").on(table.accountId),
-  index("idx_quotes_contact_id").on(table.contactId),
   index("idx_quotes_deal_stage").on(table.dealStage),
   index("idx_quotes_account_created").on(table.accountId, table.createdAt),
 ]);

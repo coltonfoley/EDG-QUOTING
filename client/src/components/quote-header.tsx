@@ -25,7 +25,6 @@ import { ClientComboboxWithCreate } from "@/components/client-combobox-with-crea
 const quoteFormSchema = insertQuoteSchema.extend({
   quoteNumber: z.string().optional(), // Auto-generated on server
   accountId: z.number().nullable().optional(),
-  contactId: z.number().nullable().optional(), // Keep for backward compatibility with existing quotes
   dealStage: z.string().default("new_lead"),
 });
 
@@ -60,7 +59,6 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
       discount: quote?.discount || "0",
       shipping: quote?.shipping || "0",
       accountId: quote?.accountId ?? null,
-      contactId: quote?.contactId ?? null, // Preserve existing contactId for backward compatibility
     },
   });
 
@@ -79,7 +77,6 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
         discount: quote.discount || "0",
         shipping: quote.shipping || "0",
         accountId: quote.accountId ?? null,
-        contactId: quote.contactId ?? null, // Preserve existing contactId for backward compatibility
       });
     }
   }, [quote, form]);
@@ -227,17 +224,6 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
                         />
                       </FormControl>
                       <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="contactId"
-                  render={({ field }) => (
-                    <FormItem className="hidden">
-                      <FormControl>
-                        <input type="hidden" {...field} value={field.value ?? ''} />
-                      </FormControl>
                     </FormItem>
                   )}
                 />

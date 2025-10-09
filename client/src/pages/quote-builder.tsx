@@ -181,7 +181,6 @@ export default function QuoteBuilder() {
     id: 0,
     quoteNumber: "",
     accountId: null,
-    contactId: null,
     projectName: "",
     projectAddress: "",
     jobsiteAddress: null,
