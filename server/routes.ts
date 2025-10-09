@@ -1438,10 +1438,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     if (attachCustomer === 'auto') {
       // Create new client with integrated contact info (unified model)
-      const { firstName, lastName } = parseFullName(customerData.name || '');
+      // Use provided firstName/lastName if available, otherwise parse from name
+      let firstName = (customerData as any).firstName || '';
+      let lastName = (customerData as any).lastName || '';
+      
+      if (!firstName && !lastName && customerData.name) {
+        const parsed = parseFullName(customerData.name);
+        firstName = parsed.firstName;
+        lastName = parsed.lastName;
+      }
+      
+      // Construct name from firstName/lastName if not provided
+      const name = customerData.name || `${firstName} ${lastName}`.trim() || 'Unnamed Client';
       
       const clientData = {
-        name: customerData.name || '',
+        name,
         firstName: firstName || undefined,
         lastName: lastName || undefined,
         email: customerData.email || `import_${Date.now()}@example.com`,

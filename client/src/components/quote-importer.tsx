@@ -42,7 +42,9 @@ interface ExtractedLineItem {
 }
 
 interface ExtractedCustomer {
-  name?: string | null;
+  name?: string | null; // Keep for backward compatibility with AI extraction
+  firstName?: string | null;
+  lastName?: string | null;
   email?: string | null;
   phone?: string | null;
   company?: string | null;
@@ -125,6 +127,39 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
     if (confidence === undefined) return '';
     const clampedConfidence = Math.max(0, Math.min(1, confidence));
     return ` (${Math.round(clampedConfidence * 100)}% confidence)`;
+  };
+
+  // Helper function to split full name into firstName and lastName
+  const parseFullName = (fullName: string): { firstName: string; lastName: string } => {
+    const trimmed = fullName.trim();
+    if (!trimmed) {
+      return { firstName: '', lastName: '' };
+    }
+    
+    const parts = trimmed.split(/\s+/);
+    if (parts.length === 1) {
+      return { firstName: parts[0], lastName: '' };
+    }
+    
+    const firstName = parts[0];
+    const lastName = parts.slice(1).join(' ');
+    return { firstName, lastName };
+  };
+
+  // Helper function to process extracted data and split name into firstName/lastName
+  const processExtractedData = (data: ExtractedQuote): ExtractedQuote => {
+    if (data.customer.name && !data.customer.firstName && !data.customer.lastName) {
+      const { firstName, lastName } = parseFullName(data.customer.name);
+      return {
+        ...data,
+        customer: {
+          ...data.customer,
+          firstName,
+          lastName
+        }
+      };
+    }
+    return data;
   };
 
   // Helper functions for editable PDF data
@@ -341,7 +376,7 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
           ...p, 
           progress: 100, 
           status: 'success', 
-          extractedData: result.extractedData,
+          extractedData: processExtractedData(result.extractedData),
           processingMethod: 'vision'
         } : p
       ));
@@ -654,15 +689,24 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
                             <h4 className="font-medium mb-3">Customer Information</h4>
                             <div className="grid grid-cols-2 gap-3">
                               <div>
-                                <Label>Name</Label>
+                                <Label>First Name</Label>
                                 <Input 
-                                  value={selectedPDFId ? getCurrentPDFData(selectedPDFId)?.customer?.name ?? '' : ''} 
-                                  onChange={(e) => selectedPDFId && updatePDFData(selectedPDFId, 'customer.name', e.target.value)}
-                                  placeholder="Customer name"
-                                  data-testid="input-customer-name"
+                                  value={selectedPDFId ? getCurrentPDFData(selectedPDFId)?.customer?.firstName ?? '' : ''} 
+                                  onChange={(e) => selectedPDFId && updatePDFData(selectedPDFId, 'customer.firstName', e.target.value)}
+                                  placeholder="First name"
+                                  data-testid="input-customer-first-name"
                                 />
                               </div>
                               <div>
+                                <Label>Last Name</Label>
+                                <Input 
+                                  value={selectedPDFId ? getCurrentPDFData(selectedPDFId)?.customer?.lastName ?? '' : ''} 
+                                  onChange={(e) => selectedPDFId && updatePDFData(selectedPDFId, 'customer.lastName', e.target.value)}
+                                  placeholder="Last name"
+                                  data-testid="input-customer-last-name"
+                                />
+                              </div>
+                              <div className="col-span-2">
                                 <Label>Company</Label>
                                 <Input 
                                   value={selectedPDFId ? getCurrentPDFData(selectedPDFId)?.customer?.company ?? '' : ''} 
