@@ -439,8 +439,8 @@ export const insertProductSchema = z.object({
     .transform(val => typeof val === 'string' ? val : val.toString())
     .refine(val => {
       const num = parseFloat(val);
-      return !isNaN(num) && num >= 0 && num <= 1000;
-    }, "Default markup value must be between 0 and 1000"),
+      return !isNaN(num) && num >= 0;
+    }, "Default markup value must be greater than or equal to 0"),
   defaultDiscountType: z.enum(['percentage', 'dollar'], {
     errorMap: () => ({ message: "Discount type must be either 'percentage' or 'dollar'" })
   }).optional(),
@@ -691,8 +691,8 @@ export const bulkUpdateSchema = z.object({
       .transform(val => typeof val === 'string' ? val : val.toString())
       .refine(val => {
         const num = parseFloat(val);
-        return !isNaN(num) && num >= 0 && num <= 1000;
-      }, "Markup value must be between 0 and 1000")
+        return !isNaN(num) && num >= 0;
+      }, "Markup value must be greater than or equal to 0")
       .optional(),
     quantity: z.union([z.string(), z.number()])
       .transform(val => typeof val === 'string' ? val : val.toString())
@@ -729,8 +729,8 @@ export const bulkUpdateProductsSchema = z.object({
       .transform(val => typeof val === 'string' ? val : val.toString())
       .refine(val => {
         const num = parseFloat(val);
-        return !isNaN(num) && num >= 0 && num <= 1000;
-      }, "Default markup value must be between 0 and 1000")
+        return !isNaN(num) && num >= 0;
+      }, "Default markup value must be greater than or equal to 0")
       .optional(),
     defaultDiscountType: z.enum(['percentage', 'dollar']).optional(),
     defaultDiscountValue: z.union([z.string(), z.number()])

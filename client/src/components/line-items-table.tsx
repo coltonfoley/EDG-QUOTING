@@ -303,8 +303,6 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
         validationError = "Markup value is required";
       } else if (isNaN(num) || num < 0) {
         validationError = "Markup must be a valid positive number";
-      } else if (num > 1000) {
-        validationError = "Markup must be less than 1000";
       }
     } else if (field === "markupType") {
       if (!value || (value !== "percentage" && value !== "dollar")) {
