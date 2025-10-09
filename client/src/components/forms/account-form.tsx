@@ -14,7 +14,9 @@ import { z } from "zod";
 import { User, Info } from "lucide-react";
 
 const accountFormSchema = insertAccountSchema.extend({
-  name: z.string().min(1, "Name is required"),
+  firstName: z.string().min(1, "First name is required"),
+  lastName: z.string().min(1, "Last name is required"),
+  name: z.string().optional(), // Auto-generated from firstName + lastName
   email: z.string().email("Valid email is required"),
   phone: z.string().min(10, "Valid phone number is required"),
   company: z.string().optional(),
@@ -48,6 +50,8 @@ export function AccountForm({ account, onSuccess, onCancel }: AccountFormProps) 
   const form = useForm<AccountFormData>({
     resolver: zodResolver(accountFormSchema),
     defaultValues: {
+      firstName: account?.firstName || "",
+      lastName: account?.lastName || "",
       name: account?.name || "",
       email: account?.email || "",
       phone: account?.phone || "",
@@ -78,7 +82,12 @@ export function AccountForm({ account, onSuccess, onCancel }: AccountFormProps) 
   });
 
   const onSubmit = (data: AccountFormData) => {
-    createAccountMutation.mutate(data);
+    // Auto-generate name from firstName and lastName if not provided
+    const submissionData = {
+      ...data,
+      name: data.name || `${data.firstName} ${data.lastName}`.trim()
+    };
+    createAccountMutation.mutate(submissionData);
   };
 
   return (
@@ -88,8 +97,8 @@ export function AccountForm({ account, onSuccess, onCancel }: AccountFormProps) 
           <Alert className="bg-blue-50 border-blue-200">
             <Info className="h-4 w-4 text-blue-600" />
             <AlertDescription className="text-blue-800">
-              <strong>Creating a new account</strong> will automatically create a primary contact using the information below. 
-              You can add additional contacts to this account later.
+              <strong>Creating a new client</strong> for individual contacts or businesses. 
+              Provide at minimum first name, last name, email, and phone.
             </AlertDescription>
           </Alert>
         )}
@@ -97,15 +106,33 @@ export function AccountForm({ account, onSuccess, onCancel }: AccountFormProps) 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <FormField
             control={form.control}
-            name="name"
+            name="firstName"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Account Holder Name *</FormLabel>
+                <FormLabel>First Name *</FormLabel>
                 <FormControl>
                   <Input 
-                    placeholder="John Doe" 
+                    placeholder="John" 
                     {...field} 
-                    data-testid="input-account-name"
+                    data-testid="input-account-firstname"
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="lastName"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Last Name *</FormLabel>
+                <FormControl>
+                  <Input 
+                    placeholder="Doe" 
+                    {...field} 
+                    data-testid="input-account-lastname"
                   />
                 </FormControl>
                 <FormMessage />
