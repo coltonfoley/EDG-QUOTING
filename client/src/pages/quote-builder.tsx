@@ -189,6 +189,7 @@ export default function QuoteBuilder() {
     taxRate: "8.5",
     discount: "0",
     shipping: "0",
+    isShippingTaxable: true,
     dealStage: "new_lead",
     lostReason: null,
     contractTemplateId: null,
@@ -204,6 +205,9 @@ export default function QuoteBuilder() {
       accountType: "homeowner" as const,
       paymentTerms: null,
       billingAddress: null,
+      firstName: null,
+      lastName: null,
+      secondaryContacts: null,
       createdAt: new Date(),
       updatedAt: new Date()
     },
@@ -216,6 +220,9 @@ export default function QuoteBuilder() {
       accountType: "homeowner" as const,
       paymentTerms: null,
       billingAddress: null,
+      firstName: null,
+      lastName: null,
+      secondaryContacts: null,
       createdAt: new Date(),
       updatedAt: new Date()
     },

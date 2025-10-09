@@ -860,281 +860,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Contact routes
-  // Contact search endpoint - MUST be before :id routes
-  app.get("/api/contacts", isAuthenticated, async (req, res) => {
-    try {
-      const searchTerm = req.query.search as string;
-      
-      if (!searchTerm || searchTerm.length < 1) {
-        return res.json([]);
-      }
-      
-      const term = searchTerm.toLowerCase();
-      
-      // Search contacts with account information
-      const contactResults = await db
-        .select({
-          id: contacts.id,
-          firstName: contacts.firstName,
-          lastName: contacts.lastName,
-          email: contacts.email,
-          phone: contacts.phone,
-          accountId: contacts.accountId,
-          accountName: accounts.name,
-        })
-        .from(contacts)
-        .innerJoin(accounts, eq(contacts.accountId, accounts.id))
-        .where(
-          or(
-            ilike(contacts.firstName, `%${term}%`),
-            ilike(contacts.lastName, `%${term}%`),
-            ilike(contacts.email, `%${term}%`),
-            ilike(contacts.phone, `%${term}%`),
-            ilike(accounts.name, `%${term}%`)
-          )
-        )
-        .limit(10);
-      
-      res.json(contactResults);
-    } catch (error) {
-      console.error("Contact search error:", error);
-      res.status(500).json({ message: "Failed to search contacts" });
-    }
-  });
-
-  // Quick create contact endpoint (with optional account creation)
-  app.post("/api/contacts/quick-create", isAuthenticated, async (req, res) => {
-    try {
-      const data = quickCreateContactSchema.parse(req.body);
-      
-      // Validate the request structure
-      if (!data.contact || !data.contact.firstName || !data.contact.lastName || !data.contact.email) {
-        return res.status(400).json({ 
-          message: "Contact information is required (firstName, lastName, email)" 
-        });
-      }
-
-      let accountId = data.accountId;
-      let account;
-
-      // If account needs to be created
-      if (data.account && !accountId) {
-        if (!data.account.name || !data.account.email) {
-          return res.status(400).json({ 
-            message: "Account name and email are required when creating new account" 
-          });
-        }
-
-        // Check for duplicate account by email
-        const existingAccounts = await db
-          .select()
-          .from(accounts)
-          .where(eq(accounts.email, data.account.email))
-          .limit(1);
-
-        if (existingAccounts.length > 0) {
-          return res.status(409).json({
-            message: "Account with this email already exists",
-            existingAccount: {
-              id: existingAccounts[0].id,
-              name: existingAccounts[0].name,
-              email: existingAccounts[0].email
-            }
-          });
-        }
-
-        // Create the account and contact in a transaction
-        const result = await db.transaction(async (tx) => {
-          const [newAccount] = await tx
-            .insert(accounts)
-            .values({
-              name: data.account!.name,
-              email: data.account!.email,
-              phone: data.account!.phone || "",
-              accountType: "general_contractor"
-            })
-            .returning();
-
-          const [newContact] = await tx
-            .insert(contacts)
-            .values({
-              accountId: newAccount.id,
-              firstName: data.contact.firstName,
-              lastName: data.contact.lastName,
-              email: data.contact.email,
-              phone: data.contact.phone || null,
-              role: "primary_contact",
-              isPrimary: false
-            })
-            .returning();
-
-          return { 
-            account: newAccount, 
-            contact: {
-              ...newContact,
-              accountName: newAccount.name
-            }
-          };
-        });
-
-        return res.status(201).json(result);
-      } else if (accountId) {
-        // Verify the account exists
-        const [existingAccount] = await db
-          .select()
-          .from(accounts)
-          .where(eq(accounts.id, accountId))
-          .limit(1);
-
-        if (!existingAccount) {
-          return res.status(404).json({ message: "Account not found" });
-        }
-        account = existingAccount;
-        
-        // Check for duplicate contact by email within the account
-        const existingContacts = await db
-          .select()
-          .from(contacts)
-          .where(
-            and(
-              eq(contacts.accountId, accountId),
-              eq(contacts.email, data.contact.email)
-            )
-          )
-          .limit(1);
-
-        if (existingContacts.length > 0) {
-          return res.status(409).json({
-            message: "Contact with this email already exists for this account",
-            existingContact: {
-              id: existingContacts[0].id,
-              firstName: existingContacts[0].firstName,
-              lastName: existingContacts[0].lastName,
-              email: existingContacts[0].email
-            }
-          });
-        }
-
-        // Create the contact for existing account
-        const [newContact] = await db
-          .insert(contacts)
-          .values({
-            accountId: accountId,
-            firstName: data.contact.firstName,
-            lastName: data.contact.lastName,
-            email: data.contact.email,
-            phone: data.contact.phone || null,
-            role: "primary_contact",
-            isPrimary: false
-          })
-          .returning();
-
-        res.status(201).json({
-          contact: {
-            ...newContact,
-            accountName: account.name
-          },
-          account: account
-        });
-      } else {
-        return res.status(400).json({ 
-          message: "Either accountId or account data must be provided" 
-        });
-      }
-    } catch (error) {
-      console.error("Quick create contact error:", error);
-      res.status(500).json({ message: "Failed to create contact" });
-    }
-  });
-
-  app.get("/api/contacts/account/:accountId", isAuthenticated, async (req, res) => {
-    try {
-      const accountId = parseInt(req.params.accountId);
-      if (isNaN(accountId)) {
-        return res.status(400).json({ message: "Invalid account ID" });
-      }
-      
-      const contacts = await storage.getContactsByAccountId(accountId);
-      res.json(contacts);
-    } catch (error) {
-      console.error("Error fetching contacts:", error);
-      res.status(500).json({ message: "Failed to fetch contacts" });
-    }
-  });
-
-  app.get("/api/contacts/:id", isAuthenticated, async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      if (isNaN(id)) {
-        return res.status(400).json({ message: "Invalid contact ID" });
-      }
-      
-      const contact = await storage.getContact(id);
-      if (!contact) {
-        return res.status(404).json({ message: "Contact not found" });
-      }
-      res.json(contact);
-    } catch (error) {
-      console.error("Error fetching contact:", error);
-      res.status(500).json({ message: "Failed to fetch contact" });
-    }
-  });
-
-  app.post("/api/contacts", isAuthenticated, async (req, res) => {
-    try {
-      const contactData = insertContactSchema.parse(req.body);
-      const contact = await storage.createContact(contactData);
-      res.status(201).json(contact);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: "Invalid contact data", errors: error.errors });
-      }
-      console.error("Contact creation error:", error);
-      res.status(500).json({ message: "Failed to create contact" });
-    }
-  });
-
-  app.put("/api/contacts/:id", isAuthenticated, async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      if (isNaN(id)) {
-        return res.status(400).json({ message: "Invalid contact ID" });
-      }
-      
-      const contactData = insertContactSchema.partial().parse(req.body);
-      const contact = await storage.updateContact(id, contactData);
-      if (!contact) {
-        return res.status(404).json({ message: "Contact not found" });
-      }
-      res.json(contact);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: "Invalid contact data", errors: error.errors });
-      }
-      console.error("Contact update error:", error);
-      res.status(500).json({ message: "Failed to update contact" });
-    }
-  });
-
-  app.delete("/api/contacts/:id", isAuthenticated, async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      if (isNaN(id)) {
-        return res.status(400).json({ message: "Invalid contact ID" });
-      }
-      
-      const deleted = await storage.deleteContact(id);
-      if (!deleted) {
-        return res.status(404).json({ message: "Contact not found" });
-      }
-      res.status(204).send();
-    } catch (error) {
-      console.error("Contact deletion error:", error);
-      res.status(500).json({ message: "Failed to delete contact" });
-    }
-  });
-
   app.put("/api/accounts/:id", isAuthenticated, async (req, res) => {
     try {
       // Validate ID parameter
@@ -1509,10 +1234,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/quotes", isAuthenticated, async (req, res) => {
     try {
       console.log("Quote creation request body:", JSON.stringify(req.body, null, 2));
-      const { accountId, contactId, customerCreate, ...baseQuoteData } = createQuoteSchema.parse(req.body);
+      const { accountId, customerCreate, ...baseQuoteData } = createQuoteSchema.parse(req.body);
       
       let resolvedAccountId = accountId ?? null;
-      let resolvedContactId = contactId ?? null;
 
       // Only create/get an Account when explicitly requested via customerCreate
       if (!resolvedAccountId && customerCreate) {
@@ -1525,7 +1249,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const quoteData: InsertQuote = {
         ...baseQuoteData,
         accountId: resolvedAccountId,
-        contactId: resolvedContactId,
         quoteNumber: `Q-${Date.now()}`, // Auto-generate unique quote number
         projectName: baseQuoteData.projectName || "",
         projectAddress: baseQuoteData.projectAddress || "",
@@ -1534,6 +1257,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         taxRate: baseQuoteData.taxRate || "0",
         discount: baseQuoteData.discount || "0", 
         shipping: baseQuoteData.shipping || "0",
+        isShippingTaxable: true,
         dealStage: baseQuoteData.dealStage || "new_lead",
         jobsiteAddress: baseQuoteData.jobsiteAddress || undefined,
         lostReason: baseQuoteData.lostReason || undefined,
@@ -1817,6 +1541,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             taxRate: '0',
             discount: '0',
             shipping: '0',
+            isShippingTaxable: true,
             dealStage: 'new_lead' as const
           };
 
@@ -1909,6 +1634,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               taxRate: extractedQuote.taxRate?.toString() || '0',
               discount: '0',
               shipping: '0',
+              isShippingTaxable: true,
               dealStage: 'new_lead' as const
             };
 
