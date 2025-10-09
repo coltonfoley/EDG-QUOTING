@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { FileText, Bookmark, Plus, Eye, Send, Mail, CheckCircle, AlertCircle, Clock } from "lucide-react";
@@ -244,7 +245,24 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
                     setLocalShipping("");
                   }}
                   className="mt-1"
+                  data-testid="input-shipping"
                 />
+                <div className="flex items-center gap-2 mt-2">
+                  <Checkbox
+                    id="isShippingTaxable"
+                    checked={quote.isShippingTaxable !== false}
+                    onCheckedChange={(checked) => {
+                      onUpdateQuote("isShippingTaxable", checked === true);
+                    }}
+                    data-testid="checkbox-shipping-taxable"
+                  />
+                  <Label 
+                    htmlFor="isShippingTaxable" 
+                    className="text-sm font-normal cursor-pointer"
+                  >
+                    Taxable
+                  </Label>
+                </div>
               </div>
             </div>
           </CardContent>
