@@ -175,8 +175,14 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
         ...(editedPDFData[pdf.id] || pdf.extractedData!)
       }));
 
+      // Map customerHandling to attachCustomer for backend compatibility
+      const mappedImportOptions = {
+        ...importOptions,
+        attachCustomer: importOptions.customerHandling === 'create_new' ? 'auto' as const : 'match_only' as const
+      };
+
       const response = await apiRequest('POST', '/api/quotes/import-batch', {
-        importOptions,
+        importOptions: mappedImportOptions,
         extractedQuotes
       });
 
