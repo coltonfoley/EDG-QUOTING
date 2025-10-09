@@ -215,14 +215,14 @@ export function calculateLineItemMargin(
  * 2. Track taxable vs non-taxable items separately
  * 3. Apply quote-level discount to subtotal (proportionally to taxable items)
  * 4. Add shipping costs
- * 5. Calculate tax on (discounted taxable subtotal + shipping)
+ * 5. Calculate tax on (discounted taxable subtotal + shipping if taxable)
  * 6. Calculate final total: discounted subtotal + shipping + tax
  * 
  * Business Rules:
  * - Tax is only calculated on taxable line items (isTaxable !== false)
  * - Non-taxable items (e.g., labor) are excluded from tax calculation
  * - Quote-level discounts apply proportionally to taxable and non-taxable items
- * - Shipping is always included in the taxable base
+ * - Shipping is included in the taxable base only if isShippingTaxable is true
  * - All percentages are clamped to 0-100%
  * - All amounts are rounded to 2 decimal places for currency
  * - Safe math operations prevent overflow/underflow
@@ -231,9 +231,10 @@ export function calculateLineItemMargin(
  * @param taxRate - Tax percentage (0-100)
  * @param discount - Quote-level discount percentage (0-100)
  * @param shipping - Fixed shipping amount (0-1,000,000)
+ * @param isShippingTaxable - Whether shipping is subject to sales tax (defaults to true)
  * @returns Object with subtotal, discounts, tax, total, and margin
  */
-export function calculateQuoteTotals(lineItems: any[], taxRate: number | string = 0, discount: number | string = 0, shipping: number | string = 0) {
+export function calculateQuoteTotals(lineItems: any[], taxRate: number | string = 0, discount: number | string = 0, shipping: number | string = 0, isShippingTaxable: boolean = true) {
   // Safely parse and validate inputs
   const tax = typeof taxRate === 'string' ? parseFloat(sanitizeNumberString(taxRate)) : taxRate;
   const disc = typeof discount === 'string' ? parseFloat(sanitizeNumberString(discount)) : discount;
@@ -311,8 +312,9 @@ export function calculateQuoteTotals(lineItems: any[], taxRate: number | string 
   const taxableDiscountAmount = safeMultiply(discountAmount, taxableDiscountRatio);
   const taxableAfterDiscount = Math.max(0, taxableSubtotal - taxableDiscountAmount);
   
-  // Tax calculation: (taxable subtotal after discount + shipping)
-  const taxableBase = safeAdd(taxableAfterDiscount, safeShipping);
+  // Tax calculation: (taxable subtotal after discount + shipping if taxable)
+  const taxableShipping = isShippingTaxable ? safeShipping : 0;
+  const taxableBase = safeAdd(taxableAfterDiscount, taxableShipping);
   const taxAmount = safeMultiply(taxableBase, safeDivide(safeTax, 100));
   
   const beforeTax = safeAdd(afterDiscount, safeShipping);

@@ -276,10 +276,12 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
       unitPrice: item.unitPrice,
       markupType: item.markupType,
       markupValue: item.markupValue,
+      isTaxable: item.isTaxable,
     })),
     quote.taxRate ?? 0,
     quote.discount ?? 0,
-    quote.shipping ?? 0
+    quote.shipping ?? 0,
+    quote.isShippingTaxable ?? true
   );
 
   const handleFileUpload = (
