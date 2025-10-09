@@ -66,25 +66,6 @@ export const accounts = pgTable("accounts", {
 export const customers = accounts; // Legacy alias for backward compatibility
 export const clients = accounts; // New unified client model alias
 
-// Contacts table - individuals associated with accounts
-// NOTE: This table is being phased out in favor of the unified client model (accounts table with firstName/lastName)
-// Kept for backward compatibility and to preserve existing contact data
-export const contacts = pgTable("contacts", {
-  id: serial("id").primaryKey(),
-  accountId: integer("account_id").notNull(),
-  firstName: text("first_name").notNull(),
-  lastName: text("last_name").notNull(),
-  email: text("email").notNull(),
-  phone: text("phone"),
-  role: text("role").notNull().default("primary_contact"), // project_manager, primary_contact, accounting, etc.
-  isPrimary: boolean("is_primary").default(false),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-}, (table) => [
-  index("idx_contacts_account_id").on(table.accountId),
-  index("idx_contacts_email").on(table.email),
-]);
-
 export const quotes = pgTable("quotes", {
   id: serial("id").primaryKey(),
   quoteNumber: text("quote_number").notNull().unique(),
@@ -316,16 +297,6 @@ export const insertAccountSchema = createInsertSchema(accounts).omit({
   secondaryContacts: z.any().optional().nullable(), // JSONB field for additional contacts
 });
 
-export const insertContactSchema = createInsertSchema(contacts).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-}).extend({
-  role: z.string().default("primary_contact"),
-  phone: z.string().optional().nullable(),
-  isPrimary: z.boolean().default(false),
-});
-
 // Legacy alias for backward compatibility
 export const insertCustomerSchema = insertAccountSchema;
 
@@ -466,7 +437,6 @@ export const insertApiKeySchema = createInsertSchema(apiKeys).omit({
 // Type exports
 export type ApiKey = typeof apiKeys.$inferSelect;
 export type Account = typeof accounts.$inferSelect;
-export type Contact = typeof contacts.$inferSelect;
 export type Customer = typeof accounts.$inferSelect; // Legacy alias
 export type Quote = typeof quotes.$inferSelect;
 export type Product = typeof products.$inferSelect;
@@ -481,7 +451,6 @@ export type IssueReport = typeof issueReports.$inferSelect;
 
 export type InsertApiKey = z.infer<typeof insertApiKeySchema>;
 export type InsertAccount = z.infer<typeof insertAccountSchema>;
-export type InsertContact = z.infer<typeof insertContactSchema>;
 export type InsertCustomer = z.infer<typeof insertAccountSchema>; // Legacy alias
 export type InsertQuote = z.infer<typeof insertQuoteSchema>;
 export type InsertProduct = z.infer<typeof insertProductSchema>;
@@ -499,7 +468,6 @@ export type QuoteWithDetails = Quote & {
   customer?: Account; // Legacy alias for backward compatibility - also optional
   lineItems: (LineItem & { manufacturer?: string })[];
   contractTemplate?: ContractTemplate;
-  contacts?: Contact[]; // Associated contacts for the project
   coverPhoto?: QuoteCoverPhoto; // Cover page image
   productRenderings?: QuoteProductRendering[]; // Visual assets and details
 };
