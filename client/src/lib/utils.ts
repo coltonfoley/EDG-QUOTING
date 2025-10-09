@@ -77,7 +77,7 @@ export function formatCurrency(value: number | string): string {
  * @param quantity - Number of items (0.01 to 999,999)
  * @param unitPrice - Price per item (0 to 10,000,000)
  * @param markupType - "percentage" or "dollar"
- * @param markupValue - Markup amount (0 to 1000)
+ * @param markupValue - Markup amount (no max limit)
  * @param discountType - "percentage" or "dollar" for manufacturer discount
  * @param discountValue - Manufacturer discount amount
  * @returns Total price rounded to 2 decimal places
@@ -99,13 +99,13 @@ export function calculateLineItemTotal(
   // Validate inputs
   if (!isValidNumber(qty) || qty <= 0 || qty > 999999) return 0;
   if (!isValidNumber(price) || price < 0 || price > 10000000) return 0;
-  if (!isValidNumber(markup) || markup < 0 || markup > 1000) return 0;
+  if (!isValidNumber(markup) || markup < 0) return 0;
   if (!isValidNumber(discount) || discount < 0) return 0;
 
   // Clamp values to safe ranges
   const safeQty = clampValue(qty, 0.01, 999999);
   const safePrice = clampValue(price, 0, 10000000);
-  const safeMarkup = clampValue(markup, 0, 1000);
+  const safeMarkup = Math.max(0, markup);
   const safeDiscount = discountType === 'percentage' 
     ? clampValue(discount, 0, 100)
     : clampValue(discount, 0, 10000000);
@@ -171,13 +171,13 @@ export function calculateLineItemMargin(
   // Validate inputs
   if (!isValidNumber(qty) || qty <= 0 || qty > 999999) return 0;
   if (!isValidNumber(price) || price < 0 || price > 10000000) return 0;
-  if (!isValidNumber(markup) || markup < 0 || markup > 1000) return 0;
+  if (!isValidNumber(markup) || markup < 0) return 0;
   if (!isValidNumber(discount) || discount < 0) return 0;
 
   // Clamp values to safe ranges
   const safeQty = clampValue(qty, 0.01, 999999);
   const safePrice = clampValue(price, 0, 10000000);
-  const safeMarkup = clampValue(markup, 0, 1000);
+  const safeMarkup = Math.max(0, markup);
   const safeDiscount = discountType === 'percentage' 
     ? clampValue(discount, 0, 100)
     : clampValue(discount, 0, 10000000);

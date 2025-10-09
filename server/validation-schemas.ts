@@ -359,8 +359,8 @@ export const insertLineItemSchema = baseLineItemSchema.extend({
     .transform(val => typeof val === 'string' ? val : val.toString())
     .refine(val => {
       const num = parseFloat(val);
-      return !isNaN(num) && num >= 0 && num <= 1000;
-    }, "Markup value must be between 0 and 1000")
+      return !isNaN(num) && num >= 0;
+    }, "Markup value must be greater than or equal to 0")
     .refine(val => {
       const num = parseFloat(val);
       // For percentage markup, limit to 2 decimal places
