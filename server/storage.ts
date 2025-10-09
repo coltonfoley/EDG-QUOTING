@@ -49,6 +49,16 @@ export interface IStorage {
   createAccount(account: InsertAccount, options?: { allowDuplicate?: boolean; updateIfExists?: boolean; createPrimaryContact?: boolean }): Promise<Account>;
   updateAccount(id: number, account: Partial<InsertAccount>): Promise<Account | undefined>;
   
+  // Client methods (unified model - accounts with integrated contact info)
+  getClient(id: number): Promise<Account | undefined>;
+  getClientByEmail(email: string): Promise<Account | undefined>;
+  searchClients(searchTerm: string): Promise<Account[]>;
+  getAllClients(): Promise<Account[]>;
+  getClientWithDetails(id: number): Promise<any>;
+  deleteClient(id: number): Promise<boolean>;
+  createClient(client: InsertAccount, options?: { allowDuplicate?: boolean; updateIfExists?: boolean }): Promise<Account>;
+  updateClient(id: number, client: Partial<InsertAccount>): Promise<Account | undefined>;
+  
   // Legacy customer methods (backward compatibility)
   getCustomer(id: number): Promise<Customer | undefined>;
   getCustomerByEmail(email: string): Promise<Customer | undefined>;
@@ -676,6 +686,41 @@ export class DatabaseStorage implements IStorage {
     // Then delete the account
     const result = await db.delete(accounts).where(eq(accounts.id, id));
     return (result.rowCount || 0) > 0;
+  }
+
+  // Client methods - unified model that wraps accounts with integrated contact info
+  // These provide a cleaner API for the new unified client model
+  async getClient(id: number): Promise<Account | undefined> {
+    return this.getAccount(id);
+  }
+
+  async getClientByEmail(email: string): Promise<Account | undefined> {
+    return this.getAccountByEmail(email);
+  }
+
+  async searchClients(searchTerm: string): Promise<Account[]> {
+    return this.searchAccounts(searchTerm);
+  }
+
+  async getAllClients(): Promise<Account[]> {
+    return this.getAllAccounts();
+  }
+
+  async getClientWithDetails(id: number): Promise<any> {
+    return this.getAccountWithDetails(id);
+  }
+
+  async deleteClient(id: number): Promise<boolean> {
+    return this.deleteAccount(id);
+  }
+
+  async createClient(client: InsertAccount, options?: { allowDuplicate?: boolean; updateIfExists?: boolean }): Promise<Account> {
+    // For clients, we typically don't create a separate contact record since the contact info is integrated
+    return this.createAccount(client, { ...options, createPrimaryContact: false });
+  }
+
+  async updateClient(id: number, client: Partial<InsertAccount>): Promise<Account | undefined> {
+    return this.updateAccount(id, client);
   }
 
   // Legacy method for backward compatibility
