@@ -44,14 +44,14 @@ export default function Accounts() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/accounts"] });
       toast({
-        title: "Account deleted",
-        description: "The account has been successfully deleted.",
+        title: "Client deleted",
+        description: "The client has been successfully deleted.",
       });
     },
     onError: (error: any) => {
       toast({
         title: "Error",
-        description: error.message || "Failed to delete account. Please try again.",
+        description: error.message || "Failed to delete client. Please try again.",
         variant: "destructive",
       });
     },
@@ -61,8 +61,8 @@ export default function Accounts() {
     setCreateDialogOpen(false);
     queryClient.invalidateQueries({ queryKey: ["/api/accounts"] });
     toast({
-      title: "Account created",
-      description: "The account has been successfully created.",
+      title: "Client created",
+      description: "The client has been successfully created.",
     });
   };
 
@@ -172,16 +172,16 @@ export default function Accounts() {
         {/* Header */}
         <div className="flex justify-between items-center mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Account Management</h1>
+            <h1 className="text-3xl font-bold text-gray-900">Client Management</h1>
             <p className="text-gray-600 mt-1">Manage your clients and business relationships</p>
           </div>
           <Button 
             onClick={() => setCreateDialogOpen(true)}
             className="bg-blue-600 hover:bg-blue-700"
-            data-testid="button-new-account"
+            data-testid="button-new-client"
           >
             <Plus className="h-4 w-4 mr-2" />
-            New Account
+            New Client
           </Button>
         </div>
 
@@ -194,8 +194,8 @@ export default function Accounts() {
                   <Building2 className="h-6 w-6 text-blue-600" />
                 </div>
                 <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">Total Accounts</p>
-                  <p className="text-2xl font-bold text-gray-900" data-testid="text-total-accounts">{totalAccounts}</p>
+                  <p className="text-sm font-medium text-gray-600">Total Clients</p>
+                  <p className="text-2xl font-bold text-gray-900" data-testid="text-total-clients">{totalAccounts}</p>
                 </div>
               </div>
             </CardContent>
@@ -238,16 +238,16 @@ export default function Accounts() {
                 <div className="relative">
                   <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                   <Input
-                    placeholder="Search accounts by name, email, or company..."
+                    placeholder="Search clients by name, email, or company..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="pl-10"
-                    data-testid="input-search-accounts"
+                    data-testid="input-search-clients"
                   />
                 </div>
               </div>
               <Select value={accountTypeFilter} onValueChange={setAccountTypeFilter}>
-                <SelectTrigger className="w-[200px]" data-testid="select-account-type-filter">
+                <SelectTrigger className="w-[200px]" data-testid="select-client-type-filter">
                   <SelectValue placeholder="Filter by type" />
                 </SelectTrigger>
                 <SelectContent>
@@ -261,10 +261,10 @@ export default function Accounts() {
           </CardContent>
         </Card>
 
-        {/* Accounts Table */}
+        {/* Clients Table */}
         <Card>
           <CardHeader>
-            <CardTitle>All Accounts</CardTitle>
+            <CardTitle>All Clients</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
             <div className="overflow-x-auto">
@@ -275,7 +275,7 @@ export default function Accounts() {
                       Company Name
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Account Type
+                      Client Type
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Payment Terms
@@ -295,7 +295,7 @@ export default function Accounts() {
                   {filteredAccounts.length === 0 ? (
                     <tr>
                       <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
-                        {searchTerm || accountTypeFilter !== "all" ? "No accounts found matching your filters." : "No accounts yet. Create your first account to get started."}
+                        {searchTerm || accountTypeFilter !== "all" ? "No clients found matching your filters." : "No clients yet. Create your first client to get started."}
                       </td>
                     </tr>
                   ) : (
@@ -308,7 +308,7 @@ export default function Accounts() {
                             navigate(`/accounts/${account.id}`);
                           }
                         }}
-                        data-testid={`row-account-${account.id}`}
+                        data-testid={`row-client-${account.id}`}
                       >
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div>
@@ -340,19 +340,19 @@ export default function Accounts() {
                                 size="sm"
                                 className="text-red-600 hover:text-red-700"
                                 onClick={(e) => e.stopPropagation()}
-                                data-testid={`button-delete-account-${account.id}`}
+                                data-testid={`button-delete-client-${account.id}`}
                               >
                                 <Trash2 className="h-4 w-4" />
                               </Button>
                             </AlertDialogTrigger>
                             <AlertDialogContent>
                               <AlertDialogHeader>
-                                <AlertDialogTitle>Delete Account</AlertDialogTitle>
+                                <AlertDialogTitle>Delete Client</AlertDialogTitle>
                                 <AlertDialogDescription>
-                                  Are you sure you want to delete this account? This action cannot be undone.
+                                  Are you sure you want to delete this client? This action cannot be undone.
                                   {(account.projectCount || 0) > 0 && (
                                     <span className="block mt-2 text-red-600">
-                                      Warning: This account has {account.projectCount} project(s). You must delete or reassign them first.
+                                      Warning: This client has {account.projectCount} project(s). You must delete or reassign them first.
                                     </span>
                                   )}
                                 </AlertDialogDescription>
@@ -382,11 +382,11 @@ export default function Accounts() {
       </div>
 
 
-      {/* Create Account Dialog - Keep for direct account creation if needed */}
+      {/* Create Client Dialog */}
       <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Create New Account</DialogTitle>
+            <DialogTitle>Create New Client</DialogTitle>
           </DialogHeader>
           <AccountForm 
             onSuccess={handleAccountCreated}
