@@ -123,6 +123,7 @@ export function ClientComboboxWithCreate({
       
       // Invalidate queries to refresh data
       queryClient.invalidateQueries({ queryKey: ["/api/clients"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/accounts"] });
     },
     onError: (error: any) => {
       toast({
