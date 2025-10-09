@@ -8,21 +8,18 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Building2, Users, Briefcase, Plus, Edit, Trash2, Phone, Mail, ChevronLeft, Star, User, FolderPlus } from "lucide-react";
+import { Building2, Briefcase, Edit, ChevronLeft, User, FolderPlus } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { AccountForm } from "@/components/forms/account-form";
-import { ContactForm } from "@/components/forms/contact-form";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { Account, Contact, Quote } from "@shared/schema";
+import type { Account, Quote } from "@shared/schema";
 import { format } from "date-fns";
 import { getDealStageColor, getDealStageLabel } from "@shared/dealStageConstants";
 
 interface AccountDetails extends Account {
-  contacts: Contact[];
   quotes: Quote[];
-  contactCount: number;
   projectCount: number;
 }
 
@@ -34,33 +31,10 @@ export default function AccountDetail() {
   const { isAuthenticated } = useAuth();
   
   const [editAccountOpen, setEditAccountOpen] = useState(false);
-  const [createContactOpen, setCreateContactOpen] = useState(false);
-  const [editContact, setEditContact] = useState<Contact | null>(null);
 
   const { data: account, isLoading, error } = useQuery<AccountDetails>({
     queryKey: [`/api/accounts/${accountId}/details`],
     enabled: isAuthenticated && accountId !== null,
-  });
-
-  // Delete contact mutation
-  const deleteContactMutation = useMutation({
-    mutationFn: async (contactId: number) => {
-      return await apiRequest("DELETE", `/api/contacts/${contactId}`);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`/api/accounts/${accountId}/details`] });
-      toast({
-        title: "Team member deleted",
-        description: "The team member has been successfully deleted.",
-      });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to delete team member. Please try again.",
-        variant: "destructive",
-      });
-    },
   });
 
   const handleAccountUpdated = () => {
@@ -69,16 +43,6 @@ export default function AccountDetail() {
     toast({
       title: "Client updated",
       description: "The client has been successfully updated.",
-    });
-  };
-
-  const handleContactSaved = () => {
-    setCreateContactOpen(false);
-    setEditContact(null);
-    queryClient.invalidateQueries({ queryKey: [`/api/accounts/${accountId}/details`] });
-    toast({
-      title: editContact ? "Team member updated" : "Team member added",
-      description: `The team member has been successfully ${editContact ? 'updated' : 'added'}.`,
     });
   };
 
@@ -235,122 +199,8 @@ export default function AccountDetail() {
           </CardContent>
         </Card>
 
-        {/* Two Column Layout for Contacts and Quotes */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Team Members Section */}
-          <Card>
-            <CardHeader>
-              <div className="flex justify-between items-center">
-                <div>
-                  <CardTitle className="flex items-center gap-2">
-                    <Users className="h-5 w-5" />
-                    Team Members
-                  </CardTitle>
-                  <CardDescription>
-                    {account.contactCount} team member{account.contactCount !== 1 ? 's' : ''}
-                  </CardDescription>
-                </div>
-                <Button
-                  size="sm"
-                  onClick={() => setCreateContactOpen(true)}
-                  data-testid="button-new-team-member"
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Team Member
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {account.contacts.length === 0 ? (
-                  <p className="text-center py-8 text-gray-500">
-                    No team members yet. Add your first team member to get started.
-                  </p>
-                ) : (
-                  account.contacts.map(contact => (
-                    <div 
-                      key={contact.id}
-                      className="p-4 border rounded-lg hover:bg-gray-50 transition-colors"
-                      data-testid={`card-team-member-${contact.id}`}
-                    >
-                      <div className="flex justify-between items-start">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            <p className="font-medium text-gray-900">
-                              {contact.firstName} {contact.lastName}
-                            </p>
-                            {contact.isPrimary && (
-                              <Badge className="bg-yellow-100 text-yellow-800">
-                                <Star className="h-3 w-3 mr-1" />
-                                Primary
-                              </Badge>
-                            )}
-                          </div>
-                          <p className="text-sm text-gray-500 mt-1">{contact.role}</p>
-                          <div className="flex items-center gap-4 mt-2 text-sm text-gray-600">
-                            <span className="flex items-center gap-1">
-                              <Mail className="h-3 w-3" />
-                              {contact.email}
-                            </span>
-                            {contact.phone && (
-                              <span className="flex items-center gap-1">
-                                <Phone className="h-3 w-3" />
-                                {contact.phone}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        <div className="flex gap-1">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              setEditContact(contact);
-                              setCreateContactOpen(true);
-                            }}
-                            data-testid={`button-edit-team-member-${contact.id}`}
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="text-red-600 hover:text-red-700"
-                                data-testid={`button-delete-team-member-${contact.id}`}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Delete Team Member</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  Are you sure you want to delete {contact.firstName} {contact.lastName}? This action cannot be undone.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel data-testid="button-cancel-delete">Cancel</AlertDialogCancel>
-                                <AlertDialogAction
-                                  onClick={() => deleteContactMutation.mutate(contact.id)}
-                                  className="bg-red-600 hover:bg-red-700"
-                                  data-testid="button-confirm-delete"
-                                >
-                                  Delete
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-                        </div>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </CardContent>
-          </Card>
-
+        {/* Quotes Section - Full Width */}
+        <div className="grid grid-cols-1 gap-6">
           {/* Quotes Section */}
           <Card>
             <CardHeader>
@@ -427,26 +277,6 @@ export default function AccountDetail() {
         </DialogContent>
       </Dialog>
 
-      {/* Create/Edit Team Member Dialog */}
-      <Dialog open={createContactOpen} onOpenChange={(open) => {
-        setCreateContactOpen(open);
-        if (!open) setEditContact(null);
-      }}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>{editContact ? 'Edit Team Member' : 'Add Team Member'}</DialogTitle>
-          </DialogHeader>
-          <ContactForm 
-            accountId={accountId}
-            contact={editContact}
-            onSuccess={handleContactSaved}
-            onCancel={() => {
-              setCreateContactOpen(false);
-              setEditContact(null);
-            }}
-          />
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
