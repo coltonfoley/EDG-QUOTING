@@ -69,7 +69,8 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
     })),
     quote.taxRate ?? 0,
     quote.discount ?? 0,
-    quote.shipping ?? 0
+    quote.shipping ?? 0,
+    quote.isShippingTaxable ?? true
   );
 
   return (
