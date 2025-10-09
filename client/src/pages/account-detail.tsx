@@ -50,14 +50,14 @@ export default function AccountDetail() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/accounts/${accountId}/details`] });
       toast({
-        title: "Contact deleted",
-        description: "The contact has been successfully deleted.",
+        title: "Team member deleted",
+        description: "The team member has been successfully deleted.",
       });
     },
     onError: (error: any) => {
       toast({
         title: "Error",
-        description: error.message || "Failed to delete contact. Please try again.",
+        description: error.message || "Failed to delete team member. Please try again.",
         variant: "destructive",
       });
     },
@@ -67,8 +67,8 @@ export default function AccountDetail() {
     setEditAccountOpen(false);
     queryClient.invalidateQueries({ queryKey: [`/api/accounts/${accountId}/details`] });
     toast({
-      title: "Account updated",
-      description: "The account has been successfully updated.",
+      title: "Client updated",
+      description: "The client has been successfully updated.",
     });
   };
 
@@ -77,8 +77,8 @@ export default function AccountDetail() {
     setEditContact(null);
     queryClient.invalidateQueries({ queryKey: [`/api/accounts/${accountId}/details`] });
     toast({
-      title: editContact ? "Contact updated" : "Contact created",
-      description: `The contact has been successfully ${editContact ? 'updated' : 'created'}.`,
+      title: editContact ? "Team member updated" : "Team member added",
+      description: `The team member has been successfully ${editContact ? 'updated' : 'added'}.`,
     });
   };
 
@@ -146,13 +146,13 @@ export default function AccountDetail() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <Card>
             <CardContent className="p-12 text-center">
-              <p className="text-gray-500">Account not found or you don't have permission to view it.</p>
+              <p className="text-gray-500">Client not found or you don't have permission to view it.</p>
               <Button 
                 className="mt-4"
                 onClick={() => navigate("/accounts")}
-                data-testid="button-back-to-accounts"
+                data-testid="button-back-to-clients"
               >
-                Back to Accounts
+                Back to Clients
               </Button>
             </CardContent>
           </Card>
@@ -174,10 +174,10 @@ export default function AccountDetail() {
           data-testid="button-back"
         >
           <ChevronLeft className="h-4 w-4 mr-2" />
-          Back to Accounts
+          Back to Clients
         </Button>
 
-        {/* Account Information Card */}
+        {/* Client Information Card */}
         <Card className="mb-6">
           <CardHeader>
             <div className="flex justify-between items-start">
@@ -188,6 +188,12 @@ export default function AccountDetail() {
                     <CardTitle className="text-2xl">
                       {account.company || account.name}
                     </CardTitle>
+                    {(account.firstName || account.lastName) && (
+                      <p className="text-sm text-gray-500 flex items-center gap-1">
+                        <User className="h-3 w-3" />
+                        {account.firstName} {account.lastName}
+                      </p>
+                    )}
                     <p className="text-gray-600">{account.email} • {account.phone}</p>
                   </div>
                 </div>
@@ -199,10 +205,10 @@ export default function AccountDetail() {
                 <Button
                   onClick={() => setEditAccountOpen(true)}
                   size="sm"
-                  data-testid="button-edit-account"
+                  data-testid="button-edit-client"
                 >
                   <Edit className="h-4 w-4 mr-2" />
-                  Edit Account
+                  Edit Client
                 </Button>
               </div>
             </div>
@@ -231,26 +237,26 @@ export default function AccountDetail() {
 
         {/* Two Column Layout for Contacts and Quotes */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Contacts Section */}
+          {/* Team Members Section */}
           <Card>
             <CardHeader>
               <div className="flex justify-between items-center">
                 <div>
                   <CardTitle className="flex items-center gap-2">
                     <Users className="h-5 w-5" />
-                    Contacts
+                    Team Members
                   </CardTitle>
                   <CardDescription>
-                    {account.contactCount} contact{account.contactCount !== 1 ? 's' : ''} for this account
+                    {account.contactCount} team member{account.contactCount !== 1 ? 's' : ''}
                   </CardDescription>
                 </div>
                 <Button
                   size="sm"
                   onClick={() => setCreateContactOpen(true)}
-                  data-testid="button-new-contact"
+                  data-testid="button-new-team-member"
                 >
                   <Plus className="h-4 w-4 mr-2" />
-                  Add Contact
+                  Add Team Member
                 </Button>
               </div>
             </CardHeader>
@@ -258,14 +264,14 @@ export default function AccountDetail() {
               <div className="space-y-3">
                 {account.contacts.length === 0 ? (
                   <p className="text-center py-8 text-gray-500">
-                    No contacts yet. Add your first contact to get started.
+                    No team members yet. Add your first team member to get started.
                   </p>
                 ) : (
                   account.contacts.map(contact => (
                     <div 
                       key={contact.id}
                       className="p-4 border rounded-lg hover:bg-gray-50 transition-colors"
-                      data-testid={`card-contact-${contact.id}`}
+                      data-testid={`card-team-member-${contact.id}`}
                     >
                       <div className="flex justify-between items-start">
                         <div className="flex-1">
@@ -302,7 +308,7 @@ export default function AccountDetail() {
                               setEditContact(contact);
                               setCreateContactOpen(true);
                             }}
-                            data-testid={`button-edit-contact-${contact.id}`}
+                            data-testid={`button-edit-team-member-${contact.id}`}
                           >
                             <Edit className="h-4 w-4" />
                           </Button>
@@ -312,14 +318,14 @@ export default function AccountDetail() {
                                 variant="ghost"
                                 size="sm"
                                 className="text-red-600 hover:text-red-700"
-                                data-testid={`button-delete-contact-${contact.id}`}
+                                data-testid={`button-delete-team-member-${contact.id}`}
                               >
                                 <Trash2 className="h-4 w-4" />
                               </Button>
                             </AlertDialogTrigger>
                             <AlertDialogContent>
                               <AlertDialogHeader>
-                                <AlertDialogTitle>Delete Contact</AlertDialogTitle>
+                                <AlertDialogTitle>Delete Team Member</AlertDialogTitle>
                                 <AlertDialogDescription>
                                   Are you sure you want to delete {contact.firstName} {contact.lastName}? This action cannot be undone.
                                 </AlertDialogDescription>
@@ -355,7 +361,7 @@ export default function AccountDetail() {
                     Quotes
                   </CardTitle>
                   <CardDescription>
-                    {account.quotes?.length || 0} quote{account.quotes?.length !== 1 ? 's' : ''} for this account
+                    {account.quotes?.length || 0} quote{account.quotes?.length !== 1 ? 's' : ''} for this client
                   </CardDescription>
                 </div>
                 <Button
@@ -407,11 +413,11 @@ export default function AccountDetail() {
         </div>
       </div>
 
-      {/* Edit Account Dialog */}
+      {/* Edit Client Dialog */}
       <Dialog open={editAccountOpen} onOpenChange={setEditAccountOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Edit Account</DialogTitle>
+            <DialogTitle>Edit Client</DialogTitle>
           </DialogHeader>
           <AccountForm 
             account={account}
@@ -421,14 +427,14 @@ export default function AccountDetail() {
         </DialogContent>
       </Dialog>
 
-      {/* Create/Edit Contact Dialog */}
+      {/* Create/Edit Team Member Dialog */}
       <Dialog open={createContactOpen} onOpenChange={(open) => {
         setCreateContactOpen(open);
         if (!open) setEditContact(null);
       }}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>{editContact ? 'Edit Contact' : 'Add New Contact'}</DialogTitle>
+            <DialogTitle>{editContact ? 'Edit Team Member' : 'Add Team Member'}</DialogTitle>
           </DialogHeader>
           <ContactForm 
             accountId={accountId}
