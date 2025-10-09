@@ -204,6 +204,9 @@ export class MemStorage {
       company: insertCustomer.company || null,
       paymentTerms: insertCustomer.paymentTerms || null,
       billingAddress: insertCustomer.billingAddress || null,
+      firstName: insertCustomer.firstName || null,
+      lastName: insertCustomer.lastName || null,
+      secondaryContacts: insertCustomer.secondaryContacts || null,
       createdAt: new Date(),
       updatedAt: new Date()
     };
@@ -482,6 +485,9 @@ export class DatabaseStorage implements IStorage {
           accountType: accounts.accountType,
           paymentTerms: accounts.paymentTerms,
           billingAddress: accounts.billingAddress,
+          firstName: accounts.firstName,
+          lastName: accounts.lastName,
+          secondaryContacts: accounts.secondaryContacts,
           createdAt: accounts.createdAt,
           updatedAt: accounts.updatedAt,
         })
@@ -612,6 +618,9 @@ export class DatabaseStorage implements IStorage {
       accountType: accounts.accountType,
       paymentTerms: accounts.paymentTerms,
       billingAddress: accounts.billingAddress,
+      firstName: accounts.firstName,
+      lastName: accounts.lastName,
+      secondaryContacts: accounts.secondaryContacts,
       createdAt: accounts.createdAt,
       updatedAt: accounts.updatedAt,
       contactCount: sql<number>`
