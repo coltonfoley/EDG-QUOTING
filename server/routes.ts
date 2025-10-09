@@ -1187,6 +1187,164 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Client routes - unified model for accounts with integrated contact info
+  // These provide a cleaner API for the new unified client model
+  app.get("/api/clients", isAuthenticated, async (req, res) => {
+    try {
+      const searchTerm = req.query.search as string;
+      
+      if (searchTerm && searchTerm.length > 0) {
+        // Search functionality
+        console.log(`[CLIENT SEARCH] Search request: search="${searchTerm}"`);
+        const clients = await storage.searchClients(searchTerm);
+        console.log(`[CLIENT SEARCH] Found ${clients.length} clients for term "${searchTerm}"`);
+        res.json(clients);
+      } else {
+        // Return all clients when no search term
+        const clients = await storage.getAllClients();
+        res.json(clients);
+      }
+    } catch (error) {
+      console.error("Error fetching clients:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.get("/api/clients/search", isAuthenticated, async (req, res) => {
+    try {
+      const searchTerm = req.query.q as string;
+      console.log(`[CLIENT SEARCH] Autocomplete request: q="${searchTerm}"`);
+      
+      if (!searchTerm || searchTerm.length < 1) {
+        console.log("[CLIENT SEARCH] Empty search term, returning empty array");
+        return res.json([]);
+      }
+      
+      const clients = await storage.searchClients(searchTerm);
+      console.log(`[CLIENT SEARCH] Found ${clients.length} clients`);
+      res.json(clients);
+    } catch (error) {
+      console.error("Client search error:", error);
+      res.status(400).json({ message: "Invalid request parameter", error: error instanceof Error ? error.message : "Unknown error" });
+    }
+  });
+
+  app.get("/api/clients/:id", isAuthenticated, async (req, res) => {
+    try {
+      const params = idParamSchema.safeParse(req.params);
+      if (!params.success) {
+        return res.status(400).json({ 
+          message: "Invalid request parameters", 
+          errors: params.error.errors 
+        });
+      }
+      
+      const client = await storage.getClient(params.data.id);
+      if (!client) {
+        return res.status(404).json({ message: "Client not found" });
+      }
+      res.json(client);
+    } catch (error) {
+      console.error("Error fetching client:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.get("/api/clients/:id/details", isAuthenticated, async (req, res) => {
+    try {
+      const params = idParamSchema.safeParse(req.params);
+      if (!params.success) {
+        return res.status(400).json({ 
+          message: "Invalid request parameters", 
+          errors: params.error.errors 
+        });
+      }
+      
+      const clientDetails = await storage.getClientWithDetails(params.data.id);
+      if (!clientDetails) {
+        return res.status(404).json({ message: "Client not found" });
+      }
+      res.json(clientDetails);
+    } catch (error) {
+      console.error("Error fetching client details:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.post("/api/clients", isAuthenticated, async (req, res) => {
+    try {
+      console.log("Client creation request body:", JSON.stringify(req.body, null, 2));
+      const clientData = insertAccountSchema.parse(req.body);
+      
+      // Options for duplicate handling (no contact creation since info is integrated)
+      const allowDuplicate = req.body.allowDuplicate === true;
+      const updateIfExists = req.body.updateIfExists !== false; // Default to true
+      
+      const client = await storage.createClient(clientData, {
+        allowDuplicate,
+        updateIfExists
+      });
+      
+      res.status(201).json(client);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        console.error("Client validation error:", JSON.stringify(error.errors, null, 2));
+        return res.status(400).json({ message: "Invalid client data", errors: error.errors });
+      }
+      console.error("Client creation error:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.put("/api/clients/:id", isAuthenticated, async (req, res) => {
+    try {
+      const params = idParamSchema.safeParse(req.params);
+      if (!params.success) {
+        return res.status(400).json({ 
+          message: "Invalid request parameters", 
+          errors: params.error.errors 
+        });
+      }
+      
+      console.log("Client update request body:", JSON.stringify(req.body, null, 2));
+      const clientData = updateAccountSchema.parse(req.body);
+      const client = await storage.updateClient(params.data.id, clientData);
+      if (!client) {
+        return res.status(404).json({ message: "Client not found" });
+      }
+      res.json(client);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid client data", errors: error.errors });
+      }
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.delete("/api/clients/:id", isAuthenticated, async (req, res) => {
+    try {
+      const params = idParamSchema.safeParse(req.params);
+      if (!params.success) {
+        return res.status(400).json({ 
+          message: "Invalid request parameters", 
+          errors: params.error.errors 
+        });
+      }
+      
+      const deleted = await storage.deleteClient(params.data.id);
+      if (!deleted) {
+        return res.status(404).json({ message: "Client not found or has existing quotes" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      console.error("Client deletion error:", error);
+      if (error instanceof Error && error.message.includes("existing quotes")) {
+        return res.status(400).json({ message: error.message });
+      }
+      res.status(500).json({ message: "Failed to delete client" });
+    }
+  });
+
   // Quote routes (protected)
   app.get("/api/quotes", isAuthenticated, async (req, res) => {
     try {
