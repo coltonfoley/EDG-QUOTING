@@ -1641,7 +1641,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                 <col style={{width: '26%'}} /> {/* Description */}
                 <col style={{width: '80px'}} /> {/* Quantity */}
                 <col style={{width: '100px'}} /> {/* Cost */}
-                <col style={{width: '80px'}} /> {/* Markup% */}
+                <col style={{width: '160px'}} /> {/* Markup% */}
                 <col style={{width: '120px'}} /> {/* Price */}
                 <col style={{width: '100px'}} /> {/* Margin$ */}
                 <col style={{width: '140px'}} /> {/* Total */}
