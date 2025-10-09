@@ -165,7 +165,6 @@ export const insertCustomerSchema = baseCustomerSchema.extend({
 export const insertQuoteSchema = baseQuoteSchema.extend({
   quoteNumber: z.string().min(1, "Quote number is required").max(50, "Quote number is too long").optional(), // Auto-generated on server
   accountId: z.number().int().positive("Account ID must be a positive integer").optional(),
-  contactId: z.number().int().positive("Contact ID must be a positive integer").optional(),
 
   dealStage: z.enum(["new_lead", "qualifying", "consultation_scheduled", "building_estimate", "quote_sent", "closed_won", "closed_lost", "on_hold"]).default("new_lead"),
   lostReason: z.string().max(500, "Lost reason is too long").optional().nullable(),
@@ -206,9 +205,8 @@ export const insertQuoteSchema = baseQuoteSchema.extend({
 
 // Enhanced quote creation schema with optional customer creation hint
 export const createQuoteSchema = z.object({
-  // Base quote fields (optional account/contact linkage)
+  // Base quote fields (optional account linkage)
   accountId: z.number().int().positive("Account ID must be a positive integer").optional().nullable(),
-  contactId: z.number().int().positive("Contact ID must be a positive integer").optional().nullable(),
   
   // Optional auto-create hint for customer
   customerCreate: z.object({
@@ -271,7 +269,6 @@ export type CreateQuoteBody = z.infer<typeof createQuoteSchema>;
 export const updateQuoteSchema = z.object({
   quoteNumber: z.string().min(1, "Quote number is required").max(50, "Quote number is too long").optional(),
   accountId: z.number().int().positive("Account ID must be a positive integer").nullable().optional(),
-  contactId: z.number().int().positive("Contact ID must be a positive integer").nullable().optional(),
 
   dealStage: z.enum(["new_lead", "qualifying", "consultation_scheduled", "building_estimate", "quote_sent", "closed_won", "closed_lost", "on_hold"]).optional(),
   lostReason: z.string().max(500, "Lost reason is too long").optional().nullable(),
