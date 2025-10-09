@@ -4,11 +4,10 @@ import { storage } from "./storage";
 import { z } from "zod";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import { db } from "./db";
-import { accounts, contacts, products } from "@shared/schema";
+import { accounts, products } from "@shared/schema";
 import { eq, or, ilike, and } from "drizzle-orm";
 import {
   insertAccountSchema,
-  insertContactSchema,
   insertCustomerSchema,
   insertQuoteSchema,
   updateQuoteSchema,
@@ -42,7 +41,6 @@ import {
   quoteIdParamSchema,
   imageIdParamSchema,
   insertIssueReportSchema,
-  quickCreateContactSchema,
   createQuoteSchema,
   CreateQuoteBody
 } from "./validation-schemas";
@@ -618,41 +616,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .limit(10);
       
       console.log(`[SEARCH] Found ${accountResults.length} accounts`);
-      
-      // Also search contacts
-      const contactResults = await db
-        .select({
-          id: accounts.id,
-          name: accounts.name,
-          email: accounts.email,
-          phone: accounts.phone,
-          company: accounts.company,
-          accountType: accounts.accountType,
-          paymentTerms: accounts.paymentTerms,
-          billingAddress: accounts.billingAddress,
-          createdAt: accounts.createdAt,
-          updatedAt: accounts.updatedAt,
-        })
-        .from(contacts)
-        .innerJoin(accounts, eq(contacts.accountId, accounts.id))
-        .where(
-          or(
-            ilike(contacts.firstName, `%${term}%`),
-            ilike(contacts.lastName, `%${term}%`)
-          )
-        )
-        .limit(10);
-      
-      console.log(`[SEARCH] Found ${contactResults.length} contact matches`);
-      
-      // Combine and deduplicate
-      const allResults = [...accountResults, ...contactResults];
-      const uniqueResults = allResults.filter((account, index, self) => 
-        index === self.findIndex(a => a.id === account.id)
-      );
-      
-      console.log(`[SEARCH] Returning ${uniqueResults.length} unique results`);
-      res.json(uniqueResults.slice(0, 10));
+      console.log(`[SEARCH] Returning ${accountResults.length} results`);
+      res.json(accountResults.slice(0, 10));
     } catch (error) {
       console.error("[SEARCH ERROR] Account search error:", error);
       if (error instanceof Error) {
