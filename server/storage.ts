@@ -1,4 +1,4 @@
-import { accounts, customers, contacts, quotes, lineItems, groups, products, users, apiKeys, contractTemplates, pricingTables, productAccessories, quoteCoverPhotos, quoteProductRenderings, issueReports, type Account, type Customer, type Contact, type Quote, type LineItem, type Group, type Product, type User, type ApiKey, type ContractTemplate, type PricingTable, type ProductAccessory, type QuoteCoverPhoto, type QuoteProductRendering, type IssueReport, type InsertAccount, type InsertCustomer, type InsertContact, type InsertQuote, type InsertLineItem, type InsertGroup, type InsertProduct, type InsertUser, type InsertApiKey, type InsertContractTemplate, type InsertPricingTable, type InsertProductAccessory, type InsertQuoteCoverPhoto, type InsertQuoteProductRendering, type InsertIssueReport, type QuoteWithDetails, type ProductWithDetails } from "@shared/schema";
+import { accounts, customers, quotes, lineItems, groups, products, users, apiKeys, contractTemplates, pricingTables, productAccessories, quoteCoverPhotos, quoteProductRenderings, issueReports, type Account, type Customer, type Quote, type LineItem, type Group, type Product, type User, type ApiKey, type ContractTemplate, type PricingTable, type ProductAccessory, type QuoteCoverPhoto, type QuoteProductRendering, type IssueReport, type InsertAccount, type InsertCustomer, type InsertQuote, type InsertLineItem, type InsertGroup, type InsertProduct, type InsertUser, type InsertApiKey, type InsertContractTemplate, type InsertPricingTable, type InsertProductAccessory, type InsertQuoteCoverPhoto, type InsertQuoteProductRendering, type InsertIssueReport, type QuoteWithDetails, type ProductWithDetails } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, asc, inArray, sql, and, ne, or, ilike } from "drizzle-orm";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
@@ -67,14 +67,6 @@ export interface IStorage {
   createCustomer(customer: InsertCustomer, options?: { allowDuplicate?: boolean; updateIfExists?: boolean; createPrimaryContact?: boolean }): Promise<Customer>;
   updateCustomer(id: number, customer: Partial<InsertCustomer>): Promise<Customer | undefined>;
   
-  // Contact methods
-  getContact(id: number): Promise<Contact | undefined>;
-  getContactsByAccountId(accountId: number): Promise<Contact[]>;
-  createContact(contact: InsertContact): Promise<Contact>;
-  updateContact(id: number, contact: Partial<InsertContact>): Promise<Contact | undefined>;
-  deleteContact(id: number): Promise<boolean>;
-  getPrimaryContact(accountId: number): Promise<Contact | undefined>;
-
   // Quote methods
   getQuote(id: number): Promise<Quote | undefined>;
   getQuoteWithDetails(id: number): Promise<QuoteWithDetails | undefined>;
@@ -294,7 +286,6 @@ export class MemStorage {
       ...insertQuote,
       id,
       accountId: insertQuote.accountId || null, // Keep accountId as is
-      contactId: insertQuote.contactId || null, // Handle optional contactId
       dealStage: insertQuote.dealStage || "new_lead",
       projectName: insertQuote.projectName || null,
       projectAddress: insertQuote.projectAddress || null,
@@ -484,46 +475,8 @@ export class DatabaseStorage implements IStorage {
       
       console.log(`Account results: ${accountResults.length}`);
       
-      // Search through contacts and return their associated accounts
-      const contactResults = await db
-        .select({
-          id: accounts.id,
-          name: accounts.name,
-          email: accounts.email,
-          phone: accounts.phone,
-          company: accounts.company,
-          accountType: accounts.accountType,
-          paymentTerms: accounts.paymentTerms,
-          billingAddress: accounts.billingAddress,
-          firstName: accounts.firstName,
-          lastName: accounts.lastName,
-          secondaryContacts: accounts.secondaryContacts,
-          createdAt: accounts.createdAt,
-          updatedAt: accounts.updatedAt,
-        })
-        .from(contacts)
-        .innerJoin(accounts, eq(contacts.accountId, accounts.id))
-        .where(
-          or(
-            ilike(contacts.firstName, `%${term}%`),
-            ilike(contacts.lastName, `%${term}%`),
-            ilike(contacts.email, `%${term}%`)
-          )
-        )
-        .limit(10);
-      
-      console.log(`Contact results: ${contactResults.length}`);
-      
-      // Combine results and remove duplicates by account ID
-      const allResults = [...accountResults, ...contactResults];
-      const uniqueResults = allResults.filter((account, index, self) => 
-        index === self.findIndex(a => a.id === account.id)
-      );
-      
-      console.log(`Total unique results: ${uniqueResults.length}`);
-      
-      // Limit to 10 total results
-      return uniqueResults.slice(0, 10);
+      // Return account results only (contacts search removed)
+      return accountResults;
     } catch (error) {
       console.error("Search error:", error);
       throw error;
@@ -568,39 +521,12 @@ export class DatabaseStorage implements IStorage {
     }
     
     // No duplicate found or duplicates allowed, create new account
-    // Use transaction to create account and optionally primary contact atomically
-    const result = await db.transaction(async (tx) => {
-      const [account] = await tx
-        .insert(accounts)
-        .values(insertAccount)
-        .returning();
-      
-      // Create primary contact if requested (default true)
-      if (createPrimaryContact) {
-        // Extract first and last name from account name
-        const nameParts = insertAccount.name.trim().split(' ');
-        const firstName = nameParts[0] || '';
-        const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : '';
-        
-        const primaryContact = {
-          accountId: account.id,
-          firstName,
-          lastName: lastName || firstName, // If no last name, use first name
-          email: insertAccount.email,
-          phone: insertAccount.phone || null,
-          role: 'primary_contact',
-          isPrimary: true
-        };
-        
-        await tx.insert(contacts).values(primaryContact);
-        console.log(`Created primary contact for account ${account.id}`);
-      }
-      
-      return account;
-    });
+    const [account] = await db.insert(accounts)
+      .values(insertAccount)
+      .returning();
     
-    console.log(`Created new account ${result.id}`);
-    return result;
+    console.log(`Created new account ${account.id}`);
+    return account;
   }
 
   // Legacy method for backward compatibility
@@ -633,11 +559,6 @@ export class DatabaseStorage implements IStorage {
       secondaryContacts: accounts.secondaryContacts,
       createdAt: accounts.createdAt,
       updatedAt: accounts.updatedAt,
-      contactCount: sql<number>`
-        (SELECT COUNT(*)::int 
-         FROM contacts
-         WHERE contacts.account_id = accounts.id)
-      `,
       projectCount: sql<number>`
         (SELECT COUNT(*)::int
          FROM quotes
@@ -654,11 +575,6 @@ export class DatabaseStorage implements IStorage {
     const [account] = await db.select().from(accounts).where(eq(accounts.id, id));
     if (!account) return undefined;
 
-    // Get all contacts for this account
-    const accountContacts = await db.select().from(contacts)
-      .where(eq(contacts.accountId, id))
-      .orderBy(desc(contacts.isPrimary), contacts.firstName);
-
     // Get all quotes/projects for this account
     const accountQuotes = await db.select().from(quotes)
       .where(eq(quotes.accountId, id))
@@ -666,10 +582,8 @@ export class DatabaseStorage implements IStorage {
 
     return {
       ...account,
-      contacts: accountContacts,
       quotes: accountQuotes,
-      projectCount: accountQuotes.length,
-      contactCount: accountContacts.length
+      projectCount: accountQuotes.length
     };
   }
 
@@ -680,10 +594,7 @@ export class DatabaseStorage implements IStorage {
       throw new Error("Cannot delete account with existing quotes");
     }
     
-    // Delete contacts first
-    await db.delete(contacts).where(eq(contacts.accountId, id));
-    
-    // Then delete the account
+    // Delete the account
     const result = await db.delete(accounts).where(eq(accounts.id, id));
     return (result.rowCount || 0) > 0;
   }
@@ -728,44 +639,6 @@ export class DatabaseStorage implements IStorage {
     return this.updateAccount(id, customerData as Partial<InsertAccount>);
   }
 
-  // Contact methods
-  async getContact(id: number): Promise<Contact | undefined> {
-    const [contact] = await db.select().from(contacts).where(eq(contacts.id, id));
-    return contact || undefined;
-  }
-
-  async getContactsByAccountId(accountId: number): Promise<Contact[]> {
-    const results = await db.select().from(contacts).where(eq(contacts.accountId, accountId));
-    return results;
-  }
-
-  async createContact(contact: InsertContact): Promise<Contact> {
-    const [newContact] = await db.insert(contacts).values(contact).returning();
-    return newContact;
-  }
-
-  async updateContact(id: number, contact: Partial<InsertContact>): Promise<Contact | undefined> {
-    const [updated] = await db.update(contacts)
-      .set({...contact, updatedAt: new Date()})
-      .where(eq(contacts.id, id))
-      .returning();
-    return updated || undefined;
-  }
-
-  async deleteContact(id: number): Promise<boolean> {
-    const result = await db.delete(contacts).where(eq(contacts.id, id));
-    return result.rowCount! > 0;
-  }
-
-  async getPrimaryContact(accountId: number): Promise<Contact | undefined> {
-    const [contact] = await db.select().from(contacts)
-      .where(and(
-        eq(contacts.accountId, accountId),
-        eq(contacts.isPrimary, true)
-      ));
-    return contact || undefined;
-  }
-
   async getQuote(id: number): Promise<Quote | undefined> {
     const [quote] = await db.select().from(quotes).where(eq(quotes.id, id));
     return quote || undefined;
@@ -777,14 +650,10 @@ export class DatabaseStorage implements IStorage {
 
     const accountIdToUse = quote.accountId;
     let account = undefined;
-    let projectContacts: any[] = [];
     
-    // Get account and contacts if accountId exists
+    // Get account if accountId exists
     if (accountIdToUse) {
       [account] = await db.select().from(accounts).where(eq(accounts.id, accountIdToUse));
-      if (account) {
-        projectContacts = await db.select().from(contacts).where(eq(contacts.accountId, accountIdToUse));
-      }
     }
 
     // Join line items with products to get manufacturer data
@@ -848,7 +717,6 @@ export class DatabaseStorage implements IStorage {
       customer: account, // Legacy alias for backward compatibility
       lineItems: quoteLineItems,
       contractTemplate,
-      contacts: projectContacts,
     };
   }
 
@@ -859,14 +727,10 @@ export class DatabaseStorage implements IStorage {
     for (const quote of allQuotes) {
       const accountIdToUse = quote.accountId;
       let account = null;
-      let projectContacts: any[] = [];
       
-      // Get account and contacts if accountId exists
+      // Get account if accountId exists
       if (accountIdToUse) {
         [account] = await db.select().from(accounts).where(eq(accounts.id, accountIdToUse));
-        if (account) {
-          projectContacts = await db.select().from(contacts).where(eq(contacts.accountId, accountIdToUse));
-        }
       }
       
       // Process quote even if no account (for unassigned quotes)
@@ -931,7 +795,6 @@ export class DatabaseStorage implements IStorage {
         customer: account || undefined, // Legacy alias for backward compatibility
         lineItems: quoteLineItems,
         contractTemplate,
-        contacts: projectContacts,
       });
     }
 
@@ -977,53 +840,13 @@ export class DatabaseStorage implements IStorage {
         }
         
         // Try to insert the quote
-        // Handle contactId to accountId mapping and set legacy customerId
-        let resolvedAccountId = insertQuote.accountId;
+        const resolvedAccountId = insertQuote.accountId || null;
         
-        // If both accountId and contactId are provided, validate consistency
-        if (insertQuote.accountId && insertQuote.contactId) {
-          const [contact] = await db
-            .select({ accountId: contacts.accountId })
-            .from(contacts)
-            .where(eq(contacts.id, insertQuote.contactId))
-            .limit(1);
-          
-          if (!contact) {
-            throw new Error(`Contact with ID ${insertQuote.contactId} not found`);
-          }
-          
-          if (contact.accountId !== insertQuote.accountId) {
-            throw new Error(`Contact ${insertQuote.contactId} belongs to account ${contact.accountId}, but accountId ${insertQuote.accountId} was provided. These must match.`);
-          }
-          
-          resolvedAccountId = insertQuote.accountId;
-        }
-        // If contactId provided but no accountId, fetch contact to derive accountId
-        else if (insertQuote.contactId && !resolvedAccountId) {
-          const [contact] = await db
-            .select({ accountId: contacts.accountId })
-            .from(contacts)
-            .where(eq(contacts.id, insertQuote.contactId))
-            .limit(1);
-          
-          if (!contact) {
-            throw new Error(`Contact with ID ${insertQuote.contactId} not found`);
-          }
-          
-          resolvedAccountId = contact.accountId;
-          console.log(`Resolved accountId ${resolvedAccountId} from contactId ${insertQuote.contactId}`);
-        }
-        // If only accountId provided, use it directly
-        else if (insertQuote.accountId) {
-          resolvedAccountId = insertQuote.accountId;
-        }
-        
-        // Handle unassigned quotes (no account or contact)
+        // Handle unassigned quotes (no account)
         const quoteToInsert: any = {
           ...insertQuote,
           customerId: resolvedAccountId || 0, // Use resolved accountId or default to 0 for unassigned quotes
-          accountId: resolvedAccountId || null, // Set accountId if available
-          contactId: insertQuote.contactId || null, // Include contactId if provided
+          accountId: resolvedAccountId, // Set accountId if available
         };
         
         const [quote] = await db
