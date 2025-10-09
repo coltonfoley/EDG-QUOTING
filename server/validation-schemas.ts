@@ -302,6 +302,7 @@ export const updateQuoteSchema = z.object({
       return !isNaN(num) && num >= 0 && num <= 1000000;
     }, "Shipping must be between 0 and 1,000,000")
     .optional(),
+  isShippingTaxable: z.boolean().optional(),
   contractTemplateId: z.number().int().positive().optional().nullable(),
   customContractTerms: z.string().max(10000, "Custom contract terms are too long").optional().nullable()
 }).refine((data) => {
