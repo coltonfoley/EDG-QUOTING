@@ -40,6 +40,7 @@ export const apiKeys = pgTable("api_keys", {
 ]);
 
 // Accounts table (formerly customers) - represents business entities
+// Enhanced with client fields (firstName, lastName) to support unified client model
 export const accounts = pgTable("accounts", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(), // Company or individual name
@@ -49,6 +50,10 @@ export const accounts = pgTable("accounts", {
   accountType: text("account_type").notNull().default("homeowner"), // general_contractor, homeowner, commercial
   paymentTerms: text("payment_terms").default("net_30"), // net_30, net_60, due_on_receipt, etc.
   billingAddress: text("billing_address"),
+  // Client-specific fields for unified model
+  firstName: text("first_name"), // Individual's first name (optional for company-only accounts)
+  lastName: text("last_name"), // Individual's last name (optional for company-only accounts)
+  secondaryContacts: jsonb("secondary_contacts"), // Array of additional contact info for multi-person accounts
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => [
@@ -57,10 +62,13 @@ export const accounts = pgTable("accounts", {
   index("idx_accounts_type").on(table.accountType),
 ]);
 
-// Legacy alias for backward compatibility
-export const customers = accounts;
+// Aliases for different conceptual uses
+export const customers = accounts; // Legacy alias for backward compatibility
+export const clients = accounts; // New unified client model alias
 
 // Contacts table - individuals associated with accounts
+// NOTE: This table is being phased out in favor of the unified client model (accounts table with firstName/lastName)
+// Kept for backward compatibility and to preserve existing contact data
 export const contacts = pgTable("contacts", {
   id: serial("id").primaryKey(),
   accountId: integer("account_id").notNull(),
@@ -304,6 +312,10 @@ export const insertAccountSchema = createInsertSchema(accounts).omit({
   ]).default("homeowner"),
   paymentTerms: z.string().optional().nullable(),
   billingAddress: z.string().optional().nullable(),
+  // Client-specific fields for unified model
+  firstName: z.string().optional().nullable(),
+  lastName: z.string().optional().nullable(),
+  secondaryContacts: z.any().optional().nullable(), // JSONB field for additional contacts
 });
 
 export const insertContactSchema = createInsertSchema(contacts).omit({
