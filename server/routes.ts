@@ -1379,6 +1379,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Helper function to parse name into firstName and lastName
+  function parseFullName(fullName: string): { firstName: string; lastName: string } {
+    const trimmed = fullName.trim();
+    if (!trimmed) {
+      return { firstName: '', lastName: '' };
+    }
+    
+    // Split by spaces and handle various name formats
+    const parts = trimmed.split(/\s+/);
+    if (parts.length === 1) {
+      // Single name - use as firstName
+      return { firstName: parts[0], lastName: '' };
+    } else if (parts.length === 2) {
+      // Two names - firstName lastName
+      return { firstName: parts[0], lastName: parts[1] };
+    } else {
+      // Multiple names - first part is firstName, rest is lastName
+      return { firstName: parts[0], lastName: parts.slice(1).join(' ') };
+    }
+  }
+
   // Helper function to handle customer attachment based on attachCustomer behavior
   async function handleCustomerAttachment(
     customerData: { name?: string | null; email?: string | null; phone?: string | null; company?: string | null; address?: string | null },
@@ -1416,9 +1437,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
 
     if (attachCustomer === 'auto') {
-      // Create if no match (old behavior)
-      const accountData = {
+      // Create new client with integrated contact info (unified model)
+      const { firstName, lastName } = parseFullName(customerData.name || '');
+      
+      const clientData = {
         name: customerData.name || '',
+        firstName: firstName || undefined,
+        lastName: lastName || undefined,
         email: customerData.email || `import_${Date.now()}@example.com`,
         phone: customerData.phone || '',
         company: customerData.company || undefined,
@@ -1427,9 +1452,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         billingAddress: customerData.address || undefined,
       };
 
-      console.log('Creating new account for import:', accountData);
-      const newAccount = await storage.createAccount(accountData);
-      return { accountId: newAccount.id, wasCreated: true };
+      console.log('Creating new client for import (unified model):', clientData);
+      const newClient = await storage.createClient(clientData, {
+        allowDuplicate: false,
+        updateIfExists: true
+      });
+      return { accountId: newClient.id, wasCreated: true };
     }
 
     return { accountId: null, wasCreated: false };
