@@ -90,6 +90,7 @@ export const quotes = pgTable("quotes", {
   taxRate: decimal("tax_rate", { precision: 5, scale: 2 }).default("0"),
   discount: decimal("discount", { precision: 5, scale: 2 }).default("0"),
   shipping: decimal("shipping", { precision: 10, scale: 2 }).default("0"),
+  isShippingTaxable: boolean("is_shipping_taxable").default(true), // whether shipping is subject to sales tax
   dealStage: text("deal_stage").notNull().default("new_lead"), // new_lead, qualifying, consultation_scheduled, building_estimate, quote_sent, closed_won, closed_lost, on_hold
   lostReason: text("lost_reason"), // price, timeline, competitor, no_budget, etc.
   // Contract fields
@@ -344,6 +345,7 @@ export const insertQuoteSchema = createInsertSchema(quotes).omit({
   taxRate: z.union([z.string(), z.number(), z.null()]).transform(val => val === null ? "0" : (typeof val === 'string' ? val : val.toString())),
   discount: z.union([z.string(), z.number(), z.null()]).transform(val => val === null ? "0" : (typeof val === 'string' ? val : val.toString())),
   shipping: z.union([z.string(), z.number(), z.null()]).transform(val => val === null ? "0" : (typeof val === 'string' ? val : val.toString())),
+  isShippingTaxable: z.boolean().default(true),
   projectName: z.union([z.string(), z.null()]).transform(val => val === null ? "" : val).optional(),
   projectAddress: z.union([z.string(), z.null()]).transform(val => val === null ? "" : val).optional(),
   jobsiteAddress: z.union([z.string(), z.null()]).transform(val => val === null ? "" : val).optional(),
