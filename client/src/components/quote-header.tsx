@@ -20,13 +20,12 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { cn } from "@/lib/utils";
 import { debounce } from "lodash";
 import { DEAL_STAGES } from "@shared/dealStageConstants";
-import { ContactComboboxWithCreate } from "@/components/contact-combobox-with-create";
-import { AccountComboboxWithCreate } from "@/components/account-combobox-with-create";
+import { ClientComboboxWithCreate } from "@/components/client-combobox-with-create";
 
 const quoteFormSchema = insertQuoteSchema.extend({
   quoteNumber: z.string().optional(), // Auto-generated on server
   accountId: z.number().nullable().optional(),
-  contactId: z.number().nullable().optional(),
+  contactId: z.number().nullable().optional(), // Keep for backward compatibility with existing quotes
   dealStage: z.string().default("new_lead"),
 });
 
@@ -61,7 +60,7 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
       discount: quote?.discount || "0",
       shipping: quote?.shipping || "0",
       accountId: quote?.accountId ?? null,
-      contactId: quote?.contactId ?? null,
+      contactId: quote?.contactId ?? null, // Preserve existing contactId for backward compatibility
     },
   });
 
@@ -80,7 +79,7 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
         discount: quote.discount || "0",
         shipping: quote.shipping || "0",
         accountId: quote.accountId ?? null,
-        contactId: quote.contactId ?? null,
+        contactId: quote.contactId ?? null, // Preserve existing contactId for backward compatibility
       });
     }
   }, [quote, form]);
@@ -203,74 +202,48 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
       <CardContent className="p-6">
         <Form {...form}>
           <form id="quote-form" onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-lg font-semibold text-charcoal">Account Information</h3>
-                  <span className="text-sm text-gray-500">(Optional)</span>
-                </div>
-                
-                <div className="text-sm text-gray-600 mb-4">
-                  Account can be linked later if needed. Focus on getting the quote created quickly.
-                </div>
-                
-                <div className="space-y-3">
-                  <FormField
-                    control={form.control}
-                    name="accountId"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Account (Optional)</FormLabel>
-                        <FormControl>
-                          <AccountComboboxWithCreate
-                            value={field.value}
-                            onValueChange={field.onChange}
-                            placeholder="Search accounts or create new..."
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <div className="text-xs text-gray-500 bg-gray-50 p-3 rounded-md">
-                    <strong>Tip:</strong> You can create quotes quickly without selecting an account. 
-                    Accounts can be linked later when managing client relationships.
-                  </div>
-                </div>
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-lg font-semibold text-charcoal">Client Information</h3>
+                <span className="text-sm text-gray-500">(Optional)</span>
               </div>
               
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-lg font-semibold text-charcoal">Contact Information</h3>
-                  <span className="text-sm text-gray-500">(Optional)</span>
-                </div>
-                
-                <div className="text-sm text-gray-600 mb-4">
-                  Contact can be linked later if needed. Focus on getting the quote created quickly.
-                </div>
-                
-                <div className="space-y-3">
-                  <FormField
-                    control={form.control}
-                    name="contactId"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Contact (Optional)</FormLabel>
-                        <FormControl>
-                          <ContactComboboxWithCreate
-                            value={field.value}
-                            onValueChange={field.onChange}
-                            placeholder="Search contacts or create new..."
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <div className="text-xs text-gray-500 bg-gray-50 p-3 rounded-md">
-                    <strong>Tip:</strong> You can create quotes quickly without selecting a contact. 
-                    Contacts can be linked later when managing client relationships.
-                  </div>
+              <div className="text-sm text-gray-600 mb-4">
+                Client can be linked later if needed. Focus on getting the quote created quickly.
+              </div>
+              
+              <div className="space-y-3">
+                <FormField
+                  control={form.control}
+                  name="accountId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Client (Optional)</FormLabel>
+                      <FormControl>
+                        <ClientComboboxWithCreate
+                          value={field.value}
+                          onValueChange={field.onChange}
+                          placeholder="Search clients or create new..."
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="contactId"
+                  render={({ field }) => (
+                    <FormItem className="hidden">
+                      <FormControl>
+                        <input type="hidden" {...field} value={field.value ?? ''} />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+                <div className="text-xs text-gray-500 bg-gray-50 p-3 rounded-md">
+                  <strong>Tip:</strong> You can create quotes quickly without selecting a client. 
+                  Clients can be linked later when managing relationships.
                 </div>
               </div>
             </div>
