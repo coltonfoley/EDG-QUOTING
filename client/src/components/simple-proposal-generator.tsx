@@ -1261,16 +1261,33 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         pdf.setFont("Barlow", "normal");
         pdf.setFontSize(cfg.bodyFontSizePt);
 
-        const drawField = (label: string, lineWidthMm: number) => {
+        const drawField = (label: string, lineWidthMm: number, value?: string, imageData?: string) => {
           const labelH = cfg.bodyFontSizePt * 0.352778 * 1.15;
           pdf.text(label, margin, yPosition + labelH);
           // label -> line gap
           const lineY = yPosition + labelH + cfg.labelGap;
+          
+          // Draw signature image if available (for Signature field)
+          if (imageData && label === "Signature:") {
+            pdf.addImage(imageData, 'PNG', margin + 28, lineY - 8, 60, 15);
+          }
+          
+          // Draw text value if available
+          if (value) {
+            pdf.text(value, margin + 30, lineY - 1);
+          }
+          
           pdf.line(margin + 28, lineY, margin + 28 + lineWidthMm, lineY); // shift 28mm to leave label
           yPosition = lineY + cfg.fieldGap;
         };
 
-        cfg.fields.forEach(f => drawField(f.label, f.lineWidthMm));
+        // Draw fields with signature data if available
+        const clientSig = quote.clientSignatureData as { type: 'draw' | 'type', imageData: string, name: string } | undefined;
+        const signedDate = quote.clientSignedAt ? new Date(quote.clientSignedAt).toLocaleDateString() : undefined;
+        
+        drawField("Signature:", cfg.fields[0].lineWidthMm, undefined, clientSig?.imageData);
+        drawField("Date:", cfg.fields[1].lineWidthMm, signedDate);
+        drawField("Print Name:", cfg.fields[2].lineWidthMm, clientSig?.name);
 
         yPosition += cfg.bottomPadding;
       };

@@ -106,6 +106,7 @@ interface DrawContractSectionOpts {
   contentW: number;
   pageW: number;
   pageH: number;
+  quote?: any; // For signature data
 }
 
 interface DrawBrandedBackPageOpts {
@@ -232,7 +233,14 @@ function calculateInvestmentTotals(quote: any) {
   return { subtotal, taxableSubtotal, discountAmount, tax, shipping, total };
 }
 
-function drawAcceptanceBlock(pdf: jsPDF, x: number, y: number, width: number): void {
+function drawAcceptanceBlock(
+  pdf: jsPDF, 
+  x: number, 
+  y: number, 
+  width: number,
+  signatureData?: { type: 'draw' | 'type', imageData: string, name: string } | null,
+  signedDate?: Date | null
+): void {
   pdf.setFont('Barlow-SemiBold', 'normal');
   pdf.setFontSize(14);
   pdf.text('CLIENT ACCEPTANCE', x, y);
@@ -241,21 +249,43 @@ function drawAcceptanceBlock(pdf: jsPDF, x: number, y: number, width: number): v
   pdf.setFont('Barlow-Regular', 'normal');
   pdf.setFontSize(11);
 
-  const fields = [
-    { label: 'Signature', lineWidth: width * 0.6 },
-    { label: 'Print Name', lineWidth: width * 0.6 },
-    { label: 'Date', lineWidth: 50 },
-  ];
+  // Signature field
+  pdf.text('Signature', x, y);
+  y += 3;
+  if (signatureData?.imageData) {
+    // Draw signature image
+    pdf.addImage(signatureData.imageData, 'PNG', x, y - 10, 60, 15);
+  }
+  pdf.line(x, y, x + width * 0.6, y);
+  y += 12;
 
-  fields.forEach(field => {
-    pdf.text(field.label, x, y);
-    y += 3;
-    pdf.line(x, y, x + field.lineWidth, y);
-    y += 12;
-  });
+  // Print Name field
+  pdf.text('Print Name', x, y);
+  y += 3;
+  if (signatureData?.name) {
+    pdf.text(signatureData.name, x + 2, y - 1);
+  }
+  pdf.line(x, y, x + width * 0.6, y);
+  y += 12;
+
+  // Date field
+  pdf.text('Date', x, y);
+  y += 3;
+  if (signedDate) {
+    pdf.text(signedDate.toLocaleDateString(), x + 2, y - 1);
+  }
+  pdf.line(x, y, x + 50, y);
+  y += 12;
 }
 
-function drawCompanyAcceptanceBlock(pdf: jsPDF, x: number, y: number, width: number): void {
+function drawCompanyAcceptanceBlock(
+  pdf: jsPDF, 
+  x: number, 
+  y: number, 
+  width: number,
+  signatureData?: { type: 'draw' | 'type', imageData: string, name: string } | null,
+  signedDate?: Date | null
+): void {
   pdf.setFont('Barlow-SemiBold', 'normal');
   pdf.setFontSize(14);
   pdf.text('EDG PATIO & SHADE ACCEPTANCE', x, y);
@@ -264,21 +294,43 @@ function drawCompanyAcceptanceBlock(pdf: jsPDF, x: number, y: number, width: num
   pdf.setFont('Barlow-Regular', 'normal');
   pdf.setFontSize(11);
 
-  const fields = [
-    { label: 'Signature', lineWidth: width * 0.6 },
-    { label: 'Print Name', lineWidth: width * 0.6 },
-    { label: 'Date', lineWidth: 50 },
-  ];
+  // Signature field
+  pdf.text('Signature', x, y);
+  y += 3;
+  if (signatureData?.imageData) {
+    // Draw signature image
+    pdf.addImage(signatureData.imageData, 'PNG', x, y - 10, 60, 15);
+  }
+  pdf.line(x, y, x + width * 0.6, y);
+  y += 12;
 
-  fields.forEach(field => {
-    pdf.text(field.label, x, y);
-    y += 3;
-    pdf.line(x, y, x + field.lineWidth, y);
-    y += 12;
-  });
+  // Print Name field
+  pdf.text('Print Name', x, y);
+  y += 3;
+  if (signatureData?.name) {
+    pdf.text(signatureData.name, x + 2, y - 1);
+  }
+  pdf.line(x, y, x + width * 0.6, y);
+  y += 12;
+
+  // Date field
+  pdf.text('Date', x, y);
+  y += 3;
+  if (signedDate) {
+    pdf.text(signedDate.toLocaleDateString(), x + 2, y - 1);
+  }
+  pdf.line(x, y, x + 50, y);
+  y += 12;
 }
 
-function drawCompactAcceptanceBlock(pdf: jsPDF, x: number, y: number, width: number): void {
+function drawCompactAcceptanceBlock(
+  pdf: jsPDF, 
+  x: number, 
+  y: number, 
+  width: number,
+  signatureData?: { type: 'draw' | 'type', imageData: string, name: string } | null,
+  signedDate?: Date | null
+): void {
   pdf.setFont('Barlow-SemiBold', 'normal');
   pdf.setFontSize(11);
   pdf.text('CLIENT ACCEPTANCE', x, y);
@@ -287,21 +339,43 @@ function drawCompactAcceptanceBlock(pdf: jsPDF, x: number, y: number, width: num
   pdf.setFont('Barlow-Regular', 'normal');
   pdf.setFontSize(9);
 
-  const fields = [
-    { label: 'Signature', lineWidth: width * 0.8 },
-    { label: 'Print Name', lineWidth: width * 0.8 },
-    { label: 'Date', lineWidth: 40 },
-  ];
+  // Signature field
+  pdf.text('Signature', x, y);
+  y += 2;
+  if (signatureData?.imageData) {
+    // Draw signature image (scaled down for compact mode)
+    pdf.addImage(signatureData.imageData, 'PNG', x, y - 8, 40, 10);
+  }
+  pdf.line(x, y, x + width * 0.8, y);
+  y += 8;
 
-  fields.forEach(field => {
-    pdf.text(field.label, x, y);
-    y += 2;
-    pdf.line(x, y, x + field.lineWidth, y);
-    y += 8;
-  });
+  // Print Name field
+  pdf.text('Print Name', x, y);
+  y += 2;
+  if (signatureData?.name) {
+    pdf.text(signatureData.name, x + 2, y - 1);
+  }
+  pdf.line(x, y, x + width * 0.8, y);
+  y += 8;
+
+  // Date field
+  pdf.text('Date', x, y);
+  y += 2;
+  if (signedDate) {
+    pdf.text(signedDate.toLocaleDateString(), x + 2, y - 1);
+  }
+  pdf.line(x, y, x + 40, y);
+  y += 8;
 }
 
-function drawCompactCompanyAcceptanceBlock(pdf: jsPDF, x: number, y: number, width: number): void {
+function drawCompactCompanyAcceptanceBlock(
+  pdf: jsPDF, 
+  x: number, 
+  y: number, 
+  width: number,
+  signatureData?: { type: 'draw' | 'type', imageData: string, name: string } | null,
+  signedDate?: Date | null
+): void {
   pdf.setFont('Barlow-SemiBold', 'normal');
   pdf.setFontSize(11);
   pdf.text('EDG ACCEPTANCE', x, y);
@@ -310,18 +384,33 @@ function drawCompactCompanyAcceptanceBlock(pdf: jsPDF, x: number, y: number, wid
   pdf.setFont('Barlow-Regular', 'normal');
   pdf.setFontSize(9);
 
-  const fields = [
-    { label: 'Signature', lineWidth: width * 0.8 },
-    { label: 'Print Name', lineWidth: width * 0.8 },
-    { label: 'Date', lineWidth: 40 },
-  ];
+  // Signature field
+  pdf.text('Signature', x, y);
+  y += 2;
+  if (signatureData?.imageData) {
+    // Draw signature image (scaled down for compact mode)
+    pdf.addImage(signatureData.imageData, 'PNG', x, y - 8, 40, 10);
+  }
+  pdf.line(x, y, x + width * 0.8, y);
+  y += 8;
 
-  fields.forEach(field => {
-    pdf.text(field.label, x, y);
-    y += 2;
-    pdf.line(x, y, x + field.lineWidth, y);
-    y += 8;
-  });
+  // Print Name field
+  pdf.text('Print Name', x, y);
+  y += 2;
+  if (signatureData?.name) {
+    pdf.text(signatureData.name, x + 2, y - 1);
+  }
+  pdf.line(x, y, x + width * 0.8, y);
+  y += 8;
+
+  // Date field
+  pdf.text('Date', x, y);
+  y += 2;
+  if (signedDate) {
+    pdf.text(signedDate.toLocaleDateString(), x + 2, y - 1);
+  }
+  pdf.line(x, y, x + 40, y);
+  y += 8;
 }
 
 export function drawRenderingsPages(pdf: jsPDF, opts: DrawRenderingsPagesOpts): void {
@@ -577,7 +666,14 @@ export function drawLineItemsSection(pdf: jsPDF, opts: DrawLineItemsSectionOpts)
     }
   }
   
-  drawAcceptanceBlock(pdf, margin, signatureY, contentW);
+  drawAcceptanceBlock(
+    pdf, 
+    margin, 
+    signatureY, 
+    contentW,
+    quote.clientSignatureData,
+    quote.clientSignedAt ? new Date(quote.clientSignedAt) : null
+  );
 
   // Add disclaimer text above the footer
   const disclaimerY = pageH - 25 - 5; // Footer height + gap
@@ -593,7 +689,7 @@ export function drawLineItemsSection(pdf: jsPDF, opts: DrawLineItemsSectionOpts)
 }
 
 export function drawContractSection(pdf: jsPDF, opts: DrawContractSectionOpts): void {
-  const { contractText, logoDataUrl, company, margin, contentW, pageW, pageH } = opts;
+  const { contractText, logoDataUrl, company, margin, contentW, pageW, pageH, quote } = opts;
 
   if (!contractText || contractText.trim() === '') return;
 
@@ -674,8 +770,22 @@ export function drawContractSection(pdf: jsPDF, opts: DrawContractSectionOpts): 
   }
 
   // Draw both signatures side by side
-  drawCompactAcceptanceBlock(pdf, col1X, y, signatureBlockWidth);
-  drawCompactCompanyAcceptanceBlock(pdf, col2X, y, signatureBlockWidth);
+  drawCompactAcceptanceBlock(
+    pdf, 
+    col1X, 
+    y, 
+    signatureBlockWidth,
+    quote?.clientSignatureData,
+    quote?.clientSignedAt ? new Date(quote.clientSignedAt) : null
+  );
+  drawCompactCompanyAcceptanceBlock(
+    pdf, 
+    col2X, 
+    y, 
+    signatureBlockWidth,
+    quote?.companySignatureData,
+    quote?.companySignedAt ? new Date(quote.companySignedAt) : null
+  );
 
   // Add branded footer to the last page (no initials since signatures are here)
   drawBrandedFooter({ pdf, logoDataUrl, company, pageW, pageH, margin, showInitials: false });
