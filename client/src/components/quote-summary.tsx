@@ -8,7 +8,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { FileText, Bookmark, Plus, Eye, Send, Mail, CheckCircle, AlertCircle, Clock } from "lucide-react";
+import { FileText, Bookmark, Plus, Eye, Send, Mail, CheckCircle, AlertCircle, Clock, Link2, Copy } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { formatCurrency, calculateQuoteTotals } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import type { QuoteWithDetails, ContractTemplate } from "@shared/schema";
@@ -25,6 +27,8 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
   const [localShipping, setLocalShipping] = useState<string>("");
   const [localNotes, setLocalNotes] = useState<string>("");
   const [localCustomContractTerms, setLocalCustomContractTerms] = useState<string>("");
+  const [showSigningLinkDialog, setShowSigningLinkDialog] = useState(false);
+  const [signingLink, setSigningLink] = useState<string>("");
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -60,6 +64,71 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
     },
   });
 
+  // E-signature toggle mutation
+  const toggleESignatureMutation = useMutation({
+    mutationFn: async (enabled: boolean) => {
+      const response = await apiRequest("PUT", `/api/quotes/${quote.id}`, { 
+        enableESignature: enabled 
+      });
+      return response.json();
+    },
+    onSuccess: (updatedQuote, enabled) => {
+      toast({ 
+        title: enabled ? "E-signature enabled" : "E-signature disabled",
+        description: enabled ? "You can now send this quote for digital signature" : "Digital signature has been disabled for this quote"
+      });
+      
+      queryClient.setQueryData([`/api/quotes/${quote.id}`], (oldData: any) => {
+        if (!oldData) return oldData;
+        return { ...oldData, ...updatedQuote };
+      });
+    },
+    onError: () => {
+      toast({ 
+        title: "Error", 
+        description: "Failed to update e-signature setting", 
+        variant: "destructive" 
+      });
+    },
+  });
+
+  // Generate signing link mutation
+  const generateSigningLinkMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("POST", `/api/quotes/${quote.id}/enable-esignature`, {});
+      return response.json();
+    },
+    onSuccess: (data) => {
+      const link = `${window.location.origin}/sign/${data.token}`;
+      setSigningLink(link);
+      setShowSigningLinkDialog(true);
+      toast({ 
+        title: "Signing link generated",
+        description: "Share this link with the client to sign the quote"
+      });
+      
+      // Invalidate query to refetch with updated data
+      queryClient.invalidateQueries({ 
+        queryKey: [`/api/quotes/${quote.id}`] 
+      });
+    },
+    onError: () => {
+      toast({ 
+        title: "Error", 
+        description: "Failed to generate signing link", 
+        variant: "destructive" 
+      });
+    },
+  });
+
+  const copySigningLink = () => {
+    navigator.clipboard.writeText(signingLink);
+    toast({ 
+      title: "Copied!",
+      description: "Signing link copied to clipboard"
+    });
+  };
+
   const totals = calculateQuoteTotals(
     quote.lineItems.map(item => ({
       quantity: item.quantity,
@@ -75,7 +144,8 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
   );
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       {/* Additional Options */}
       <div className="lg:col-span-2">
         <Card>
@@ -335,6 +405,95 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
           </CardContent>
         </Card>
 
+        {/* E-Signature Settings */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Electronic Signature</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label htmlFor="enable-esignature" className="text-sm font-medium">
+                  Enable E-Signature
+                </Label>
+                <p className="text-xs text-gray-500">
+                  Allow clients to sign digitally
+                </p>
+              </div>
+              <Switch
+                id="enable-esignature"
+                data-testid="switch-enable-esignature"
+                checked={quote.enableESignature ?? false}
+                onCheckedChange={(checked) => toggleESignatureMutation.mutate(checked)}
+                disabled={toggleESignatureMutation.isPending}
+              />
+            </div>
+
+            {quote.enableESignature && (
+              <>
+                {/* Signature Status Display */}
+                {quote.clientSignedAt && quote.companySignedAt ? (
+                  <Alert className="border-green-200 bg-green-50">
+                    <CheckCircle className="h-4 w-4 text-green-600" />
+                    <AlertDescription className="text-green-800">
+                      <strong>Fully Signed</strong>
+                      <span className="block mt-1 text-sm">
+                        Client: {new Date(quote.clientSignedAt).toLocaleString()}
+                      </span>
+                      <span className="block text-sm">
+                        Company: {new Date(quote.companySignedAt).toLocaleString()}
+                      </span>
+                    </AlertDescription>
+                  </Alert>
+                ) : quote.clientSignedAt ? (
+                  <Alert className="border-blue-200 bg-blue-50">
+                    <CheckCircle className="h-4 w-4 text-blue-600" />
+                    <AlertDescription className="text-blue-800">
+                      <strong>Client Signed</strong>
+                      <span className="block mt-1 text-sm">
+                        Signed on {new Date(quote.clientSignedAt).toLocaleString()}
+                      </span>
+                    </AlertDescription>
+                  </Alert>
+                ) : quote.companySignedAt ? (
+                  <Alert className="border-purple-200 bg-purple-50">
+                    <CheckCircle className="h-4 w-4 text-purple-600" />
+                    <AlertDescription className="text-purple-800">
+                      <strong>Company Signed</strong>
+                      <span className="block mt-1 text-sm">
+                        Signed on {new Date(quote.companySignedAt).toLocaleString()}
+                      </span>
+                      <span className="block text-sm text-purple-600">
+                        Waiting for client signature
+                      </span>
+                    </AlertDescription>
+                  </Alert>
+                ) : quote.signingToken ? (
+                  <Alert className="border-yellow-200 bg-yellow-50">
+                    <Clock className="h-4 w-4 text-yellow-600" />
+                    <AlertDescription className="text-yellow-800">
+                      <strong>Pending Signature</strong>
+                      <span className="block mt-1 text-sm">
+                        Signing link is active, waiting for signature
+                      </span>
+                    </AlertDescription>
+                  </Alert>
+                ) : null}
+
+                <Button
+                  onClick={() => generateSigningLinkMutation.mutate()}
+                  disabled={generateSigningLinkMutation.isPending || !!(quote.clientSignedAt && quote.companySignedAt)}
+                  className="w-full"
+                  data-testid="button-send-for-signature"
+                >
+                  <Link2 className="mr-2 h-4 w-4" />
+                  {quote.signingToken ? 'Regenerate Signing Link' : 'Generate Signing Link'}
+                </Button>
+              </>
+            )}
+          </CardContent>
+        </Card>
+
         {/* Action Buttons */}
         <div className="space-y-3">
 
@@ -350,6 +509,51 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
         </div>
       </div>
 
-    </div>
+      {/* Signing Link Dialog */}
+      <Dialog open={showSigningLinkDialog} onOpenChange={setShowSigningLinkDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Signing Link Generated</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <Alert>
+              <AlertDescription>
+                Share this link with the client to sign the quote electronically
+              </AlertDescription>
+            </Alert>
+            
+            <div className="space-y-2">
+              <Label>Signing Link</Label>
+              <div className="flex gap-2">
+                <Input
+                  value={signingLink}
+                  readOnly
+                  data-testid="input-signing-link"
+                  className="font-mono text-sm"
+                />
+                <Button
+                  onClick={copySigningLink}
+                  variant="outline"
+                  data-testid="button-copy-signing-link"
+                >
+                  <Copy className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+
+            <div className="pt-4">
+              <Button
+                onClick={() => setShowSigningLinkDialog(false)}
+                className="w-full"
+                data-testid="button-close-dialog"
+              >
+                Done
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+      </div>
+    </>
   );
 }
