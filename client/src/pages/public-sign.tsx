@@ -20,16 +20,8 @@ interface SigningQuoteData {
   id: number;
   quoteNumber: string | null;
   projectName: string | null;
-  status: string | null;
-  total: number | null;
-  customer?: {
-    id: number;
-    name: string | null;
-  } | null;
-  account?: {
-    id: number;
-    name: string | null;
-  } | null;
+  projectAddress: string | null;
+  accountName: string;
   lineItems: Array<{
     id: number;
     quoteId: number;
@@ -39,7 +31,12 @@ interface SigningQuoteData {
     unitPrice: number;
     lineType: string;
   }>;
-  signatureType: 'client' | 'company' | null;
+  taxRate: number | null;
+  discount: number | null;
+  shipping: number | null;
+  isShippingTaxable: boolean | null;
+  contractTemplate?: any;
+  customContractTerms: string | null;
   clientSignedAt: string | null;
   companySignedAt: string | null;
 }
@@ -208,7 +205,7 @@ export default function PublicSignPage() {
     signMutation.mutate(signature);
   };
 
-  const isAlreadySigned = quoteData?.signatureType === 'client' && quoteData?.clientSignedAt;
+  const isAlreadySigned = !!quoteData?.clientSignedAt;
   const canSign = signature && !isAlreadySigned && !signMutation.isPending;
 
   if (isLoading) {
@@ -259,7 +256,7 @@ export default function PublicSignPage() {
                 <strong>Quote:</strong> {quoteData.projectName || `#${quoteData.quoteNumber}`}
               </p>
               <p className="text-sm text-gray-600">
-                <strong>Company:</strong> {quoteData.account?.name || quoteData.customer?.name || 'N/A'}
+                <strong>Company:</strong> {quoteData.accountName}
               </p>
             </div>
             
@@ -293,7 +290,7 @@ export default function PublicSignPage() {
               Sign Quote: {quoteData.projectName || `Quote #${quoteData.id}`}
             </CardTitle>
             <CardDescription>
-              {quoteData.account?.name || quoteData.customer?.name}
+              {quoteData.accountName}
             </CardDescription>
           </CardHeader>
         </Card>
