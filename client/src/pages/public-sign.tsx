@@ -209,19 +209,31 @@ export default function PublicSignPage() {
   if (isAlreadySigned) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
-        <Card className="max-w-md w-full">
+        <Card className="max-w-2xl w-full">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-green-600">
-              <CheckCircle className="w-5 h-5" />
-              Already Signed
+              <CheckCircle className="w-6 h-6" />
+              Quote Signed Successfully
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <Alert>
-              <AlertDescription>
-                This quote has already been signed on {new Date(quoteData.clientSignedAt!).toLocaleString()}.
+          <CardContent className="space-y-4">
+            <Alert className="border-green-200 bg-green-50">
+              <CheckCircle className="w-4 h-4 text-green-600" />
+              <AlertDescription className="text-green-800">
+                This quote was signed on {new Date(quoteData.clientSignedAt!).toLocaleString()}.
               </AlertDescription>
             </Alert>
+            <div className="space-y-2">
+              <p className="text-sm text-gray-600">
+                <strong>Quote:</strong> {quoteData.projectName || `#${quoteData.quoteNumber}`}
+              </p>
+              <p className="text-sm text-gray-600">
+                <strong>Company:</strong> {quoteData.account?.name || quoteData.customer?.name || 'N/A'}
+              </p>
+            </div>
+            <p className="text-sm text-gray-500 pt-4 border-t">
+              You will receive a copy of the signed quote shortly. You may now close this window.
+            </p>
           </CardContent>
         </Card>
       </div>
