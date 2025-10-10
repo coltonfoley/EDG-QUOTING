@@ -42,7 +42,9 @@ import {
   imageIdParamSchema,
   insertIssueReportSchema,
   createQuoteSchema,
-  CreateQuoteBody
+  CreateQuoteBody,
+  signatureTokenParamSchema,
+  submitSignatureSchema
 } from "./validation-schemas";
 import multer from "multer";
 import * as XLSX from "xlsx";
@@ -52,6 +54,7 @@ import type { ExtractedProduct } from "./openai";
 import { ObjectStorageService, ObjectNotFoundError, objectStorageClient } from "./objectStorage";
 import { ObjectPermission } from "./objectAcl";
 import type { InsertQuote } from "@shared/schema";
+import { nanoid } from "nanoid";
 
 // Simple in-memory rate limiter for OpenAI API calls
 interface RateLimitEntry {
@@ -1847,6 +1850,145 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       res.status(204).send();
     } catch (error) {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // E-Signature routes
+  // Enable e-signature and generate signing link
+  app.post("/api/quotes/:id/enable-esignature", isAuthenticated, async (req, res) => {
+    try {
+      const params = idParamSchema.safeParse(req.params);
+      if (!params.success) {
+        return res.status(400).json({ 
+          message: "Invalid request parameters", 
+          errors: params.error.errors 
+        });
+      }
+
+      const quote = await storage.getQuote(params.data.id);
+      if (!quote) {
+        return res.status(404).json({ message: "Quote not found" });
+      }
+
+      // Generate unique signing token
+      const signingToken = nanoid(32);
+      
+      // Update quote with e-signature enabled, new token, and reset signatures
+      const updatedQuote = await storage.updateQuote(params.data.id, {
+        enableESignature: true,
+        signingToken,
+        // Reset any previous signatures when issuing new link
+        clientSignatureData: null,
+        clientSignedAt: null,
+        clientSignedIp: null,
+        companySignatureData: null,
+        companySignedAt: null,
+        companySignedIp: null
+      });
+
+      res.json({ 
+        success: true,
+        signingToken,
+        signingUrl: `/sign/${signingToken}`
+      });
+    } catch (error) {
+      console.error("Error enabling e-signature:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // Get quote info for signing (public route)
+  app.get("/api/signatures/:token", async (req, res) => {
+    try {
+      // Validate token parameter
+      const params = signatureTokenParamSchema.safeParse(req.params);
+      if (!params.success) {
+        return res.status(400).json({ 
+          message: "Invalid token", 
+          errors: params.error.errors 
+        });
+      }
+      
+      const quote = await storage.getQuoteBySigningToken(params.data.token);
+      if (!quote) {
+        return res.status(404).json({ message: "Invalid or expired signing link" });
+      }
+
+      if (!quote.enableESignature) {
+        return res.status(403).json({ message: "E-signature not enabled for this quote" });
+      }
+
+      // Return sanitized quote data (no PII like phone/email)
+      res.json({
+        id: quote.id,
+        quoteNumber: quote.quoteNumber,
+        projectName: quote.projectName,
+        accountName: quote.account?.name || "N/A",
+        clientSignedAt: quote.clientSignedAt,
+        companySignedAt: quote.companySignedAt
+      });
+    } catch (error) {
+      console.error("Error getting signature info:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // Submit signature (public route)
+  app.post("/api/signatures/:token/sign", async (req, res) => {
+    try {
+      // Validate token parameter
+      const params = signatureTokenParamSchema.safeParse(req.params);
+      if (!params.success) {
+        return res.status(400).json({ 
+          message: "Invalid token", 
+          errors: params.error.errors 
+        });
+      }
+
+      // Validate request body
+      const bodyValidation = submitSignatureSchema.safeParse(req.body);
+      if (!bodyValidation.success) {
+        return res.status(400).json({ 
+          message: "Invalid signature data", 
+          errors: bodyValidation.error.errors 
+        });
+      }
+
+      const { signatureData, signerType } = bodyValidation.data;
+
+      const quote = await storage.getQuoteBySigningToken(params.data.token);
+      if (!quote) {
+        return res.status(404).json({ message: "Invalid or expired signing link" });
+      }
+
+      if (!quote.enableESignature) {
+        return res.status(403).json({ message: "E-signature not enabled for this quote" });
+      }
+
+      // Get client IP address
+      const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+
+      // Update quote with signature
+      const updateData: any = {};
+      if (signerType === 'client') {
+        updateData.clientSignatureData = signatureData;
+        updateData.clientSignedAt = new Date();
+        updateData.clientSignedIp = clientIp;
+      } else {
+        updateData.companySignatureData = signatureData;
+        updateData.companySignedAt = new Date();
+        updateData.companySignedIp = clientIp;
+      }
+
+      await storage.updateQuote(quote.id, updateData);
+
+      res.json({ 
+        success: true,
+        message: "Signature captured successfully"
+      });
+    } catch (error) {
+      console.error("Error submitting signature:", error);
       res.status(500).json({ message: "Internal server error" });
     }
   });

@@ -346,14 +346,14 @@ export const insertQuoteSchema = createInsertSchema(quotes).omit({
   // Contract template fields
   contractTemplateId: z.union([z.number(), z.null()]).optional(),
   customContractTerms: z.union([z.string(), z.null()]).optional(),
-  // E-Signature fields (optional, set server-side)
+  // E-Signature fields (optional, set server-side, not included in client insert)
   enableESignature: z.boolean().optional(),
   signingToken: z.string().optional().nullable(),
   clientSignatureData: z.any().optional().nullable(),
-  clientSignedAt: z.string().optional().nullable(),
+  clientSignedAt: z.union([z.date(), z.null()]).optional(),
   clientSignedIp: z.string().optional().nullable(),
   companySignatureData: z.any().optional().nullable(),
-  companySignedAt: z.string().optional().nullable(),
+  companySignedAt: z.union([z.date(), z.null()]).optional(),
   companySignedIp: z.string().optional().nullable(),
 });
 

@@ -797,3 +797,19 @@ export const insertIssueReportSchema = baseIssueReportSchema.extend({
   healthMetrics: z.any().optional().nullable()
 });
 
+// E-Signature validation schemas
+export const signatureTokenParamSchema = z.object({
+  token: z.string().min(1, "Token is required")
+});
+
+export const signatureDataSchema = z.object({
+  type: z.enum(["draw", "type"], { errorMap: () => ({ message: "Signature type must be 'draw' or 'type'" }) }),
+  imageData: z.string().min(1, "Signature image data is required"),
+  name: z.string().min(1, "Signer name is required").max(200, "Name is too long")
+});
+
+export const submitSignatureSchema = z.object({
+  signatureData: signatureDataSchema,
+  signerType: z.enum(["client", "company"], { errorMap: () => ({ message: "Signer type must be 'client' or 'company'" }) })
+});
+

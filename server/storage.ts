@@ -70,6 +70,7 @@ export interface IStorage {
   // Quote methods
   getQuote(id: number): Promise<Quote | undefined>;
   getQuoteWithDetails(id: number): Promise<QuoteWithDetails | undefined>;
+  getQuoteBySigningToken(token: string): Promise<QuoteWithDetails | undefined>;
   getAllQuotes(): Promise<QuoteWithDetails[]>;
   createQuote(quote: InsertQuote): Promise<Quote>;
   updateQuote(id: number, quote: Partial<InsertQuote>): Promise<Quote | undefined>;
@@ -255,6 +256,26 @@ export class MemStorage {
     };
   }
 
+  async getQuoteBySigningToken(token: string): Promise<QuoteWithDetails | undefined> {
+    const quote = Array.from(this.quotes.values()).find(q => q.signingToken === token);
+    if (!quote) return undefined;
+
+    const accountIdToUse = quote.accountId;
+    let customer = undefined;
+    if (accountIdToUse) {
+      customer = this.customers.get(accountIdToUse);
+    }
+
+    const quoteLineItems = Array.from(this.lineItems.values()).filter(item => item.quoteId === quote.id);
+
+    return {
+      ...quote,
+      account: customer,
+      customer,
+      lineItems: quoteLineItems,
+    };
+  }
+
   async getAllQuotes(): Promise<QuoteWithDetails[]> {
     const result: QuoteWithDetails[] = [];
     
@@ -298,6 +319,14 @@ export class MemStorage {
       lostReason: insertQuote.lostReason || null,
       contractTemplateId: insertQuote.contractTemplateId || null,
       customContractTerms: insertQuote.customContractTerms || null,
+      enableESignature: insertQuote.enableESignature || false,
+      signingToken: insertQuote.signingToken || null,
+      clientSignatureData: insertQuote.clientSignatureData || null,
+      clientSignedAt: insertQuote.clientSignedAt || null,
+      clientSignedIp: insertQuote.clientSignedIp || null,
+      companySignatureData: insertQuote.companySignatureData || null,
+      companySignedAt: insertQuote.companySignedAt || null,
+      companySignedIp: insertQuote.companySignedIp || null,
       createdAt: new Date(),
       updatedAt: new Date()
     };
@@ -681,6 +710,82 @@ export class DatabaseStorage implements IStorage {
       .from(lineItems)
       .leftJoin(products, eq(lineItems.productId, products.id))
       .where(eq(lineItems.quoteId, id))
+      .orderBy(asc(lineItems.position));
+    
+    // Add manufacturer field to line items using fallback logic
+    const quoteLineItems = quoteLineItemsWithProducts.map(item => ({
+      id: item.id,
+      quoteId: item.quoteId,
+      productId: item.productId,
+      description: item.description,
+      quantity: item.quantity,
+      retailPrice: item.retailPrice,
+      unitPrice: item.unitPrice,
+      markupType: item.markupType,
+      markupValue: item.markupValue,
+      discountType: item.discountType,
+      discountValue: item.discountValue,
+      configData: item.configData,
+      baseProductId: item.baseProductId,
+      isAccessory: item.isAccessory,
+      isTaxable: item.isTaxable,
+      groupId: item.groupId,
+      position: item.position,
+      manufacturer: item.productManufacturer || "Uncategorized",
+    }));
+
+    // Get contract template if referenced
+    let contractTemplate: ContractTemplate | undefined;
+    if (quote.contractTemplateId) {
+      [contractTemplate] = await db.select().from(contractTemplates).where(eq(contractTemplates.id, quote.contractTemplateId));
+    }
+
+    return {
+      ...quote,
+      account,
+      customer: account, // Legacy alias for backward compatibility
+      lineItems: quoteLineItems,
+      contractTemplate,
+    };
+  }
+
+  async getQuoteBySigningToken(token: string): Promise<QuoteWithDetails | undefined> {
+    const [quote] = await db.select().from(quotes).where(eq(quotes.signingToken, token));
+    if (!quote) return undefined;
+
+    const accountIdToUse = quote.accountId;
+    let account = undefined;
+    
+    // Get account if accountId exists
+    if (accountIdToUse) {
+      [account] = await db.select().from(accounts).where(eq(accounts.id, accountIdToUse));
+    }
+
+    // Join line items with products to get manufacturer data
+    const quoteLineItemsWithProducts = await db
+      .select({
+        id: lineItems.id,
+        quoteId: lineItems.quoteId,
+        productId: lineItems.productId,
+        description: lineItems.description,
+        quantity: lineItems.quantity,
+        retailPrice: lineItems.retailPrice,
+        unitPrice: lineItems.unitPrice,
+        markupType: lineItems.markupType,
+        markupValue: lineItems.markupValue,
+        discountType: lineItems.discountType,
+        discountValue: lineItems.discountValue,
+        configData: lineItems.configData,
+        baseProductId: lineItems.baseProductId,
+        isAccessory: lineItems.isAccessory,
+        isTaxable: lineItems.isTaxable,
+        groupId: lineItems.groupId,
+        position: lineItems.position,
+        productManufacturer: products.manufacturer,
+      })
+      .from(lineItems)
+      .leftJoin(products, eq(lineItems.productId, products.id))
+      .where(eq(lineItems.quoteId, quote.id))
       .orderBy(asc(lineItems.position));
     
     // Add manufacturer field to line items using fallback logic
