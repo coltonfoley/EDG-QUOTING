@@ -2037,6 +2037,63 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Manual signed PDF generation endpoint (protected)
+  app.post("/api/quotes/:id/generate-signed-pdf", isAuthenticated, async (req, res) => {
+    try {
+      const quoteId = parseInt(req.params.id);
+      const quote = await storage.getQuote(quoteId);
+      
+      if (!quote) {
+        return res.status(404).json({ message: "Quote not found" });
+      }
+
+      // Check if quote already has a signed PDF
+      if (quote.signedPdfUrl) {
+        return res.status(400).json({ message: "Quote already has a signed PDF" });
+      }
+
+      // Check if quote has at least one signature
+      if (!quote.clientSignedAt && !quote.companySignedAt) {
+        return res.status(400).json({ message: "Quote must have at least one signature" });
+      }
+
+      // Get updated quote with all details
+      const updatedQuote = await storage.getQuote(quote.id);
+      if (!updatedQuote) {
+        throw new Error("Failed to fetch updated quote");
+      }
+
+      // Get contract text
+      const contractText = updatedQuote.contractTemplate?.terms || updatedQuote.customContractTerms || '';
+
+      // Generate PDF with signatures using Puppeteer
+      const { generateSignedPDF } = await import('./pdfGenerator');
+      const pdfBuffer = await generateSignedPDF({
+        quote: updatedQuote,
+        contractText,
+        signingToken: quote.signingToken!
+      });
+
+      // Upload to object storage
+      const objectStorage = new ObjectStorageService();
+      const filename = `quote-${updatedQuote.quoteNumber || updatedQuote.id}`;
+      const pdfUrl = await objectStorage.uploadPdf(pdfBuffer, filename);
+
+      // Save PDF URL to database
+      await storage.updateQuote(quote.id, { signedPdfUrl: pdfUrl });
+
+      console.log(`✅ Signed PDF generated for quote ${quote.id} at ${pdfUrl}`);
+      res.json({ 
+        success: true, 
+        message: "Signed PDF generated successfully",
+        pdfUrl 
+      });
+    } catch (error) {
+      console.error("Error generating signed PDF:", error);
+      res.status(500).json({ message: "Failed to generate signed PDF" });
+    }
+  });
+
   // Quote image routes (protected)
   app.get("/api/quotes/:quoteId/cover-photos", isAuthenticated, async (req, res) => {
     try {

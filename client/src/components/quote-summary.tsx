@@ -490,6 +490,30 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
                   {quote.signingToken ? 'Regenerate Signing Link' : 'Generate Signing Link'}
                 </Button>
 
+                {!quote.signedPdfUrl && (quote.clientSignedAt || quote.companySignedAt) && (
+                  <Button
+                    onClick={async () => {
+                      try {
+                        const response = await fetch(`/api/quotes/${quote.id}/generate-signed-pdf`, {
+                          method: 'POST'
+                        });
+                        if (!response.ok) throw new Error('Failed to generate PDF');
+                        const data = await response.json();
+                        toast({ title: "Success", description: "Signed PDF generated successfully" });
+                        queryClient.invalidateQueries({ queryKey: ['/api/quotes', quote.id] });
+                      } catch (error) {
+                        toast({ title: "Error", description: "Failed to generate signed PDF", variant: "destructive" });
+                      }
+                    }}
+                    variant="outline"
+                    className="w-full border-blue-600 text-blue-600 hover:bg-blue-50"
+                    data-testid="button-generate-signed-pdf"
+                  >
+                    <FileText className="mr-2 h-4 w-4" />
+                    Generate Signed PDF
+                  </Button>
+                )}
+
                 {quote.signedPdfUrl && (
                   <Button
                     variant="outline"
