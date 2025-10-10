@@ -246,7 +246,10 @@ export const updateQuoteSchema = z.object({
     .optional(),
   isShippingTaxable: z.boolean().optional(),
   contractTemplateId: z.number().int().positive().optional().nullable(),
-  customContractTerms: z.string().max(10000, "Custom contract terms are too long").optional().nullable()
+  customContractTerms: z.string().max(10000, "Custom contract terms are too long").optional().nullable(),
+  
+  // E-signature fields
+  enableESignature: z.boolean().optional()
 }).refine((data) => {
   // Enforce mutual exclusivity: cannot have both template and custom terms
   const hasTemplate = data.contractTemplateId !== null && data.contractTemplateId !== undefined;
