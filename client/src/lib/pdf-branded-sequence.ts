@@ -106,7 +106,8 @@ export async function generateBrandedSequencePDF(options: BrandedSequenceOptions
       margin,
       contentW,
       pageW,
-      pageH
+      pageH,
+      quote
     });
   }
 
