@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { FileText, Bookmark, Plus, Eye, Send, Mail, CheckCircle, AlertCircle, Clock, Link2, Copy, Download } from "lucide-react";
+import { FileText, Bookmark, Plus, Eye, Send, Mail, CheckCircle, AlertCircle, Clock, Link2, Copy, Download, PenTool } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { formatCurrency, calculateQuoteTotals } from "@/lib/utils";
@@ -16,6 +16,7 @@ import { useToast } from "@/hooks/use-toast";
 import type { QuoteWithDetails, ContractTemplate } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
 import { generateSignedPDF, downloadSignedPDF } from "@/lib/generate-signed-pdf";
+import { SignatureCanvas, SignatureData } from "@/components/signature-canvas";
 
 interface QuoteSummaryProps {
   quote: QuoteWithDetails;
@@ -30,6 +31,8 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
   const [localCustomContractTerms, setLocalCustomContractTerms] = useState<string>("");
   const [showSigningLinkDialog, setShowSigningLinkDialog] = useState(false);
   const [signingLink, setSigningLink] = useState<string>("");
+  const [showCompanySignDialog, setShowCompanySignDialog] = useState(false);
+  const [companySignature, setCompanySignature] = useState<SignatureData | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -151,6 +154,41 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
     },
   });
 
+  // Company signature mutation
+  const companySignMutation = useMutation({
+    mutationFn: async (signatureData: SignatureData) => {
+      if (!quote.signingToken) {
+        throw new Error("Signing token not available");
+      }
+      const response = await apiRequest('POST', `/api/signatures/${quote.signingToken}/sign`, { 
+        signatureData,
+        signerType: 'company'
+      });
+      return response;
+    },
+    onSuccess: () => {
+      toast({
+        title: 'Success',
+        description: 'Quote signed as company successfully!',
+        variant: 'default'
+      });
+      setShowCompanySignDialog(false);
+      setCompanySignature(null);
+      
+      // Refresh quote data to show signed status
+      queryClient.invalidateQueries({ 
+        queryKey: [`/api/quotes/${quote.id}`]
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to sign quote',
+        variant: 'destructive'
+      });
+    }
+  });
+
   // Handle signing link button click
   const handleSigningLinkClick = () => {
     if (quote.signingToken) {
@@ -170,6 +208,18 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
       title: "Copied!",
       description: "Signing link copied to clipboard"
     });
+  };
+
+  const handleCompanySign = () => {
+    if (!companySignature) {
+      toast({
+        title: 'Signature Required',
+        description: 'Please provide your signature before submitting',
+        variant: 'destructive'
+      });
+      return;
+    }
+    companySignMutation.mutate(companySignature);
   };
 
   const totals = calculateQuoteTotals(
@@ -556,6 +606,18 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
                   <Link2 className="mr-2 h-4 w-4" />
                   {quote.signingToken ? 'View Signing Link' : 'Generate Signing Link'}
                 </Button>
+
+                {quote.signingToken && !quote.companySignedAt && (
+                  <Button
+                    onClick={() => setShowCompanySignDialog(true)}
+                    variant="outline"
+                    className="w-full border-edg-teal text-edg-teal hover:bg-edg-light-teal hover:bg-opacity-10"
+                    data-testid="button-sign-as-company"
+                  >
+                    <PenTool className="mr-2 h-4 w-4" />
+                    Sign as Company
+                  </Button>
+                )}
               </>
             )}
           </CardContent>
@@ -615,6 +677,63 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
                 data-testid="button-close-dialog"
               >
                 Done
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Company Signature Dialog */}
+      <Dialog open={showCompanySignDialog} onOpenChange={(open) => {
+        setShowCompanySignDialog(open);
+        if (!open) {
+          setCompanySignature(null);
+        }
+      }}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Sign Quote as Company</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <Alert>
+              <AlertDescription>
+                Draw or type your signature below to sign this quote on behalf of the company
+              </AlertDescription>
+            </Alert>
+            
+            <SignatureCanvas
+              onSignatureChange={setCompanySignature}
+              signerName=""
+            />
+
+            {companySignature && (
+              <Alert className="border-green-200 bg-green-50">
+                <CheckCircle className="w-4 h-4 text-green-600" />
+                <AlertDescription className="text-green-800">
+                  Signature captured. Click "Submit Signature" to complete.
+                </AlertDescription>
+              </Alert>
+            )}
+
+            <div className="flex gap-2 pt-4">
+              <Button
+                onClick={() => {
+                  setShowCompanySignDialog(false);
+                  setCompanySignature(null);
+                }}
+                variant="outline"
+                className="flex-1"
+                data-testid="button-cancel-company-sign"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleCompanySign}
+                disabled={!companySignature || companySignMutation.isPending}
+                className="flex-1"
+                data-testid="button-submit-company-signature"
+              >
+                {companySignMutation.isPending ? 'Submitting...' : 'Submit Signature'}
               </Button>
             </div>
           </div>
