@@ -11,10 +11,11 @@ interface BrandedFooterOpts {
   pageW: number;
   pageH: number;
   margin: number;
+  showInitials?: boolean; // Optional - defaults to true
 }
 
 function drawBrandedFooter(opts: BrandedFooterOpts): void {
-  const { pdf, logoDataUrl, company, pageW, pageH, margin } = opts;
+  const { pdf, logoDataUrl, company, pageW, pageH, margin, showInitials = true } = opts;
   
   const footerY = pageH - 15;
   const lineY = footerY - 12; // Moved line up for more space
@@ -38,18 +39,20 @@ function drawBrandedFooter(opts: BrandedFooterOpts): void {
   const infoText = `${company.name} | ${company.phone} | ${company.email}`;
   pdf.text(infoText, pageW - margin, footerY, { align: 'right' });
   
-  // Add initial field at bottom left
-  pdf.setFont('Barlow-Regular', 'normal');
-  pdf.setFontSize(7);
-  pdf.setTextColor(80, 80, 80);
-  const initialX = margin;
-  const initialY = pageH - 5;
-  pdf.text('Initial:', initialX, initialY);
-  
-  // Draw short line for initial
-  pdf.setDrawColor(150, 150, 150);
-  pdf.setLineWidth(0.3);
-  pdf.line(initialX + 10, initialY, initialX + 25, initialY);
+  // Add initial field at bottom left (only if showInitials is true)
+  if (showInitials) {
+    pdf.setFont('Barlow-Regular', 'normal');
+    pdf.setFontSize(7);
+    pdf.setTextColor(80, 80, 80);
+    const initialX = margin;
+    const initialY = pageH - 5;
+    pdf.text('Initial:', initialX, initialY);
+    
+    // Draw short line for initial
+    pdf.setDrawColor(150, 150, 150);
+    pdf.setLineWidth(0.3);
+    pdf.line(initialX + 10, initialY, initialX + 25, initialY);
+  }
 }
 
 interface DrawStandardCoverOpts {
@@ -585,8 +588,8 @@ export function drawLineItemsSection(pdf: jsPDF, opts: DrawLineItemsSectionOpts)
   
   pdf.text(disclaimerLines, pageW / 2, disclaimerY - disclaimerHeight, { align: 'center' });
 
-  // Add branded footer
-  drawBrandedFooter({ pdf, logoDataUrl, company, pageW, pageH, margin });
+  // Add branded footer (no initials on signature page)
+  drawBrandedFooter({ pdf, logoDataUrl, company, pageW, pageH, margin, showInitials: false });
 }
 
 export function drawContractSection(pdf: jsPDF, opts: DrawContractSectionOpts): void {
@@ -622,7 +625,17 @@ export function drawContractSection(pdf: jsPDF, opts: DrawContractSectionOpts): 
 
     // Check if we need a new page (including space for header if it's a new page)
     if (y + paraHeight > pageH - margin) {
+      const currentPage = pdf.getNumberOfPages();
+      
       pdf.addPage();
+      
+      // Draw footer on the previous page
+      pdf.setPage(currentPage);
+      drawBrandedFooter({ pdf, logoDataUrl, company, pageW, pageH, margin });
+      
+      // Go back to the new page
+      pdf.setPage(currentPage + 1);
+      
       y = margin;
       pdf.setFont('Barlow-SemiBold', 'normal');
       pdf.setFontSize(18);
@@ -646,7 +659,17 @@ export function drawContractSection(pdf: jsPDF, opts: DrawContractSectionOpts): 
 
   // Check if we need a new page for signatures (need ~35mm for compact signatures)
   if (y + 35 > pageH - margin - 25) { // 25mm for footer
+    const currentPage = pdf.getNumberOfPages();
+    
     pdf.addPage();
+    
+    // Draw footer on the previous page
+    pdf.setPage(currentPage);
+    drawBrandedFooter({ pdf, logoDataUrl, company, pageW, pageH, margin });
+    
+    // Go back to the new page
+    pdf.setPage(currentPage + 1);
+    
     y = margin;
   }
 
@@ -654,8 +677,8 @@ export function drawContractSection(pdf: jsPDF, opts: DrawContractSectionOpts): 
   drawCompactAcceptanceBlock(pdf, col1X, y, signatureBlockWidth);
   drawCompactCompanyAcceptanceBlock(pdf, col2X, y, signatureBlockWidth);
 
-  // Add branded footer to the last page
-  drawBrandedFooter({ pdf, logoDataUrl, company, pageW, pageH, margin });
+  // Add branded footer to the last page (no initials since signatures are here)
+  drawBrandedFooter({ pdf, logoDataUrl, company, pageW, pageH, margin, showInitials: false });
 }
 
 export function drawBrandedBackPage(pdf: jsPDF, opts: DrawBrandedBackPageOpts): void {
