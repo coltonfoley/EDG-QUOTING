@@ -159,6 +159,40 @@ export class ObjectStorageService {
     };
   }
 
+  // Upload a PDF buffer to object storage
+  async uploadPdf(pdfBuffer: Buffer, filename: string): Promise<string> {
+    const privateObjectDir = this.getPrivateObjectDir();
+    if (!privateObjectDir) {
+      throw new Error(
+        "PRIVATE_OBJECT_DIR not set. Create a bucket in 'Object Storage' " +
+          "tool and set PRIVATE_OBJECT_DIR env var."
+      );
+    }
+
+    const objectId = randomUUID();
+    const fullPath = `${privateObjectDir}/signed-contracts/${filename}-${objectId}.pdf`;
+
+    const { bucketName, objectName } = parseObjectPath(fullPath);
+    const bucket = objectStorageClient.bucket(bucketName);
+    const file = bucket.file(objectName);
+
+    // Upload the PDF buffer
+    await file.save(pdfBuffer, {
+      metadata: {
+        contentType: 'application/pdf',
+      },
+    });
+
+    // Set ACL policy for private access
+    await setObjectAclPolicy(file, {
+      owner: 'system', // System-generated PDF
+      visibility: 'private',
+    });
+
+    // Return the path to access the file
+    return `/objects/signed-contracts/${filename}-${objectId}.pdf`;
+  }
+
   // Gets the object entity file from the object path.
   async getObjectEntityFile(objectPath: string): Promise<File> {
     if (!objectPath.startsWith("/objects/")) {

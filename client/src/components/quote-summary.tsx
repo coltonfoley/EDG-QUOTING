@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { FileText, Bookmark, Plus, Eye, Send, Mail, CheckCircle, AlertCircle, Clock, Link2, Copy } from "lucide-react";
+import { FileText, Bookmark, Plus, Eye, Send, Mail, CheckCircle, AlertCircle, Clock, Link2, Copy, Download } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { formatCurrency, calculateQuoteTotals } from "@/lib/utils";
@@ -489,6 +489,18 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
                   <Link2 className="mr-2 h-4 w-4" />
                   {quote.signingToken ? 'Regenerate Signing Link' : 'Generate Signing Link'}
                 </Button>
+
+                {quote.signedPdfUrl && (
+                  <Button
+                    variant="outline"
+                    onClick={() => window.open(quote.signedPdfUrl!, '_blank')}
+                    className="w-full border-green-600 text-green-600 hover:bg-green-50"
+                    data-testid="button-download-signed-pdf"
+                  >
+                    <Download className="mr-2 h-4 w-4" />
+                    Download Signed Contract
+                  </Button>
+                )}
               </>
             )}
           </CardContent>
