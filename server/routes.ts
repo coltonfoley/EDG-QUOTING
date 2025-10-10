@@ -2042,7 +2042,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       console.log("📄 Starting manual PDF generation...");
       const quoteId = parseInt(req.params.id);
-      const quote = await storage.getQuote(quoteId);
+      const quote = await storage.getQuoteWithDetails(quoteId);
       
       if (!quote) {
         console.log("❌ Quote not found:", quoteId);
@@ -2065,21 +2065,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log("✅ Signatures found - Client:", !!quote.clientSignedAt, "Company:", !!quote.companySignedAt);
 
-      // Get updated quote with all details
-      const updatedQuote = await storage.getQuote(quote.id);
-      if (!updatedQuote) {
-        throw new Error("Failed to fetch updated quote");
-      }
-
       // Get contract text
-      const contractText = updatedQuote.contractTemplate?.terms || updatedQuote.customContractTerms || '';
+      const contractText = quote.contractTemplate?.terms || quote.customContractTerms || '';
       console.log("📝 Contract text length:", contractText.length);
 
       // Generate PDF with signatures using Puppeteer
       console.log("🚀 Launching Puppeteer...");
       const { generateSignedPDF } = await import('./pdfGenerator');
       const pdfBuffer = await generateSignedPDF({
-        quote: updatedQuote,
+        quote,
         contractText,
         signingToken: quote.signingToken!
       });
@@ -2088,7 +2082,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Upload to object storage
       console.log("☁️ Uploading to object storage...");
       const objectStorage = new ObjectStorageService();
-      const filename = `quote-${updatedQuote.quoteNumber || updatedQuote.id}`;
+      const filename = `quote-${quote.quoteNumber || quote.id}`;
       const pdfUrl = await objectStorage.uploadPdf(pdfBuffer, filename);
       console.log("✅ PDF uploaded to:", pdfUrl);
 
