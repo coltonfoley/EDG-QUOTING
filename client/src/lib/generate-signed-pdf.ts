@@ -1,0 +1,96 @@
+import jsPDF from 'jspdf';
+import type { QuoteWithDetails } from '@shared/schema';
+import { barlowRegularBase64, barlowSemiBoldBase64 } from './fonts';
+import { generateBrandedSequencePDF } from './pdf-branded-sequence';
+import { normalizeImageToDataUrl } from './pdf-image-pipeline';
+
+interface GenerateSignedPDFOptions {
+  quote: QuoteWithDetails;
+  includeImages?: boolean;
+}
+
+/**
+ * Generates a signed PDF for a quote with all signatures and contract terms
+ * This is the official legally-binding document for both parties
+ */
+export async function generateSignedPDF(options: GenerateSignedPDFOptions): Promise<Blob> {
+  const { quote, includeImages = false } = options;
+
+  // Create PDF instance
+  const pdf = new jsPDF({ unit: 'mm', format: 'letter' });
+
+  // Add custom fonts
+  pdf.addFileToVFS('Barlow-Regular.ttf', barlowRegularBase64);
+  pdf.addFont('Barlow-Regular.ttf', 'Barlow-Regular', 'normal');
+  pdf.addFileToVFS('Barlow-SemiBold.ttf', barlowSemiBoldBase64);
+  pdf.addFont('Barlow-SemiBold.ttf', 'Barlow-SemiBold', 'normal');
+
+  // Prepare normalized images if requested
+  let normalizedImages: Array<{ dataUrl: string; format: 'PNG' | 'JPEG' }> = [];
+  if (includeImages && quote.productRenderings && quote.productRenderings.length > 0) {
+    const imageResults = await Promise.allSettled(
+      quote.productRenderings.map(async (rendering) => {
+        return await normalizeImageToDataUrl(rendering.storageUrl);
+      })
+    );
+    normalizedImages = imageResults
+      .filter((r): r is PromiseFulfilledResult<{ dataUrl: string; format: 'PNG' | 'JPEG' }> => r.status === 'fulfilled')
+      .map(r => r.value);
+  }
+
+  // Company information
+  const company = {
+    name: 'EDG Patio & Shade',
+    address: '1802 Holian Drive, Spring Grove, IL 60081',
+    phone: '+1 (815) 581-0138',
+    email: 'info@edgpatioshade.com'
+  };
+
+  // Get contract text
+  const contractText = quote.contractTemplate?.terms || quote.customContractTerms || '';
+
+  // Get client logo if available
+  let clientLogoDataUrl: string | null = null;
+  if (quote.coverPhoto) {
+    try {
+      const result = await normalizeImageToDataUrl(quote.coverPhoto.storageUrl);
+      clientLogoDataUrl = result.dataUrl;
+    } catch (error) {
+      console.warn('Failed to load client logo:', error);
+    }
+  }
+
+  // Generate the PDF using branded sequence
+  await generateBrandedSequencePDF({
+    pdf,
+    company,
+    quote,
+    renderImages: normalizedImages,
+    contractText,
+    showPricing: true,
+    clientLogoDataUrl
+  });
+
+  // Return as blob
+  return pdf.output('blob');
+}
+
+/**
+ * Downloads a signed PDF with proper filename
+ */
+export function downloadSignedPDF(pdfBlob: Blob, quote: QuoteWithDetails) {
+  const timestamp = new Date().toISOString().slice(0, 10);
+  const customer = quote.account ?? quote.customer;
+  const customerName = customer?.name ?? 'Customer';
+  const quoteNumber = quote.quoteNumber || 'Quote';
+  const filename = `${customerName.replace(/[^a-zA-Z0-9]/g, '_')}_${quoteNumber}_Signed_${timestamp}.pdf`;
+
+  const url = URL.createObjectURL(pdfBlob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}

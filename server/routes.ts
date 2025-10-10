@@ -1942,6 +1942,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get full quote data for signed PDF download (public route)
+  app.get("/api/signatures/:token/full", async (req, res) => {
+    try {
+      // Validate token parameter
+      const params = signatureTokenParamSchema.safeParse(req.params);
+      if (!params.success) {
+        return res.status(400).json({ 
+          message: "Invalid token", 
+          errors: params.error.errors 
+        });
+      }
+      
+      const quote = await storage.getQuoteBySigningToken(params.data.token);
+      if (!quote) {
+        return res.status(404).json({ message: "Invalid or expired signing link" });
+      }
+
+      // Return full quote data with all necessary fields for PDF generation
+      res.json(quote);
+    } catch (error) {
+      console.error("Error getting full quote data:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
   // Submit signature (public route)
   app.post("/api/signatures/:token/sign", async (req, res) => {
     try {
