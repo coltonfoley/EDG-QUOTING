@@ -131,9 +131,10 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
       const link = `${window.location.origin}/sign/${data.signingToken}`;
       setSigningLink(link);
       setShowSigningLinkDialog(true);
+      const isNewToken = !quote.signingToken;
       toast({ 
-        title: "Signing link generated",
-        description: "Share this link with the client to sign the quote"
+        title: isNewToken ? "Signing link generated" : "Signing link retrieved",
+        description: isNewToken ? "Share this link with the client to sign the quote" : "Your permanent signing link is ready"
       });
       
       // Invalidate query to refetch with updated data
@@ -149,6 +150,19 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
       });
     },
   });
+
+  // Handle signing link button click
+  const handleSigningLinkClick = () => {
+    if (quote.signingToken) {
+      // Token exists - just show the dialog with the existing link
+      const link = `${window.location.origin}/sign/${quote.signingToken}`;
+      setSigningLink(link);
+      setShowSigningLinkDialog(true);
+    } else {
+      // No token - generate a new one
+      generateSigningLinkMutation.mutate();
+    }
+  };
 
   const copySigningLink = () => {
     navigator.clipboard.writeText(signingLink);
@@ -534,13 +548,13 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
                 ) : null}
 
                 <Button
-                  onClick={() => generateSigningLinkMutation.mutate()}
+                  onClick={handleSigningLinkClick}
                   disabled={generateSigningLinkMutation.isPending || !!(quote.clientSignedAt && quote.companySignedAt)}
                   className="w-full"
                   data-testid="button-send-for-signature"
                 >
                   <Link2 className="mr-2 h-4 w-4" />
-                  {quote.signingToken ? 'Regenerate Signing Link' : 'Generate Signing Link'}
+                  {quote.signingToken ? 'View Signing Link' : 'Generate Signing Link'}
                 </Button>
               </>
             )}
