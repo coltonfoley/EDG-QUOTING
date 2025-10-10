@@ -303,13 +303,13 @@ export default function PublicSignPage() {
             </CardHeader>
             <CardContent>
               {isGeneratingPdf ? (
-                <div className="flex items-center justify-center h-96">
+                <div className="flex items-center justify-center h-64 sm:h-96">
                   <LoadingSpinner text="Generating preview..." />
                 </div>
               ) : pdfUrl ? (
                 <iframe
                   src={pdfUrl}
-                  className="w-full h-96 border rounded-md"
+                  className="w-full h-64 sm:h-96 border rounded-md"
                   data-testid="pdf-preview"
                   title="Quote Preview"
                 />

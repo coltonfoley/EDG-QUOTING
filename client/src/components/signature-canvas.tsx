@@ -48,6 +48,11 @@ export function SignatureCanvas({ onSignatureChange, signerName = '' }: Signatur
     const canvas = canvasRef.current;
     if (!canvas) return;
 
+    // Prevent scrolling on touch devices
+    if ('touches' in e) {
+      e.preventDefault();
+    }
+
     setIsDrawing(true);
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
@@ -62,6 +67,11 @@ export function SignatureCanvas({ onSignatureChange, signerName = '' }: Signatur
 
   const draw = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
     if (!isDrawing) return;
+
+    // Prevent scrolling on touch devices
+    if ('touches' in e) {
+      e.preventDefault();
+    }
 
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -184,7 +194,7 @@ export function SignatureCanvas({ onSignatureChange, signerName = '' }: Signatur
               <canvas
                 ref={canvasRef}
                 data-testid="signature-canvas"
-                className="w-full h-40 border-2 border-gray-300 rounded-md cursor-crosshair touch-none bg-white"
+                className="w-full h-56 sm:h-40 border-2 border-gray-300 rounded-md cursor-crosshair touch-none bg-white"
                 onMouseDown={startDrawing}
                 onMouseMove={draw}
                 onMouseUp={stopDrawing}
@@ -194,7 +204,7 @@ export function SignatureCanvas({ onSignatureChange, signerName = '' }: Signatur
                 onTouchEnd={stopDrawing}
               />
               {!hasDrawing && (
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none text-gray-400">
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none text-gray-400 text-center px-4">
                   Sign here with your mouse or finger
                 </div>
               )}
