@@ -22,6 +22,7 @@ import ContractsPage from "@/pages/contracts";
 import Accounts from "@/pages/accounts";
 import AccountDetail from "@/pages/account-detail";
 import Pipeline from "@/pages/pipeline";
+import PublicSignPage from "@/pages/public-sign";
 import { ReportIssueButton } from "@/components/report-issue-button";
 
 function GlobalLoadingIndicator() {
@@ -77,6 +78,9 @@ function Router() {
 
   return (
     <Switch>
+      {/* Public routes - accessible without authentication */}
+      <Route path="/sign/:token" component={PublicSignPage} />
+      
       {!isAuthenticated ? (
         <>
           <Route path="/auth" component={AuthPage} />
