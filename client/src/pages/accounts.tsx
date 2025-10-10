@@ -19,7 +19,6 @@ import type { Account } from "@shared/schema";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface AccountWithCounts extends Account {
-  contactCount?: number;
   projectCount?: number;
 }
 
@@ -108,7 +107,6 @@ export default function Accounts() {
 
   const totalAccounts = accounts?.length || 0;
   const activeProjects = accounts?.reduce((sum, account) => sum + (account.projectCount || 0), 0) || 0;
-  const totalContacts = accounts?.reduce((sum, account) => sum + (account.contactCount || 0), 0) || 0;
 
   if (isLoading) {
     return (
@@ -125,8 +123,8 @@ export default function Accounts() {
           </div>
           
           {/* Stats cards skeleton */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-            {[1, 2, 3].map((i) => (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            {[1, 2].map((i) => (
               <Card key={i}>
                 <CardContent className="p-6">
                   <div className="flex items-center">
@@ -186,7 +184,7 @@ export default function Accounts() {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
           <Card>
             <CardContent className="p-6">
               <div className="flex items-center">
@@ -210,20 +208,6 @@ export default function Accounts() {
                 <div className="ml-4">
                   <p className="text-sm font-medium text-gray-600">Active Projects</p>
                   <p className="text-2xl font-bold text-gray-900" data-testid="text-active-projects">{activeProjects}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center">
-                <div className="p-2 bg-purple-100 rounded-lg">
-                  <Users className="h-6 w-6 text-purple-600" />
-                </div>
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">Total Contacts</p>
-                  <p className="text-2xl font-bold text-gray-900" data-testid="text-total-contacts">{totalContacts}</p>
                 </div>
               </div>
             </CardContent>
@@ -281,9 +265,6 @@ export default function Accounts() {
                       Payment Terms
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      # of Contacts
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       # of Projects
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -294,7 +275,7 @@ export default function Accounts() {
                 <tbody className="bg-white divide-y divide-gray-200">
                   {filteredAccounts.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
+                      <td colSpan={5} className="px-6 py-12 text-center text-gray-500">
                         {searchTerm || accountTypeFilter !== "all" ? "No clients found matching your filters." : "No clients yet. Create your first client to get started."}
                       </td>
                     </tr>
@@ -325,9 +306,6 @@ export default function Accounts() {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                           {account.paymentTerms?.replace('_', ' ').toUpperCase() || 'NET 30'}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {account.contactCount || 0}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                           {account.projectCount || 0}
