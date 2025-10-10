@@ -1919,12 +1919,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "E-signature not enabled for this quote" });
       }
 
-      // Return sanitized quote data (no PII like phone/email)
+      // Return sanitized quote data (no PII like phone/email, but include line items and pricing)
       res.json({
         id: quote.id,
         quoteNumber: quote.quoteNumber,
         projectName: quote.projectName,
-        accountName: quote.account?.name || "N/A",
+        projectAddress: quote.projectAddress,
+        accountName: quote.account?.name || quote.customer?.name || "N/A",
+        lineItems: quote.lineItems || [],
+        taxRate: quote.taxRate,
+        discount: quote.discount,
+        shipping: quote.shipping,
+        isShippingTaxable: quote.isShippingTaxable,
         clientSignedAt: quote.clientSignedAt,
         companySignedAt: quote.companySignedAt
       });
