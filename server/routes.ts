@@ -1991,6 +1991,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       await storage.updateQuote(quote.id, updateData);
 
+      // If client just signed, generate and save the signed PDF
+      if (signerType === 'client') {
+        try {
+          // Re-fetch quote with full details including the new signature
+          const updatedQuote = await storage.getQuoteWithDetails(quote.id);
+          if (!updatedQuote) {
+            throw new Error("Failed to fetch updated quote");
+          }
+
+          // Get contract text
+          const contractText = updatedQuote.contractTemplate?.terms || updatedQuote.customContractTerms || '';
+
+          // Generate PDF with signatures using Puppeteer
+          const { generateSignedPDF } = await import('./pdfGenerator');
+          const pdfBuffer = await generateSignedPDF({
+            quote: updatedQuote,
+            contractText,
+            signingToken: quote.signingToken!
+          });
+
+          // Upload to object storage
+          const objectStorage = new ObjectStorageService();
+          const filename = `quote-${updatedQuote.quoteNumber || updatedQuote.id}`;
+          const pdfUrl = await objectStorage.uploadPdf(pdfBuffer, filename);
+
+          // Save PDF URL to database
+          await storage.updateQuote(quote.id, { signedPdfUrl: pdfUrl });
+
+          console.log(`✅ Signed PDF saved for quote ${quote.id} at ${pdfUrl}`);
+        } catch (pdfError) {
+          console.error("Error generating/saving signed PDF:", pdfError);
+          // Don't fail the signature submission if PDF generation fails
+          // The signature is still valid, PDF can be regenerated later if needed
+        }
+      }
+
       res.json({ 
         success: true,
         message: "Signature captured successfully"

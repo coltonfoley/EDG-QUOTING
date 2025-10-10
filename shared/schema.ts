@@ -93,6 +93,7 @@ export const quotes = pgTable("quotes", {
   companySignatureData: jsonb("company_signature_data"), // { type: 'draw'|'type', imageData: string, name: string }
   companySignedAt: timestamp("company_signed_at"),
   companySignedIp: text("company_signed_ip"),
+  signedPdfUrl: text("signed_pdf_url"), // URL to the signed PDF in object storage
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => [
