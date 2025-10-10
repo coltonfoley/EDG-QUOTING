@@ -1991,42 +1991,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       await storage.updateQuote(quote.id, updateData);
 
-      // If client just signed, generate and save the signed PDF
-      if (signerType === 'client') {
-        try {
-          // Re-fetch quote with full details including the new signature
-          const updatedQuote = await storage.getQuoteWithDetails(quote.id);
-          if (!updatedQuote) {
-            throw new Error("Failed to fetch updated quote");
-          }
-
-          // Get contract text
-          const contractText = updatedQuote.contractTemplate?.terms || updatedQuote.customContractTerms || '';
-
-          // Generate PDF with signatures using Puppeteer
-          const { generateSignedPDF } = await import('./pdfGenerator');
-          const pdfBuffer = await generateSignedPDF({
-            quote: updatedQuote,
-            contractText,
-            signingToken: quote.signingToken!
-          });
-
-          // Upload to object storage
-          const objectStorage = new ObjectStorageService();
-          const filename = `quote-${updatedQuote.quoteNumber || updatedQuote.id}`;
-          const pdfUrl = await objectStorage.uploadPdf(pdfBuffer, filename);
-
-          // Save PDF URL to database
-          await storage.updateQuote(quote.id, { signedPdfUrl: pdfUrl });
-
-          console.log(`✅ Signed PDF saved for quote ${quote.id} at ${pdfUrl}`);
-        } catch (pdfError) {
-          console.error("Error generating/saving signed PDF:", pdfError);
-          // Don't fail the signature submission if PDF generation fails
-          // The signature is still valid, PDF can be regenerated later if needed
-        }
-      }
-
       res.json({ 
         success: true,
         message: "Signature captured successfully"
@@ -2034,71 +1998,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error submitting signature:", error);
       res.status(500).json({ message: "Internal server error" });
-    }
-  });
-
-  // Manual signed PDF generation endpoint (protected)
-  app.post("/api/quotes/:id/generate-signed-pdf", isAuthenticated, async (req, res) => {
-    try {
-      console.log("📄 Starting manual PDF generation...");
-      const quoteId = parseInt(req.params.id);
-      const quote = await storage.getQuoteWithDetails(quoteId);
-      
-      if (!quote) {
-        console.log("❌ Quote not found:", quoteId);
-        return res.status(404).json({ message: "Quote not found" });
-      }
-
-      console.log("✅ Quote found:", quote.id, "Token:", quote.signingToken);
-
-      // Check if quote already has a signed PDF
-      if (quote.signedPdfUrl) {
-        console.log("❌ Quote already has a signed PDF:", quote.signedPdfUrl);
-        return res.status(400).json({ message: "Quote already has a signed PDF" });
-      }
-
-      // Check if quote has at least one signature
-      if (!quote.clientSignedAt && !quote.companySignedAt) {
-        console.log("❌ No signatures found on quote");
-        return res.status(400).json({ message: "Quote must have at least one signature" });
-      }
-
-      console.log("✅ Signatures found - Client:", !!quote.clientSignedAt, "Company:", !!quote.companySignedAt);
-
-      // Get contract text
-      const contractText = quote.contractTemplate?.terms || quote.customContractTerms || '';
-      console.log("📝 Contract text length:", contractText.length);
-
-      // Generate PDF with signatures using Puppeteer
-      console.log("🚀 Launching Puppeteer...");
-      const { generateSignedPDF } = await import('./pdfGenerator');
-      const pdfBuffer = await generateSignedPDF({
-        quote,
-        contractText,
-        signingToken: quote.signingToken!
-      });
-      console.log("✅ PDF generated, buffer size:", pdfBuffer.length);
-
-      // Upload to object storage
-      console.log("☁️ Uploading to object storage...");
-      const objectStorage = new ObjectStorageService();
-      const filename = `quote-${quote.quoteNumber || quote.id}`;
-      const pdfUrl = await objectStorage.uploadPdf(pdfBuffer, filename);
-      console.log("✅ PDF uploaded to:", pdfUrl);
-
-      // Save PDF URL to database
-      console.log("💾 Saving PDF URL to database...");
-      await storage.updateQuote(quote.id, { signedPdfUrl: pdfUrl });
-
-      console.log(`✅ Signed PDF generated for quote ${quote.id} at ${pdfUrl}`);
-      res.json({ 
-        success: true, 
-        message: "Signed PDF generated successfully",
-        pdfUrl 
-      });
-    } catch (error) {
-      console.error("❌ Error generating signed PDF:", error);
-      res.status(500).json({ message: "Failed to generate signed PDF", error: String(error) });
     }
   });
 
