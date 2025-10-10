@@ -105,12 +105,15 @@ export default function PublicSignPage() {
         email: 'info@company.com'
       };
 
+      // Get contract text from template or custom terms
+      const contractText = (quoteData as any).contractTemplate?.terms || (quoteData as any).customContractTerms || '';
+
       await generateBrandedSequencePDF({
         pdf,
         company,
         quote: quoteData as any,
         renderImages: [],
-        contractText: '',
+        contractText,
         showPricing: true,
         clientLogoDataUrl: null
       });
