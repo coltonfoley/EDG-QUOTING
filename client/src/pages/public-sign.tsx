@@ -138,7 +138,10 @@ export default function PublicSignPage() {
   const signMutation = useMutation({
     mutationFn: async (signatureData: SignatureData) => {
       // Get client IP (browser will send this with request)
-      const response = await apiRequest('POST', `/api/signatures/${token}/sign`, { signatureData });
+      const response = await apiRequest('POST', `/api/signatures/${token}/sign`, { 
+        signatureData,
+        signerType: 'client'
+      });
       return response;
     },
     onSuccess: () => {
