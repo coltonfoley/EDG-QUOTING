@@ -1871,20 +1871,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Quote not found" });
       }
 
-      // Generate unique signing token
-      const signingToken = nanoid(32);
+      // Use existing signing token if available, otherwise generate a new one
+      const signingToken = quote.signingToken || nanoid(32);
       
-      // Update quote with e-signature enabled, new token, and reset signatures
+      // Update quote with e-signature enabled and token (preserve existing signatures)
       const updatedQuote = await storage.updateQuote(params.data.id, {
         enableESignature: true,
-        signingToken,
-        // Reset any previous signatures when issuing new link
-        clientSignatureData: null,
-        clientSignedAt: null,
-        clientSignedIp: null,
-        companySignatureData: null,
-        companySignedAt: null,
-        companySignedIp: null
+        signingToken
+        // Note: We no longer reset signatures - they persist permanently
       });
 
       res.json({ 
