@@ -167,6 +167,34 @@ export default function PublicSignPage() {
     }
   });
 
+  // Download signed PDF mutation
+  const downloadPdfMutation = useMutation({
+    mutationFn: async () => {
+      // Fetch full quote data with signatures
+      const response = await apiRequest('GET', `/api/signatures/${token}/full`);
+      const fullQuote: QuoteWithDetails = await response.json();
+      
+      // Generate PDF
+      const pdfBlob = await generateSignedPDF({ quote: fullQuote, includeImages: false });
+      
+      // Download
+      downloadSignedPDF(pdfBlob, fullQuote);
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Download Failed',
+        description: error.message || 'Failed to generate PDF',
+        variant: 'destructive'
+      });
+    },
+    onSuccess: () => {
+      toast({
+        title: 'PDF Downloaded',
+        description: 'Your signed quote has been downloaded successfully',
+      });
+    }
+  });
+
   const handleSign = () => {
     if (!signature) {
       toast({
@@ -208,34 +236,6 @@ export default function PublicSignPage() {
       </div>
     );
   }
-
-  // Download signed PDF mutation
-  const downloadPdfMutation = useMutation({
-    mutationFn: async () => {
-      // Fetch full quote data with signatures
-      const response = await apiRequest('GET', `/api/signatures/${token}/full`);
-      const fullQuote: QuoteWithDetails = await response.json();
-      
-      // Generate PDF
-      const pdfBlob = await generateSignedPDF({ quote: fullQuote, includeImages: false });
-      
-      // Download
-      downloadSignedPDF(pdfBlob, fullQuote);
-    },
-    onError: (error: any) => {
-      toast({
-        title: 'Download Failed',
-        description: error.message || 'Failed to generate PDF',
-        variant: 'destructive'
-      });
-    },
-    onSuccess: () => {
-      toast({
-        title: 'PDF Downloaded',
-        description: 'Your signed quote has been downloaded successfully',
-      });
-    }
-  });
 
   if (isAlreadySigned) {
     return (
