@@ -99,7 +99,7 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
       return response.json();
     },
     onSuccess: (data) => {
-      const link = `${window.location.origin}/sign/${data.token}`;
+      const link = `${window.location.origin}/sign/${data.signingToken}`;
       setSigningLink(link);
       setShowSigningLinkDialog(true);
       toast({ 
