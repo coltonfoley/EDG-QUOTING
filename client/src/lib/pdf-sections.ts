@@ -37,6 +37,19 @@ function drawBrandedFooter(opts: BrandedFooterOpts): void {
   
   const infoText = `${company.name} | ${company.phone} | ${company.email}`;
   pdf.text(infoText, pageW - margin, footerY, { align: 'right' });
+  
+  // Add initial field at bottom left
+  pdf.setFont('Barlow-Regular', 'normal');
+  pdf.setFontSize(7);
+  pdf.setTextColor(80, 80, 80);
+  const initialX = margin;
+  const initialY = pageH - 5;
+  pdf.text('Initial:', initialX, initialY);
+  
+  // Draw short line for initial
+  pdf.setDrawColor(150, 150, 150);
+  pdf.setLineWidth(0.3);
+  pdf.line(initialX + 10, initialY, initialX + 25, initialY);
 }
 
 interface DrawStandardCoverOpts {
@@ -262,6 +275,52 @@ function drawCompanyAcceptanceBlock(pdf: jsPDF, x: number, y: number, width: num
   });
 }
 
+function drawCompactAcceptanceBlock(pdf: jsPDF, x: number, y: number, width: number): void {
+  pdf.setFont('Barlow-SemiBold', 'normal');
+  pdf.setFontSize(11);
+  pdf.text('CLIENT ACCEPTANCE', x, y);
+  y += 6;
+
+  pdf.setFont('Barlow-Regular', 'normal');
+  pdf.setFontSize(9);
+
+  const fields = [
+    { label: 'Signature', lineWidth: width * 0.8 },
+    { label: 'Print Name', lineWidth: width * 0.8 },
+    { label: 'Date', lineWidth: 40 },
+  ];
+
+  fields.forEach(field => {
+    pdf.text(field.label, x, y);
+    y += 2;
+    pdf.line(x, y, x + field.lineWidth, y);
+    y += 8;
+  });
+}
+
+function drawCompactCompanyAcceptanceBlock(pdf: jsPDF, x: number, y: number, width: number): void {
+  pdf.setFont('Barlow-SemiBold', 'normal');
+  pdf.setFontSize(11);
+  pdf.text('EDG ACCEPTANCE', x, y);
+  y += 6;
+
+  pdf.setFont('Barlow-Regular', 'normal');
+  pdf.setFontSize(9);
+
+  const fields = [
+    { label: 'Signature', lineWidth: width * 0.8 },
+    { label: 'Print Name', lineWidth: width * 0.8 },
+    { label: 'Date', lineWidth: 40 },
+  ];
+
+  fields.forEach(field => {
+    pdf.text(field.label, x, y);
+    y += 2;
+    pdf.line(x, y, x + field.lineWidth, y);
+    y += 8;
+  });
+}
+
 export function drawRenderingsPages(pdf: jsPDF, opts: DrawRenderingsPagesOpts): void {
   const { images, logoDataUrl, company, margin, contentW, pageW, pageH } = opts;
 
@@ -472,7 +531,7 @@ export function drawLineItemsSection(pdf: jsPDF, opts: DrawLineItemsSectionOpts)
   pdf.text(formatCurrency(totals.total), margin + contentW - 30, y, { align: 'right' });
   y += 18;
 
-  // Client Acceptance Block
+  // Client Acceptance Block - positioned at bottom of page
   const acceptanceH = measureAcceptanceBlock(pdf, {
     heading: 'CLIENT ACCEPTANCE',
     width: contentW,
@@ -490,46 +549,32 @@ export function drawLineItemsSection(pdf: jsPDF, opts: DrawLineItemsSectionOpts)
     ],
   });
 
-  y = ensureSpace(pdf, y, acceptanceH, {
-    marginTop: margin,
-    marginBottom: margin,
-    footerReserve: footerReserveHeight,
-    onNewPage: () => {
-      y = margin;
-    },
-  });
-
-  drawAcceptanceBlock(pdf, margin, y, contentW);
-  y += acceptanceH + 10; // Add spacing between client and company signatures
-
-  // Company Acceptance Block
-  const companyAcceptanceH = measureAcceptanceBlock(pdf, {
-    heading: 'EDG PATIO & SHADE ACCEPTANCE',
-    width: contentW,
-    headingFontSizePt: 14,
-    bodyFontSizePt: 11,
-    spacingTop: 10,
-    spacingAfterHeading: 8,
-    fieldGap: 8,
-    labelGap: 2,
-    bottomPadding: 5,
-    fields: [
-      { label: 'Signature', lineWidthMm: contentW * 0.6 },
-      { label: 'Print Name', lineWidthMm: contentW * 0.6 },
-      { label: 'Date', lineWidthMm: 50 },
-    ],
-  });
-
-  y = ensureSpace(pdf, y, companyAcceptanceH, {
-    marginTop: margin,
-    marginBottom: margin,
-    footerReserve: footerReserveHeight,
-    onNewPage: () => {
-      y = margin;
-    },
-  });
-
-  drawCompanyAcceptanceBlock(pdf, margin, y, contentW);
+  // Ensure space for signature, pushing to bottom when possible
+  const targetSignatureY = pageH - footerReserveHeight - acceptanceH - 10;
+  let signatureY = y;
+  
+  // If current position is above target, push to bottom
+  if (y + acceptanceH < targetSignatureY) {
+    signatureY = targetSignatureY;
+  } else {
+    // Otherwise ensure space at current position
+    signatureY = ensureSpace(pdf, y, acceptanceH, {
+      marginTop: margin,
+      marginBottom: margin,
+      footerReserve: footerReserveHeight,
+      onNewPage: () => {
+        // If new page, position at bottom of that page
+        signatureY = pageH - footerReserveHeight - acceptanceH - 10;
+      },
+    });
+    
+    // If ensureSpace returned a new page, update position
+    if (signatureY === margin) {
+      signatureY = pageH - footerReserveHeight - acceptanceH - 10;
+    }
+  }
+  
+  drawAcceptanceBlock(pdf, margin, signatureY, contentW);
 
   // Add disclaimer text above the footer
   const disclaimerY = pageH - 25 - 5; // Footer height + gap
@@ -590,6 +635,24 @@ export function drawContractSection(pdf: jsPDF, opts: DrawContractSectionOpts): 
     pdf.text(lines, margin, y);
     y += lines.length * 5 + 5;
   });
+
+  // Add side-by-side signatures after contract
+  y += 15; // Add spacing after contract text
+  
+  // Calculate signature block dimensions
+  const signatureBlockWidth = (contentW - 10) / 2; // 10mm gap between signatures
+  const col1X = margin;
+  const col2X = margin + signatureBlockWidth + 10;
+
+  // Check if we need a new page for signatures (need ~35mm for compact signatures)
+  if (y + 35 > pageH - margin - 25) { // 25mm for footer
+    pdf.addPage();
+    y = margin;
+  }
+
+  // Draw both signatures side by side
+  drawCompactAcceptanceBlock(pdf, col1X, y, signatureBlockWidth);
+  drawCompactCompanyAcceptanceBlock(pdf, col2X, y, signatureBlockWidth);
 
   // Add branded footer to the last page
   drawBrandedFooter({ pdf, logoDataUrl, company, pageW, pageH, margin });
