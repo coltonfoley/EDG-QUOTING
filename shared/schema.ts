@@ -84,6 +84,15 @@ export const quotes = pgTable("quotes", {
   // Contract fields
   contractTemplateId: integer("contract_template_id"), // reference to contract template
   customContractTerms: text("custom_contract_terms"), // custom contract text for this quote
+  // E-Signature fields
+  enableESignature: boolean("enable_e_signature").default(false), // toggle for electronic signature
+  signingToken: text("signing_token").unique(), // unique token for signing link
+  clientSignatureData: jsonb("client_signature_data"), // { type: 'draw'|'type', imageData: string, name: string }
+  clientSignedAt: timestamp("client_signed_at"),
+  clientSignedIp: text("client_signed_ip"),
+  companySignatureData: jsonb("company_signature_data"), // { type: 'draw'|'type', imageData: string, name: string }
+  companySignedAt: timestamp("company_signed_at"),
+  companySignedIp: text("company_signed_ip"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => [
@@ -337,6 +346,15 @@ export const insertQuoteSchema = createInsertSchema(quotes).omit({
   // Contract template fields
   contractTemplateId: z.union([z.number(), z.null()]).optional(),
   customContractTerms: z.union([z.string(), z.null()]).optional(),
+  // E-Signature fields (optional, set server-side)
+  enableESignature: z.boolean().optional(),
+  signingToken: z.string().optional().nullable(),
+  clientSignatureData: z.any().optional().nullable(),
+  clientSignedAt: z.string().optional().nullable(),
+  clientSignedIp: z.string().optional().nullable(),
+  companySignatureData: z.any().optional().nullable(),
+  companySignedAt: z.string().optional().nullable(),
+  companySignedIp: z.string().optional().nullable(),
 });
 
 
