@@ -8,13 +8,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { FileText, Bookmark, Plus, Eye, Send, Mail, CheckCircle, AlertCircle, Clock, Link2, Copy } from "lucide-react";
+import { FileText, Bookmark, Plus, Eye, Send, Mail, CheckCircle, AlertCircle, Clock, Link2, Copy, Download } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { formatCurrency, calculateQuoteTotals } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import type { QuoteWithDetails, ContractTemplate } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
+import { generateSignedPDF, downloadSignedPDF } from "@/lib/generate-signed-pdf";
 
 interface QuoteSummaryProps {
   quote: QuoteWithDetails;
@@ -62,6 +63,34 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
         variant: "destructive" 
       });
     },
+  });
+
+  // Download signed PDF mutation
+  const downloadSignedPdfMutation = useMutation({
+    mutationFn: async () => {
+      // Fetch full quote data with signatures
+      const response = await apiRequest('GET', `/api/quotes/${quote.id}`);
+      const fullQuote: QuoteWithDetails = await response.json();
+      
+      // Generate PDF
+      const pdfBlob = await generateSignedPDF({ quote: fullQuote, includeImages: false });
+      
+      // Download
+      downloadSignedPDF(pdfBlob, fullQuote);
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Download Failed',
+        description: error.message || 'Failed to generate PDF',
+        variant: 'destructive'
+      });
+    },
+    onSuccess: () => {
+      toast({
+        title: 'PDF Downloaded',
+        description: 'Signed quote has been downloaded successfully',
+      });
+    }
   });
 
   // E-signature toggle mutation
@@ -433,28 +462,52 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
               <>
                 {/* Signature Status Display */}
                 {quote.clientSignedAt && quote.companySignedAt ? (
-                  <Alert className="border-green-200 bg-green-50">
-                    <CheckCircle className="h-4 w-4 text-green-600" />
-                    <AlertDescription className="text-green-800">
-                      <strong>Fully Signed</strong>
-                      <span className="block mt-1 text-sm">
-                        Client: {new Date(quote.clientSignedAt).toLocaleString()}
-                      </span>
-                      <span className="block text-sm">
-                        Company: {new Date(quote.companySignedAt).toLocaleString()}
-                      </span>
-                    </AlertDescription>
-                  </Alert>
+                  <>
+                    <Alert className="border-green-200 bg-green-50">
+                      <CheckCircle className="h-4 w-4 text-green-600" />
+                      <AlertDescription className="text-green-800">
+                        <strong>Fully Signed</strong>
+                        <span className="block mt-1 text-sm">
+                          Client: {new Date(quote.clientSignedAt).toLocaleString()}
+                        </span>
+                        <span className="block text-sm">
+                          Company: {new Date(quote.companySignedAt).toLocaleString()}
+                        </span>
+                      </AlertDescription>
+                    </Alert>
+                    <Button 
+                      onClick={() => downloadSignedPdfMutation.mutate()}
+                      disabled={downloadSignedPdfMutation.isPending}
+                      variant="outline"
+                      className="w-full"
+                      data-testid="button-download-signed-pdf-company"
+                    >
+                      <Download className="w-4 h-4 mr-2" />
+                      {downloadSignedPdfMutation.isPending ? 'Generating PDF...' : 'Download Signed Quote'}
+                    </Button>
+                  </>
                 ) : quote.clientSignedAt ? (
-                  <Alert className="border-blue-200 bg-blue-50">
-                    <CheckCircle className="h-4 w-4 text-blue-600" />
-                    <AlertDescription className="text-blue-800">
-                      <strong>Client Signed</strong>
-                      <span className="block mt-1 text-sm">
-                        Signed on {new Date(quote.clientSignedAt).toLocaleString()}
-                      </span>
-                    </AlertDescription>
-                  </Alert>
+                  <>
+                    <Alert className="border-blue-200 bg-blue-50">
+                      <CheckCircle className="h-4 w-4 text-blue-600" />
+                      <AlertDescription className="text-blue-800">
+                        <strong>Client Signed</strong>
+                        <span className="block mt-1 text-sm">
+                          Signed on {new Date(quote.clientSignedAt).toLocaleString()}
+                        </span>
+                      </AlertDescription>
+                    </Alert>
+                    <Button 
+                      onClick={() => downloadSignedPdfMutation.mutate()}
+                      disabled={downloadSignedPdfMutation.isPending}
+                      variant="outline"
+                      className="w-full"
+                      data-testid="button-download-signed-pdf-company"
+                    >
+                      <Download className="w-4 h-4 mr-2" />
+                      {downloadSignedPdfMutation.isPending ? 'Generating PDF...' : 'Download Signed Quote'}
+                    </Button>
+                  </>
                 ) : quote.companySignedAt ? (
                   <Alert className="border-purple-200 bg-purple-50">
                     <CheckCircle className="h-4 w-4 text-purple-600" />

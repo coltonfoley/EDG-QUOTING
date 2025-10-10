@@ -7,15 +7,18 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { LoadingSpinner } from '@/components/loading-spinner';
 import { SignatureCanvas, SignatureData } from '@/components/signature-canvas';
 import { apiRequest, queryClient } from '@/lib/queryClient';
-import { CheckCircle, AlertTriangle, FileText } from 'lucide-react';
+import { CheckCircle, AlertTriangle, FileText, Download } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import jsPDF from 'jspdf';
 import { barlowRegularBase64, barlowSemiBoldBase64 } from '@/lib/fonts';
 import { generateBrandedSequencePDF } from '@/lib/pdf-branded-sequence';
 import { normalizeImageToDataUrl } from '@/lib/pdf-image-pipeline';
+import { generateSignedPDF, downloadSignedPDF } from '@/lib/generate-signed-pdf';
+import type { QuoteWithDetails } from '@shared/schema';
 
 interface SigningQuoteData {
   id: number;
+  quoteNumber: string | null;
   projectName: string | null;
   status: string | null;
   total: number | null;
@@ -206,6 +209,34 @@ export default function PublicSignPage() {
     );
   }
 
+  // Download signed PDF mutation
+  const downloadPdfMutation = useMutation({
+    mutationFn: async () => {
+      // Fetch full quote data with signatures
+      const response = await apiRequest('GET', `/api/signatures/${token}/full`);
+      const fullQuote: QuoteWithDetails = await response.json();
+      
+      // Generate PDF
+      const pdfBlob = await generateSignedPDF({ quote: fullQuote, includeImages: false });
+      
+      // Download
+      downloadSignedPDF(pdfBlob, fullQuote);
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Download Failed',
+        description: error.message || 'Failed to generate PDF',
+        variant: 'destructive'
+      });
+    },
+    onSuccess: () => {
+      toast({
+        title: 'PDF Downloaded',
+        description: 'Your signed quote has been downloaded successfully',
+      });
+    }
+  });
+
   if (isAlreadySigned) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
@@ -231,9 +262,21 @@ export default function PublicSignPage() {
                 <strong>Company:</strong> {quoteData.account?.name || quoteData.customer?.name || 'N/A'}
               </p>
             </div>
-            <p className="text-sm text-gray-500 pt-4 border-t">
-              You will receive a copy of the signed quote shortly. You may now close this window.
-            </p>
+            
+            <div className="pt-4 border-t space-y-3">
+              <Button 
+                onClick={() => downloadPdfMutation.mutate()}
+                disabled={downloadPdfMutation.isPending}
+                className="w-full"
+                data-testid="button-download-signed-pdf"
+              >
+                <Download className="w-4 h-4 mr-2" />
+                {downloadPdfMutation.isPending ? 'Generating PDF...' : 'Download Signed Quote'}
+              </Button>
+              <p className="text-sm text-gray-500 text-center">
+                You may now close this window.
+              </p>
+            </div>
           </CardContent>
         </Card>
       </div>
