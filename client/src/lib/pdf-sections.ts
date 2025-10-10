@@ -239,7 +239,8 @@ function drawAcceptanceBlock(
   y: number, 
   width: number,
   signatureData?: { type: 'draw' | 'type', imageData: string, name: string } | null,
-  signedDate?: Date | null
+  signedDate?: Date | null,
+  ipAddress?: string | null
 ): void {
   pdf.setFont('Barlow-SemiBold', 'normal');
   pdf.setFontSize(14);
@@ -276,6 +277,15 @@ function drawAcceptanceBlock(
   }
   pdf.line(x, y, x + 50, y);
   y += 12;
+
+  // IP Address field (for legal verification)
+  if (ipAddress) {
+    pdf.setFontSize(8);
+    pdf.setTextColor(100, 100, 100);
+    pdf.text(`IP: ${ipAddress}`, x, y);
+    y += 8;
+    pdf.setTextColor(0, 0, 0);
+  }
 }
 
 function drawCompanyAcceptanceBlock(
@@ -284,7 +294,8 @@ function drawCompanyAcceptanceBlock(
   y: number, 
   width: number,
   signatureData?: { type: 'draw' | 'type', imageData: string, name: string } | null,
-  signedDate?: Date | null
+  signedDate?: Date | null,
+  ipAddress?: string | null
 ): void {
   pdf.setFont('Barlow-SemiBold', 'normal');
   pdf.setFontSize(14);
@@ -321,6 +332,15 @@ function drawCompanyAcceptanceBlock(
   }
   pdf.line(x, y, x + 50, y);
   y += 12;
+
+  // IP Address field (for legal verification)
+  if (ipAddress) {
+    pdf.setFontSize(8);
+    pdf.setTextColor(100, 100, 100);
+    pdf.text(`IP: ${ipAddress}`, x, y);
+    y += 8;
+    pdf.setTextColor(0, 0, 0);
+  }
 }
 
 function drawCompactAcceptanceBlock(
@@ -329,7 +349,8 @@ function drawCompactAcceptanceBlock(
   y: number, 
   width: number,
   signatureData?: { type: 'draw' | 'type', imageData: string, name: string } | null,
-  signedDate?: Date | null
+  signedDate?: Date | null,
+  ipAddress?: string | null
 ): void {
   pdf.setFont('Barlow-SemiBold', 'normal');
   pdf.setFontSize(11);
@@ -366,6 +387,15 @@ function drawCompactAcceptanceBlock(
   }
   pdf.line(x, y, x + 40, y);
   y += 8;
+
+  // IP Address field (for legal verification)
+  if (ipAddress) {
+    pdf.setFontSize(7);
+    pdf.setTextColor(100, 100, 100);
+    pdf.text(`IP: ${ipAddress}`, x, y);
+    y += 6;
+    pdf.setTextColor(0, 0, 0);
+  }
 }
 
 function drawCompactCompanyAcceptanceBlock(
@@ -374,7 +404,8 @@ function drawCompactCompanyAcceptanceBlock(
   y: number, 
   width: number,
   signatureData?: { type: 'draw' | 'type', imageData: string, name: string } | null,
-  signedDate?: Date | null
+  signedDate?: Date | null,
+  ipAddress?: string | null
 ): void {
   pdf.setFont('Barlow-SemiBold', 'normal');
   pdf.setFontSize(11);
@@ -411,6 +442,15 @@ function drawCompactCompanyAcceptanceBlock(
   }
   pdf.line(x, y, x + 40, y);
   y += 8;
+
+  // IP Address field (for legal verification)
+  if (ipAddress) {
+    pdf.setFontSize(7);
+    pdf.setTextColor(100, 100, 100);
+    pdf.text(`IP: ${ipAddress}`, x, y);
+    y += 6;
+    pdf.setTextColor(0, 0, 0);
+  }
 }
 
 export function drawRenderingsPages(pdf: jsPDF, opts: DrawRenderingsPagesOpts): void {
@@ -639,7 +679,7 @@ export function drawLineItemsSection(pdf: jsPDF, opts: DrawLineItemsSectionOpts)
       { label: 'Print Name', lineWidthMm: contentW * 0.6 },
       { label: 'Date', lineWidthMm: 50 },
     ],
-  });
+  }) + (quote.clientSignedIp ? 8 : 0); // Add space for IP address if present
 
   // Ensure space for signature, pushing to bottom when possible
   const targetSignatureY = pageH - footerReserveHeight - acceptanceH - 10;
@@ -672,7 +712,8 @@ export function drawLineItemsSection(pdf: jsPDF, opts: DrawLineItemsSectionOpts)
     signatureY, 
     contentW,
     quote.clientSignatureData,
-    quote.clientSignedAt ? new Date(quote.clientSignedAt) : null
+    quote.clientSignedAt ? new Date(quote.clientSignedAt) : null,
+    quote.clientSignedIp || null
   );
 
   // Add disclaimer text above the footer
@@ -776,7 +817,8 @@ export function drawContractSection(pdf: jsPDF, opts: DrawContractSectionOpts): 
     y, 
     signatureBlockWidth,
     quote?.clientSignatureData,
-    quote?.clientSignedAt ? new Date(quote.clientSignedAt) : null
+    quote?.clientSignedAt ? new Date(quote.clientSignedAt) : null,
+    quote?.clientSignedIp || null
   );
   drawCompactCompanyAcceptanceBlock(
     pdf, 
@@ -784,7 +826,8 @@ export function drawContractSection(pdf: jsPDF, opts: DrawContractSectionOpts): 
     y, 
     signatureBlockWidth,
     quote?.companySignatureData,
-    quote?.companySignedAt ? new Date(quote.companySignedAt) : null
+    quote?.companySignedAt ? new Date(quote.companySignedAt) : null,
+    quote?.companySignedIp || null
   );
 
   // Add branded footer to the last page (no initials since signatures are here)
