@@ -892,8 +892,9 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
         width,
       }, {
         onSuccess: () => {
-          // Close dialog and reset dimensions only after successful calculation
+          // Close dialog, show the new item form, and reset dimensions only after successful calculation
           setShowDimensionDialog(false);
+          setShowNewItemForm(true);
           setDimensions({ length: "", width: "" });
         }
       });
