@@ -96,12 +96,20 @@ export default function QuoteBuilder() {
       const response = await apiRequest("PUT", `/api/quotes/${quoteId}`, quoteData);
       return response.json();
     },
-    onSuccess: (updatedQuote) => {
-      // Use setQueryData to update the cache without triggering refetches
-      queryClient.setQueryData([`/api/quotes/${quoteId}`], (oldData: any) => {
-        if (!oldData) return oldData;
-        return { ...oldData, ...updatedQuote };
-      });
+    onSuccess: (updatedQuote, variables) => {
+      // Get the current cached quote to compare accountId
+      const cachedQuote = queryClient.getQueryData([`/api/quotes/${quoteId}`]) as any;
+      
+      // If accountId actually changed (not just present in the update), invalidate to refetch full account details
+      if (variables.accountId !== undefined && cachedQuote && variables.accountId !== cachedQuote.accountId) {
+        queryClient.invalidateQueries({ queryKey: [`/api/quotes/${quoteId}`] });
+      } else {
+        // For other updates, use setQueryData to update cache without refetch
+        queryClient.setQueryData([`/api/quotes/${quoteId}`], (oldData: any) => {
+          if (!oldData) return oldData;
+          return { ...oldData, ...updatedQuote };
+        });
+      }
       
       toast({ title: "Quote updated successfully" });
     },
