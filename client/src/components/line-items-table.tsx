@@ -508,9 +508,9 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
       const updateKey = `update-${id}`;
       delete pendingMutations.current.update[updateKey];
       
-      // Don't invalidate queries for field updates - local state is already updated
-      // Only invalidate if explicitly requested (for batch operations)
-      if (result.skipInvalidation === false) {
+      // Invalidate queries by default to update totals, unless explicitly skipped
+      // Skip invalidation for batch operations (will be invalidated once at the end)
+      if (result.skipInvalidation !== true) {
         queryClient.invalidateQueries({ queryKey: [`/api/quotes/${quoteId}`] });
         
         // Also update the list cache by refetching and updating that specific quote
