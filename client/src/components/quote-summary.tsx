@@ -694,10 +694,17 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
             </div>
 
             <div className="pt-4 space-y-2">
+              {!quote.account?.email && (
+                <Alert className="border-yellow-200 bg-yellow-50">
+                  <AlertDescription className="text-yellow-800 text-sm">
+                    Add a customer email to enable email sending
+                  </AlertDescription>
+                </Alert>
+              )}
               <Button
                 onClick={() => sendSignatureEmailMutation.mutate()}
                 disabled={sendSignatureEmailMutation.isPending || !quote.account?.email}
-                className="w-full bg-edg-teal hover:bg-edg-dark-teal"
+                className="w-full bg-edg-teal hover:bg-edg-dark-teal text-white disabled:opacity-50 disabled:cursor-not-allowed"
                 data-testid="button-send-email"
               >
                 <Mail className="mr-2 h-4 w-4" />
