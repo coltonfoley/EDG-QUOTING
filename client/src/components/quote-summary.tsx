@@ -222,19 +222,27 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
     companySignMutation.mutate(companySignature);
   };
 
+  const mappedItems = quote.lineItems.map(item => ({
+    quantity: item.quantity,
+    unitPrice: item.unitPrice,
+    markupType: item.markupType,
+    markupValue: item.markupValue,
+    discountType: item.discountType,
+    discountValue: item.discountValue,
+    isTaxable: item.isTaxable,
+  }));
+  
+  console.log('QuoteSummary - Line items being passed to calculateQuoteTotals:', mappedItems);
+
   const totals = calculateQuoteTotals(
-    quote.lineItems.map(item => ({
-      quantity: item.quantity,
-      unitPrice: item.unitPrice,
-      markupType: item.markupType,
-      markupValue: item.markupValue,
-      isTaxable: item.isTaxable,
-    })),
+    mappedItems,
     quote.taxRate ?? 0,
     quote.discount ?? 0,
     quote.shipping ?? 0,
     quote.isShippingTaxable ?? true
   );
+  
+  console.log('QuoteSummary - Calculated totals:', totals);
 
   return (
     <>
