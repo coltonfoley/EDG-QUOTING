@@ -95,6 +95,7 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+- October 13, 2025: Implemented email sending for e-signatures - integrated Gmail connector to send professional HTML emails directly from the app to customers with their signing link, includes "Send Email to Customer" button in signing link dialog with comprehensive error handling for missing Gmail configuration
 - October 8, 2025: Implemented taxable vs non-taxable line items functionality - added "Taxable" checkbox column to line items table allowing users to control tax application at the quote level for individual items, with quote-level discounts applied proportionally before tax calculation, ensuring complete parity between UI and PDF totals
 - October 4, 2025: Fixed PDF generation image fetch errors - resolved CORS failures by updating image normalizer to handle data:/blob: URLs without fetch, proxying all non-same-origin URLs through backend, and using Promise.allSettled for resilient image loading that won't crash if one image fails
 - October 4, 2025: Optimized line item rendering performance - replaced O(n) array.find() operations with O(1) Map lookups in LineItemsTable component, eliminating per-render O(n×fields) work for significant performance improvement with many line items
