@@ -1892,6 +1892,109 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Send e-signature email to customer
+  app.post("/api/quotes/:id/send-signature-email", isAuthenticated, async (req, res) => {
+    try {
+      const params = idParamSchema.safeParse(req.params);
+      if (!params.success) {
+        return res.status(400).json({ 
+          message: "Invalid request parameters", 
+          errors: params.error.errors 
+        });
+      }
+
+      const quote = await storage.getQuote(params.data.id);
+      if (!quote) {
+        return res.status(404).json({ message: "Quote not found" });
+      }
+
+      if (!quote.enableESignature || !quote.signingToken) {
+        return res.status(400).json({ message: "E-signature must be enabled first" });
+      }
+
+      if (!quote.account?.email) {
+        return res.status(400).json({ message: "Customer email not found" });
+      }
+
+      // Import sendEmail function
+      const { sendEmail } = await import("./gmail");
+
+      // Get the base URL from environment or construct it
+      const baseUrl = process.env.REPLIT_DEV_DOMAIN 
+        ? `https://${process.env.REPLIT_DEV_DOMAIN}` 
+        : req.get('origin') || `${req.protocol}://${req.get('host')}`;
+      
+      const signingUrl = `${baseUrl}/sign/${quote.signingToken}`;
+
+      // Create email content
+      const customerName = quote.account.firstName 
+        ? `${quote.account.firstName} ${quote.account.lastName || ''}`.trim()
+        : quote.account.name;
+
+      const htmlBody = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Your Quote is Ready for Signature</title>
+        </head>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background-color: #f8f9fa; border-radius: 8px; padding: 30px; margin-bottom: 20px;">
+            <h1 style="color: #2563eb; margin-top: 0;">Your Quote is Ready for Signature</h1>
+            <p>Hello ${customerName},</p>
+            <p>Your quote <strong>#${quote.quoteNumber}</strong> for <strong>${quote.projectName || 'your project'}</strong> is ready for your electronic signature.</p>
+          </div>
+          
+          <div style="background-color: #ffffff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 30px; margin-bottom: 20px;">
+            <h2 style="color: #1f2937; margin-top: 0;">Quote Details</h2>
+            <p><strong>Quote Number:</strong> ${quote.quoteNumber}</p>
+            <p><strong>Project:</strong> ${quote.projectName || 'N/A'}</p>
+            ${quote.projectAddress ? `<p><strong>Address:</strong> ${quote.projectAddress}</p>` : ''}
+          </div>
+          
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${signingUrl}" 
+               style="display: inline-block; background-color: #2563eb; color: white; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 16px;">
+              Review and Sign Quote
+            </a>
+          </div>
+          
+          <div style="background-color: #f8f9fa; border-radius: 8px; padding: 20px; margin-top: 20px;">
+            <p style="margin: 0; font-size: 14px; color: #6b7280;">
+              If you have any questions about this quote, please don't hesitate to contact us.
+            </p>
+          </div>
+          
+          <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb; text-align: center; color: #9ca3af; font-size: 12px;">
+            <p>EDG Patio & Shade</p>
+            <p>1802 Holian Drive, Spring Grove, IL 60081</p>
+            <p>Phone: +1 (815) 581-0138 | Email: info@edgpatioshade.com</p>
+          </div>
+        </body>
+        </html>
+      `;
+
+      // Send the email
+      await sendEmail({
+        to: quote.account.email,
+        subject: `Your Quote #${quote.quoteNumber} is Ready for Signature`,
+        htmlBody
+      });
+
+      res.json({ 
+        success: true,
+        message: `E-signature email sent to ${quote.account.email}`
+      });
+    } catch (error) {
+      console.error("Error sending signature email:", error);
+      res.status(500).json({ 
+        message: "Failed to send email", 
+        error: error instanceof Error ? error.message : "Unknown error" 
+      });
+    }
+  });
+
   // Get quote info for signing (public route)
   app.get("/api/signatures/:token", async (req, res) => {
     try {
