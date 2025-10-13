@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, FileText, Users, DollarSign, Search, Upload, Trash2, Loader2 } from "lucide-react";
+import { Plus, FileText, Users, DollarSign, Search, Upload, Trash2, Loader2, CheckCircle2, Clock, FileSignature } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { getDealStageColor, getDealStageLabel } from "@shared/dealStageConstants";
 import { isUnauthorizedError } from "@/lib/authUtils";
@@ -327,6 +327,9 @@ export default function Quotes() {
                       <th className="px-6 py-3 text-center text-xs font-medium text-edg-grey uppercase tracking-wider">
                         Workflow
                       </th>
+                      <th className="px-6 py-3 text-center text-xs font-medium text-edg-grey uppercase tracking-wider">
+                        Signature
+                      </th>
                       <th className="px-6 py-3 text-right text-xs font-medium text-edg-grey uppercase tracking-wider">
                         Amount
                       </th>
@@ -370,6 +373,28 @@ export default function Quotes() {
                             <Badge className={getDealStageColor(quote.dealStage)}>
                               {getDealStageLabel(quote.dealStage)}
                             </Badge>
+                          </td>
+                          <td className="px-6 py-4 text-center">
+                            {quote.enableESignature ? (
+                              quote.clientSignedAt && quote.companySignedAt ? (
+                                <Badge className="bg-green-100 text-green-800 hover:bg-green-100" data-testid={`badge-signature-complete-${quote.id}`}>
+                                  <CheckCircle2 className="w-3 h-3 mr-1" />
+                                  Fully Signed
+                                </Badge>
+                              ) : quote.clientSignedAt ? (
+                                <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100" data-testid={`badge-signature-client-${quote.id}`}>
+                                  <FileSignature className="w-3 h-3 mr-1" />
+                                  Client Signed
+                                </Badge>
+                              ) : (
+                                <Badge className="bg-yellow-100 text-yellow-800 hover:bg-yellow-100" data-testid={`badge-signature-pending-${quote.id}`}>
+                                  <Clock className="w-3 h-3 mr-1" />
+                                  Pending Client
+                                </Badge>
+                              )
+                            ) : (
+                              <span className="text-gray-400 text-xs">-</span>
+                            )}
                           </td>
                           <td className="px-6 py-4 text-sm font-medium text-edg-black text-right">
                             {formatCurrency(total)}
