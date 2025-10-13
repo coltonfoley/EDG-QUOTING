@@ -768,7 +768,10 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
   const calculatePricingMutation = useMutation({
     mutationFn: async (data: { productId: number; length: number; width: number }) => {
       try {
-        const response = await apiRequest("POST", "/api/calculate-price", data, {
+        const response = await apiRequest("POST", `/api/products/${data.productId}/calculate-price`, {
+          length: data.length,
+          width: data.width
+        }, {
           signal: abortController.current.signal
         });
         return response.json();
