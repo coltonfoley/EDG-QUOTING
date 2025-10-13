@@ -1939,37 +1939,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
           <title>Your Quote is Ready for Signature</title>
         </head>
-        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-          <div style="background-color: #f8f9fa; border-radius: 8px; padding: 30px; margin-bottom: 20px;">
-            <h1 style="color: #2563eb; margin-top: 0;">Your Quote is Ready for Signature</h1>
-            <p>Hello ${customerName},</p>
-            <p>Your quote <strong>#${quote.quoteNumber}</strong> for <strong>${quote.projectName || 'your project'}</strong> is ready for your electronic signature.</p>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #1a1a1a; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9fafb;">
+          <div style="background-color: #000000; border-radius: 8px 8px 0 0; border-bottom: 4px solid #14b8a6; padding: 30px; margin-bottom: 20px;">
+            <h1 style="color: #ffffff; margin-top: 0; font-size: 24px;">Your Quote is Ready for Signature</h1>
+            <p style="color: #ffffff; margin-bottom: 0;">Hello ${customerName},</p>
+            <p style="color: #f0f0f0;">Your quote <strong>#${quote.quoteNumber}</strong> for <strong>${quote.projectName || 'your project'}</strong> is ready for your electronic signature.</p>
           </div>
           
-          <div style="background-color: #ffffff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 30px; margin-bottom: 20px;">
-            <h2 style="color: #1f2937; margin-top: 0;">Quote Details</h2>
-            <p><strong>Quote Number:</strong> ${quote.quoteNumber}</p>
-            <p><strong>Project:</strong> ${quote.projectName || 'N/A'}</p>
-            ${quote.projectAddress ? `<p><strong>Address:</strong> ${quote.projectAddress}</p>` : ''}
+          <div style="background-color: #ffffff; border: 2px solid #e5e7eb; border-radius: 8px; padding: 30px; margin-bottom: 20px;">
+            <h2 style="color: #000000; margin-top: 0; font-size: 20px; border-bottom: 2px solid #14b8a6; padding-bottom: 10px;">Quote Details</h2>
+            <p style="color: #1a1a1a;"><strong>Quote Number:</strong> ${quote.quoteNumber}</p>
+            <p style="color: #1a1a1a;"><strong>Project:</strong> ${quote.projectName || 'N/A'}</p>
+            ${quote.projectAddress ? `<p style="color: #1a1a1a;"><strong>Address:</strong> ${quote.projectAddress}</p>` : ''}
           </div>
           
           <div style="text-align: center; margin: 30px 0;">
             <a href="${signingUrl}" 
-               style="display: inline-block; background-color: #2563eb; color: white; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 16px;">
+               style="display: inline-block; background-color: #14b8a6; color: #ffffff; padding: 16px 32px; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 16px; box-shadow: 0 2px 4px rgba(20, 184, 166, 0.3);">
               Review and Sign Quote
             </a>
           </div>
           
-          <div style="background-color: #f8f9fa; border-radius: 8px; padding: 20px; margin-top: 20px;">
-            <p style="margin: 0; font-size: 14px; color: #6b7280;">
+          <div style="background-color: #f0fdfa; border-left: 4px solid #14b8a6; border-radius: 4px; padding: 20px; margin-top: 20px;">
+            <p style="margin: 0; font-size: 14px; color: #115e59;">
               If you have any questions about this quote, please don't hesitate to contact us.
             </p>
           </div>
           
-          <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb; text-align: center; color: #9ca3af; font-size: 12px;">
-            <p>EDG Patio & Shade</p>
-            <p>1802 Holian Drive, Spring Grove, IL 60081</p>
-            <p>Phone: +1 (815) 581-0138 | Email: info@edgpatioshade.com</p>
+          <div style="margin-top: 30px; padding-top: 20px; border-top: 2px solid #14b8a6; text-align: center; color: #6b7280; font-size: 12px;">
+            <p style="margin: 5px 0; font-weight: 600; color: #1a1a1a;">EDG Patio & Shade</p>
+            <p style="margin: 5px 0;">1802 Holian Drive, Spring Grove, IL 60081</p>
+            <p style="margin: 5px 0;">Phone: +1 (815) 581-0138 | Email: info@edgpatioshade.com</p>
           </div>
         </body>
         </html>
