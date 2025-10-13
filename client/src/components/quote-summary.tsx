@@ -210,6 +210,27 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
     });
   };
 
+  // Send signature email mutation
+  const sendSignatureEmailMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("POST", `/api/quotes/${quote.id}/send-signature-email`, {});
+      return response.json();
+    },
+    onSuccess: (data) => {
+      toast({ 
+        title: "Email Sent!",
+        description: data.message || "E-signature email sent to customer"
+      });
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: "Error", 
+        description: error.message || "Failed to send email", 
+        variant: "destructive" 
+      });
+    },
+  });
+
   const handleCompanySign = () => {
     if (!companySignature) {
       toast({
@@ -672,9 +693,19 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
               </div>
             </div>
 
-            <div className="pt-4">
+            <div className="pt-4 space-y-2">
+              <Button
+                onClick={() => sendSignatureEmailMutation.mutate()}
+                disabled={sendSignatureEmailMutation.isPending || !quote.account?.email}
+                className="w-full bg-edg-teal hover:bg-edg-dark-teal"
+                data-testid="button-send-email"
+              >
+                <Mail className="mr-2 h-4 w-4" />
+                {sendSignatureEmailMutation.isPending ? "Sending..." : "Send Email to Customer"}
+              </Button>
               <Button
                 onClick={() => setShowSigningLinkDialog(false)}
+                variant="outline"
                 className="w-full"
                 data-testid="button-close-dialog"
               >

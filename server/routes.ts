@@ -1903,7 +1903,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      const quote = await storage.getQuote(params.data.id);
+      const quote = await storage.getQuoteWithDetails(params.data.id);
       if (!quote) {
         return res.status(404).json({ message: "Quote not found" });
       }
