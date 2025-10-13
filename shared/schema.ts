@@ -82,7 +82,7 @@ export const quotes = pgTable("quotes", {
   dealStage: text("deal_stage").notNull().default("new_lead"), // new_lead, qualifying, consultation_scheduled, building_estimate, quote_sent, closed_won, closed_lost, on_hold
   lostReason: text("lost_reason"), // price, timeline, competitor, no_budget, etc.
   // Contract fields
-  contractTemplateId: integer("contract_template_id"), // reference to contract template
+  contractTemplateId: integer("contract_template_id").references(() => contractTemplates.id, { onDelete: "set null" }), // reference to contract template
   customContractTerms: text("custom_contract_terms"), // custom contract text for this quote
   // E-Signature fields
   enableESignature: boolean("enable_e_signature").default(false), // toggle for electronic signature
