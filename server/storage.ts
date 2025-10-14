@@ -460,22 +460,31 @@ export class DatabaseStorage implements IStorage {
     // Build conditions for duplicate detection
     const conditions = [];
     
-    // Check for email match (case-insensitive)
-    conditions.push(eq(sql`LOWER(${accounts.email})`, normalizedEmail));
+    // Check for email match (case-insensitive) - only if email is not empty
+    if (normalizedEmail && normalizedEmail.trim().length > 0) {
+      conditions.push(eq(sql`LOWER(${accounts.email})`, normalizedEmail));
+    }
     
-    // Check for phone match (after normalization)
-    // We need to compare normalized versions of the stored phone numbers
-    const phonePattern = `%${normalizedPhone}%`;
-    conditions.push(sql`REPLACE(REPLACE(REPLACE(REPLACE(${accounts.phone}, '-', ''), '(', ''), ')', ''), ' ', '') LIKE ${phonePattern}`);
+    // Check for phone match (after normalization) - only if phone has digits
+    if (normalizedPhone && normalizedPhone.length > 0) {
+      // We need to compare normalized versions of the stored phone numbers
+      const phonePattern = `%${normalizedPhone}%`;
+      conditions.push(sql`REPLACE(REPLACE(REPLACE(REPLACE(${accounts.phone}, '-', ''), '(', ''), ')', ''), ' ', '') LIKE ${phonePattern}`);
+    }
     
     // For business accounts, also check name + company combination
-    if (account.company) {
+    if (account.company && account.company.trim().length > 0) {
       conditions.push(
         and(
           eq(sql`LOWER(${accounts.name})`, account.name.toLowerCase()),
           eq(sql`LOWER(${accounts.company})`, account.company.toLowerCase())
         )
       );
+    }
+    
+    // If no valid conditions, return no duplicate
+    if (conditions.length === 0) {
+      return undefined;
     }
     
     // Query for any matching accounts
