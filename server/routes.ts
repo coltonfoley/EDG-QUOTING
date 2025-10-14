@@ -1112,9 +1112,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     );
     const hasCompanyOnly = !hasContactInfo && customerData.company && customerData.company.trim();
 
-    // If company-only import, skip matching and always create new account
+    // If company-only import, try to match by company name first
     if (hasCompanyOnly && attachCustomer === 'auto') {
-      console.log('Company-only import detected, creating new account with company name');
+      console.log('Company-only import detected, checking for existing company match');
+      
+      // Try to find existing account by company name (excluding placeholders)
+      const accounts = await storage.getAllAccounts();
+      const existingByCompany = accounts.find(acc => {
+        const isPlaceholder = acc.name === 'Unnamed Client' && (!acc.email || !acc.email.trim()) && (!acc.phone || !acc.phone.trim());
+        const companyMatches = acc.company && acc.company.toLowerCase().trim() === customerData.company?.toLowerCase().trim();
+        return !isPlaceholder && companyMatches;
+      });
+
+      if (existingByCompany) {
+        console.log(`Found existing company match: ${existingByCompany.name} (ID: ${existingByCompany.id})`);
+        return { accountId: existingByCompany.id, wasCreated: false };
+      }
+
+      // No match found - create new account with company name
+      console.log('No existing company found, creating new account');
       const clientData = {
         name: customerData.company!.trim(),
         firstName: undefined,
@@ -1128,7 +1144,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       };
 
       const newClient = await storage.createClient(clientData, {
-        allowDuplicate: true, // Always create new for company-only
+        allowDuplicate: true, // Create new if no company match found
         updateIfExists: false
       });
       return { accountId: newClient.id, wasCreated: true };
