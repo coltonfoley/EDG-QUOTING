@@ -3731,9 +3731,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       delete (req.session as any).qbState;
       console.log('QuickBooks connection successful!');
       res.redirect('/admin/quickbooks?qb_connected=true');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error in QuickBooks callback:', error);
-      res.redirect('/admin/quickbooks?qb_error=auth_failed');
+      const errorMessage = error.message || 'auth_failed';
+      // URL encode the error message to preserve it
+      const encodedError = encodeURIComponent(errorMessage);
+      res.redirect(`/admin/quickbooks?qb_error=${encodedError}`);
     }
   });
 
