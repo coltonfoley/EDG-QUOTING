@@ -13,8 +13,9 @@ import { generateQuoteNumber } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { LoadingSpinner } from "@/components/loading-spinner";
 import { SimpleProposalGenerator } from "@/components/simple-proposal-generator";
-import { Save, Loader2, FileText } from "lucide-react";
+import { Save, Loader2, FileText, CloudUpload } from "lucide-react";
 import type { QuoteWithDetails } from "@shared/schema";
+import { QuickBooksSync } from "@/components/quickbooks-sync";
 
 export default function QuoteBuilder() {
   const params = useParams();
@@ -202,6 +203,18 @@ export default function QuoteBuilder() {
     lostReason: null,
     contractTemplateId: null,
     customContractTerms: null,
+    enableESignature: false,
+    signingToken: null,
+    clientSignatureData: null,
+    clientSignedAt: null,
+    clientSignedIp: null,
+    companySignatureData: null,
+    companySignedAt: null,
+    companySignedIp: null,
+    qbInvoiceId: null,
+    qbSyncStatus: null,
+    qbSyncedAt: null,
+    qbSyncError: null,
     createdAt: new Date(),
     updatedAt: new Date(),
     account: { 
@@ -216,6 +229,7 @@ export default function QuoteBuilder() {
       firstName: null,
       lastName: null,
       secondaryContacts: null,
+      qbCustomerId: null,
       createdAt: new Date(),
       updatedAt: new Date()
     },
@@ -231,6 +245,7 @@ export default function QuoteBuilder() {
       firstName: null,
       lastName: null,
       secondaryContacts: null,
+      qbCustomerId: null,
       createdAt: new Date(),
       updatedAt: new Date()
     },
@@ -264,6 +279,7 @@ export default function QuoteBuilder() {
         {/* Action Buttons - Show for existing quotes with line items */}
         {!isNewQuote && currentQuote.id && currentQuote.lineItems.length > 0 && (
           <div className="flex justify-end gap-4 mt-8 pb-8">
+            <QuickBooksSync quote={currentQuote} />
             <Button 
               onClick={() => setProposalGeneratorOpen(true)}
               variant="outline"

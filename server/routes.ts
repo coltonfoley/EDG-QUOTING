@@ -3652,6 +3652,190 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
 
 
+  // QuickBooks OAuth and sync routes
+  app.get('/api/quickbooks/connect', isAuthenticated, async (req, res) => {
+    try {
+      const { createQuickBooksService } = await import('./quickbooks');
+      const qbService = createQuickBooksService();
+      
+      if (!qbService) {
+        return res.status(500).json({ message: 'QuickBooks integration not configured' });
+      }
+
+      const state = nanoid();
+      (req.session as any).qbState = state;
+      
+      const authUrl = qbService.getAuthorizationUrl(state);
+      res.json({ authUrl });
+    } catch (error) {
+      console.error('Error initiating QuickBooks connection:', error);
+      res.status(500).json({ message: 'Failed to initiate QuickBooks connection' });
+    }
+  });
+
+  app.get('/api/quickbooks/callback', async (req, res) => {
+    try {
+      const { code, state, realmId } = req.query;
+      
+      if (!code || !state || !realmId) {
+        return res.redirect('/?qb_error=missing_params');
+      }
+
+      if (state !== (req.session as any).qbState) {
+        return res.redirect('/?qb_error=invalid_state');
+      }
+
+      const { createQuickBooksService } = await import('./quickbooks');
+      const qbService = createQuickBooksService();
+      
+      if (!qbService) {
+        return res.redirect('/?qb_error=not_configured');
+      }
+
+      const tokens = await qbService.exchangeCodeForTokens(code as string);
+      const expiresAt = new Date(Date.now() + tokens.expiresIn * 1000);
+      
+      await storage.saveQuickBooksSettings({
+        realmId: realmId as string,
+        accessToken: tokens.accessToken,
+        refreshToken: tokens.refreshToken,
+        tokenExpiresAt: expiresAt
+      });
+
+      delete (req.session as any).qbState;
+      res.redirect('/?qb_connected=true');
+    } catch (error) {
+      console.error('Error in QuickBooks callback:', error);
+      res.redirect('/?qb_error=auth_failed');
+    }
+  });
+
+  app.get('/api/quickbooks/status', isAuthenticated, async (req, res) => {
+    try {
+      const settings = await storage.getQuickBooksSettings();
+      res.json({ 
+        connected: !!settings && settings.isActive,
+        realmId: settings?.realmId || null
+      });
+    } catch (error) {
+      console.error('Error checking QuickBooks status:', error);
+      res.status(500).json({ message: 'Failed to check QuickBooks status' });
+    }
+  });
+
+  app.post('/api/quickbooks/disconnect', isAuthenticated, async (req, res) => {
+    try {
+      const { createQuickBooksService } = await import('./quickbooks');
+      const qbService = createQuickBooksService();
+      
+      if (qbService) {
+        await qbService.revokeTokens();
+      }
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error disconnecting QuickBooks:', error);
+      res.status(500).json({ message: 'Failed to disconnect QuickBooks' });
+    }
+  });
+
+  app.post('/api/quickbooks/sync-quote/:id', isAuthenticated, async (req, res) => {
+    try {
+      const { id } = idParamSchema.parse(req.params);
+      const { createQuickBooksService } = await import('./quickbooks');
+      const qbService = createQuickBooksService();
+      
+      if (!qbService) {
+        return res.status(500).json({ message: 'QuickBooks integration not configured' });
+      }
+
+      const quote = await storage.getQuoteWithDetails(id);
+      if (!quote) {
+        return res.status(404).json({ message: 'Quote not found' });
+      }
+
+      if (!quote.account) {
+        return res.status(400).json({ message: 'Quote must have an associated customer' });
+      }
+
+      await storage.updateQuoteQbSync(id, {
+        qbSyncStatus: 'pending',
+        qbSyncError: undefined
+      });
+
+      let qbCustomerId = quote.account.qbCustomerId;
+
+      if (!qbCustomerId) {
+        const qbCustomer = await qbService.createCustomer({
+          name: quote.account.name,
+          email: quote.account.email,
+          phone: quote.account.phone,
+          billingAddress: quote.account.billingAddress || undefined
+        });
+
+        if (!qbCustomer) {
+          await storage.updateQuoteQbSync(id, {
+            qbSyncStatus: 'error',
+            qbSyncError: 'Failed to create customer in QuickBooks'
+          });
+          return res.status(500).json({ message: 'Failed to create customer in QuickBooks' });
+        }
+
+        qbCustomerId = qbCustomer.id;
+        await storage.updateAccountQbCustomerId(quote.account.id, qbCustomerId);
+      }
+
+      const lineItems = quote.lineItems.map(item => ({
+        description: item.description,
+        quantity: item.quantity,
+        amount: parseFloat(item.unitPrice) * parseFloat(item.quantity)
+      }));
+
+      const invoice = await qbService.createInvoice({
+        quoteNumber: quote.quoteNumber,
+        customerId: qbCustomerId,
+        lineItems,
+        taxRate: parseFloat(quote.taxRate || '0'),
+        discount: parseFloat(quote.discount || '0'),
+        shipping: parseFloat(quote.shipping || '0'),
+        isShippingTaxable: quote.isShippingTaxable ?? undefined,
+        projectName: quote.projectName || undefined,
+        notes: quote.notes || undefined
+      });
+
+      if (!invoice) {
+        await storage.updateQuoteQbSync(id, {
+          qbSyncStatus: 'error',
+          qbSyncError: 'Failed to create invoice in QuickBooks'
+        });
+        return res.status(500).json({ message: 'Failed to create invoice in QuickBooks' });
+      }
+
+      await storage.updateQuoteQbSync(id, {
+        qbInvoiceId: invoice.id,
+        qbSyncStatus: 'synced',
+        qbSyncedAt: new Date(),
+        qbSyncError: undefined
+      });
+
+      res.json({ 
+        success: true, 
+        invoiceId: invoice.id,
+        docNumber: invoice.docNumber
+      });
+    } catch (error: any) {
+      console.error('Error syncing quote to QuickBooks:', error);
+      
+      const { id } = req.params;
+      await storage.updateQuoteQbSync(parseInt(id), {
+        qbSyncStatus: 'error',
+        qbSyncError: error.message || 'Unknown error occurred'
+      });
+      
+      res.status(500).json({ message: error.message || 'Failed to sync quote to QuickBooks' });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
