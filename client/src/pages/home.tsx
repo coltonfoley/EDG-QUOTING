@@ -21,7 +21,7 @@ import {
 import { Link } from "wouter";
 import { AppHeader } from "@/components/app-header";
 import { useQuery } from "@tanstack/react-query";
-import { formatCurrency, cn } from "@/lib/utils";
+import { formatCurrency, cn, calculateQuoteTotals } from "@/lib/utils";
 import { format, startOfMonth, endOfMonth, isWithinInterval } from "date-fns";
 import type { QuoteWithDetails, Account } from "@shared/schema";
 import { DEAL_STAGES, getDealStageById, isWonStage, isLostStage, isFinalStage, isActiveStage } from "@shared/dealStageConstants";
@@ -52,6 +52,17 @@ export default function Home() {
     }, 0);
   }
 
+  // Calculate quote margin (profit)
+  function calculateQuoteMargin(quote: QuoteWithDetails): number {
+    const totals = calculateQuoteTotals(
+      quote.lineItems,
+      quote.taxRate ? parseFloat(quote.taxRate.toString()) : 0,
+      quote.discount ? parseFloat(quote.discount.toString()) : 0,
+      quote.shipping ? parseFloat(quote.shipping.toString()) : 0
+    );
+    return totals.totalMarkup;
+  }
+
   // Calculate metrics
   const metrics = {
     totalAccounts: accounts?.length || 0,
@@ -76,6 +87,33 @@ export default function Home() {
     winRate: quotes && quotes.length > 0
       ? (quotes.filter(q => isWonStage(q.dealStage || '')).length / 
          quotes.filter(q => isFinalStage(q.dealStage || '')).length) * 100 || 0
+      : 0,
+    // Margin/Profit metrics
+    totalProfit: quotes?.filter(q => isWonStage(q.dealStage || '')).reduce((sum, quote) => {
+      return sum + calculateQuoteMargin(quote);
+    }, 0) || 0,
+    pipelineProfit: quotes?.filter(q => isActiveStage(q.dealStage || 'new_lead')).reduce((sum, quote) => {
+      return sum + calculateQuoteMargin(quote);
+    }, 0) || 0,
+    profitThisMonth: quotes?.filter(q => {
+      if (!isWonStage(q.dealStage || '')) return false;
+      const updatedAt = new Date(q.updatedAt || q.createdAt || '');
+      const start = startOfMonth(new Date());
+      const end = endOfMonth(new Date());
+      return isWithinInterval(updatedAt, { start, end });
+    }).reduce((sum, quote) => {
+      return sum + calculateQuoteMargin(quote);
+    }, 0) || 0,
+    avgMarginPercent: quotes && quotes.length > 0 
+      ? quotes.reduce((sum, q) => {
+          const totals = calculateQuoteTotals(
+            q.lineItems,
+            q.taxRate ? parseFloat(q.taxRate.toString()) : 0,
+            q.discount ? parseFloat(q.discount.toString()) : 0,
+            q.shipping ? parseFloat(q.shipping.toString()) : 0
+          );
+          return sum + totals.margin;
+        }, 0) / quotes.length 
       : 0
   };
 
@@ -83,10 +121,12 @@ export default function Home() {
   const quotesByStage = DEAL_STAGES.map(stage => {
     const stageQuotes = quotes?.filter(q => (q.dealStage || 'new_lead') === stage.id) || [];
     const stageValue = stageQuotes.reduce((sum, q) => sum + calculateQuoteTotal(q), 0);
+    const stageProfit = stageQuotes.reduce((sum, q) => sum + calculateQuoteMargin(q), 0);
     return {
       ...stage,
       count: stageQuotes.length,
       value: stageValue,
+      profit: stageProfit,
       percentage: quotes && quotes.length > 0 
         ? (stageQuotes.length / quotes.length) * 100 
         : 0
@@ -265,6 +305,85 @@ export default function Home() {
           </Card>
         </div>
 
+        {/* Profit & Margin Metrics */}
+        <div className="grid md:grid-cols-4 gap-4 mb-8">
+          <Card className="border-l-4 border-l-emerald-500">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm font-medium text-edg-grey">
+                  Total Profit
+                </CardTitle>
+                <DollarSign className="h-4 w-4 text-emerald-500" />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-edg-black">
+                {isLoading ? "-" : formatCurrency(metrics.totalProfit)}
+              </div>
+              <p className="text-xs text-edg-grey mt-1">
+                from all won deals
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card className="border-l-4 border-l-amber-500">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm font-medium text-edg-grey">
+                  Pipeline Profit
+                </CardTitle>
+                <TrendingUp className="h-4 w-4 text-amber-500" />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-edg-black">
+                {isLoading ? "-" : formatCurrency(metrics.pipelineProfit)}
+              </div>
+              <p className="text-xs text-edg-grey mt-1">
+                expected from active deals
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card className="border-l-4 border-l-lime-500">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm font-medium text-edg-grey">
+                  Profit This Month
+                </CardTitle>
+                <Award className="h-4 w-4 text-lime-500" />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-edg-black">
+                {isLoading ? "-" : formatCurrency(metrics.profitThisMonth)}
+              </div>
+              <p className="text-xs text-edg-grey mt-1">
+                won in {format(new Date(), 'MMMM')}
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card className="border-l-4 border-l-cyan-500">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm font-medium text-edg-grey">
+                  Avg Margin %
+                </CardTitle>
+                <BarChart3 className="h-4 w-4 text-cyan-500" />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-edg-black">
+                {isLoading ? "-" : `${metrics.avgMarginPercent.toFixed(1)}%`}
+              </div>
+              <p className="text-xs text-edg-grey mt-1">
+                average profit margin
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+
         {/* Pipeline Overview and Recent Activity */}
         <div className="grid lg:grid-cols-2 gap-6">
 
@@ -299,9 +418,14 @@ export default function Home() {
                           {stage.count} deals
                         </span>
                       </div>
-                      <span className="text-sm font-medium">
-                        {formatCurrency(stage.value)}
-                      </span>
+                      <div className="text-right">
+                        <div className="text-sm font-medium">
+                          {formatCurrency(stage.value)}
+                        </div>
+                        <div className="text-xs text-emerald-600">
+                          {formatCurrency(stage.profit)} profit
+                        </div>
+                      </div>
                     </div>
                     <Progress 
                       value={stage.percentage} 
