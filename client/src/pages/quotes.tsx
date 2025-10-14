@@ -360,8 +360,12 @@ export default function Quotes() {
                           </td>
                           <td className="px-6 py-4 text-sm text-edg-black">
                             <div>
-                              <div className="font-medium">{quote.account?.name || 'Unassigned Quote'}</div>
-                              {quote.account?.company && (
+                              <div className="font-medium">
+                                {quote.account?.name === 'Unnamed Client' && quote.account?.company 
+                                  ? quote.account.company 
+                                  : quote.account?.name || 'Unassigned Quote'}
+                              </div>
+                              {quote.account?.company && quote.account?.name !== 'Unnamed Client' && (
                                 <div className="text-xs text-edg-grey">{quote.account.company}</div>
                               )}
                             </div>
