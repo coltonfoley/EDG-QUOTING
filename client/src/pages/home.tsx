@@ -105,15 +105,25 @@ export default function Home() {
       return sum + calculateQuoteMargin(quote);
     }, 0) || 0,
     avgMarginPercent: quotes && quotes.length > 0 
-      ? quotes.reduce((sum, q) => {
-          const totals = calculateQuoteTotals(
-            q.lineItems,
-            q.taxRate ? parseFloat(q.taxRate.toString()) : 0,
-            q.discount ? parseFloat(q.discount.toString()) : 0,
-            q.shipping ? parseFloat(q.shipping.toString()) : 0
-          );
-          return sum + totals.margin;
-        }, 0) / quotes.length 
+      ? (() => {
+          let totalMarkup = 0;
+          let totalBaseCost = 0;
+          quotes.forEach(q => {
+            const totals = calculateQuoteTotals(
+              q.lineItems,
+              q.taxRate ? parseFloat(q.taxRate.toString()) : 0,
+              q.discount ? parseFloat(q.discount.toString()) : 0,
+              q.shipping ? parseFloat(q.shipping.toString()) : 0
+            );
+            totalMarkup += totals.totalMarkup;
+            // Calculate actual base cost (after manufacturer discounts)
+            // baseCost = subtotal - totalMarkup + totalManufacturerDiscount
+            // actualBaseCost = baseCost - totalManufacturerDiscount = subtotal - totalMarkup
+            const actualBaseCost = totals.subtotal - totals.totalMarkup;
+            totalBaseCost += actualBaseCost;
+          });
+          return totalBaseCost > 0 ? (totalMarkup / totalBaseCost) * 100 : 0;
+        })()
       : 0
   };
 
