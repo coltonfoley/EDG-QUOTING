@@ -1104,24 +1104,65 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return { accountId: null, wasCreated: false };
     }
 
+    // Check if we only have company data (no contact information)
+    const hasContactInfo = !!(
+      (customerData.name && customerData.name.trim()) || 
+      (customerData.email && customerData.email.trim()) || 
+      (customerData.phone && customerData.phone.trim())
+    );
+    const hasCompanyOnly = !hasContactInfo && customerData.company && customerData.company.trim();
+
+    // If company-only import, skip matching and always create new account
+    if (hasCompanyOnly && attachCustomer === 'auto') {
+      console.log('Company-only import detected, creating new account with company name');
+      const clientData = {
+        name: customerData.company!.trim(),
+        firstName: undefined,
+        lastName: undefined,
+        email: `import_${Date.now()}@example.com`,
+        phone: '',
+        company: customerData.company || undefined,
+        accountType: 'commercial' as const,
+        paymentTerms: 'net_30' as const,
+        billingAddress: customerData.address || undefined,
+      };
+
+      const newClient = await storage.createClient(clientData, {
+        allowDuplicate: true, // Always create new for company-only
+        updateIfExists: false
+      });
+      return { accountId: newClient.id, wasCreated: true };
+    }
+
     // Try to find existing customer by email first, then by name
     let existingAccount = null;
-    if (customerData.email) {
+    if (customerData.email && customerData.email.trim()) {
       existingAccount = await storage.getAccountByEmail(customerData.email);
     }
     
-    if (!existingAccount && customerData.name) {
+    if (!existingAccount && customerData.name && customerData.name.trim()) {
       // Try to find by name if no email match
+      // But skip matching against placeholder accounts (Unnamed Client with no contact info)
       const accounts = await storage.getAllAccounts();
-      existingAccount = accounts.find(acc => 
-        acc.name.toLowerCase().trim() === (customerData.name?.toLowerCase().trim() || '')
-      );
+      existingAccount = accounts.find(acc => {
+        const isPlaceholder = acc.name === 'Unnamed Client' && (!acc.email || !acc.email.trim()) && (!acc.phone || !acc.phone.trim());
+        return !isPlaceholder && acc.name.toLowerCase().trim() === (customerData.name?.toLowerCase().trim() || '');
+      });
     }
 
     if (existingAccount) {
-      // Found match - attach the existing account
-      console.log(`Found existing account match: ${existingAccount.name} (ID: ${existingAccount.id})`);
-      return { accountId: existingAccount.id, wasCreated: false };
+      // Found match - only update if it's not a placeholder account
+      const isPlaceholder = existingAccount.name === 'Unnamed Client' && 
+                           (!existingAccount.email || !existingAccount.email.trim()) && 
+                           (!existingAccount.phone || !existingAccount.phone.trim());
+      
+      if (isPlaceholder) {
+        console.log(`Skipping placeholder account ${existingAccount.id}, will create new account instead`);
+        existingAccount = null;
+      } else {
+        console.log(`Found existing account match: ${existingAccount.name} (ID: ${existingAccount.id})`);
+        return { accountId: existingAccount.id, wasCreated: false };
+      }
     }
 
     if (attachCustomer === 'match_only') {
@@ -1158,8 +1199,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log('Creating new client for import (unified model):', clientData);
       const newClient = await storage.createClient(clientData, {
-        allowDuplicate: false,
-        updateIfExists: true
+        allowDuplicate: false, // Allow duplicate detection for regular imports
+        updateIfExists: true // Update existing accounts if found
       });
       return { accountId: newClient.id, wasCreated: true };
     }
