@@ -3791,7 +3791,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         amount: parseFloat(item.unitPrice) * parseFloat(item.quantity)
       }));
 
-      const invoice = await qbService.createInvoice({
+      const estimate = await qbService.createEstimate({
         quoteNumber: quote.quoteNumber,
         customerId: qbCustomerId,
         lineItems,
@@ -3803,16 +3803,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         notes: quote.notes || undefined
       });
 
-      if (!invoice) {
+      if (!estimate) {
         await storage.updateQuoteQbSync(id, {
           qbSyncStatus: 'error',
-          qbSyncError: 'Failed to create invoice in QuickBooks'
+          qbSyncError: 'Failed to create estimate in QuickBooks'
         });
-        return res.status(500).json({ message: 'Failed to create invoice in QuickBooks' });
+        return res.status(500).json({ message: 'Failed to create estimate in QuickBooks' });
       }
 
       await storage.updateQuoteQbSync(id, {
-        qbInvoiceId: invoice.id,
+        qbEstimateId: estimate.id,
         qbSyncStatus: 'synced',
         qbSyncedAt: new Date(),
         qbSyncError: undefined
@@ -3820,8 +3820,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json({ 
         success: true, 
-        invoiceId: invoice.id,
-        docNumber: invoice.docNumber
+        estimateId: estimate.id,
+        docNumber: estimate.docNumber
       });
     } catch (error: any) {
       console.error('Error syncing quote to QuickBooks:', error);

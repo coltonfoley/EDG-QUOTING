@@ -95,6 +95,7 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+- October 14, 2025: Updated QuickBooks integration from Invoices to Estimates - changed API integration to create Estimates instead of Invoices for better alignment with construction quote workflow, renamed database column qb_invoice_id to qb_estimate_id, updated all UI components and messaging to reference "estimates" throughout the application
 - October 13, 2025: Enhanced email integration UX improvements - updated email template colors to match EDG brand (black/white/teal), fixed button contrast issues, added warning when customer email is missing, and optimized cache strategy to immediately show customer email after adding client to quote without requiring page refresh
 - October 13, 2025: Implemented email sending for e-signatures - integrated Gmail connector to send professional HTML emails directly from the app to customers with their signing link, includes "Send Email to Customer" button in signing link dialog with comprehensive error handling for missing Gmail configuration
 - October 8, 2025: Implemented taxable vs non-taxable line items functionality - added "Taxable" checkbox column to line items table allowing users to control tax application at the quote level for individual items, with quote-level discounts applied proportionally before tax calculation, ensuring complete parity between UI and PDF totals

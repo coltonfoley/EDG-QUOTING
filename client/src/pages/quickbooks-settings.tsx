@@ -96,7 +96,7 @@ export default function QuickBooksSettings() {
         <div className="mb-8">
           <h1 className="text-3xl font-bold mb-2">QuickBooks Integration</h1>
           <p className="text-muted-foreground">
-            Connect your QuickBooks Online account to sync quotes as invoices
+            Connect your QuickBooks Online account to sync quotes as estimates
           </p>
         </div>
 
@@ -136,7 +136,7 @@ export default function QuickBooksSettings() {
                         QuickBooks Connected
                       </h3>
                       <p className="text-sm text-green-700">
-                        Your QuickBooks account is connected. You can now sync quotes to QuickBooks as invoices.
+                        Your QuickBooks account is connected. You can now sync quotes to QuickBooks as estimates.
                       </p>
                       {(status as any)?.realmId && (
                         <p className="text-xs text-green-600 mt-2">
@@ -152,7 +152,7 @@ export default function QuickBooksSettings() {
                   <ul className="space-y-2">
                     <li className="flex items-start gap-2 text-sm">
                       <CheckCircle2 className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
-                      <span>Sync quotes to QuickBooks as invoices</span>
+                      <span>Sync quotes to QuickBooks as estimates</span>
                     </li>
                     <li className="flex items-start gap-2 text-sm">
                       <CheckCircle2 className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
@@ -180,13 +180,13 @@ export default function QuickBooksSettings() {
               <>
                 <div className="space-y-4">
                   <p className="text-sm text-muted-foreground">
-                    Connect your QuickBooks Online account to automatically sync quotes as invoices.
+                    Connect your QuickBooks Online account to automatically sync quotes as estimates.
                     This integration allows you to:
                   </p>
                   <ul className="space-y-2">
                     <li className="flex items-start gap-2 text-sm">
                       <CheckCircle2 className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
-                      <span>Convert quotes to QuickBooks invoices with one click</span>
+                      <span>Convert quotes to QuickBooks estimates with one click</span>
                     </li>
                     <li className="flex items-start gap-2 text-sm">
                       <CheckCircle2 className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
@@ -194,7 +194,7 @@ export default function QuickBooksSettings() {
                     </li>
                     <li className="flex items-start gap-2 text-sm">
                       <CheckCircle2 className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
-                      <span>Keep invoices in sync with your quote data</span>
+                      <span>Keep estimates in sync with your quote data</span>
                     </li>
                   </ul>
                 </div>

@@ -36,7 +36,7 @@ export function QuickBooksSync({ quote }: QuickBooksSyncProps) {
       setShowDialog(true);
       toast({
         title: "Success",
-        description: `Quote synced to QuickBooks as invoice ${data.docNumber}`,
+        description: `Quote synced to QuickBooks as estimate ${data.docNumber}`,
       });
     },
     onError: (error: any) => {
@@ -114,12 +114,12 @@ export function QuickBooksSync({ quote }: QuickBooksSyncProps) {
             </DialogTitle>
             <DialogDescription className="space-y-4">
               <p className="pt-4">
-                Quote <strong>{quote.quoteNumber}</strong> has been successfully synced to QuickBooks as an invoice.
+                Quote <strong>{quote.quoteNumber}</strong> has been successfully synced to QuickBooks as an estimate.
               </p>
-              {quote.qbInvoiceId && (
+              {quote.qbEstimateId && (
                 <div className="bg-green-50 border border-green-200 rounded-lg p-4">
                   <p className="text-sm text-green-800">
-                    <strong>Invoice ID:</strong> {quote.qbInvoiceId}
+                    <strong>Estimate ID:</strong> {quote.qbEstimateId}
                   </p>
                 </div>
               )}
@@ -136,9 +136,9 @@ export function QuickBooksSync({ quote }: QuickBooksSyncProps) {
                 </Button>
                 <Button
                   onClick={() => {
-                    window.open(`https://app.qbo.intuit.com/app/invoice?txnId=${quote.qbInvoiceId}`, '_blank');
+                    window.open(`https://app.qbo.intuit.com/app/estimate?txnId=${quote.qbEstimateId}`, '_blank');
                   }}
-                  disabled={!quote.qbInvoiceId}
+                  disabled={!quote.qbEstimateId}
                   data-testid="button-view-in-quickbooks"
                 >
                   <ExternalLink className="h-4 w-4 mr-2" />
