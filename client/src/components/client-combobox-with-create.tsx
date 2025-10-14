@@ -144,7 +144,10 @@ export function ClientComboboxWithCreate({
     const company = client.company?.trim();
     const email = client.email?.trim();
     
-    if (name) return company ? `${name} (${company})` : name;
+    // Treat "Unnamed Client" as no name
+    const hasRealName = name && name !== 'Unnamed Client';
+    
+    if (hasRealName) return company ? `${name} (${company})` : name;
     if (company) return company;
     if (email) return email;
     
