@@ -41,7 +41,7 @@ The system uses four main entities:
 - **Line Items Table**: Dynamic table for adding/editing quote line items with product catalog integration
 - **Product Catalog**: Full CRUD interface for managing reusable products and services
 - **Quote Summary**: Financial calculations and status management
-- **Dashboard**: Overview of all quotes with filtering and status indicators
+- **Dashboard**: Overview of all quotes with filtering and status indicators, including comprehensive margin/profit tracking
 - **Navigation**: Professional header with active page indicators
 
 ### Business Logic
@@ -95,6 +95,7 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+- October 14, 2025: Added comprehensive margin and profit tracking to dashboard - implemented Total Profit, Pipeline Profit, Profit This Month, and Average Margin % metrics with mathematically correct weighted average calculations that account for manufacturer discounts; pipeline overview now displays expected profit for each deal stage alongside deal value
 - October 14, 2025: Fixed quote import account matching to prevent unrelated quotes from being linked together - company-only imports (no contact info) now create separate accounts with company name instead of matching/updating "Unnamed Client" placeholder accounts, updated duplicate detection to ignore empty email/phone fields, added explicit placeholder account protection in matching logic
 - October 14, 2025: Updated QuickBooks integration from Invoices to Estimates - changed API integration to create Estimates instead of Invoices for better alignment with construction quote workflow, renamed database column qb_invoice_id to qb_estimate_id, updated all UI components and messaging to reference "estimates" throughout the application
 - October 13, 2025: Enhanced email integration UX improvements - updated email template colors to match EDG brand (black/white/teal), fixed button contrast issues, added warning when customer email is missing, and optimized cache strategy to immediately show customer email after adding client to quote without requiring page refresh
