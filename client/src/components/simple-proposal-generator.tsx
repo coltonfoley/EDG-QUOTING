@@ -566,16 +566,20 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
                 />
               </div>
 
-              {hasContractData && (
-                <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between">
+                <div className="flex flex-col">
                   <Label htmlFor="include-contract">Include Contract Terms</Label>
-                  <Switch 
-                    id="include-contract" 
-                    checked={includeContract} 
-                    onCheckedChange={setIncludeContract} 
-                  />
+                  {!hasContractData && (
+                    <span className="text-xs text-gray-500 mt-1">No contract data available for this quote</span>
+                  )}
                 </div>
-              )}
+                <Switch 
+                  id="include-contract" 
+                  checked={includeContract} 
+                  onCheckedChange={setIncludeContract}
+                  disabled={!hasContractData}
+                />
+              </div>
             </CardContent>
           </Card>
 
