@@ -3665,8 +3665,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const state = nanoid();
       (req.session as any).qbState = state;
       
-      const authUrl = qbService.getAuthorizationUrl(state);
-      res.json({ authUrl });
+      // Save session before redirecting to ensure state is persisted
+      req.session.save((err) => {
+        if (err) {
+          console.error('Failed to save session state:', err);
+          return res.status(500).json({ message: 'Failed to save session state' });
+        }
+        
+        const authUrl = qbService.getAuthorizationUrl(state);
+        console.log('QuickBooks OAuth initiated with state:', state);
+        res.json({ authUrl });
+      });
     } catch (error) {
       console.error('Error initiating QuickBooks connection:', error);
       res.status(500).json({ message: 'Failed to initiate QuickBooks connection' });
@@ -3677,24 +3686,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { code, state, realmId } = req.query;
       
+      console.log('QuickBooks callback received:', { 
+        hasCode: !!code, 
+        hasState: !!state, 
+        hasRealmId: !!realmId,
+        sessionState: (req.session as any).qbState 
+      });
+      
       if (!code || !state || !realmId) {
-        return res.redirect('/?qb_error=missing_params');
+        console.error('QuickBooks callback missing params:', { code: !!code, state: !!state, realmId: !!realmId });
+        return res.redirect('/admin/quickbooks?qb_error=missing_params');
       }
 
-      if (state !== (req.session as any).qbState) {
-        return res.redirect('/?qb_error=invalid_state');
+      const sessionState = (req.session as any).qbState;
+      if (state !== sessionState) {
+        console.error('QuickBooks callback state mismatch:', { 
+          receivedState: state, 
+          sessionState: sessionState,
+          sessionExists: !!req.session
+        });
+        return res.redirect('/admin/quickbooks?qb_error=invalid_state');
       }
 
       const { createQuickBooksService } = await import('./quickbooks');
       const qbService = createQuickBooksService();
       
       if (!qbService) {
-        return res.redirect('/?qb_error=not_configured');
+        console.error('QuickBooks service not configured');
+        return res.redirect('/admin/quickbooks?qb_error=not_configured');
       }
 
+      console.log('Exchanging code for tokens...');
       const tokens = await qbService.exchangeCodeForTokens(code as string);
       const expiresAt = new Date(Date.now() + tokens.expiresIn * 1000);
       
+      console.log('Saving QuickBooks settings for realmId:', realmId);
       await storage.saveQuickBooksSettings({
         realmId: realmId as string,
         accessToken: tokens.accessToken,
@@ -3703,10 +3729,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       delete (req.session as any).qbState;
-      res.redirect('/?qb_connected=true');
+      console.log('QuickBooks connection successful!');
+      res.redirect('/admin/quickbooks?qb_connected=true');
     } catch (error) {
       console.error('Error in QuickBooks callback:', error);
-      res.redirect('/?qb_error=auth_failed');
+      res.redirect('/admin/quickbooks?qb_error=auth_failed');
     }
   });
 
