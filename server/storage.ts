@@ -1752,10 +1752,16 @@ export class DatabaseStorage implements IStorage {
   }
 
   async saveQuickBooksSettings(settings: { realmId: string; accessToken: string; refreshToken: string; tokenExpiresAt: Date }): Promise<QuickBooksSettings> {
+    // Mark all existing active settings as inactive
     await db.update(quickbooksSettings)
       .set({ isActive: false })
       .where(eq(quickbooksSettings.isActive, true));
     
+    // Delete all inactive settings to avoid unique constraint violations when switching accounts
+    await db.delete(quickbooksSettings)
+      .where(eq(quickbooksSettings.isActive, false));
+    
+    // Insert new settings
     const [newSettings] = await db.insert(quickbooksSettings)
       .values(settings)
       .returning();
