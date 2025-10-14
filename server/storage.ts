@@ -175,7 +175,7 @@ export interface IStorage {
   updateQuickBooksTokens(realmId: string, accessToken: string, refreshToken: string, tokenExpiresAt: Date): Promise<void>;
   disconnectQuickBooks(): Promise<void>;
   updateAccountQbCustomerId(accountId: number, qbCustomerId: string): Promise<void>;
-  updateQuoteQbSync(quoteId: number, data: { qbInvoiceId?: string; qbSyncStatus?: string; qbSyncedAt?: Date; qbSyncError?: string }): Promise<void>;
+  updateQuoteQbSync(quoteId: number, data: { qbEstimateId?: string; qbSyncStatus?: string; qbSyncedAt?: Date; qbSyncError?: string }): Promise<void>;
 }
 
 export class MemStorage {
@@ -336,7 +336,7 @@ export class MemStorage {
       companySignatureData: insertQuote.companySignatureData || null,
       companySignedAt: insertQuote.companySignedAt || null,
       companySignedIp: insertQuote.companySignedIp || null,
-      qbInvoiceId: null,
+      qbEstimateId: null,
       qbSyncStatus: null,
       qbSyncedAt: null,
       qbSyncError: null,
@@ -1785,7 +1785,7 @@ export class DatabaseStorage implements IStorage {
       .where(eq(accounts.id, accountId));
   }
 
-  async updateQuoteQbSync(quoteId: number, data: { qbInvoiceId?: string; qbSyncStatus?: string; qbSyncedAt?: Date; qbSyncError?: string }): Promise<void> {
+  async updateQuoteQbSync(quoteId: number, data: { qbEstimateId?: string; qbSyncStatus?: string; qbSyncedAt?: Date; qbSyncError?: string }): Promise<void> {
     await db.update(quotes)
       .set({ 
         ...data,

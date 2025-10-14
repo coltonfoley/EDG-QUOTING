@@ -171,7 +171,7 @@ export class QuickBooksService {
     }
   }
 
-  async createInvoice(quoteData: {
+  async createEstimate(quoteData: {
     quoteNumber: string;
     customerId: string;
     lineItems: Array<{
@@ -223,7 +223,7 @@ export class QuickBooksService {
       });
     }
 
-    const invoiceData: any = {
+    const estimateData: any = {
       Line: lines,
       CustomerRef: {
         value: quoteData.customerId
@@ -235,8 +235,8 @@ export class QuickBooksService {
 
     try {
       const response = await axios.post(
-        `${QB_API_BASE}/v3/company/${settings.realmId}/invoice`,
-        invoiceData,
+        `${QB_API_BASE}/v3/company/${settings.realmId}/estimate`,
+        estimateData,
         {
           headers: {
             'Authorization': `Bearer ${accessToken}`,
@@ -247,12 +247,12 @@ export class QuickBooksService {
       );
 
       return {
-        id: response.data.Invoice.Id,
-        docNumber: response.data.Invoice.DocNumber
+        id: response.data.Estimate.Id,
+        docNumber: response.data.Estimate.DocNumber
       };
     } catch (error: any) {
-      console.error('Failed to create QuickBooks invoice:', error.response?.data || error.message);
-      throw new Error(error.response?.data?.Fault?.Error?.[0]?.Message || 'Failed to create invoice');
+      console.error('Failed to create QuickBooks estimate:', error.response?.data || error.message);
+      throw new Error(error.response?.data?.Fault?.Error?.[0]?.Message || 'Failed to create estimate');
     }
   }
 

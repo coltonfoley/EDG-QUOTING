@@ -211,7 +211,7 @@ export default function QuoteBuilder() {
     companySignatureData: null,
     companySignedAt: null,
     companySignedIp: null,
-    qbInvoiceId: null,
+    qbEstimateId: null,
     qbSyncStatus: null,
     qbSyncedAt: null,
     qbSyncError: null,

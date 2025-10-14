@@ -109,7 +109,7 @@ export const quotes = pgTable("quotes", {
   companySignedAt: timestamp("company_signed_at"),
   companySignedIp: text("company_signed_ip"),
   // QuickBooks sync fields
-  qbInvoiceId: text("qb_invoice_id"), // QuickBooks invoice ID
+  qbEstimateId: text("qb_estimate_id"), // QuickBooks estimate ID
   qbSyncStatus: text("qb_sync_status"), // null, 'pending', 'synced', 'error'
   qbSyncedAt: timestamp("qb_synced_at"),
   qbSyncError: text("qb_sync_error"),
