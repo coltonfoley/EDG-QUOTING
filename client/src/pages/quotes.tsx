@@ -416,9 +416,20 @@ export default function Quotes() {
                                 <Button
                                   variant="ghost"
                                   size="sm"
-                                  onClick={() => {
-                                    setSelectedQuoteForProposal(quote);
-                                    setProposalGeneratorOpen(true);
+                                  onClick={async () => {
+                                    // Fetch fresh quote data with contract template relation
+                                    try {
+                                      const response = await apiRequest('GET', `/api/quotes/${quote.id}`);
+                                      const freshQuote = await response.json();
+                                      setSelectedQuoteForProposal(freshQuote);
+                                      setProposalGeneratorOpen(true);
+                                    } catch (error) {
+                                      toast({
+                                        title: "Error",
+                                        description: "Failed to load quote data",
+                                        variant: "destructive"
+                                      });
+                                    }
                                   }}
                                   className="text-blue-600 hover:text-blue-800 hover:bg-blue-50"
                                   data-testid={`button-generate-proposal-${quote.id}`}

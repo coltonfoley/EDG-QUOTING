@@ -53,11 +53,8 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
     onSuccess: (updatedQuote) => {
       toast({ title: "Contract updated successfully" });
       
-      // Use setQueryData instead of invalidateQueries to avoid refetch
-      queryClient.setQueryData([`/api/quotes/${quote.id}`], (oldData: any) => {
-        if (!oldData) return oldData;
-        return { ...oldData, ...updatedQuote };
-      });
+      // Invalidate to refetch with contractTemplate relation
+      queryClient.invalidateQueries({ queryKey: [`/api/quotes/${quote.id}`] });
     },
     onError: () => {
       toast({ 
