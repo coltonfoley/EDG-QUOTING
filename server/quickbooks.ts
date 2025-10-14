@@ -41,28 +41,48 @@ export class QuickBooksService {
   }> {
     const auth = Buffer.from(`${this.config.clientId}:${this.config.clientSecret}`).toString('base64');
 
-    const response = await axios.post(
-      `${QB_OAUTH_BASE}/tokens/bearer`,
-      new URLSearchParams({
-        grant_type: 'authorization_code',
-        code: code,
-        redirect_uri: this.config.redirectUri
-      }).toString(),
-      {
-        headers: {
-          'Authorization': `Basic ${auth}`,
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'Accept': 'application/json'
+    try {
+      console.log('Exchanging authorization code for tokens...');
+      console.log('Redirect URI being used:', this.config.redirectUri);
+      console.log('OAuth Base URL:', QB_OAUTH_BASE);
+      
+      const response = await axios.post(
+        `${QB_OAUTH_BASE}/tokens/bearer`,
+        new URLSearchParams({
+          grant_type: 'authorization_code',
+          code: code,
+          redirect_uri: this.config.redirectUri
+        }).toString(),
+        {
+          headers: {
+            'Authorization': `Basic ${auth}`,
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Accept': 'application/json'
+          }
         }
-      }
-    );
+      );
 
-    return {
-      accessToken: response.data.access_token,
-      refreshToken: response.data.refresh_token,
-      expiresIn: response.data.expires_in,
-      realmId: response.data.realm_id || ''
-    };
+      console.log('Token exchange successful!');
+      return {
+        accessToken: response.data.access_token,
+        refreshToken: response.data.refresh_token,
+        expiresIn: response.data.expires_in,
+        realmId: response.data.realm_id || ''
+      };
+    } catch (error: any) {
+      console.error('QuickBooks token exchange failed!');
+      console.error('Error details:', {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        message: error.message
+      });
+      throw new Error(
+        error.response?.data?.error_description || 
+        error.response?.data?.error || 
+        'Failed to exchange authorization code for tokens'
+      );
+    }
   }
 
   async refreshAccessToken(refreshToken: string): Promise<{
