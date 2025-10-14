@@ -54,17 +54,32 @@ export const accounts = pgTable("accounts", {
   firstName: text("first_name"), // Individual's first name (optional for company-only accounts)
   lastName: text("last_name"), // Individual's last name (optional for company-only accounts)
   secondaryContacts: jsonb("secondary_contacts"), // Array of additional contact info for multi-person accounts
+  // QuickBooks integration
+  qbCustomerId: text("qb_customer_id"), // QuickBooks customer ID
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => [
   index("idx_accounts_email").on(table.email),
   index("idx_accounts_phone").on(table.phone),
   index("idx_accounts_type").on(table.accountType),
+  index("idx_accounts_qb_customer_id").on(table.qbCustomerId),
 ]);
 
 // Aliases for different conceptual uses
 export const customers = accounts; // Legacy alias for backward compatibility
 export const clients = accounts; // New unified client model alias
+
+// QuickBooks integration settings
+export const quickbooksSettings = pgTable("quickbooks_settings", {
+  id: serial("id").primaryKey(),
+  realmId: text("realm_id").notNull().unique(), // QuickBooks company ID
+  accessToken: text("access_token").notNull(),
+  refreshToken: text("refresh_token").notNull(),
+  tokenExpiresAt: timestamp("token_expires_at").notNull(),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
 
 export const quotes = pgTable("quotes", {
   id: serial("id").primaryKey(),
@@ -93,12 +108,18 @@ export const quotes = pgTable("quotes", {
   companySignatureData: jsonb("company_signature_data"), // { type: 'draw'|'type', imageData: string, name: string }
   companySignedAt: timestamp("company_signed_at"),
   companySignedIp: text("company_signed_ip"),
+  // QuickBooks sync fields
+  qbInvoiceId: text("qb_invoice_id"), // QuickBooks invoice ID
+  qbSyncStatus: text("qb_sync_status"), // null, 'pending', 'synced', 'error'
+  qbSyncedAt: timestamp("qb_synced_at"),
+  qbSyncError: text("qb_sync_error"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => [
   index("idx_quotes_account_id").on(table.accountId),
   index("idx_quotes_deal_stage").on(table.dealStage),
   index("idx_quotes_account_created").on(table.accountId, table.createdAt),
+  index("idx_quotes_qb_sync_status").on(table.qbSyncStatus),
 ]);
 
 // Quote cover photos - stores metadata for cover page images
@@ -466,6 +487,7 @@ export type ProductAccessory = typeof productAccessories.$inferSelect;
 export type QuoteCoverPhoto = typeof quoteCoverPhotos.$inferSelect;
 export type QuoteProductRendering = typeof quoteProductRenderings.$inferSelect;
 export type IssueReport = typeof issueReports.$inferSelect;
+export type QuickBooksSettings = typeof quickbooksSettings.$inferSelect;
 
 export type InsertApiKey = z.infer<typeof insertApiKeySchema>;
 export type InsertAccount = z.infer<typeof insertAccountSchema>;
