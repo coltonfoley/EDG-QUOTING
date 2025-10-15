@@ -43,8 +43,6 @@ type EditUserData = z.infer<typeof editUserSchema>;
 const bulkUpdateSchema = z.object({
   manufacturer: z.string().optional(),
   retailPrice: z.string().optional(),
-  defaultMarkupType: z.enum(["percentage", "dollar"]).optional(),
-  defaultMarkupValue: z.string().optional(),
   defaultDiscountType: z.enum(["percentage", "dollar"]).optional(),
   defaultDiscountValue: z.string().optional(),
   unit: z.string().optional(),
@@ -849,8 +847,6 @@ function ProductBulkEditor() {
     defaultValues: {
       manufacturer: "",
       retailPrice: "",
-      defaultMarkupType: "percentage",
-      defaultMarkupValue: "",
       defaultDiscountType: "percentage",
       defaultDiscountValue: "",
       unit: "",
@@ -999,7 +995,6 @@ function ProductBulkEditor() {
                 <TableHead data-testid="header-manufacturer">Manufacturer</TableHead>
                 <TableHead>Unit</TableHead>
                 <TableHead>Price</TableHead>
-                <TableHead>Markup</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -1017,9 +1012,6 @@ function ProductBulkEditor() {
                   <TableCell data-testid={`text-manufacturer-${product.id}`}>{product.manufacturer || "Unspecified"}</TableCell>
                   <TableCell>{product.unit}</TableCell>
                   <TableCell>${product.defaultUnitPrice}</TableCell>
-                  <TableCell>
-                    {product.defaultMarkupValue}% ({product.defaultMarkupType})
-                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -1100,45 +1092,6 @@ function ProductBulkEditor() {
                         <Input {...field} placeholder="e.g., 20" />
                       </FormControl>
                       <p className="text-xs text-gray-500">Discount off retail price</p>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={bulkUpdateForm.control}
-                  name="defaultMarkupType"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Markup Type</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select type" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="percentage">Percentage</SelectItem>
-                          <SelectItem value="dollar">Dollar Amount</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={bulkUpdateForm.control}
-                  name="defaultMarkupValue"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Markup Value</FormLabel>
-                      <FormControl>
-                        <Input {...field} placeholder="e.g., 25 or -200" />
-                      </FormControl>
-                      <p className="text-xs text-gray-500 mt-1">Use negative values for markdown. Final price will never go below $0.</p>
                       <FormMessage />
                     </FormItem>
                   )}

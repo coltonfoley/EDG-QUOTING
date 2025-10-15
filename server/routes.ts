@@ -3029,8 +3029,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (body.productType !== undefined) updateFields.productType = body.productType;
       if (body.retailPrice !== undefined) updateFields.retailPrice = body.retailPrice;
       if (body.defaultUnitPrice !== undefined) updateFields.defaultUnitPrice = body.defaultUnitPrice;
-      if (body.defaultMarkupType !== undefined) updateFields.defaultMarkupType = body.defaultMarkupType;
-      if (body.defaultMarkupValue !== undefined) updateFields.defaultMarkupValue = body.defaultMarkupValue;
       if (body.defaultDiscountType !== undefined) updateFields.defaultDiscountType = body.defaultDiscountType;
       if (body.defaultDiscountValue !== undefined) updateFields.defaultDiscountValue = body.defaultDiscountValue;
       if (body.unit !== undefined) updateFields.unit = body.unit;
@@ -3558,8 +3556,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
               manufacturer: 'Imported',
               retailPrice: retailPrice.toString(),
               defaultUnitPrice: actualCost.toFixed(2),
-              defaultMarkupType: 'percentage',
-              defaultMarkupValue: '25',
               defaultDiscountType: manufacturerDiscountType,
               defaultDiscountValue: manufacturerDiscountValue.toString(),
               unit: extractedProduct.unit || 'each',

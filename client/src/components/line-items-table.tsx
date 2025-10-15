@@ -898,8 +898,8 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
         unitPrice: calculatedUnitPrice,
         discountType: (product.defaultDiscountType || "percentage") as "percentage" | "dollar",
         discountValue: product.defaultDiscountValue?.toString() || "0",
-        markupType: (product.defaultMarkupType || "percentage") as "percentage" | "dollar",
-        markupValue: product.defaultMarkupValue?.toString() || "0",
+        markupType: "percentage",
+        markupValue: "0",
       });
       setShowProductDialog(false);
       setShowNewItemForm(true);

@@ -378,15 +378,6 @@ export const insertProductSchema = z.object({
       const num = parseFloat(val);
       return !isNaN(num) && num >= 0 && num <= 10000000;
     }, "Default unit price must be between 0 and 10,000,000"),
-  defaultMarkupType: z.enum(['percentage', 'dollar'], {
-    errorMap: () => ({ message: "Markup type must be either 'percentage' or 'dollar'" })
-  }).optional(),
-  defaultMarkupValue: z.union([z.string(), z.number()])
-    .transform(val => typeof val === 'string' ? val : val.toString())
-    .refine(val => {
-      const num = parseFloat(val);
-      return !isNaN(num) && Number.isFinite(num) && num >= -10000000 && num <= 10000000;
-    }, "Default markup value must be between -10,000,000 and 10,000,000"),
   defaultDiscountType: z.enum(['percentage', 'dollar'], {
     errorMap: () => ({ message: "Discount type must be either 'percentage' or 'dollar'" })
   }).optional(),
@@ -670,14 +661,6 @@ export const bulkUpdateProductsSchema = z.object({
       return num;
     })),
   updates: z.object({
-    defaultMarkupType: z.enum(['percentage', 'dollar']).optional(),
-    defaultMarkupValue: z.union([z.string(), z.number()])
-      .transform(val => typeof val === 'string' ? val : val.toString())
-      .refine(val => {
-        const num = parseFloat(val);
-        return !isNaN(num) && Number.isFinite(num) && num >= -10000000 && num <= 10000000;
-      }, "Default markup value must be between -10,000,000 and 10,000,000")
-      .optional(),
     defaultDiscountType: z.enum(['percentage', 'dollar']).optional(),
     defaultDiscountValue: z.union([z.string(), z.number()])
       .transform(val => typeof val === 'string' ? val : val.toString())
@@ -686,7 +669,6 @@ export const bulkUpdateProductsSchema = z.object({
         return !isNaN(num) && num >= 0 && num <= 100;
       }, "Default discount value must be between 0 and 100")
       .optional(),
-    // Phase B: Only manufacturer field supported
     manufacturer: z.string().min(1, "Manufacturer is required").max(100, "Manufacturer name is too long").optional()
   }).refine(val => Object.keys(val).length > 0, "At least one field must be provided for update")
 });
