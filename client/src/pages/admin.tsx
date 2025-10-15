@@ -1021,8 +1021,9 @@ function ProductBulkEditor() {
                     <FormItem>
                       <FormLabel>Markup Value</FormLabel>
                       <FormControl>
-                        <Input {...field} placeholder="e.g., 25" />
+                        <Input {...field} placeholder="e.g., 25 or -200" />
                       </FormControl>
+                      <p className="text-xs text-gray-500 mt-1">Use negative values for markdown. Final price will never go below $0.</p>
                       <FormMessage />
                     </FormItem>
                   )}

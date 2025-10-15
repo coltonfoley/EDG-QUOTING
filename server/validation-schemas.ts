@@ -305,8 +305,8 @@ export const insertLineItemSchema = baseLineItemSchema.extend({
     .transform(val => typeof val === 'string' ? val : val.toString())
     .refine(val => {
       const num = parseFloat(val);
-      return !isNaN(num) && num >= 0;
-    }, "Markup value must be greater than or equal to 0")
+      return !isNaN(num) && Number.isFinite(num) && num >= -10000000 && num <= 10000000;
+    }, "Markup value must be between -10,000,000 and 10,000,000")
     .refine(val => {
       const num = parseFloat(val);
       // For percentage markup, limit to 2 decimal places
@@ -385,8 +385,8 @@ export const insertProductSchema = z.object({
     .transform(val => typeof val === 'string' ? val : val.toString())
     .refine(val => {
       const num = parseFloat(val);
-      return !isNaN(num) && num >= 0;
-    }, "Default markup value must be greater than or equal to 0"),
+      return !isNaN(num) && Number.isFinite(num) && num >= -10000000 && num <= 10000000;
+    }, "Default markup value must be between -10,000,000 and 10,000,000"),
   defaultDiscountType: z.enum(['percentage', 'dollar'], {
     errorMap: () => ({ message: "Discount type must be either 'percentage' or 'dollar'" })
   }).optional(),
@@ -637,8 +637,8 @@ export const bulkUpdateSchema = z.object({
       .transform(val => typeof val === 'string' ? val : val.toString())
       .refine(val => {
         const num = parseFloat(val);
-        return !isNaN(num) && num >= 0;
-      }, "Markup value must be greater than or equal to 0")
+        return !isNaN(num) && Number.isFinite(num) && num >= -10000000 && num <= 10000000;
+      }, "Markup value must be between -10,000,000 and 10,000,000")
       .optional(),
     quantity: z.union([z.string(), z.number()])
       .transform(val => typeof val === 'string' ? val : val.toString())
@@ -675,8 +675,8 @@ export const bulkUpdateProductsSchema = z.object({
       .transform(val => typeof val === 'string' ? val : val.toString())
       .refine(val => {
         const num = parseFloat(val);
-        return !isNaN(num) && num >= 0;
-      }, "Default markup value must be greater than or equal to 0")
+        return !isNaN(num) && Number.isFinite(num) && num >= -10000000 && num <= 10000000;
+      }, "Default markup value must be between -10,000,000 and 10,000,000")
       .optional(),
     defaultDiscountType: z.enum(['percentage', 'dollar']).optional(),
     defaultDiscountValue: z.union([z.string(), z.number()])
