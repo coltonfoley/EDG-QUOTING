@@ -874,11 +874,30 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
       setShowProductDialog(false);
       setShowDimensionDialog(true);
     } else {
+      // Calculate unit price based on retail price or use direct cost
+      let calculatedUnitPrice = product.defaultUnitPrice?.toString() || "0";
+      
+      if (product.retailPrice) {
+        // Product has retail pricing - calculate cost from retail minus manufacturer discount
+        const retail = parseFloat(product.retailPrice.toString());
+        const discountValue = parseFloat(product.defaultDiscountValue?.toString() || "0");
+        
+        if (product.defaultDiscountType === "percentage") {
+          calculatedUnitPrice = (retail * (1 - discountValue / 100)).toFixed(2);
+        } else {
+          // Dollar discount
+          calculatedUnitPrice = Math.max(0, retail - discountValue).toFixed(2);
+        }
+      }
+      
       setNewItem({
         ...newItem,
         description: product.name,
-        unitPrice: product.defaultUnitPrice?.toString() || "0",
-        markupType: product.defaultMarkupType || "percentage",
+        retailPrice: product.retailPrice?.toString() || "",
+        unitPrice: calculatedUnitPrice,
+        discountType: (product.defaultDiscountType || "percentage") as "percentage" | "dollar",
+        discountValue: product.defaultDiscountValue?.toString() || "0",
+        markupType: (product.defaultMarkupType || "percentage") as "percentage" | "dollar",
         markupValue: product.defaultMarkupValue?.toString() || "0",
       });
       setShowProductDialog(false);
