@@ -1,0 +1,22 @@
+{
+  "meta": {
+    "heightMax": 144,
+    "notes": ["Solar Screen with Gaposa motor - placeholder data"]
+  },
+  "table": {
+    "84": { "60": 1200, "72": 1250, "84": 1300 },
+    "96": { "60": 1250, "72": 1325, "84": 1400 },
+    "108": { "60": 1325, "72": 1400, "84": 1475 }
+  },
+  "housingRules": [
+    { "maxW": 72, "maxH": 96,  "housing": "6in",  "roller": "4in" },
+    { "maxW": 120,"maxH": 144, "housing": "7.5in","roller": "5.75in" }
+  ],
+  "adders": {
+    "remote": 95,
+    "uChannelPerLf": null,
+    "colorUpchargePct": 0.08,
+    "fabricUpcharges": {}
+  },
+  "specialQuoteFlags": { "fabrics": [] }
+}
