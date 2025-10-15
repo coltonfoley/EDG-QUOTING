@@ -225,7 +225,7 @@ function verifyLineItemCalculation(
     console.warn(`⚠️ Invalid unit price: ${price}`);
     return { isValid: false, calculatedTotal: 0, expectedTotal: expected, discrepancy: expected };
   }
-  if (!isFinite(markup) || markup < 0 || markup > 1000) {
+  if (!isFinite(markup) || markup < -10000000 || markup > 10000000) {
     console.warn(`⚠️ Invalid markup value: ${markup}`);
     return { isValid: false, calculatedTotal: 0, expectedTotal: expected, discrepancy: expected };
   }
@@ -253,6 +253,9 @@ function verifyLineItemCalculation(
   } else {
     calculatedTotal = afterDiscount + markup;
   }
+
+  // Floor at $0 to prevent negative totals
+  calculatedTotal = Math.max(0, calculatedTotal);
 
   // Round to 2 decimal places
   calculatedTotal = Math.round(calculatedTotal * 100) / 100;
