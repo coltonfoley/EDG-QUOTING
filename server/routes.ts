@@ -3570,6 +3570,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Validate request body
       const validatedData = bulkUpdateProductsSchema.safeParse(req.body);
       if (!validatedData.success) {
+        console.error("Bulk update validation failed:", JSON.stringify(validatedData.error.errors, null, 2));
+        console.error("Request body:", JSON.stringify(req.body, null, 2));
         return res.status(400).json({ 
           message: "Invalid request data", 
           errors: validatedData.error.errors 
