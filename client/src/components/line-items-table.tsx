@@ -841,8 +841,8 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
     }
     
     const markupValue = parseFloat(newItem.markupValue || "0");
-    if (isNaN(markupValue) || markupValue < 0) {
-      errors.markupValue = "Markup value must be a valid positive number";
+    if (isNaN(markupValue)) {
+      errors.markupValue = "Markup value must be a valid number";
     }
     
     if (Object.keys(errors).length > 0) {
@@ -876,6 +876,8 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
         ...newItem,
         description: product.name,
         unitPrice: product.defaultUnitPrice?.toString() || "0",
+        markupType: product.defaultMarkupType || "percentage",
+        markupValue: product.defaultMarkupValue?.toString() || "0",
       });
       setShowProductDialog(false);
     }
