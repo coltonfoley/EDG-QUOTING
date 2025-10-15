@@ -99,13 +99,13 @@ export function calculateLineItemTotal(
   // Validate inputs
   if (!isValidNumber(qty) || qty <= 0 || qty > 999999) return 0;
   if (!isValidNumber(price) || price < 0 || price > 10000000) return 0;
-  if (!isValidNumber(markup) || markup < 0) return 0;
+  if (isNaN(markup) || !Number.isFinite(markup) || markup < -10000000 || markup > 10000000) return 0;
   if (!isValidNumber(discount) || discount < 0) return 0;
 
   // Clamp values to safe ranges
   const safeQty = clampValue(qty, 0.01, 999999);
   const safePrice = clampValue(price, 0, 10000000);
-  const safeMarkup = Math.max(0, markup);
+  const safeMarkup = markup;
   const safeDiscount = discountType === 'percentage' 
     ? clampValue(discount, 0, 100)
     : clampValue(discount, 0, 10000000);
@@ -132,6 +132,9 @@ export function calculateLineItemTotal(
   } else {
     finalTotal = safeAdd(afterDiscount, safeMarkup);
   }
+
+  // Ensure total never goes below zero
+  finalTotal = Math.max(0, finalTotal);
 
   return roundCurrency(finalTotal);
 }
@@ -171,13 +174,13 @@ export function calculateLineItemMargin(
   // Validate inputs
   if (!isValidNumber(qty) || qty <= 0 || qty > 999999) return 0;
   if (!isValidNumber(price) || price < 0 || price > 10000000) return 0;
-  if (!isValidNumber(markup) || markup < 0) return 0;
+  if (isNaN(markup) || !Number.isFinite(markup) || markup < -10000000 || markup > 10000000) return 0;
   if (!isValidNumber(discount) || discount < 0) return 0;
 
   // Clamp values to safe ranges
   const safeQty = clampValue(qty, 0.01, 999999);
   const safePrice = clampValue(price, 0, 10000000);
-  const safeMarkup = Math.max(0, markup);
+  const safeMarkup = markup;
   const safeDiscount = discountType === 'percentage' 
     ? clampValue(discount, 0, 100)
     : clampValue(discount, 0, 10000000);
@@ -204,6 +207,7 @@ export function calculateLineItemMargin(
     marginAmount = safeMarkup;
   }
 
+  // Note: marginAmount can be negative (representing a loss) which is intentional for markdown
   return roundCurrency(marginAmount);
 }
 
