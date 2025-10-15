@@ -55,16 +55,19 @@ export default function ScreenForm(props: ScreenFormProps) {
   })();
 
   const onSubmit = (v: FormVals) => {
-    if (!computed) return;
+    if (!computed) {
+      // Show validation error if trying to submit without valid price
+      return;
+    }
     const { total, housing, notes } = computed;
     props.onAdd({
       description: `${v.type} Screen ${v.widthIn}" x ${v.heightIn}" (${housing.housing}/${housing.roller})`,
-      quantity: 1,
-      unitPrice: total,
+      quantity: "1",
+      unitPrice: total.toString(),
       markupType: "percentage",
-      markupValue: 0,
+      markupValue: "0",
       discountType: "percentage",
-      discountValue: 0,
+      discountValue: "0",
       isTaxable: true,
       configData: { 
         screenType: v.type,
@@ -150,7 +153,8 @@ export default function ScreenForm(props: ScreenFormProps) {
 
         <button 
           type="submit" 
-          className="rounded-xl bg-black dark:bg-white text-white dark:text-black px-4 py-2 hover:bg-gray-800 dark:hover:bg-gray-200 transition-colors"
+          disabled={!computed}
+          className="rounded-xl bg-black dark:bg-white text-white dark:text-black px-4 py-2 hover:bg-gray-800 dark:hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           data-testid="button-add-to-quote"
         >
           Add to Quote
