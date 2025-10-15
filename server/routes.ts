@@ -3027,6 +3027,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (body.category !== undefined) updateFields.category = body.category;
       if (body.manufacturer !== undefined) updateFields.manufacturer = body.manufacturer;
       if (body.productType !== undefined) updateFields.productType = body.productType;
+      if (body.retailPrice !== undefined) updateFields.retailPrice = body.retailPrice;
       if (body.defaultUnitPrice !== undefined) updateFields.defaultUnitPrice = body.defaultUnitPrice;
       if (body.defaultMarkupType !== undefined) updateFields.defaultMarkupType = body.defaultMarkupType;
       if (body.defaultMarkupValue !== undefined) updateFields.defaultMarkupValue = body.defaultMarkupValue;
