@@ -42,8 +42,11 @@ type EditUserData = z.infer<typeof editUserSchema>;
 
 const bulkUpdateSchema = z.object({
   manufacturer: z.string().optional(),
+  retailPrice: z.string().optional(),
   defaultMarkupType: z.enum(["percentage", "dollar"]).optional(),
   defaultMarkupValue: z.string().optional(),
+  defaultDiscountType: z.enum(["percentage", "dollar"]).optional(),
+  defaultDiscountValue: z.string().optional(),
   unit: z.string().optional(),
 });
 
@@ -794,8 +797,11 @@ function ProductBulkEditor() {
     resolver: zodResolver(bulkUpdateSchema),
     defaultValues: {
       manufacturer: "",
+      retailPrice: "",
       defaultMarkupType: "percentage",
       defaultMarkupValue: "",
+      defaultDiscountType: "percentage",
+      defaultDiscountValue: "",
       unit: "",
     },
   });
@@ -994,6 +1000,60 @@ function ProductBulkEditor() {
                   </FormItem>
                 )}
               />
+
+              <FormField
+                control={bulkUpdateForm.control}
+                name="retailPrice"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Retail Price (MSRP)</FormLabel>
+                    <FormControl>
+                      <Input {...field} type="number" step="0.01" placeholder="Leave blank to keep current" />
+                    </FormControl>
+                    <p className="text-xs text-gray-500">Optional manufacturer's suggested retail price</p>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={bulkUpdateForm.control}
+                  name="defaultDiscountType"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Manufacturer Discount Type</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select type" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="percentage">Percentage</SelectItem>
+                          <SelectItem value="dollar">Dollar Amount</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={bulkUpdateForm.control}
+                  name="defaultDiscountValue"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Manufacturer Discount Value</FormLabel>
+                      <FormControl>
+                        <Input {...field} placeholder="e.g., 20" />
+                      </FormControl>
+                      <p className="text-xs text-gray-500">Discount off retail price</p>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <FormField
