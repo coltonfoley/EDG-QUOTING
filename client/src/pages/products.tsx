@@ -59,8 +59,6 @@ export default function Products() {
       productType: "simple",
       retailPrice: undefined,
       defaultUnitPrice: "0",
-      defaultMarkupType: "percentage",
-      defaultMarkupValue: "25",
       defaultDiscountType: "percentage",
       defaultDiscountValue: "0",
       unit: "each",
@@ -133,8 +131,6 @@ export default function Products() {
       productType: product.productType || "simple",
       retailPrice: product.retailPrice,
       defaultUnitPrice: product.defaultUnitPrice,
-      defaultMarkupType: product.defaultMarkupType,
-      defaultMarkupValue: product.defaultMarkupValue,
       defaultDiscountType: product.defaultDiscountType,
       defaultDiscountValue: product.defaultDiscountValue,
       unit: product.unit || "each",
@@ -476,36 +472,6 @@ export default function Products() {
                         </FormItem>
                       )}
                     />
-                    <FormField
-                      control={form.control}
-                      name="defaultMarkupValue"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Default Markup</FormLabel>
-                          <div className="flex space-x-1">
-                            <FormControl>
-                              <Input type="number" step="0.01" {...field} className="flex-1" />
-                            </FormControl>
-                            <FormField
-                              control={form.control}
-                              name="defaultMarkupType"
-                              render={({ field: markupField }) => (
-                                <Select onValueChange={markupField.onChange} defaultValue={markupField.value}>
-                                  <SelectTrigger className="w-16">
-                                    <SelectValue />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="percentage">%</SelectItem>
-                                    <SelectItem value="dollar">$</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                              )}
-                            />
-                          </div>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
                   </div>
 
                   {/* Manufacturer Discount Section */}
@@ -811,12 +777,6 @@ export default function Products() {
                               )}
                             </span>
                           </div>
-                          <div className="flex justify-between text-sm">
-                            <span className="text-edg-grey">Default Markup:</span>
-                            <span className="font-medium text-edg-teal">
-                              {product.defaultMarkupValue}{product.defaultMarkupType === 'percentage' ? '%' : ' $'}
-                            </span>
-                          </div>
                         </div>
                       </CardContent>
                     </Card>
@@ -869,7 +829,6 @@ function ProductTable({ products, onEdit, onDelete, onManagePricing }: ProductTa
               <TableHead>Type</TableHead>
               <TableHead>Unit</TableHead>
               <TableHead className="text-right">Unit Price</TableHead>
-              <TableHead className="text-right">Markup</TableHead>
               <TableHead className="w-[130px]">Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -944,11 +903,6 @@ function ProductTable({ products, onEdit, onDelete, onManagePricing }: ProductTa
                   ) : (
                     formatCurrency(product.defaultUnitPrice)
                   )}
-                </TableCell>
-                <TableCell className="text-right">
-                  <span className="text-edg-teal font-medium">
-                    {product.defaultMarkupValue}{product.defaultMarkupType === 'percentage' ? '%' : '$'}
-                  </span>
                 </TableCell>
                 <TableCell>
                   <div className="flex gap-1">

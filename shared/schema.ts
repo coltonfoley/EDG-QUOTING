@@ -187,9 +187,6 @@ export const products = pgTable("products", {
   // Manufacturer discount (applied to retail price to get our cost)
   defaultDiscountType: text("default_discount_type").notNull().default("percentage"),
   defaultDiscountValue: decimal("default_discount_value", { precision: 10, scale: 2 }).notNull().default("0"),
-  // Our markup to customer
-  defaultMarkupType: text("default_markup_type").notNull().default("percentage"),
-  defaultMarkupValue: decimal("default_markup_value", { precision: 10, scale: 2 }).notNull().default("25"),
   unit: text("unit").default("each"), // each, sq ft, linear ft, cubic yard, etc.
   // Configuration fields for configurable products
   configFields: jsonb("config_fields"), // JSON array of configuration field definitions
