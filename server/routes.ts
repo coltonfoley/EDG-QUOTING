@@ -3461,16 +3461,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Process based on file type
       if (file.mimetype === 'application/pdf') {
-        // Process PDF
-        const parsePDF = (await import('pdf-parse')).default;
-        const pdfData = await parsePDF(file.buffer);
-        if (pdfData.text.trim()) {
-          extractedProducts = await extractProductsFromText(pdfData.text);
-          if (extractedProducts.length === 0) {
-            errors.push("No products found in PDF content");
+        // Process PDF - use vision-based extraction with OpenAI
+        try {
+          const { convertPDFToImagesServer } = await import('./quoteImageUtils');
+          const pdfImages = await convertPDFToImagesServer(file.buffer);
+          
+          // Extract products from all PDF pages (convertPDFToImagesServer already limits to 10 pages)
+          for (const pageImage of pdfImages) {
+            const pageProducts = await extractProductsFromImage(pageImage.imageBase64);
+            extractedProducts.push(...pageProducts);
           }
-        } else {
-          errors.push("Failed to extract text from PDF");
+          
+          if (extractedProducts.length === 0) {
+            errors.push("No products found in PDF - try a clearer image or Excel file");
+          }
+        } catch (pdfError) {
+          console.error("PDF processing error:", pdfError);
+          errors.push("Failed to process PDF - try uploading an Excel file instead");
         }
       } else if (file.mimetype.includes('excel') || file.mimetype.includes('spreadsheet')) {
         // Process Excel
