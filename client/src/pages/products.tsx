@@ -63,8 +63,6 @@ export default function Products() {
       defaultDiscountType: "percentage",
       defaultDiscountValue: "0",
       unit: "each",
-      dimensionLabel1: "Width",
-      dimensionLabel2: "Height",
     },
   });
 
@@ -142,8 +140,6 @@ export default function Products() {
       maxLength: product.maxLength,
       minWidth: product.minWidth,
       maxWidth: product.maxWidth,
-      dimensionLabel1: product.dimensionLabel1 || "Width",
-      dimensionLabel2: product.dimensionLabel2 || "Height",
     });
     setIsDialogOpen(true);
   };
@@ -389,97 +385,6 @@ export default function Products() {
                         <strong>Configurable Product:</strong> This product will use dimensional pricing tables (length × width) instead of a fixed unit price. 
                         You can set up pricing tables after creating the product.
                       </p>
-                    </div>
-                  )}
-
-                  {/* Dimension Configuration for Configurable Products */}
-                  {form.watch("productType") === "configurable" && (
-                    <div className="space-y-4 p-4 border border-gray-200 rounded-md">
-                      <h3 className="font-medium text-sm">Dimension Configuration</h3>
-                      
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <FormField
-                          control={form.control}
-                          name="dimensionLabel1"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Dimension 1 Label</FormLabel>
-                              <FormControl>
-                                <Input {...field} value={field.value || ""} placeholder="e.g., Width" />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <FormField
-                          control={form.control}
-                          name="dimensionLabel2"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Dimension 2 Label</FormLabel>
-                              <FormControl>
-                                <Input {...field} value={field.value || ""} placeholder="e.g., Height" />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      </div>
-
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <FormField
-                          control={form.control}
-                          name="minWidth"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Min {form.watch("dimensionLabel1") || "Width"} (ft)</FormLabel>
-                              <FormControl>
-                                <Input type="number" step="0.1" {...field} value={field.value || ""} placeholder="0" />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <FormField
-                          control={form.control}
-                          name="maxWidth"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Max {form.watch("dimensionLabel1") || "Width"} (ft)</FormLabel>
-                              <FormControl>
-                                <Input type="number" step="0.1" {...field} value={field.value || ""} placeholder="0" />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <FormField
-                          control={form.control}
-                          name="minLength"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Min {form.watch("dimensionLabel2") || "Height"} (ft)</FormLabel>
-                              <FormControl>
-                                <Input type="number" step="0.1" {...field} value={field.value || ""} placeholder="0" />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <FormField
-                          control={form.control}
-                          name="maxLength"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Max {form.watch("dimensionLabel2") || "Height"} (ft)</FormLabel>
-                              <FormControl>
-                                <Input type="number" step="0.1" {...field} value={field.value || ""} placeholder="0" />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      </div>
                     </div>
                   )}
 
