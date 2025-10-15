@@ -611,6 +611,8 @@ function PriceListUploader() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [uploading, setUploading] = useState(false);
+  const [manufacturerDiscountType, setManufacturerDiscountType] = useState<"percentage" | "dollar">("percentage");
+  const [manufacturerDiscountValue, setManufacturerDiscountValue] = useState("0");
   const [results, setResults] = useState<{
     created: number;
     updated: number;
@@ -638,6 +640,8 @@ function PriceListUploader() {
 
     const formData = new FormData();
     formData.append('file', file);
+    formData.append('manufacturerDiscountType', manufacturerDiscountType);
+    formData.append('manufacturerDiscountValue', manufacturerDiscountValue);
 
     try {
       const response = await fetch('/api/admin/upload-price-list', {
@@ -685,6 +689,53 @@ function PriceListUploader() {
     <div className="space-y-4">
       <div className="text-sm text-gray-600 mb-4">
         Upload a manufacturer price list (PDF, Excel, or image) to automatically extract and import products into your catalog.
+      </div>
+
+      {/* Manufacturer Discount Settings */}
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+        <h4 className="font-semibold text-blue-900 mb-3 flex items-center gap-2">
+          <DollarSign className="h-4 w-4" />
+          Retail Pricing Settings
+        </h4>
+        <p className="text-sm text-blue-800 mb-3">
+          Prices in the file will be treated as <strong>retail prices (MSRP)</strong>. Set your manufacturer discount to calculate your actual cost.
+        </p>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <Label htmlFor="discount-type" className="text-blue-900">Manufacturer Discount Type</Label>
+            <Select 
+              value={manufacturerDiscountType} 
+              onValueChange={(value) => setManufacturerDiscountType(value as "percentage" | "dollar")}
+            >
+              <SelectTrigger id="discount-type" className="bg-white">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="percentage">Percentage (%)</SelectItem>
+                <SelectItem value="dollar">Dollar Amount ($)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label htmlFor="discount-value" className="text-blue-900">Discount Value</Label>
+            <Input
+              id="discount-value"
+              type="number"
+              step="0.01"
+              value={manufacturerDiscountValue}
+              onChange={(e) => setManufacturerDiscountValue(e.target.value)}
+              placeholder="e.g., 20"
+              className="bg-white"
+            />
+          </div>
+        </div>
+        <p className="text-xs text-blue-700 mt-2">
+          Example: Retail $100 - {manufacturerDiscountType === 'percentage' ? `${manufacturerDiscountValue}%` : `$${manufacturerDiscountValue}`} = Your Cost ${
+            manufacturerDiscountType === 'percentage' 
+              ? `$${(100 - (100 * parseFloat(manufacturerDiscountValue || "0") / 100)).toFixed(2)}`
+              : `$${(100 - parseFloat(manufacturerDiscountValue || "0")).toFixed(2)}`
+          }
+        </p>
       </div>
       
       <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
