@@ -301,8 +301,10 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
       const num = parseFloat(sanitizeNumberString(value));
       if (!value && value !== "0") {
         validationError = "Markup value is required";
-      } else if (isNaN(num) || num < 0) {
-        validationError = "Markup must be a valid positive number";
+      } else if (isNaN(num)) {
+        validationError = "Markup must be a valid number";
+      } else if (num < -10000000 || num > 10000000) {
+        validationError = "Markup must be between -10,000,000 and 10,000,000";
       }
     } else if (field === "markupType") {
       if (!value || (value !== "percentage" && value !== "dollar")) {
