@@ -24,6 +24,7 @@ import Accounts from "@/pages/accounts";
 import AccountDetail from "@/pages/account-detail";
 import Pipeline from "@/pages/pipeline";
 import PublicSignPage from "@/pages/public-sign";
+import ScreenSetup from "@/pages/screen-setup";
 import { ReportIssueButton } from "@/components/report-issue-button";
 
 function GlobalLoadingIndicator() {
@@ -103,6 +104,7 @@ function Router() {
           <Route path="/quotes/new" component={QuoteBuilder} />
           <Route path="/quotes/:id/edit" component={QuoteBuilder} />
           <Route path="/products" component={Products} />
+          <Route path="/screen-setup" component={ScreenSetup} />
           <Route path="/contracts">
             <Redirect to="/admin/contracts" />
           </Route>
