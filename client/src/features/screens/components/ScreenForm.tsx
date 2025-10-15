@@ -1,11 +1,10 @@
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import insectMatrix from "../data/insect_matrix.json";
-import solarMatrix from "../data/solar_matrix.json";
-import vinylMatrix from "../data/vinyl_matrix.json";
-import { priceScreen, Matrix } from "../pricing/lookup";
 import { PriceTile } from "./PriceTile";
+import { useQuery } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+import { useEffect, useState } from "react";
 
 const schema = z.object({
   type: z.enum(["INSECT","SOLAR","VINYL"]).default("INSECT"),
@@ -30,40 +29,83 @@ export default function ScreenForm(props: ScreenFormProps) {
   });
 
   const vals = watch();
+  const [priceData, setPriceData] = useState<any>(null);
   
-  // Select the appropriate matrix based on type
-  const matrixMap: Record<string, Matrix> = {
-    INSECT: insectMatrix as Matrix,
-    SOLAR: solarMatrix as Matrix,
-    VINYL: vinylMatrix as Matrix,
-  };
-  
-  const matrix = matrixMap[vals.type] || (insectMatrix as Matrix);
+  // Fetch screen products from database
+  const { data: products = [], isLoading: productsLoading } = useQuery({
+    queryKey: ['/api/products'],
+    select: (data: any[]) => data.filter(p => p.manufacturer === "Gaposa" && p.productType === "configurable")
+  });
 
-  const computed = (() => {
-    try {
-      if (vals.heightIn > matrix.meta.heightMax) return null;
-      return priceScreen(matrix, vals.widthIn, vals.heightIn, {
-        remotesQty: vals.remotesQty,
-        uChannelLf: vals.uChannelLf,
-        colorNonStandard: vals.colorNonStandard,
-        fabricKey: vals.fabricKey
-      });
-    } catch {
-      return null;
+  // Map screen types to product IDs
+  const productMap: Record<string, any> = {
+    INSECT: products.find(p => p.name.includes("Insect")),
+    SOLAR: products.find(p => p.name.includes("Solar")),
+    VINYL: products.find(p => p.name.includes("Vinyl"))
+  };
+
+  const currentProduct = productMap[vals.type];
+
+  // Calculate price when dimensions or options change
+  useEffect(() => {
+    if (!currentProduct) {
+      setPriceData(null);
+      return;
     }
-  })();
+
+    const calculatePrice = async () => {
+      try {
+        const response: any = await apiRequest('POST', '/api/screens/calculate-price', {
+          productId: currentProduct.id,
+          widthIn: vals.widthIn,
+          heightIn: vals.heightIn,
+          options: {
+            remotesQty: vals.remotesQty,
+            uChannelLf: vals.uChannelLf,
+            colorNonStandard: vals.colorNonStandard,
+            fabricKey: vals.fabricKey || ""
+          }
+        });
+        
+        // Find housing rule based on dimensions
+        const housingRules = currentProduct.housingRules || [];
+        let housingRule = null;
+        if (housingRules.length > 0) {
+          housingRule = housingRules.find((rule: any) => 
+            vals.widthIn <= rule.maxW && vals.heightIn <= rule.maxH
+          ) || housingRules[housingRules.length - 1];
+        }
+
+        setPriceData({
+          ...response,
+          housing: housingRule,
+          total: response.totalPrice // Add legacy 'total' field for backward compatibility
+        });
+      } catch (error: any) {
+        console.error("Error calculating price:", error);
+        // Always show user-friendly error message, never set to null
+        if (error?.message?.includes("No pricing found")) {
+          setPriceData({ error: "No pricing available for these dimensions" });
+        } else {
+          setPriceData({ error: "Unable to calculate price. Please try different dimensions." });
+        }
+      }
+    };
+
+    calculatePrice();
+  }, [currentProduct, vals.widthIn, vals.heightIn, vals.remotesQty, vals.uChannelLf, vals.colorNonStandard, vals.fabricKey]);
 
   const onSubmit = (v: FormVals) => {
-    if (!computed) {
+    if (!priceData || !priceData.totalPrice) {
       // Show validation error if trying to submit without valid price
       return;
     }
-    const { total, housing, notes } = computed;
+    const { totalPrice, housing } = priceData;
+    const housingDesc = housing ? `(${housing.housing}/${housing.roller})` : "";
     props.onAdd({
-      description: `${v.type} Screen ${v.widthIn}" x ${v.heightIn}" (${housing.housing}/${housing.roller})`,
+      description: `${v.type} Screen ${v.widthIn}" x ${v.heightIn}" ${housingDesc}`,
       quantity: "1",
-      unitPrice: total.toString(),
+      unitPrice: (totalPrice || 0).toString(),
       markupType: "percentage",
       markupValue: "0",
       discountType: "percentage",
@@ -76,7 +118,7 @@ export default function ScreenForm(props: ScreenFormProps) {
         remotes: v.remotesQty,
         uChannelLf: v.uChannelLf,
         colorNonStandard: v.colorNonStandard,
-        notes 
+        productId: currentProduct?.id
       }
     });
   };
@@ -153,9 +195,10 @@ export default function ScreenForm(props: ScreenFormProps) {
 
         <button 
           type="submit" 
-          disabled={!computed}
+          disabled={!priceData || productsLoading || !priceData?.totalPrice || priceData?.error}
           className="rounded-xl bg-black dark:bg-white text-white dark:text-black px-4 py-2 hover:bg-gray-800 dark:hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           data-testid="button-add-to-quote"
+          title={priceData?.error ? priceData.error : undefined}
         >
           Add to Quote
         </button>
@@ -163,20 +206,28 @@ export default function ScreenForm(props: ScreenFormProps) {
 
       <div>
         <div className="mb-4 text-sm text-gray-600 dark:text-gray-400">
-          Max height enforced: <b>{matrix.meta.heightMax}"</b>
+          {currentProduct && (
+            <>Max height: <b>{currentProduct.maxLength}"</b></>
+          )}
         </div>
         <div className="mb-4">
-          {computed ? null : (
+          {productsLoading ? (
+            <div className="text-sm text-gray-600 dark:text-gray-400">Loading products...</div>
+          ) : priceData?.error ? (
+            <div className="text-sm text-red-700 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 p-2 rounded-lg" data-testid="alert-pricing-error">
+              {priceData.error}
+            </div>
+          ) : !priceData ? (
             <div className="text-sm text-orange-700 bg-orange-50 dark:bg-orange-950 border border-orange-200 dark:border-orange-800 p-2 rounded-lg" data-testid="alert-invalid-dimensions">
               Enter valid dimensions to see price
             </div>
-          )}
+          ) : null}
         </div>
         <div>
           <PriceTile
-            total={computed ? computed.total : null}
-            housing={computed?.housing}
-            notes={computed?.notes}
+            total={priceData?.total || priceData?.totalPrice || null}
+            housing={priceData?.housing}
+            notes={priceData && !priceData.error ? [`Base: $${priceData.basePrice}`, `Adders: $${priceData.adders?.total || 0}`] : undefined}
           />
         </div>
       </div>

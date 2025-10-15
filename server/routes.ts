@@ -20,7 +20,6 @@ import {
   insertProductSchema,
   insertContractTemplateSchema,
   insertPricingTableSchema,
-  insertProductAccessorySchema,
   createUserSchema,
   updateUserSchema,
   idParamSchema,
@@ -44,7 +43,8 @@ import {
   createQuoteSchema,
   CreateQuoteBody,
   signatureTokenParamSchema,
-  submitSignatureSchema
+  submitSignatureSchema,
+  calculateScreenPriceSchema
 } from "./validation-schemas";
 import multer from "multer";
 import * as XLSX from "xlsx";
@@ -3178,61 +3178,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Product accessories routes
-  app.get("/api/products/:productId/accessories", isAuthenticated, async (req, res) => {
-    try {
-      const productId = parseInt(req.params.productId);
-      const accessories = await storage.getProductAccessoriesByProductId(productId);
-      res.json(accessories);
-    } catch (error) {
-      res.status(500).json({ message: "Internal server error" });
-    }
-  });
-
-  app.post("/api/products/:productId/accessories", isAuthenticated, async (req, res) => {
-    try {
-      const productId = parseInt(req.params.productId);
-      const accessoryData = insertProductAccessorySchema.parse({ ...req.body, baseProductId: productId });
-      const accessory = await storage.createProductAccessory(accessoryData);
-      res.status(201).json(accessory);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: "Invalid accessory data", errors: error.errors });
-      }
-      res.status(500).json({ message: "Internal server error" });
-    }
-  });
-
-  app.put("/api/product-accessories/:id", isAuthenticated, async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      const accessoryData = insertProductAccessorySchema.partial().parse(req.body);
-      const accessory = await storage.updateProductAccessory(id, accessoryData);
-      if (!accessory) {
-        return res.status(404).json({ message: "Product accessory not found" });
-      }
-      res.json(accessory);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: "Invalid accessory data", errors: error.errors });
-      }
-      res.status(500).json({ message: "Internal server error" });
-    }
-  });
-
-  app.delete("/api/product-accessories/:id", isAuthenticated, async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      const deleted = await storage.deleteProductAccessory(id);
-      if (!deleted) {
-        return res.status(404).json({ message: "Product accessory not found" });
-      }
-      res.status(204).send();
-    } catch (error) {
-      res.status(500).json({ message: "Internal server error" });
-    }
-  });
-
   // Calculate pricing for configurable products
   app.post("/api/products/:productId/calculate-price", isAuthenticated, async (req, res) => {
     try {
@@ -3262,6 +3207,65 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       res.json({ price, length, width });
     } catch (error) {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // Calculate screen pricing with adders (for screen configurator)
+  app.post("/api/screens/calculate-price", isAuthenticated, async (req, res) => {
+    try {
+      const validatedData = calculateScreenPriceSchema.safeParse(req.body);
+      if (!validatedData.success) {
+        return res.status(400).json({ 
+          message: "Invalid request data", 
+          errors: validatedData.error.errors 
+        });
+      }
+      
+      const { productId, widthIn, heightIn, options } = validatedData.data;
+      
+      // Get product with adder pricing
+      const product = await storage.getProduct(productId);
+      if (!product) {
+        return res.status(404).json({ message: "Product not found" });
+      }
+
+      // Get base price from pricing tables
+      const basePrice = await storage.calculateConfigurableProductPrice(productId, heightIn, widthIn);
+      if (basePrice === null) {
+        return res.status(404).json({ message: "No pricing found for these dimensions" });
+      }
+
+      // Parse adder pricing from product
+      const adderPricing = product.adderPricing as any || {};
+      const { remotesQty = 0, uChannelLf = 0, colorNonStandard = false, fabricKey = "" } = options || {};
+
+      // Calculate adders
+      let remoteCost = (adderPricing.remote || 0) * remotesQty;
+      let uChannelCost = (adderPricing.uChannelPerLf || 0) * uChannelLf;
+      let colorUpcharge = colorNonStandard ? basePrice * (adderPricing.colorUpchargePct || 0) : 0;
+      let fabricUpcharge = fabricKey && adderPricing.fabricUpcharges ? (adderPricing.fabricUpcharges[fabricKey] || 0) : 0;
+
+      const totalAdders = remoteCost + uChannelCost + colorUpcharge + fabricUpcharge;
+      const totalPrice = basePrice + totalAdders;
+
+      res.json({ 
+        basePrice,
+        adders: {
+          remote: remoteCost,
+          uChannel: uChannelCost,
+          colorUpcharge,
+          fabricUpcharge,
+          total: totalAdders
+        },
+        totalPrice,
+        dimensions: {
+          widthIn,
+          heightIn
+        }
+      });
+    } catch (error) {
+      console.error("Error calculating screen price:", error);
       res.status(500).json({ message: "Internal server error" });
     }
   });
