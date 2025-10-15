@@ -68,9 +68,16 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
   const [isUploading, setIsUploading] = useState(false);
   const [generatedPdfUrl, setGeneratedPdfUrl] = useState<string | null>(null);
   
-  // Contract state and logic
-  const hasContractData = !!(quote.contractTemplate || quote.customContractTerms);
+  // Contract state and logic - recompute on each render to catch quote updates
+  const hasContractData = Boolean(quote.notes?.trim() || quote.contractTemplate || quote.customContractTerms?.trim());
   const [includeContract, setIncludeContract] = useState(hasContractData);
+  
+  // Sync includeContract state when hasContractData changes
+  useEffect(() => {
+    if (hasContractData && !includeContract) {
+      setIncludeContract(true);
+    }
+  }, [hasContractData]);
   const { toast } = useToast();
   
   const coverPhotoRef = useRef<HTMLInputElement>(null);
@@ -575,9 +582,9 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
 
               <div className="flex items-center justify-between">
                 <div className="flex flex-col">
-                  <Label htmlFor="include-contract">Include Contract Terms</Label>
+                  <Label htmlFor="include-contract">Include Notes & Terms</Label>
                   {!hasContractData && (
-                    <span className="text-xs text-gray-500 mt-1">No contract data available for this quote</span>
+                    <span className="text-xs text-gray-500 mt-1">No notes or contract terms available for this quote</span>
                   )}
                 </div>
                 <Switch 
