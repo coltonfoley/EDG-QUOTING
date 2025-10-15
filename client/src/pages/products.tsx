@@ -35,6 +35,7 @@ export default function Products() {
   const [showPricingManager, setShowPricingManager] = useState(false);
   const [managingPricingProduct, setManagingPricingProduct] = useState<Product | null>(null);
   
+  
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -140,7 +141,6 @@ export default function Products() {
       minWidth: product.minWidth,
       maxWidth: product.maxWidth,
     });
-    
     setIsDialogOpen(true);
   };
 
@@ -304,7 +304,15 @@ export default function Products() {
               </DialogHeader>
               <Form {...form}>
                 <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
-                  <div className="space-y-4">
+                  <Tabs defaultValue="basic" className="w-full">
+                    <TabsList className="grid w-full grid-cols-1">
+                      <TabsTrigger value="basic" className="flex items-center gap-2">
+                        <Package className="h-4 w-4" />
+                        Product Details
+                      </TabsTrigger>
+                    </TabsList>
+                    
+                    <TabsContent value="basic" className="space-y-4 mt-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FormField
                       control={form.control}
@@ -487,7 +495,9 @@ export default function Products() {
                       )}
                     />
                   </div>
-                  </div>
+                    </TabsContent>
+                    
+                  </Tabs>
                   
                   <div className="flex justify-end space-x-3 pt-4 border-t">
                     <Button

@@ -8,6 +8,7 @@ import {
   insertProductSchema as baseProductSchema,
   insertContractTemplateSchema as baseContractTemplateSchema,
   insertPricingTableSchema as basePricingTableSchema,
+  insertProductAccessorySchema as baseProductAccessorySchema,
   insertUserSchema as baseUserSchema,
   insertIssueReportSchema as baseIssueReportSchema
 } from "@shared/schema";
@@ -431,9 +432,7 @@ export const insertProductSchema = z.object({
   primaryImage: z.string().url("Primary image must be a valid URL").optional(),
   galleryImages: z.array(z.any()).optional(),
   specificationSheets: z.array(z.any()).optional(),
-  configFields: z.any().optional(),
-  adderPricing: z.any().optional(), // Screen-specific: remote prices, U-channel, color/fabric upcharges
-  housingRules: z.any().optional() // Screen-specific: housing/roller specs by dimensions
+  configFields: z.any().optional()
 });
 
 // Enhanced Pricing Table validation
@@ -733,6 +732,16 @@ export const insertContractTemplateSchema = baseContractTemplateSchema.extend({
   isDefault: z.boolean().optional()
 });
 
+
+// Product accessory validation (reuse from base)
+export const insertProductAccessorySchema = baseProductAccessorySchema.extend({
+  baseProductId: z.number().int().positive("Base product ID must be a positive integer"),
+  accessoryProductId: z.number().int().positive("Accessory product ID must be a positive integer"),
+  isRequired: z.boolean().optional(),
+  displayOrder: z.number().int().min(0).max(999).optional(),
+  category: z.string().max(100, "Category name is too long").optional()
+});
+
 // Quote image validation schemas
 export const createQuoteCoverPhotoSchema = z.object({
   quoteId: z.number().int().positive("Quote ID must be a positive integer"),
@@ -807,15 +816,3 @@ export const submitSignatureSchema = z.object({
   signerType: z.enum(["client", "company"], { errorMap: () => ({ message: "Signer type must be 'client' or 'company'" }) })
 });
 
-// Screen pricing calculation validation
-export const calculateScreenPriceSchema = z.object({
-  productId: z.number().int().positive("Product ID must be a positive integer"),
-  widthIn: z.number().min(1).max(500, "Width must be between 1 and 500 inches"),
-  heightIn: z.number().min(1).max(500, "Height must be between 1 and 500 inches"),
-  options: z.object({
-    remotesQty: z.number().int().min(0).optional().default(0),
-    uChannelLf: z.number().min(0).optional().default(0),
-    colorNonStandard: z.boolean().optional().default(false),
-    fabricKey: z.string().optional().default("")
-  }).optional().default({})
-});

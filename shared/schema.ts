@@ -197,9 +197,6 @@ export const products = pgTable("products", {
   primaryImage: text("primary_image"), // Main product image URL
   galleryImages: jsonb("gallery_images"), // Array of additional product photos
   specificationSheets: jsonb("specification_sheets"), // Technical specification documents/images
-  // Screen-specific configuration fields
-  adderPricing: jsonb("adder_pricing"), // For screens: remote prices, U-channel prices, color/fabric upcharges
-  housingRules: jsonb("housing_rules"), // For screens: housing/roller specifications based on dimensions
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => [
   index("idx_products_manufacturer").on(table.manufacturer),
@@ -223,6 +220,19 @@ export const pricingTables = pgTable("pricing_tables", {
   index("idx_pricing_tables_product_id").on(table.productId),
 ]);
 
+// Product accessories - items that can be added to base products
+export const productAccessories = pgTable("product_accessories", {
+  id: serial("id").primaryKey(),
+  baseProductId: integer("base_product_id").notNull(), // the main product (e.g., Brustor B200xl)
+  accessoryProductId: integer("accessory_product_id").notNull(), // the accessory product
+  isRequired: boolean("is_required").default(false),
+  displayOrder: integer("display_order").default(0),
+  category: text("category"), // e.g., "Motors", "Lighting", "Sensors"
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_product_accessories_base_product").on(table.baseProductId),
+  index("idx_product_accessories_accessory_product").on(table.accessoryProductId),
+]);
 
 // Groups table for organizing line items
 export const groups = pgTable("groups", {
@@ -406,6 +416,11 @@ export const insertPricingTableSchema = createInsertSchema(pricingTables).omit({
   basePrice: z.union([z.string(), z.number()]).transform(val => typeof val === 'string' ? val : val.toString()),
 });
 
+export const insertProductAccessorySchema = createInsertSchema(productAccessories).omit({
+  id: true,
+  createdAt: true,
+});
+
 export const insertGroupSchema = createInsertSchema(groups).omit({
   createdAt: true,
   updatedAt: true,
@@ -475,6 +490,7 @@ export type LineItem = typeof lineItems.$inferSelect;
 export type Group = typeof groups.$inferSelect;
 export type ContractTemplate = typeof contractTemplates.$inferSelect;
 export type PricingTable = typeof pricingTables.$inferSelect;
+export type ProductAccessory = typeof productAccessories.$inferSelect;
 export type QuoteCoverPhoto = typeof quoteCoverPhotos.$inferSelect;
 export type QuoteProductRendering = typeof quoteProductRenderings.$inferSelect;
 export type IssueReport = typeof issueReports.$inferSelect;
@@ -489,6 +505,7 @@ export type InsertLineItem = z.infer<typeof insertLineItemSchema>;
 export type InsertGroup = z.infer<typeof insertGroupSchema>;
 export type InsertContractTemplate = z.infer<typeof insertContractTemplateSchema>;
 export type InsertPricingTable = z.infer<typeof insertPricingTableSchema>;
+export type InsertProductAccessory = z.infer<typeof insertProductAccessorySchema>;
 export type InsertQuoteCoverPhoto = z.infer<typeof insertQuoteCoverPhotoSchema>;
 export type InsertQuoteProductRendering = z.infer<typeof insertQuoteProductRenderingSchema>;
 export type InsertIssueReport = z.infer<typeof insertIssueReportSchema>;
@@ -518,6 +535,7 @@ export type QuoteDetail = QuoteListItem & {
 
 export type ProductWithDetails = Product & {
   pricingTables?: PricingTable[];
+  accessories?: (ProductAccessory & { accessory: Product })[];
 };
 
 
