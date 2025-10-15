@@ -661,7 +661,7 @@ export const bulkUpdateSchema = z.object({
 export const bulkUpdateProductsSchema = z.object({
   productIds: z.array(z.union([z.string(), z.number()]))
     .min(1, "At least one product ID is required")
-    .max(100, "Cannot update more than 100 products at once")
+    .max(500, "Cannot update more than 500 products at once")
     .transform(val => val.map(id => {
       const num = parseInt(typeof id === 'string' ? id : id.toString());
       if (isNaN(num) || num <= 0) {
