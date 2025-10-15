@@ -3451,6 +3451,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "No file uploaded" });
       }
 
+      // Get manufacturer discount settings from form data
+      const manufacturerDiscountType = req.body.manufacturerDiscountType || 'percentage';
+      const manufacturerDiscountValue = parseFloat(req.body.manufacturerDiscountValue || '0');
+
       const file = req.file;
       let extractedProducts: ExtractedProduct[] = [];
       const errors: string[] = [];
@@ -3518,24 +3522,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
             );
           }
 
+          // Calculate actual cost from retail price using manufacturer discount
+          const retailPrice = extractedProduct.price;
+          let actualCost = retailPrice;
+          
+          if (manufacturerDiscountType === 'percentage') {
+            actualCost = retailPrice * (1 - manufacturerDiscountValue / 100);
+          } else {
+            // Dollar discount
+            actualCost = Math.max(0, retailPrice - manufacturerDiscountValue);
+          }
+
           if (existingProduct) {
-            // Update existing product
+            // Update existing product with retail pricing
             await storage.updateProduct(existingProduct.id, {
-              defaultUnitPrice: extractedProduct.price.toString(),
+              retailPrice: retailPrice.toString(),
+              defaultUnitPrice: actualCost.toFixed(2),
+              defaultDiscountType: manufacturerDiscountType,
+              defaultDiscountValue: manufacturerDiscountValue.toString(),
               unit: extractedProduct.unit || existingProduct.unit,
             });
             updated++;
           } else {
-            // Create new product with manufacturer field for imports
+            // Create new product with retail pricing
             const productData = {
               name: extractedProduct.sku ? `${extractedProduct.name} (${extractedProduct.sku})` : extractedProduct.name,
               description: extractedProduct.description || '',
-              manufacturer: 'Imported', // Use manufacturer for imported products
-              defaultUnitPrice: extractedProduct.price.toString(),
+              manufacturer: 'Imported',
+              retailPrice: retailPrice.toString(),
+              defaultUnitPrice: actualCost.toFixed(2),
               defaultMarkupType: 'percentage',
               defaultMarkupValue: '25',
-              defaultDiscountType: 'percentage',
-              defaultDiscountValue: '0',
+              defaultDiscountType: manufacturerDiscountType,
+              defaultDiscountValue: manufacturerDiscountValue.toString(),
               unit: extractedProduct.unit || 'each',
             };
             // Strip any validation metadata before creating
