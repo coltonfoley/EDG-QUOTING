@@ -1,4 +1,4 @@
-import { accounts, customers, quotes, lineItems, groups, products, users, apiKeys, contractTemplates, pricingTables, quoteCoverPhotos, quoteProductRenderings, issueReports, quickbooksSettings, type Account, type Customer, type Quote, type LineItem, type Group, type Product, type User, type ApiKey, type ContractTemplate, type PricingTable, type QuoteCoverPhoto, type QuoteProductRendering, type IssueReport, type QuickBooksSettings, type InsertAccount, type InsertCustomer, type InsertQuote, type InsertLineItem, type InsertGroup, type InsertProduct, type InsertUser, type InsertApiKey, type InsertContractTemplate, type InsertPricingTable, type InsertQuoteCoverPhoto, type InsertQuoteProductRendering, type InsertIssueReport, type QuoteWithDetails, type ProductWithDetails } from "@shared/schema";
+import { accounts, customers, quotes, lineItems, groups, products, users, apiKeys, contractTemplates, pricingTables, productAccessories, quoteCoverPhotos, quoteProductRenderings, issueReports, quickbooksSettings, type Account, type Customer, type Quote, type LineItem, type Group, type Product, type User, type ApiKey, type ContractTemplate, type PricingTable, type ProductAccessory, type QuoteCoverPhoto, type QuoteProductRendering, type IssueReport, type QuickBooksSettings, type InsertAccount, type InsertCustomer, type InsertQuote, type InsertLineItem, type InsertGroup, type InsertProduct, type InsertUser, type InsertApiKey, type InsertContractTemplate, type InsertPricingTable, type InsertProductAccessory, type InsertQuoteCoverPhoto, type InsertQuoteProductRendering, type InsertIssueReport, type QuoteWithDetails, type ProductWithDetails } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, asc, inArray, sql, and, ne, or, ilike } from "drizzle-orm";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
@@ -98,6 +98,12 @@ export interface IStorage {
   deletePricingTable(id: number): Promise<boolean>;
   deletePricingTablesByProductId(productId: number): Promise<boolean>;
   calculateConfigurableProductPrice(productId: number, length: number, width: number): Promise<number | null>;
+
+  // Product accessories methods  
+  getProductAccessoriesByProductId(productId: number): Promise<(ProductAccessory & { accessory: Product })[]>;
+  createProductAccessory(accessory: InsertProductAccessory): Promise<ProductAccessory>;
+  updateProductAccessory(id: number, accessory: Partial<InsertProductAccessory>): Promise<ProductAccessory | undefined>;
+  deleteProductAccessory(id: number): Promise<boolean>;
 
   // Line item methods
   getLineItem(id: number): Promise<LineItem | undefined>;
@@ -1647,9 +1653,26 @@ export class DatabaseStorage implements IStorage {
     // Get pricing tables for the product
     const productPricingTables = await db.select().from(pricingTables).where(eq(pricingTables.productId, id));
 
+    // Get accessories with their product details
+    const accessoryLinks = await db
+      .select({
+        id: productAccessories.id,
+        baseProductId: productAccessories.baseProductId,
+        accessoryProductId: productAccessories.accessoryProductId,
+        isRequired: productAccessories.isRequired,
+        displayOrder: productAccessories.displayOrder,
+        category: productAccessories.category,
+        createdAt: productAccessories.createdAt,
+        accessory: products,
+      })
+      .from(productAccessories)
+      .leftJoin(products, eq(productAccessories.accessoryProductId, products.id))
+      .where(eq(productAccessories.baseProductId, id));
+
     return {
       ...product,
       pricingTables: productPricingTables,
+      accessories: accessoryLinks as (ProductAccessory & { accessory: Product })[],
     };
   }
 
@@ -1735,6 +1758,48 @@ export class DatabaseStorage implements IStorage {
     }
 
     return parseFloat(closestTable.basePrice);
+  }
+
+  // Product accessories methods
+  async getProductAccessoriesByProductId(productId: number): Promise<(ProductAccessory & { accessory: Product })[]> {
+    const accessoryLinks = await db
+      .select({
+        id: productAccessories.id,
+        baseProductId: productAccessories.baseProductId,
+        accessoryProductId: productAccessories.accessoryProductId,
+        isRequired: productAccessories.isRequired,
+        displayOrder: productAccessories.displayOrder,
+        category: productAccessories.category,
+        createdAt: productAccessories.createdAt,
+        accessory: products,
+      })
+      .from(productAccessories)
+      .leftJoin(products, eq(productAccessories.accessoryProductId, products.id))
+      .where(eq(productAccessories.baseProductId, productId));
+
+    return accessoryLinks as (ProductAccessory & { accessory: Product })[];
+  }
+
+  async createProductAccessory(insertAccessory: InsertProductAccessory): Promise<ProductAccessory> {
+    const [accessory] = await db
+      .insert(productAccessories)
+      .values(insertAccessory)
+      .returning();
+    return accessory;
+  }
+
+  async updateProductAccessory(id: number, accessoryData: Partial<InsertProductAccessory>): Promise<ProductAccessory | undefined> {
+    const [updated] = await db
+      .update(productAccessories)
+      .set(accessoryData)
+      .where(eq(productAccessories.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteProductAccessory(id: number): Promise<boolean> {
+    const result = await db.delete(productAccessories).where(eq(productAccessories.id, id));
+    return (result.rowCount || 0) > 0;
   }
 
   // Recalculate pricing tables when product discount changes

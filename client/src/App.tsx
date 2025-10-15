@@ -25,7 +25,6 @@ import AccountDetail from "@/pages/account-detail";
 import Pipeline from "@/pages/pipeline";
 import PublicSignPage from "@/pages/public-sign";
 import { ReportIssueButton } from "@/components/report-issue-button";
-import ScreenConfigurator from "@/features/screens/pages/ScreenConfigurator";
 
 function GlobalLoadingIndicator() {
   const isFetching = useIsFetching();
@@ -110,7 +109,6 @@ function Router() {
           <Route path="/admin" component={AdminPage} />
           <Route path="/admin/contracts" component={ContractsPage} />
           <Route path="/admin/quickbooks" component={QuickBooksSettings} />
-          <Route path="/configure/screen" component={ScreenConfigurator} />
         </>
       )}
     </Switch>

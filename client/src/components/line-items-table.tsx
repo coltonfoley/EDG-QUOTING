@@ -6,8 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Trash2, Plus, Package, Search, Filter, X, FileText, Loader2, GripVertical, Settings } from "lucide-react";
-import { useLocation } from "wouter";
+import { Trash2, Plus, Package, Search, Filter, X, FileText, Loader2, GripVertical } from "lucide-react";
 import { formatCurrency, calculateLineItemTotal, calculateLineItemMargin, applyDiscountToPrice, isValidNumber, clampValue, roundCurrency, generateGroupId, sanitizeNumberString } from "@/lib/utils";
 import { apiRequest, NavigationAbortError } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -45,7 +44,6 @@ interface LineItemsTableProps {
 export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
   // Check if quote is new (not saved yet)
   const isUnsavedQuote = !quoteId || quoteId === 0;
-  const [, setLocation] = useLocation();
   
   const [newItem, setNewItem] = useState({
     description: "",
@@ -1615,16 +1613,6 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                 </div>
               </DialogContent>
             </Dialog>
-            <Button
-              variant="outline"
-              className="text-sm"
-              disabled={isUnsavedQuote}
-              onClick={() => setLocation(`/configure/screen?quoteId=${quoteId}`)}
-              data-testid="button-configure-screen"
-            >
-              <Settings className="mr-2 h-4 w-4" />
-              Configure Screen
-            </Button>
             <Button
               onClick={() => setShowNewItemForm(true)}
               className="bg-blue-600 hover:bg-blue-700 text-white text-sm"
