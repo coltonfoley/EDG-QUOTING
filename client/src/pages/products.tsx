@@ -34,7 +34,8 @@ export default function Products() {
   const [viewMode, setViewMode] = useState<"grid" | "table">("table");
   const [showPricingManager, setShowPricingManager] = useState(false);
   const [managingPricingProduct, setManagingPricingProduct] = useState<Product | null>(null);
-  
+  const [screenAdders, setScreenAdders] = useState<any>(null);
+  const [screenHousing, setScreenHousing] = useState<any[]>([]);
   
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -75,6 +76,8 @@ export default function Products() {
       queryClient.invalidateQueries({ queryKey: ["/api/products"] });
       setIsDialogOpen(false);
       form.reset();
+      setScreenAdders(null);
+      setScreenHousing([]);
       toast({ title: "Product created successfully" });
     },
     onError: () => {
@@ -92,6 +95,8 @@ export default function Products() {
       setIsDialogOpen(false);
       setEditingProduct(null);
       form.reset();
+      setScreenAdders(null);
+      setScreenHousing([]);
       toast({ title: "Product updated successfully" });
     },
     onError: () => {
@@ -114,10 +119,17 @@ export default function Products() {
 
 
   const handleSubmit = (data: ProductFormData) => {
+    // Include screen-specific data if present
+    const productData = {
+      ...data,
+      adderPricing: screenAdders || undefined,
+      housingRules: screenHousing.length > 0 ? screenHousing : undefined,
+    };
+    
     if (editingProduct) {
-      updateProductMutation.mutate({ id: editingProduct.id, data });
+      updateProductMutation.mutate({ id: editingProduct.id, data: productData });
     } else {
-      createProductMutation.mutate(data);
+      createProductMutation.mutate(productData);
     }
   };
 
@@ -141,6 +153,21 @@ export default function Products() {
       minWidth: product.minWidth,
       maxWidth: product.maxWidth,
     });
+    
+    // Load screen-specific data - always initialize defaults for configurable products
+    if (product.productType === "configurable") {
+      setScreenAdders(product.adderPricing || {
+        remote: 0,
+        uChannelPerLf: 0,
+        colorUpchargePct: 0,
+        fabricUpcharges: {}
+      });
+      setScreenHousing(Array.isArray(product.housingRules) ? product.housingRules : []);
+    } else {
+      setScreenAdders(null);
+      setScreenHousing([]);
+    }
+    
     setIsDialogOpen(true);
   };
 
@@ -282,13 +309,22 @@ export default function Products() {
             <h2 className="text-3xl font-bold text-edg-black">Product Catalog</h2>
             <p className="text-edg-grey mt-2">Manage reusable products and services • {filteredProducts.length} products</p>
           </div>
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <Dialog open={isDialogOpen} onOpenChange={(open) => {
+            setIsDialogOpen(open);
+            if (!open) {
+              // Clear state when dialog closes
+              setScreenAdders(null);
+              setScreenHousing([]);
+            }
+          }}>
             <DialogTrigger asChild>
               <Button 
                 className="bg-edg-black hover:bg-edg-grey text-edg-white"
                 onClick={() => {
                   setEditingProduct(null);
                   form.reset();
+                  setScreenAdders(null);
+                  setScreenHousing([]);
                 }}
                 data-testid="button-new-product"
               >
@@ -305,11 +341,17 @@ export default function Products() {
               <Form {...form}>
                 <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
                   <Tabs defaultValue="basic" className="w-full">
-                    <TabsList className="grid w-full grid-cols-1">
+                    <TabsList className={`grid w-full ${form.watch("productType") === "configurable" ? 'grid-cols-2' : 'grid-cols-1'}`}>
                       <TabsTrigger value="basic" className="flex items-center gap-2">
                         <Package className="h-4 w-4" />
                         Product Details
                       </TabsTrigger>
+                      {form.watch("productType") === "configurable" ? (
+                        <TabsTrigger value="screen" className="flex items-center gap-2">
+                          <Settings className="h-4 w-4" />
+                          Screen Configuration
+                        </TabsTrigger>
+                      ) : null}
                     </TabsList>
                     
                     <TabsContent value="basic" className="space-y-4 mt-4">
@@ -362,7 +404,23 @@ export default function Products() {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Product Type</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value || "simple"}>
+                        <Select onValueChange={(value) => {
+                          field.onChange(value);
+                          // Initialize screen config when switching to configurable for new products
+                          if (value === "configurable" && !editingProduct) {
+                            if (!screenAdders) {
+                              setScreenAdders({
+                                remote: 0,
+                                uChannelPerLf: 0,
+                                colorUpchargePct: 0,
+                                fabricUpcharges: {}
+                              });
+                            }
+                            if (screenHousing.length === 0) {
+                              setScreenHousing([]);
+                            }
+                          }
+                        }} value={field.value || "simple"}>
                           <FormControl>
                             <SelectTrigger>
                               <SelectValue />
@@ -496,6 +554,140 @@ export default function Products() {
                     />
                   </div>
                     </TabsContent>
+                    
+                    {/* Screen Configuration Tab */}
+                    {form.watch("productType") === "configurable" ? (
+                      <TabsContent value="screen" className="space-y-4 mt-4">
+                        {/* Adder Pricing Section */}
+                        <div className="space-y-4">
+                          <h3 className="text-lg font-semibold">Adder Pricing</h3>
+                          
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div>
+                              <label className="block text-sm font-medium mb-2">Remote Price</label>
+                              <Input
+                                type="number"
+                                step="0.01"
+                                value={screenAdders?.remote || 0}
+                                onChange={(e) => setScreenAdders((prev: any) => ({ ...(prev || {}), remote: parseFloat(e.target.value) || 0 }))}
+                                data-testid="input-remote-price"
+                              />
+                            </div>
+                            
+                            <div>
+                              <label className="block text-sm font-medium mb-2">U-Channel per LF</label>
+                              <Input
+                                type="number"
+                                step="0.01"
+                                value={screenAdders?.uChannelPerLf || 0}
+                                onChange={(e) => setScreenAdders((prev: any) => ({ ...(prev || {}), uChannelPerLf: parseFloat(e.target.value) || null }))}
+                                data-testid="input-uchannel-price"
+                              />
+                            </div>
+                            
+                            <div>
+                              <label className="block text-sm font-medium mb-2">Color Upcharge %</label>
+                              <Input
+                                type="number"
+                                step="0.01"
+                                value={screenAdders?.colorUpchargePct || 0}
+                                onChange={(e) => setScreenAdders((prev: any) => ({ ...(prev || {}), colorUpchargePct: parseFloat(e.target.value) || 0 }))}
+                                data-testid="input-color-upcharge"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                        
+                        {/* Housing Rules Section */}
+                        <div className="space-y-4 pt-4 border-t">
+                          <div className="flex justify-between items-center">
+                            <h3 className="text-lg font-semibold">Housing Rules</h3>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setScreenHousing([...screenHousing, { maxW: 0, maxH: 0, housing: "", roller: "" }])}
+                              data-testid="button-add-housing-rule"
+                            >
+                              <Plus className="h-4 w-4 mr-2" />
+                              Add Rule
+                            </Button>
+                          </div>
+                          
+                          {screenHousing.length > 0 ? (
+                            <div className="space-y-2">
+                              {screenHousing.map((rule, idx) => (
+                                <div key={idx} className="grid grid-cols-12 gap-2 items-end border p-3 rounded-md">
+                                  <div className="col-span-2">
+                                    <label className="block text-xs font-medium mb-1">Max Width</label>
+                                    <Input
+                                      type="number"
+                                      value={rule.maxW}
+                                      onChange={(e) => {
+                                        const newHousing = [...screenHousing];
+                                        newHousing[idx].maxW = parseFloat(e.target.value) || 0;
+                                        setScreenHousing(newHousing);
+                                      }}
+                                      data-testid={`input-housing-maxw-${idx}`}
+                                    />
+                                  </div>
+                                  <div className="col-span-2">
+                                    <label className="block text-xs font-medium mb-1">Max Height</label>
+                                    <Input
+                                      type="number"
+                                      value={rule.maxH}
+                                      onChange={(e) => {
+                                        const newHousing = [...screenHousing];
+                                        newHousing[idx].maxH = parseFloat(e.target.value) || 0;
+                                        setScreenHousing(newHousing);
+                                      }}
+                                      data-testid={`input-housing-maxh-${idx}`}
+                                    />
+                                  </div>
+                                  <div className="col-span-4">
+                                    <label className="block text-xs font-medium mb-1">Housing</label>
+                                    <Input
+                                      value={rule.housing}
+                                      onChange={(e) => {
+                                        const newHousing = [...screenHousing];
+                                        newHousing[idx].housing = e.target.value;
+                                        setScreenHousing(newHousing);
+                                      }}
+                                      data-testid={`input-housing-housing-${idx}`}
+                                    />
+                                  </div>
+                                  <div className="col-span-3">
+                                    <label className="block text-xs font-medium mb-1">Roller</label>
+                                    <Input
+                                      value={rule.roller}
+                                      onChange={(e) => {
+                                        const newHousing = [...screenHousing];
+                                        newHousing[idx].roller = e.target.value;
+                                        setScreenHousing(newHousing);
+                                      }}
+                                      data-testid={`input-housing-roller-${idx}`}
+                                    />
+                                  </div>
+                                  <div className="col-span-1">
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => setScreenHousing(screenHousing.filter((_, i) => i !== idx))}
+                                      data-testid={`button-remove-housing-${idx}`}
+                                    >
+                                      <Trash2 className="h-4 w-4 text-red-500" />
+                                    </Button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-sm text-gray-500">No housing rules defined. Click "Add Rule" to create one.</p>
+                          )}
+                        </div>
+                      </TabsContent>
+                    ) : null}
                     
                   </Tabs>
                   
