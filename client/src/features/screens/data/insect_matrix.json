@@ -1,0 +1,23 @@
+{
+  "meta": {
+    "heightMax": 192,
+    "notes": ["Residential Insect Screen with Gaposa motor"]
+  },
+  "table": {
+    "84": { "60": 950, "72": 1000, "84": 1050 },
+    "96": { "60": 1000, "72": 1075, "84": 1150 },
+    "108": { "60": 1075, "72": 1150, "84": 1225 }
+  },
+  "housingRules": [
+    { "maxW": 72, "maxH": 96,  "housing": "6in",  "roller": "4in" },
+    { "maxW": 120,"maxH": 144, "housing": "7.5in","roller": "5.75in" },
+    { "maxW": 180,"maxH": 192, "housing": "8.5in","roller": "6.5in" }
+  ],
+  "adders": {
+    "remote": 95,
+    "uChannelPerLf": null,
+    "colorUpchargePct": 0.08,
+    "fabricUpcharges": {}
+  },
+  "specialQuoteFlags": { "fabrics": [] }
+}
