@@ -824,9 +824,13 @@ function ProductBulkEditor() {
       bulkUpdateForm.reset();
     },
     onError: (error: any) => {
+      const errorMessage = error.errors 
+        ? error.errors.map((e: any) => e.message).join(', ')
+        : error.message || "Failed to update products";
+      
       toast({
         title: "Update failed",
-        description: error.message || "Failed to update products",
+        description: errorMessage,
         variant: "destructive",
       });
     },
