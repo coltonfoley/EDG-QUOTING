@@ -57,6 +57,7 @@ export default function Products() {
       description: "",
       manufacturer: "",
       productType: "simple",
+      retailPrice: undefined,
       defaultUnitPrice: "0",
       defaultMarkupType: "percentage",
       defaultMarkupValue: "25",
@@ -130,6 +131,7 @@ export default function Products() {
       description: product.description || "",
       manufacturer: product.manufacturer || "",
       productType: product.productType || "simple",
+      retailPrice: product.retailPrice,
       defaultUnitPrice: product.defaultUnitPrice,
       defaultMarkupType: product.defaultMarkupType,
       defaultMarkupValue: product.defaultMarkupValue,
@@ -388,23 +390,67 @@ export default function Products() {
                     </div>
                   )}
 
+                  {/* Pricing Section */}
+                  {form.watch("productType") !== "configurable" && (
+                    <div className="space-y-4">
+                      <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
+                        <p className="text-sm text-blue-800">
+                          <strong>Pricing Options:</strong> Enter either a Retail Price with Manufacturer Discount, OR enter your Direct Cost. 
+                          If you enter a retail price, your cost will be calculated automatically.
+                        </p>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <FormField
+                          control={form.control}
+                          name="retailPrice"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Retail Price (Optional)</FormLabel>
+                              <FormControl>
+                                <Input 
+                                  type="number" 
+                                  step="0.01" 
+                                  {...field} 
+                                  value={field.value || ""} 
+                                  placeholder="MSRP or list price" 
+                                />
+                              </FormControl>
+                              <p className="text-xs text-gray-500">Manufacturer's suggested retail price</p>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        
+                        <FormField
+                          control={form.control}
+                          name="defaultUnitPrice"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>
+                                {form.watch("retailPrice") ? "Cost (Calculated)" : "Direct Cost"}
+                              </FormLabel>
+                              <FormControl>
+                                <Input 
+                                  type="number" 
+                                  step="0.01" 
+                                  {...field}
+                                  disabled={!!form.watch("retailPrice")}
+                                  placeholder={form.watch("retailPrice") ? "Auto-calculated from retail" : "Your cost"}
+                                />
+                              </FormControl>
+                              <p className="text-xs text-gray-500">
+                                {form.watch("retailPrice") ? "Retail - manufacturer discount" : "Your actual cost"}
+                              </p>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {/* Only show unit price for simple products */}
-                    {form.watch("productType") !== "configurable" && (
-                      <FormField
-                        control={form.control}
-                        name="defaultUnitPrice"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Unit Price</FormLabel>
-                            <FormControl>
-                              <Input type="number" step="0.01" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    )}
                     <FormField
                       control={form.control}
                       name="unit"
@@ -469,7 +515,12 @@ export default function Products() {
                       name="defaultDiscountValue"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Manufacturer Discount</FormLabel>
+                          <FormLabel>
+                            Manufacturer Discount
+                            {form.watch("retailPrice") && (
+                              <span className="text-xs text-gray-500 font-normal ml-2">(applied to retail price)</span>
+                            )}
+                          </FormLabel>
                           <div className="flex space-x-1">
                             <FormControl>
                               <Input type="number" step="0.01" {...field} className="flex-1" />
@@ -490,6 +541,11 @@ export default function Products() {
                               )}
                             />
                           </div>
+                          <p className="text-xs text-gray-500">
+                            {form.watch("retailPrice") 
+                              ? `Your discount off retail price (Cost = ${formatCurrency(parseFloat(form.watch("retailPrice") || "0"))} - discount)` 
+                              : "Leave at 0 if using direct cost"}
+                          </p>
                           <FormMessage />
                         </FormItem>
                       )}
