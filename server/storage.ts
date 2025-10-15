@@ -1202,7 +1202,24 @@ export class DatabaseStorage implements IStorage {
       
       const [newQuote] = await tx.insert(quotes).values(newQuoteData).returning();
       
-      // Copy line items
+      // Copy groups first and create a mapping from old IDs to new IDs
+      const originalGroups = await tx.select().from(groups).where(eq(groups.quoteId, originalQuoteId));
+      const groupIdMapping: Record<string, string> = {};
+      
+      for (const group of originalGroups) {
+        const newGroupId = `group-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
+        groupIdMapping[group.id] = newGroupId;
+        
+        await tx.insert(groups).values({
+          id: newGroupId,
+          quoteId: newQuote.id,
+          title: group.title,
+          position: group.position,
+          isCollapsed: group.isCollapsed,
+        });
+      }
+      
+      // Copy line items and update their group IDs to use the new group IDs
       const originalLineItems = await tx.select().from(lineItems).where(eq(lineItems.quoteId, originalQuoteId));
       for (const item of originalLineItems) {
         await tx.insert(lineItems).values({
@@ -1220,20 +1237,8 @@ export class DatabaseStorage implements IStorage {
           baseProductId: item.baseProductId,
           isAccessory: item.isAccessory,
           isTaxable: item.isTaxable,
-          groupId: item.groupId,
+          groupId: item.groupId ? (groupIdMapping[item.groupId] || null) : null,
           position: item.position,
-        });
-      }
-      
-      // Copy groups
-      const originalGroups = await tx.select().from(groups).where(eq(groups.quoteId, originalQuoteId));
-      for (const group of originalGroups) {
-        await tx.insert(groups).values({
-          id: group.id, // Keep same group ID for line item references
-          quoteId: newQuote.id,
-          title: group.title,
-          position: group.position,
-          isCollapsed: group.isCollapsed,
         });
       }
       
