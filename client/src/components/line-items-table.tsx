@@ -1832,6 +1832,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                   placeholder="0"
                   type="number"
                   step="0.01"
+                  min="-10000000"
                   className="text-sm flex-1"
                   data-testid="input-new-markup-value"
                 />
