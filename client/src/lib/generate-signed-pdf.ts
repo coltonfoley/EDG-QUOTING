@@ -46,8 +46,12 @@ export async function generateSignedPDF(options: GenerateSignedPDFOptions): Prom
     email: 'info@edgpatioshade.com'
   };
 
-  // Get contract text
-  const contractText = quote.contractTemplate?.terms || quote.customContractTerms || '';
+  // Get contract text (combine notes with contract terms)
+  const parts = [];
+  if (quote.notes?.trim()) parts.push(quote.notes.trim());
+  if (quote.customContractTerms?.trim()) parts.push(quote.customContractTerms.trim());
+  else if (quote.contractTemplate?.terms?.trim()) parts.push(quote.contractTemplate.terms.trim());
+  const contractText = parts.join('\n\n');
 
   // Get client logo if available
   let clientLogoDataUrl: string | null = null;

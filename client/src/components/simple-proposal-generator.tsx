@@ -451,7 +451,14 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
       };
 
       // Get contract text (only if includeContract is enabled)
-      const contractText = includeContract ? (quote.contractTemplate?.terms || quote.customContractTerms || '') : '';
+      let contractText = '';
+      if (includeContract) {
+        const parts = [];
+        if (quote.notes?.trim()) parts.push(quote.notes.trim());
+        if (quote.customContractTerms?.trim()) parts.push(quote.customContractTerms.trim());
+        else if (quote.contractTemplate?.terms?.trim()) parts.push(quote.contractTemplate.terms.trim());
+        contractText = parts.join('\n\n');
+      }
 
       // Get client logo (from "Cover Photo" section) - handle errors gracefully
       const clientLogoImage = getEffectiveCoverPhoto();
