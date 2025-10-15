@@ -361,7 +361,7 @@ export function applyDiscountToPrice(
   }
 }
 
-export function generateQuoteNumber(): string {
+export function generateQuoteNumber(versionNumber: number = 1): string {
   const year = new Date().getFullYear();
   // Use full timestamp including milliseconds for better uniqueness
   const timestamp = Date.now();
@@ -369,7 +369,21 @@ export function generateQuoteNumber(): string {
   const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
   // Use last 8 digits of timestamp + random component for uniqueness
   const uniqueId = `${timestamp.toString().slice(-8)}${random}`;
-  return `QT-${year}-${uniqueId}`;
+  return `QT-${year}-${uniqueId}-v${versionNumber}`;
+}
+
+export function getBaseQuoteNumber(quoteNumber: string): string | null {
+  // Extract base quote number without version suffix
+  // Example: "QT-2025-1234567890-v2" -> "QT-2025-1234567890"
+  const match = quoteNumber.match(/^(QT-\d{4}-\d+)-v\d+$/);
+  return match ? match[1] : null;
+}
+
+export function getVersionFromQuoteNumber(quoteNumber: string): number {
+  // Extract version number from quote number
+  // Example: "QT-2025-1234567890-v2" -> 2
+  const match = quoteNumber.match(/^QT-\d{4}-\d+-v(\d+)$/);
+  return match ? parseInt(match[1], 10) : 1;
 }
 
 // Group management utilities

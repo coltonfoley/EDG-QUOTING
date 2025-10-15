@@ -1911,6 +1911,65 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Quote versioning routes
+  app.post("/api/quotes/:id/create-version", isAuthenticated, async (req, res) => {
+    try {
+      // Validate ID parameter
+      const params = idParamSchema.safeParse(req.params);
+      if (!params.success) {
+        return res.status(400).json({ 
+          message: "Invalid request parameters", 
+          errors: params.error.errors 
+        });
+      }
+
+      // Check if the quote exists
+      const originalQuote = await storage.getQuote(params.data.id);
+      if (!originalQuote) {
+        return res.status(404).json({ message: "Original quote not found" });
+      }
+
+      // Create the new version
+      const newVersion = await storage.createQuoteVersion(params.data.id);
+      
+      console.log(`✅ Created version ${newVersion.versionNumber} of quote ${params.data.id}`);
+      res.status(201).json(newVersion);
+    } catch (error: any) {
+      console.error("Error creating quote version:", error);
+      res.status(500).json({ 
+        message: "Internal server error", 
+        error: error.message 
+      });
+    }
+  });
+
+  app.get("/api/quotes/:id/versions", isAuthenticated, async (req, res) => {
+    try {
+      // Validate ID parameter
+      const params = idParamSchema.safeParse(req.params);
+      if (!params.success) {
+        return res.status(400).json({ 
+          message: "Invalid request parameters", 
+          errors: params.error.errors 
+        });
+      }
+
+      // Check if the quote exists
+      const quote = await storage.getQuote(params.data.id);
+      if (!quote) {
+        return res.status(404).json({ message: "Quote not found" });
+      }
+
+      // Get all versions
+      const versions = await storage.getQuoteVersions(params.data.id);
+      
+      res.json(versions);
+    } catch (error) {
+      console.error("Error getting quote versions:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
   // E-Signature routes
   // Enable e-signature and generate signing link
   app.post("/api/quotes/:id/enable-esignature", isAuthenticated, async (req, res) => {
