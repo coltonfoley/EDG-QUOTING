@@ -6,7 +6,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Trash2, Plus, Package, Search, Filter, X, FileText, Loader2, GripVertical } from "lucide-react";
 import { formatCurrency, calculateLineItemTotal, calculateLineItemMargin, applyDiscountToPrice, isValidNumber, clampValue, roundCurrency, generateGroupId, sanitizeNumberString } from "@/lib/utils";
 import { apiRequest, NavigationAbortError } from "@/lib/queryClient";
@@ -1897,59 +1896,34 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
       <Dialog open={showDimensionDialog} onOpenChange={setShowDimensionDialog}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Configure {selectedConfigurableProduct?.name}</DialogTitle>
+            <DialogTitle>Enter Dimensions</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
-            {selectedConfigurableProduct && (
-              <Alert className="border-blue-200 bg-blue-50">
-                <AlertDescription className="text-blue-800 text-sm">
-                  <strong>Valid Ranges:</strong>{" "}
-                  {selectedConfigurableProduct.dimensionLabel1 || "Width"}: {selectedConfigurableProduct.minWidth || "N/A"}' - {selectedConfigurableProduct.maxWidth || "N/A"}'{" "}
-                  × {selectedConfigurableProduct.dimensionLabel2 || "Height"}: {selectedConfigurableProduct.minLength || "N/A"}' - {selectedConfigurableProduct.maxLength || "N/A"}'
-                </AlertDescription>
-              </Alert>
-            )}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                {selectedConfigurableProduct?.dimensionLabel1 || "Width"} (ft)
-              </label>
-              <Input
-                type="number"
-                step="0.1"
-                value={dimensions.width}
-                onChange={(e) => setDimensions({ ...dimensions, width: e.target.value })}
-                placeholder={selectedConfigurableProduct?.minWidth ? `Min: ${selectedConfigurableProduct.minWidth}'` : "0.0"}
-                data-testid="input-width"
-              />
-              {dimensions.width && selectedConfigurableProduct?.minWidth && selectedConfigurableProduct?.maxWidth && (
-                parseFloat(dimensions.width) < parseFloat(selectedConfigurableProduct.minWidth.toString()) || 
-                parseFloat(dimensions.width) > parseFloat(selectedConfigurableProduct.maxWidth.toString())
-              ) && (
-                <p className="text-sm text-red-600 mt-1">
-                  {selectedConfigurableProduct.dimensionLabel1} must be between {selectedConfigurableProduct.minWidth}' and {selectedConfigurableProduct.maxWidth}'
-                </p>
-              )}
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                {selectedConfigurableProduct?.dimensionLabel2 || "Height"} (ft)
+                Length (ft)
               </label>
               <Input
                 type="number"
                 step="0.1"
                 value={dimensions.length}
                 onChange={(e) => setDimensions({ ...dimensions, length: e.target.value })}
-                placeholder={selectedConfigurableProduct?.minLength ? `Min: ${selectedConfigurableProduct.minLength}'` : "0.0"}
+                placeholder="0.0"
                 data-testid="input-length"
               />
-              {dimensions.length && selectedConfigurableProduct?.minLength && selectedConfigurableProduct?.maxLength && (
-                parseFloat(dimensions.length) < parseFloat(selectedConfigurableProduct.minLength.toString()) || 
-                parseFloat(dimensions.length) > parseFloat(selectedConfigurableProduct.maxLength.toString())
-              ) && (
-                <p className="text-sm text-red-600 mt-1">
-                  {selectedConfigurableProduct.dimensionLabel2} must be between {selectedConfigurableProduct.minLength}' and {selectedConfigurableProduct.maxLength}'
-                </p>
-              )}
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Width (ft)
+              </label>
+              <Input
+                type="number"
+                step="0.1"
+                value={dimensions.width}
+                onChange={(e) => setDimensions({ ...dimensions, width: e.target.value })}
+                placeholder="0.0"
+                data-testid="input-width"
+              />
             </div>
             {calculatedPrice !== null && (
               <div className="p-3 bg-green-50 border border-green-200 rounded">
