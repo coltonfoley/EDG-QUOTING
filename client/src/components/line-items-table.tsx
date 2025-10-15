@@ -6,7 +6,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Trash2, Plus, Package, Search, Filter, X, FileText, Loader2, GripVertical } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Trash2, Plus, Package, Search, Filter, X, FileText, Loader2, GripVertical, Info } from "lucide-react";
 import { formatCurrency, calculateLineItemTotal, calculateLineItemMargin, applyDiscountToPrice, isValidNumber, clampValue, roundCurrency, generateGroupId, sanitizeNumberString } from "@/lib/utils";
 import { apiRequest, NavigationAbortError } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -1250,24 +1251,45 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
 
         {/* Cost - Hidden on small screens */}
         <td className="border-r border-gray-300 px-3 py-1 text-center hidden lg:table-cell">
-          <Input
-            value={getCurrentValue(item.id, 'unitPrice')}
-            onChange={(e) => {
-              handleFieldChange(item.id, "unitPrice", e.target.value);
-              markActive(`${item.id}-unitPrice`, e.currentTarget);
-            }}
-            onKeyDown={(e) => handleKeyDown(e, rowIndex, 'unitPrice')}
-            onFocus={(e) => {
-              activeInputs.current.add(`${item.id}-unitPrice`);
-              markActive(`${item.id}-unitPrice`, e.currentTarget);
-            }}
-            onBlur={() => {
-              handleFieldBlur(item.id, "unitPrice");
-              activeKeyRef.current = null;
-            }}
-            className="border-0 bg-transparent p-1 text-center text-sm focus:ring-1 focus:ring-blue-500"
-            data-testid={`input-unit-price-${item.id}`}
-          />
+          <div className="flex items-center gap-1">
+            <Input
+              value={getCurrentValue(item.id, 'unitPrice')}
+              onChange={(e) => {
+                handleFieldChange(item.id, "unitPrice", e.target.value);
+                markActive(`${item.id}-unitPrice`, e.currentTarget);
+              }}
+              onKeyDown={(e) => handleKeyDown(e, rowIndex, 'unitPrice')}
+              onFocus={(e) => {
+                activeInputs.current.add(`${item.id}-unitPrice`);
+                markActive(`${item.id}-unitPrice`, e.currentTarget);
+              }}
+              onBlur={() => {
+                handleFieldBlur(item.id, "unitPrice");
+                activeKeyRef.current = null;
+              }}
+              className="border-0 bg-transparent p-1 text-center text-sm focus:ring-1 focus:ring-blue-500 flex-1"
+              data-testid={`input-unit-price-${item.id}`}
+            />
+            {item.retailPrice && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Info className="h-3 w-3 text-blue-500 cursor-help" />
+                  </TooltipTrigger>
+                  <TooltipContent className="bg-gray-800 text-white p-2 text-xs max-w-xs">
+                    <div className="font-semibold mb-1">Cost Calculation:</div>
+                    <div>Retail Price: {formatCurrency(parseFloat(item.retailPrice.toString()))}</div>
+                    <div>
+                      Manufacturer Discount: {item.discountType === 'percentage' ? `${item.discountValue}%` : formatCurrency(parseFloat(item.discountValue.toString()))}
+                    </div>
+                    <div className="border-t border-gray-600 mt-1 pt-1">
+                      Your Cost: {formatCurrency(parseFloat(getCurrentValue(item.id, 'unitPrice')))}
+                    </div>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+          </div>
           {validationErrors[`${item.id}-unitPrice`] && (
             <div className="text-xs text-red-500 mt-1">{validationErrors[`${item.id}-unitPrice`]}</div>
           )}
