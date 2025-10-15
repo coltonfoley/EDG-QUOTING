@@ -193,6 +193,9 @@ export const products = pgTable("products", {
   maxLength: decimal("max_length", { precision: 8, scale: 2 }),
   minWidth: decimal("min_width", { precision: 8, scale: 2 }),
   maxWidth: decimal("max_width", { precision: 8, scale: 2 }),
+  // Custom dimension labels for better UX
+  dimensionLabel1: text("dimension_label_1").default("Width"), // e.g., "Width" for screens
+  dimensionLabel2: text("dimension_label_2").default("Height"), // e.g., "Height" for screens
   // Image fields for product visualization
   primaryImage: text("primary_image"), // Main product image URL
   galleryImages: jsonb("gallery_images"), // Array of additional product photos
