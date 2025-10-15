@@ -882,6 +882,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
         markupValue: product.defaultMarkupValue?.toString() || "0",
       });
       setShowProductDialog(false);
+      setShowNewItemForm(true);
     }
   };
 
