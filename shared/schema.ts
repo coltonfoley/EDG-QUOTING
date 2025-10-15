@@ -113,6 +113,10 @@ export const quotes = pgTable("quotes", {
   qbSyncStatus: text("qb_sync_status"), // null, 'pending', 'synced', 'error'
   qbSyncedAt: timestamp("qb_synced_at"),
   qbSyncError: text("qb_sync_error"),
+  // Version control fields
+  parentQuoteId: integer("parent_quote_id").references(() => quotes.id, { onDelete: "set null" }), // Links versions together
+  versionNumber: integer("version_number").notNull().default(1), // Version number (1, 2, 3, etc.)
+  isLatestVersion: boolean("is_latest_version").notNull().default(true), // Flag for filtering to latest version
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => [
@@ -120,6 +124,9 @@ export const quotes = pgTable("quotes", {
   index("idx_quotes_deal_stage").on(table.dealStage),
   index("idx_quotes_account_created").on(table.accountId, table.createdAt),
   index("idx_quotes_qb_sync_status").on(table.qbSyncStatus),
+  index("idx_quotes_parent_quote_id").on(table.parentQuoteId),
+  index("idx_quotes_is_latest_version").on(table.isLatestVersion),
+  index("idx_quotes_parent_latest").on(table.parentQuoteId, table.isLatestVersion),
 ]);
 
 // Quote cover photos - stores metadata for cover page images

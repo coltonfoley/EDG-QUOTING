@@ -13,7 +13,9 @@ import { generateQuoteNumber } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { LoadingSpinner } from "@/components/loading-spinner";
 import { SimpleProposalGenerator } from "@/components/simple-proposal-generator";
-import { Save, Loader2, FileText, CloudUpload } from "lucide-react";
+import { Save, Loader2, FileText, CloudUpload, Copy, History } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { QuoteWithDetails } from "@shared/schema";
 import { QuickBooksSync } from "@/components/quickbooks-sync";
 
@@ -30,6 +32,7 @@ export default function QuoteBuilder() {
 
   // State for proposal generator dialog
   const [proposalGeneratorOpen, setProposalGeneratorOpen] = useState(false);
+  const [versionHistoryOpen, setVersionHistoryOpen] = useState(false);
 
   const { data: quote, isLoading, error } = useQuery<QuoteWithDetails>({
     queryKey: [`/api/quotes/${quoteId}`],
@@ -38,6 +41,31 @@ export default function QuoteBuilder() {
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
     placeholderData: (previousData) => previousData,
+  });
+
+  // Query for quote versions
+  const { data: versions } = useQuery<QuoteWithDetails[]>({
+    queryKey: [`/api/quotes/${quoteId}/versions`],
+    enabled: !isNewQuote && !!quoteId,
+  });
+
+  // Mutation to create a new version
+  const createVersionMutation = useMutation({
+    mutationFn: async () => {
+      if (!quoteId) throw new Error("No quote ID");
+      const response = await apiRequest("POST", `/api/quotes/${quoteId}/create-version`);
+      return response.json();
+    },
+    onSuccess: (newVersion) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/quotes"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/quotes/${quoteId}/versions`] });
+      toast({ title: "New version created successfully" });
+      // Navigate to the new version
+      window.location.href = `/quotes/${newVersion.id}/edit`;
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to create new version", variant: "destructive" });
+    },
   });
 
   const createQuoteMutation = useMutation({
@@ -215,6 +243,9 @@ export default function QuoteBuilder() {
     qbSyncStatus: null,
     qbSyncedAt: null,
     qbSyncError: null,
+    parentQuoteId: null,
+    versionNumber: 1,
+    isLatestVersion: true,
     createdAt: new Date(),
     updatedAt: new Date(),
     account: { 
@@ -263,6 +294,101 @@ export default function QuoteBuilder() {
           isLoading={createQuoteMutation.isPending || updateQuoteMutation.isPending}
         />
 
+        {/* Version Control Section */}
+        {!isNewQuote && quote && (
+          <Card className="mb-6">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Badge variant="secondary" className="text-sm px-3 py-1" data-testid="badge-version">
+                    Version {currentQuote.versionNumber}
+                  </Badge>
+                  {!currentQuote.isLatestVersion && (
+                    <Badge variant="destructive" className="text-sm" data-testid="badge-old-version">
+                      Old Version
+                    </Badge>
+                  )}
+                  {versions && versions.length > 1 && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setVersionHistoryOpen(true)}
+                      data-testid="button-view-versions"
+                    >
+                      <History className="h-4 w-4 mr-1" />
+                      View History ({versions.length} versions)
+                    </Button>
+                  )}
+                </div>
+                <Button
+                  onClick={() => createVersionMutation.mutate()}
+                  disabled={createVersionMutation.isPending}
+                  variant="outline"
+                  data-testid="button-create-version"
+                >
+                  {createVersionMutation.isPending ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Copy className="mr-2 h-4 w-4" />
+                  )}
+                  Create New Version
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Version History Dialog */}
+        <Dialog open={versionHistoryOpen} onOpenChange={setVersionHistoryOpen}>
+          <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Version History</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3 mt-4">
+              {versions && versions.length > 0 ? (
+                versions.map((version) => (
+                  <Card key={version.id} className={version.id === quoteId ? "border-blue-500 border-2" : ""}>
+                    <CardContent className="p-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2">
+                            <h3 className="font-semibold">{version.quoteNumber}</h3>
+                            {version.isLatestVersion && (
+                              <Badge variant="default" className="text-xs">Latest</Badge>
+                            )}
+                            {version.id === quoteId && (
+                              <Badge variant="outline" className="text-xs">Current</Badge>
+                            )}
+                          </div>
+                          <p className="text-sm text-gray-600">
+                            Created: {new Date(version.createdAt).toLocaleDateString()}
+                          </p>
+                          <p className="text-sm text-gray-600">
+                            Project: {version.projectName || "Untitled"}
+                          </p>
+                        </div>
+                        {version.id !== quoteId && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              window.location.href = `/quotes/${version.id}/edit`;
+                            }}
+                            data-testid={`button-view-version-${version.id}`}
+                          >
+                            View
+                          </Button>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))
+              ) : (
+                <p className="text-center text-gray-500 py-8">No version history available</p>
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {/* Line Items Table - Show for both new and existing quotes */}
         <LineItemsTable

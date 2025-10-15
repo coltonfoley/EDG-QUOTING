@@ -75,6 +75,11 @@ export interface IStorage {
   createQuote(quote: InsertQuote): Promise<Quote>;
   updateQuote(id: number, quote: Partial<InsertQuote>): Promise<Quote | undefined>;
   deleteQuote(id: number): Promise<boolean>;
+  
+  // Quote versioning methods
+  getQuoteVersions(quoteId: number): Promise<QuoteWithDetails[]>;
+  createQuoteVersion(originalQuoteId: number): Promise<Quote>;
+  markPreviousVersionsAsOld(parentQuoteId: number): Promise<void>;
 
 
   // Product methods
@@ -340,6 +345,9 @@ export class MemStorage {
       qbSyncStatus: null,
       qbSyncedAt: null,
       qbSyncError: null,
+      parentQuoteId: insertQuote.parentQuoteId || null,
+      versionNumber: insertQuote.versionNumber || 1,
+      isLatestVersion: insertQuote.isLatestVersion ?? true,
       createdAt: new Date(),
       updatedAt: new Date()
     };
@@ -363,6 +371,41 @@ export class MemStorage {
       await this.deleteLineItemsByQuoteId(id);
     }
     return deleted;
+  }
+
+  // Quote versioning methods (stub implementations for in-memory storage)
+  async getQuoteVersions(quoteId: number): Promise<QuoteWithDetails[]> {
+    // Not fully implemented for in-memory storage
+    const quote = await this.getQuoteWithDetails(quoteId);
+    return quote ? [quote] : [];
+  }
+
+  async createQuoteVersion(originalQuoteId: number): Promise<Quote> {
+    // Simplified implementation for in-memory storage
+    const original = this.quotes.get(originalQuoteId);
+    if (!original) {
+      throw new Error('Original quote not found');
+    }
+    const newVersion: Quote = {
+      ...original,
+      id: this.currentQuoteId++,
+      versionNumber: original.versionNumber + 1,
+      parentQuoteId: original.parentQuoteId || original.id,
+      isLatestVersion: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    this.quotes.set(newVersion.id, newVersion);
+    return newVersion;
+  }
+
+  async markPreviousVersionsAsOld(parentQuoteId: number): Promise<void> {
+    // Simplified implementation for in-memory storage
+    for (const quote of this.quotes.values()) {
+      if (quote.id === parentQuoteId || quote.parentQuoteId === parentQuoteId) {
+        quote.isLatestVersion = false;
+      }
+    }
   }
 
   // Line item methods
@@ -849,7 +892,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAllQuotes(): Promise<QuoteWithDetails[]> {
-    const allQuotes = await db.select().from(quotes);
+    // Only get latest versions by default to avoid showing old quote revisions
+    const allQuotes = await db.select().from(quotes).where(eq(quotes.isLatestVersion, true));
     const result: QuoteWithDetails[] = [];
 
     for (const quote of allQuotes) {
@@ -1062,6 +1106,181 @@ export class DatabaseStorage implements IStorage {
     return (result.rowCount || 0) > 0;
   }
 
+  // Quote versioning methods
+  async getQuoteVersions(quoteId: number): Promise<QuoteWithDetails[]> {
+    // Get the quote to determine if it's a parent or a version
+    const [quote] = await db.select().from(quotes).where(eq(quotes.id, quoteId));
+    if (!quote) return [];
+    
+    // Determine the parent ID (either the quote itself if it's a parent, or its parent)
+    const parentId = quote.parentQuoteId || quote.id;
+    
+    // Get all versions (quotes with this parentId OR the parent quote itself)
+    const versionQuotes = await db
+      .select()
+      .from(quotes)
+      .where(
+        or(
+          eq(quotes.parentQuoteId, parentId),
+          eq(quotes.id, parentId)
+        )
+      )
+      .orderBy(asc(quotes.versionNumber));
+    
+    // Convert to QuoteWithDetails
+    const result: QuoteWithDetails[] = [];
+    for (const versionQuote of versionQuotes) {
+      const quoteDetails = await this.getQuoteWithDetails(versionQuote.id);
+      if (quoteDetails) {
+        result.push(quoteDetails);
+      }
+    }
+    
+    return result;
+  }
+
+  async createQuoteVersion(originalQuoteId: number): Promise<Quote> {
+    return await db.transaction(async (tx) => {
+      // Get the original quote
+      const [originalQuote] = await tx.select().from(quotes).where(eq(quotes.id, originalQuoteId));
+      if (!originalQuote) {
+        throw new Error('Original quote not found');
+      }
+      
+      // Determine parent ID and new version number
+      const parentId = originalQuote.parentQuoteId || originalQuote.id;
+      const newVersionNumber = originalQuote.versionNumber + 1;
+      
+      // Mark all previous versions as not latest
+      await tx
+        .update(quotes)
+        .set({ isLatestVersion: false })
+        .where(
+          or(
+            eq(quotes.id, parentId),
+            eq(quotes.parentQuoteId, parentId)
+          )
+        );
+      
+      // Extract base quote number (remove version suffix)
+      const baseQuoteNumber = originalQuote.quoteNumber.replace(/-v\d+$/, '');
+      const newQuoteNumber = `${baseQuoteNumber}-v${newVersionNumber}`;
+      
+      // Create new quote (copy all fields except id, timestamps, and version fields)
+      const newQuoteData: InsertQuote = {
+        quoteNumber: newQuoteNumber,
+        accountId: originalQuote.accountId,
+        projectName: originalQuote.projectName,
+        projectAddress: originalQuote.projectAddress,
+        jobsiteAddress: originalQuote.jobsiteAddress,
+        estimatedStartDate: originalQuote.estimatedStartDate,
+        notes: originalQuote.notes,
+        taxRate: originalQuote.taxRate,
+        discount: originalQuote.discount,
+        shipping: originalQuote.shipping,
+        isShippingTaxable: originalQuote.isShippingTaxable,
+        dealStage: originalQuote.dealStage,
+        lostReason: originalQuote.lostReason,
+        contractTemplateId: originalQuote.contractTemplateId,
+        customContractTerms: originalQuote.customContractTerms,
+        enableESignature: false, // Reset signature fields for new version
+        signingToken: null,
+        clientSignatureData: null,
+        clientSignedAt: null,
+        clientSignedIp: null,
+        companySignatureData: null,
+        companySignedAt: null,
+        companySignedIp: null,
+        qbEstimateId: null, // Reset QuickBooks sync fields
+        qbSyncStatus: null,
+        qbSyncedAt: null,
+        qbSyncError: null,
+        parentQuoteId: parentId,
+        versionNumber: newVersionNumber,
+        isLatestVersion: true,
+      };
+      
+      const [newQuote] = await tx.insert(quotes).values(newQuoteData).returning();
+      
+      // Copy line items
+      const originalLineItems = await tx.select().from(lineItems).where(eq(lineItems.quoteId, originalQuoteId));
+      for (const item of originalLineItems) {
+        await tx.insert(lineItems).values({
+          quoteId: newQuote.id,
+          productId: item.productId,
+          description: item.description,
+          quantity: item.quantity,
+          retailPrice: item.retailPrice,
+          unitPrice: item.unitPrice,
+          markupType: item.markupType,
+          markupValue: item.markupValue,
+          discountType: item.discountType,
+          discountValue: item.discountValue,
+          configData: item.configData,
+          baseProductId: item.baseProductId,
+          isAccessory: item.isAccessory,
+          isTaxable: item.isTaxable,
+          groupId: item.groupId,
+          position: item.position,
+        });
+      }
+      
+      // Copy groups
+      const originalGroups = await tx.select().from(groups).where(eq(groups.quoteId, originalQuoteId));
+      for (const group of originalGroups) {
+        await tx.insert(groups).values({
+          id: group.id, // Keep same group ID for line item references
+          quoteId: newQuote.id,
+          title: group.title,
+          position: group.position,
+          isCollapsed: group.isCollapsed,
+        });
+      }
+      
+      // Copy cover photos
+      const originalCoverPhotos = await tx.select().from(quoteCoverPhotos).where(eq(quoteCoverPhotos.quoteId, originalQuoteId));
+      for (const photo of originalCoverPhotos) {
+        await tx.insert(quoteCoverPhotos).values({
+          quoteId: newQuote.id,
+          filename: photo.filename,
+          originalName: photo.originalName,
+          storageUrl: photo.storageUrl,
+          fileSize: photo.fileSize,
+          mimeType: photo.mimeType,
+          isActive: photo.isActive,
+        });
+      }
+      
+      // Copy product renderings
+      const originalRenderings = await tx.select().from(quoteProductRenderings).where(eq(quoteProductRenderings.quoteId, originalQuoteId));
+      for (const rendering of originalRenderings) {
+        await tx.insert(quoteProductRenderings).values({
+          quoteId: newQuote.id,
+          filename: rendering.filename,
+          originalName: rendering.originalName,
+          storageUrl: rendering.storageUrl,
+          displayOrder: rendering.displayOrder,
+          fileSize: rendering.fileSize,
+          mimeType: rendering.mimeType,
+          isActive: rendering.isActive,
+        });
+      }
+      
+      return newQuote;
+    });
+  }
+
+  async markPreviousVersionsAsOld(parentQuoteId: number): Promise<void> {
+    await db
+      .update(quotes)
+      .set({ isLatestVersion: false })
+      .where(
+        or(
+          eq(quotes.id, parentQuoteId),
+          eq(quotes.parentQuoteId, parentQuoteId)
+        )
+      );
+  }
 
   async getLineItem(id: number): Promise<LineItem | undefined> {
     const [lineItem] = await db.select().from(lineItems).where(eq(lineItems.id, id));
