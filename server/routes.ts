@@ -180,13 +180,15 @@ function buildManufacturerFilter(manufacturerQuery?: string) {
  * Calculation Order (must match client-side):
  * 1. Calculate base total: quantity × unitPrice
  * 2. Apply manufacturer discount to base total
- * 3. Apply markup to the discounted amount
+ * 3. Apply tariff to increase cost (if applicable)
+ * 4. Apply markup to the tariff-adjusted amount
  * 
  * Validation Rules:
  * - Quantity: 0.01 to 999,999
  * - Unit Price: 0 to 10,000,000
  * - Markup: 0 to 1000 (percentage or fixed)
  * - Discount: 0 to 100% or 0 to base total (fixed)
+ * - Tariff: 0 to 100%
  * - All results rounded to 2 decimal places
  * - Tolerance for comparison: ±$0.01 (for floating-point precision)
  * 
@@ -196,6 +198,8 @@ function buildManufacturerFilter(manufacturerQuery?: string) {
  * @param markupValue - Markup amount
  * @param discountType - Manufacturer discount type
  * @param discountValue - Manufacturer discount amount
+ * @param tariffRate - Tariff percentage to increase cost
+ * @param isTariffApplicable - Whether tariff should be applied
  * @param expectedTotal - Client-calculated total to verify
  * @returns Validation result with calculated vs expected values
  */
@@ -206,6 +210,8 @@ function verifyLineItemCalculation(
   markupValue: number | string,
   discountType: string = "percentage",
   discountValue: number | string = 0,
+  tariffRate: number | string = 0,
+  isTariffApplicable: boolean = false,
   expectedTotal?: number | string
 ): { isValid: boolean; calculatedTotal: number; expectedTotal: number; discrepancy: number } {
   // Parse values
@@ -213,6 +219,7 @@ function verifyLineItemCalculation(
   const price = typeof unitPrice === 'string' ? parseFloat(unitPrice) : unitPrice;
   const markup = typeof markupValue === 'string' ? parseFloat(markupValue) : markupValue;
   const discount = typeof discountValue === 'string' ? parseFloat(discountValue) : discountValue;
+  const tariff = typeof tariffRate === 'string' ? parseFloat(tariffRate) : tariffRate;
   const expected = expectedTotal ? (typeof expectedTotal === 'string' ? parseFloat(expectedTotal) : expectedTotal) : 0;
 
   // Validate inputs
@@ -232,6 +239,10 @@ function verifyLineItemCalculation(
     console.warn(`⚠️ Invalid discount value: ${discount}`);
     return { isValid: false, calculatedTotal: 0, expectedTotal: expected, discrepancy: expected };
   }
+  if (!isFinite(tariff) || tariff < 0) {
+    console.warn(`⚠️ Invalid tariff value: ${tariff}`);
+    return { isValid: false, calculatedTotal: 0, expectedTotal: expected, discrepancy: expected };
+  }
 
   // Perform calculation with same logic as client
   const baseTotal = qty * price;
@@ -246,11 +257,18 @@ function verifyLineItemCalculation(
     }
   }
   
-  let calculatedTotal = afterDiscount;
+  // Apply tariff to increase cost (if applicable)
+  let afterTariff = afterDiscount;
+  if (isTariffApplicable && tariff > 0) {
+    const tariffPercent = Math.min(tariff, 100); // Cap at 100%
+    afterTariff = afterDiscount + (afterDiscount * (tariffPercent / 100));
+  }
+  
+  let calculatedTotal = afterTariff;
   if (markupType === 'percentage') {
-    calculatedTotal = afterDiscount + (afterDiscount * (markup / 100));
+    calculatedTotal = afterTariff + (afterTariff * (markup / 100));
   } else {
-    calculatedTotal = afterDiscount + markup;
+    calculatedTotal = afterTariff + markup;
   }
 
   // Floor at $0 to prevent negative totals
@@ -2604,6 +2622,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const lineItemData = insertLineItemSchema.parse({ ...req.body, quoteId: params.data.quoteId });
       
+      // Get quote to access tariff rate for calculation verification
+      const quote = await storage.getQuote(params.data.quoteId);
+      if (!quote) {
+        return res.status(404).json({ message: "Quote not found" });
+      }
+      
       // Server-side calculation verification
       const verification = verifyLineItemCalculation(
         lineItemData.quantity,
@@ -2611,7 +2635,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         lineItemData.markupType,
         lineItemData.markupValue,
         lineItemData.discountType,
-        lineItemData.discountValue
+        lineItemData.discountValue,
+        quote.tariffRate || 0,
+        lineItemData.isTariffApplicable || false
       );
       
       if (!verification.isValid) {
@@ -2658,6 +2684,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(404).json({ message: "Line item not found" });
         }
         
+        // Get quote to access tariff rate for calculation verification
+        const quote = await storage.getQuote(existingItem.quoteId);
+        if (!quote) {
+          return res.status(404).json({ message: "Quote not found" });
+        }
+        
         // Merge with existing data for complete calculation
         const completeData = { ...existingItem, ...lineItemData };
         
@@ -2667,7 +2699,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           completeData.markupType,
           completeData.markupValue,
           completeData.discountType,
-          completeData.discountValue
+          completeData.discountValue,
+          quote.tariffRate || 0,
+          completeData.isTariffApplicable || false
         );
         
         if (!verification.isValid) {
