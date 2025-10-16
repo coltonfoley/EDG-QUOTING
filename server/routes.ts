@@ -3006,7 +3006,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       for (const item of items) {
         const snapshot = item.productSnapshot;
 
-        // Calculate our actual cost by applying the default discount to retail price
+        // Calculate our actual cost by applying the manufacturer discount to retail price
+        // This matches the "From Catalog" pattern where discount is baked into unitPrice
         let unitPrice = parseFloat(snapshot.retailPrice);
         if (snapshot.defaultDiscountType === 'percentage') {
           const discountPercent = parseFloat(snapshot.defaultDiscountValue) / 100;
@@ -3022,8 +3023,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           quantity: item.quantity.toString(),
           retailPrice: snapshot.retailPrice,
           unitPrice: unitPrice.toFixed(2),
-          markupType: snapshot.defaultDiscountType,
-          markupValue: snapshot.defaultDiscountValue,
+          // Set markup and discount to 0 since manufacturer discount is already applied to unitPrice
+          // This matches the "From Catalog" pattern
+          markupType: "percentage",
+          markupValue: "0",
           discountType: "percentage",
           discountValue: "0",
           isTaxable: true,
