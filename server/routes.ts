@@ -3582,6 +3582,97 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // CSV Product Import endpoint with column mapping
+  app.post('/api/admin/import-csv-products', isAuthenticated, async (req: any, res) => {
+    try {
+      const currentUser = await storage.getUser(req.user?.id);
+      if (currentUser?.role !== 'admin') {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+
+      const { products } = req.body;
+
+      if (!products || !Array.isArray(products)) {
+        return res.status(400).json({ message: "Products array is required" });
+      }
+
+      let created = 0;
+      let updated = 0;
+      const errors: string[] = [];
+
+      for (const product of products) {
+        try {
+          const { name, category, unit, description, retailPrice, cost } = product;
+
+          if (!name || typeof retailPrice !== 'number' || typeof cost !== 'number') {
+            errors.push(`Invalid product data for: ${name || 'unnamed'}`);
+            continue;
+          }
+
+          // Calculate manufacturer discount from the difference
+          const manufacturerDiscount = retailPrice - cost;
+
+          // Check if product already exists by name (case-insensitive)
+          const allProducts = await storage.getAllProducts();
+          const existingProduct = allProducts.find(p => 
+            p.name.toLowerCase().trim() === name.toLowerCase().trim()
+          );
+
+          if (existingProduct) {
+            // Update existing product - only update fields that are explicitly provided
+            const updateData: any = {
+              retailPrice: retailPrice.toString(),
+              defaultDiscountType: 'dollar',
+              defaultDiscountValue: manufacturerDiscount.toString(),
+            };
+            
+            // Only update optional fields if they were mapped and have values
+            if (category !== undefined) {
+              updateData.manufacturer = category;
+            }
+            if (unit !== undefined) {
+              updateData.unit = unit;
+            }
+            if (description !== undefined) {
+              updateData.description = description;
+            }
+            
+            await storage.updateProduct(existingProduct.id, updateData);
+            updated++;
+          } else {
+            // Create new product - use defaults for unmapped fields
+            const productData = {
+              name: name.trim(),
+              description: description || '',
+              manufacturer: category || 'Imported',
+              retailPrice: retailPrice.toString(),
+              defaultDiscountType: 'dollar' as const,
+              defaultDiscountValue: manufacturerDiscount.toString(),
+              unit: unit || 'each',
+            };
+            
+            const cleanProductData = stripValidationMetadata(productData);
+            await storage.createProduct(cleanProductData);
+            created++;
+          }
+        } catch (error) {
+          console.error(`Error processing product ${product.name}:`, error);
+          errors.push(`Failed to process: ${product.name}`);
+        }
+      }
+
+      res.json({
+        created,
+        updated,
+        errors,
+        total: products.length,
+      });
+    } catch (error) {
+      console.error("CSV import error:", error);
+      res.status(500).json({ message: "Failed to import products" });
+    }
+  });
+
   // Bulk update products endpoint
   app.post('/api/admin/bulk-update-products', isAuthenticated, async (req: any, res) => {
     try {

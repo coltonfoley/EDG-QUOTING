@@ -18,6 +18,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { UserPlus, Shield, User as UserIcon, Trash2, Edit, Upload, FileSpreadsheet, AlertCircle, CheckCircle, Package, Settings, FileText, DollarSign } from "lucide-react";
 import { z } from "zod";
 import type { User, Product } from "@shared/schema";
+import { CSVProductImporter } from "@/components/csv-product-importer";
 
 const createUserSchema = z.object({
   username: z.string().min(3, "Username must be at least 3 characters"),
@@ -575,12 +576,25 @@ export default function AdminPage() {
             </Form>
           </DialogContent>
         </Dialog>
-        {/* Price List Uploader Section */}
+        {/* CSV Product Importer Section */}
         <Card className="mt-8">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <FileSpreadsheet className="h-5 w-5" />
-              Price List Uploader
+              CSV Product Importer
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <CSVProductImporter />
+          </CardContent>
+        </Card>
+
+        {/* Price List Uploader Section */}
+        <Card className="mt-8">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Upload className="h-5 w-5" />
+              AI Price List Uploader
             </CardTitle>
           </CardHeader>
           <CardContent>
