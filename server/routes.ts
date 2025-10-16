@@ -3028,7 +3028,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (body.manufacturer !== undefined) updateFields.manufacturer = body.manufacturer;
       if (body.productType !== undefined) updateFields.productType = body.productType;
       if (body.retailPrice !== undefined) updateFields.retailPrice = body.retailPrice;
-      if (body.defaultUnitPrice !== undefined) updateFields.defaultUnitPrice = body.defaultUnitPrice;
       if (body.defaultDiscountType !== undefined) updateFields.defaultDiscountType = body.defaultDiscountType;
       if (body.defaultDiscountValue !== undefined) updateFields.defaultDiscountValue = body.defaultDiscountValue;
       if (body.unit !== undefined) updateFields.unit = body.unit;
@@ -3542,7 +3541,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
             // Update existing product with retail pricing
             await storage.updateProduct(existingProduct.id, {
               retailPrice: retailPrice.toString(),
-              defaultUnitPrice: actualCost.toFixed(2),
               defaultDiscountType: manufacturerDiscountType,
               defaultDiscountValue: manufacturerDiscountValue.toString(),
               unit: extractedProduct.unit || existingProduct.unit,
@@ -3555,7 +3553,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
               description: extractedProduct.description || '',
               manufacturer: 'Imported',
               retailPrice: retailPrice.toString(),
-              defaultUnitPrice: actualCost.toFixed(2),
               defaultDiscountType: manufacturerDiscountType,
               defaultDiscountValue: manufacturerDiscountValue.toString(),
               unit: extractedProduct.unit || 'each',

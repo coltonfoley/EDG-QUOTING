@@ -875,20 +875,16 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
       setShowProductDialog(false);
       setShowDimensionDialog(true);
     } else {
-      // Calculate unit price based on retail price or use direct cost
-      let calculatedUnitPrice = product.defaultUnitPrice?.toString() || "0";
+      // Calculate cost from retail price minus manufacturer discount
+      const retail = parseFloat(product.retailPrice?.toString() || "0");
+      const discountValue = parseFloat(product.defaultDiscountValue?.toString() || "0");
       
-      if (product.retailPrice) {
-        // Product has retail pricing - calculate cost from retail minus manufacturer discount
-        const retail = parseFloat(product.retailPrice.toString());
-        const discountValue = parseFloat(product.defaultDiscountValue?.toString() || "0");
-        
-        if (product.defaultDiscountType === "percentage") {
-          calculatedUnitPrice = (retail * (1 - discountValue / 100)).toFixed(2);
-        } else {
-          // Dollar discount
-          calculatedUnitPrice = Math.max(0, retail - discountValue).toFixed(2);
-        }
+      let calculatedUnitPrice = "0";
+      if (product.defaultDiscountType === "percentage") {
+        calculatedUnitPrice = (retail * (1 - discountValue / 100)).toFixed(2);
+      } else {
+        // Dollar discount
+        calculatedUnitPrice = Math.max(0, retail - discountValue).toFixed(2);
       }
       
       setNewItem({
@@ -1636,7 +1632,17 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                                 )}
                                 <div className="flex justify-between items-center">
                                   <div className="text-sm font-medium text-green-600">
-                                    {formatCurrency(product.defaultUnitPrice || 0)}
+                                    {(() => {
+                                      const retail = parseFloat(product.retailPrice?.toString() || "0");
+                                      const discountValue = parseFloat(product.defaultDiscountValue?.toString() || "0");
+                                      let cost = 0;
+                                      if (product.defaultDiscountType === "percentage") {
+                                        cost = retail * (1 - discountValue / 100);
+                                      } else {
+                                        cost = Math.max(0, retail - discountValue);
+                                      }
+                                      return formatCurrency(cost);
+                                    })()}
                                   </div>
                                   {product.productType === "configurable" && (
                                     <Badge variant="secondary" className="text-xs">

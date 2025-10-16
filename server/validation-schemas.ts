@@ -372,12 +372,12 @@ export const insertProductSchema = z.object({
   productType: z.enum(['simple', 'configurable'], {
     errorMap: () => ({ message: "Product type must be either 'simple' or 'configurable'" })
   }).optional(),
-  defaultUnitPrice: z.union([z.string(), z.number()])
+  retailPrice: z.union([z.string(), z.number()])
     .transform(val => typeof val === 'string' ? val : val.toString())
     .refine(val => {
       const num = parseFloat(val);
       return !isNaN(num) && num >= 0 && num <= 10000000;
-    }, "Default unit price must be between 0 and 10,000,000"),
+    }, "Retail price must be between 0 and 10,000,000"),
   defaultDiscountType: z.enum(['percentage', 'dollar'], {
     errorMap: () => ({ message: "Discount type must be either 'percentage' or 'dollar'" })
   }).optional(),
