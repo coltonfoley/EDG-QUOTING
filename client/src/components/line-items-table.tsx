@@ -892,8 +892,8 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
         description: product.name,
         retailPrice: product.retailPrice?.toString() || "",
         unitPrice: calculatedUnitPrice,
-        discountType: (product.defaultDiscountType || "percentage") as "percentage" | "dollar",
-        discountValue: product.defaultDiscountValue?.toString() || "0",
+        discountType: "percentage", // Reset - discount already applied to unitPrice
+        discountValue: "0", // Reset - unitPrice is the final cost after discount
         markupType: "percentage",
         markupValue: "0",
       });
