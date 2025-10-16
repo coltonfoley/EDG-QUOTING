@@ -33,6 +33,7 @@ export default function Products() {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedManufacturer, setSelectedManufacturer] = useState<string>("all");
+  const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [viewMode, setViewMode] = useState<"grid" | "table">("table");
   const [showPricingManager, setShowPricingManager] = useState(false);
   const [managingPricingProduct, setManagingPricingProduct] = useState<Product | null>(null);
@@ -58,6 +59,7 @@ export default function Products() {
       name: "",
       description: "",
       manufacturer: "",
+      category: "",
       productType: "simple",
       retailPrice: "0",
       defaultDiscountType: "dollar",
@@ -153,6 +155,7 @@ export default function Products() {
       name: product.name,
       description: product.description || "",
       manufacturer: product.manufacturer || "",
+      category: product.category || "",
       productType: product.productType || "simple",
       retailPrice: product.retailPrice,
       defaultDiscountType: product.defaultDiscountType,
@@ -178,11 +181,17 @@ export default function Products() {
     setShowPricingManager(true);
   };
 
-  // Get unique manufacturers and filter/search products
+  // Get unique manufacturers and categories, and filter/search products
   const manufacturers = useMemo(() => {
     if (!products) return [];
     const uniqueManufacturers = Array.from(new Set(products.map(p => p.manufacturer || "Unknown")));
     return uniqueManufacturers.sort();
+  }, [products]);
+
+  const categories = useMemo(() => {
+    if (!products) return [];
+    const uniqueCategories = Array.from(new Set(products.map(p => p.category || "Uncategorized").filter(Boolean)));
+    return uniqueCategories.sort();
   }, [products]);
 
   const filteredProducts = useMemo(() => {
@@ -196,9 +205,12 @@ export default function Products() {
       const matchesManufacturer = selectedManufacturer === "all" || 
         (product.manufacturer || "Unknown") === selectedManufacturer;
       
-      return matchesSearch && matchesManufacturer;
+      const matchesCategory = selectedCategory === "all" || 
+        (product.category || "Uncategorized") === selectedCategory;
+      
+      return matchesSearch && matchesManufacturer && matchesCategory;
     });
-  }, [products, searchTerm, selectedManufacturer]);
+  }, [products, searchTerm, selectedManufacturer, selectedCategory]);
 
   const groupedProducts = useMemo(() => {
     return filteredProducts.reduce((groups, product) => {
@@ -358,6 +370,21 @@ export default function Products() {
                           <FormLabel>Manufacturer</FormLabel>
                           <FormControl>
                             <Input {...field} value={field.value || ""} placeholder="e.g. Brustor, SunSetter, Sunsail" data-testid="input-manufacturer" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="category"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Category</FormLabel>
+                          <FormControl>
+                            <Input {...field} value={field.value || ""} placeholder="e.g. Extrusions, Gutters, Louvers" data-testid="input-category" />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -560,6 +587,21 @@ export default function Products() {
               </SelectContent>
             </Select>
 
+            <Select value={selectedCategory} onValueChange={setSelectedCategory} data-testid="select-category-filter">
+              <SelectTrigger className="w-48">
+                <Filter className="h-4 w-4 mr-2" />
+                <SelectValue placeholder="All Categories" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Categories</SelectItem>
+                {categories.map(category => (
+                  <SelectItem key={category} value={category}>
+                    {category}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
             <div className="flex border rounded-md">
               <Button
                 variant={viewMode === "table" ? "default" : "ghost"}
@@ -582,7 +624,7 @@ export default function Products() {
         </div>
 
         {/* Active Filters */}
-        {(searchTerm || selectedManufacturer !== "all") && (
+        {(searchTerm || selectedManufacturer !== "all" || selectedCategory !== "all") && (
           <div className="flex gap-2 mb-4">
             {searchTerm && (
               <Badge variant="secondary" className="flex items-center gap-1" data-testid="filter-search-active">
@@ -594,6 +636,12 @@ export default function Products() {
               <Badge variant="secondary" className="flex items-center gap-1" data-testid="filter-manufacturer-active">
                 Manufacturer: {selectedManufacturer}
                 <X className="h-3 w-3 cursor-pointer" onClick={() => setSelectedManufacturer("all")} />
+              </Badge>
+            )}
+            {selectedCategory !== "all" && (
+              <Badge variant="secondary" className="flex items-center gap-1" data-testid="filter-category-active">
+                Category: {selectedCategory}
+                <X className="h-3 w-3 cursor-pointer" onClick={() => setSelectedCategory("all")} />
               </Badge>
             )}
           </div>
@@ -626,6 +674,7 @@ export default function Products() {
                 onClick={() => {
                   setSearchTerm("");
                   setSelectedManufacturer("all");
+                  setSelectedCategory("all");
                 }}
                 data-testid="button-clear-filters"
               >
@@ -814,6 +863,7 @@ function ProductTable({ products, onEdit, onDelete, onManagePricing }: ProductTa
               <TableHead className="w-[80px]">Image</TableHead>
               <TableHead className="w-[280px]">Product Name</TableHead>
               <TableHead>Manufacturer</TableHead>
+              <TableHead>Category</TableHead>
               <TableHead>Type</TableHead>
               <TableHead>Unit</TableHead>
               <TableHead className="text-right">Unit Price</TableHead>
@@ -878,6 +928,13 @@ function ProductTable({ products, onEdit, onDelete, onManagePricing }: ProductTa
                 </TableCell>
                 <TableCell>
                   <Badge variant="outline" data-testid={`text-manufacturer-${product.id}`}>{product.manufacturer || "Unknown"}</Badge>
+                </TableCell>
+                <TableCell>
+                  {product.category ? (
+                    <span className="text-sm text-gray-600">{product.category}</span>
+                  ) : (
+                    <span className="text-sm text-gray-400">Uncategorized</span>
+                  )}
                 </TableCell>
                 <TableCell>
                   <Badge variant={product.productType === "configurable" ? "default" : "secondary"}>
