@@ -46,6 +46,7 @@ export function SundanceCatalogConfigurator({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/quotes', quoteId] });
+      queryClient.invalidateQueries({ queryKey: ['/api/quotes', quoteId, 'groups'] });
       toast({
         title: 'Configuration inserted',
         description: 'Products added to quote successfully',

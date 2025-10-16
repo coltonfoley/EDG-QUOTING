@@ -47,6 +47,7 @@ Preferred communication style: Simple, everyday language.
     - Email integration for sending quotes and e-signature links.
     - Bulk product adjustment and price list uploading.
     - Cost tracking for true margin visibility in imported items.
+    - **Product Configurator System**: Manufacturer-specific configurators (Sundance catalog-style) that insert grouped line items with complete product snapshots stored in configData for historical accuracy. Cache invalidation pattern requires invalidating both quote and groups queries.
 
 ## External Dependencies
 
