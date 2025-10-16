@@ -130,6 +130,13 @@ export const insertQuoteSchema = baseQuoteSchema.extend({
       const num = parseFloat(val);
       return !isNaN(num) && num >= 0 && num <= 100;
     }, "Discount must be between 0 and 100"),
+  tariffRate: z.union([z.string(), z.number(), z.null()])
+    .transform(val => val === null ? "0" : (typeof val === 'string' ? val : val.toString()))
+    .refine(val => {
+      const num = parseFloat(val);
+      return !isNaN(num) && num >= 0 && num <= 100;
+    }, "Tariff rate must be between 0 and 100")
+    .optional(),
   shipping: z.union([z.string(), z.number(), z.null()])
     .transform(val => val === null ? "0" : (typeof val === 'string' ? val : val.toString()))
     .refine(val => {
@@ -182,6 +189,13 @@ export const createQuoteSchema = z.object({
       const num = parseFloat(val);
       return !isNaN(num) && num >= 0 && num <= 100;
     }, "Discount must be between 0 and 100")
+    .optional(),
+  tariffRate: z.union([z.string(), z.number(), z.null()])
+    .transform(val => val === null ? "0" : (typeof val === 'string' ? val : val.toString()))
+    .refine(val => {
+      const num = parseFloat(val);
+      return !isNaN(num) && num >= 0 && num <= 100;
+    }, "Tariff rate must be between 0 and 100")
     .optional(),
   shipping: z.union([z.string(), z.number(), z.null()])
     .transform(val => val === null ? "0" : (typeof val === 'string' ? val : val.toString()))
@@ -236,6 +250,13 @@ export const updateQuoteSchema = z.object({
       const num = parseFloat(val);
       return !isNaN(num) && num >= 0 && num <= 100;
     }, "Discount must be between 0 and 100")
+    .optional(),
+  tariffRate: z.union([z.string(), z.number(), z.null()])
+    .transform(val => val === null ? "0" : (typeof val === 'string' ? val : val.toString()))
+    .refine(val => {
+      const num = parseFloat(val);
+      return !isNaN(num) && num >= 0 && num <= 100;
+    }, "Tariff rate must be between 0 and 100")
     .optional(),
   shipping: z.union([z.string(), z.number(), z.null()])
     .transform(val => val === null ? "0" : (typeof val === 'string' ? val : val.toString()))
