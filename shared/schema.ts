@@ -180,6 +180,7 @@ export const products = pgTable("products", {
   name: text("name").notNull(),
   description: text("description"),
   manufacturer: text("manufacturer").notNull(),
+  category: text("category"), // e.g., "Extrusions", "Gutters", "Louvers"
   productType: text("product_type").notNull().default("simple"), // simple, configurable
   // Pricing fields
   retailPrice: decimal("retail_price", { precision: 10, scale: 2 }).notNull(), // MSRP/list price from manufacturer
@@ -201,6 +202,8 @@ export const products = pgTable("products", {
 }, (table) => [
   index("idx_products_manufacturer").on(table.manufacturer),
   index("idx_products_product_type").on(table.productType),
+  index("idx_products_category").on(table.category),
+  index("idx_products_manufacturer_category").on(table.manufacturer, table.category),
 ]);
 
 // Dimensional pricing tables for configurable products
@@ -391,6 +394,7 @@ export const insertProductSchema = createInsertSchema(products).omit({
   createdAt: true,
 }).extend({
   manufacturer: z.string().min(1, "Manufacturer is required"),
+  category: z.string().optional().nullable(),
   retailPrice: z.union([z.string(), z.number()]).transform(val => typeof val === 'string' ? val : val.toString()),
   defaultDiscountValue: z.union([z.string(), z.number()]).transform(val => typeof val === 'string' ? val : val.toString()),
   minLength: z.union([z.string(), z.number(), z.null()]).transform(val => val === null ? null : (typeof val === 'string' ? val : val.toString())).optional(),
