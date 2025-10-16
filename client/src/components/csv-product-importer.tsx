@@ -16,11 +16,12 @@ interface CSVRow {
 
 interface ColumnMapping {
   csvColumn: string;
-  productField: 'name' | 'category' | 'retailPrice' | 'cost' | 'unit' | 'description' | 'skip';
+  productField: 'name' | 'manufacturer' | 'category' | 'retailPrice' | 'cost' | 'unit' | 'description' | 'skip';
 }
 
 interface PreviewProduct {
   name: string;
+  manufacturer?: string;
   category?: string;
   unit?: string;
   description?: string;
@@ -32,6 +33,7 @@ interface PreviewProduct {
 
 const PRODUCT_FIELDS = [
   { value: 'name', label: 'Product Name' },
+  { value: 'manufacturer', label: 'Manufacturer' },
   { value: 'category', label: 'Category' },
   { value: 'retailPrice', label: 'Retail/Dealer Price' },
   { value: 'cost', label: 'Your Cost' },
@@ -58,6 +60,9 @@ export function CSVProductImporter() {
       
       if (lowerCol.includes('name') || lowerCol.includes('product') || lowerCol.includes('description') && lowerCol.length < 15) {
         return { csvColumn: col, productField: 'name' };
+      }
+      if (lowerCol.includes('manufacturer') || lowerCol.includes('brand') || lowerCol.includes('mfr')) {
+        return { csvColumn: col, productField: 'manufacturer' };
       }
       if (lowerCol.includes('category') || lowerCol.includes('type')) {
         return { csvColumn: col, productField: 'category' };
@@ -140,6 +145,7 @@ export function CSVProductImporter() {
     let skippedRows = 0;
 
     const nameMapping = columnMappings.find(m => m.productField === 'name');
+    const manufacturerMapping = columnMappings.find(m => m.productField === 'manufacturer');
     const categoryMapping = columnMappings.find(m => m.productField === 'category');
     const retailPriceMapping = columnMappings.find(m => m.productField === 'retailPrice');
     const costMapping = columnMappings.find(m => m.productField === 'cost');
@@ -163,6 +169,7 @@ export function CSVProductImporter() {
       const name = nameMapping ? String(row[nameMapping.csvColumn] || '').trim() : '';
       
       // Only include mapped fields - undefined if not mapped
+      const manufacturer = manufacturerMapping ? String(row[manufacturerMapping.csvColumn] || '').trim() || undefined : undefined;
       const category = categoryMapping ? String(row[categoryMapping.csvColumn] || '').trim() || undefined : undefined;
       const unit = unitMapping ? String(row[unitMapping.csvColumn] || '').trim() || undefined : undefined;
       const description = descMapping ? String(row[descMapping.csvColumn] || '').trim() || undefined : undefined;
@@ -192,6 +199,7 @@ export function CSVProductImporter() {
 
       preview.push({
         name,
+        manufacturer,
         category,
         unit,
         description,
@@ -408,6 +416,7 @@ export function CSVProductImporter() {
                 <thead className="sticky top-0 bg-gray-100">
                   <tr className="border-b">
                     <th className="text-left py-2 px-2">Name</th>
+                    <th className="text-left py-2 px-2">Manufacturer</th>
                     <th className="text-left py-2 px-2">Category</th>
                     <th className="text-left py-2 px-2">Unit</th>
                     <th className="text-right py-2 px-2">Retail Price</th>
@@ -420,6 +429,7 @@ export function CSVProductImporter() {
                   {previewData.map((product, index) => (
                     <tr key={index} className="border-b" data-testid={`row-preview-${index}`}>
                       <td className="py-1 px-2">{product.name}</td>
+                      <td className="py-1 px-2">{product.manufacturer || '-'}</td>
                       <td className="py-1 px-2">{product.category || '-'}</td>
                       <td className="py-1 px-2">{product.unit || '-'}</td>
                       <td className="py-1 px-2 text-right">${product.retailPrice.toFixed(2)}</td>
