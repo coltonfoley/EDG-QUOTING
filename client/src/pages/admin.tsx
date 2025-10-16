@@ -15,7 +15,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
-import { UserPlus, Shield, User as UserIcon, Trash2, Edit, Upload, FileSpreadsheet, AlertCircle, CheckCircle, Package, Settings, FileText, DollarSign } from "lucide-react";
+import { UserPlus, Shield, User as UserIcon, Trash2, Edit, FileSpreadsheet, Package, Settings, FileText, DollarSign } from "lucide-react";
 import { z } from "zod";
 import type { User, Product } from "@shared/schema";
 import { CSVProductImporter } from "@/components/csv-product-importer";
