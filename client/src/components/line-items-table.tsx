@@ -1384,6 +1384,23 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
           </div>
         </td>
 
+        {/* Tariff - Always visible */}
+        <td className="border-r border-gray-300 px-2 py-1 text-center">
+          <div className="flex justify-center">
+            <Checkbox
+              checked={item.isTariffApplicable === true}
+              onCheckedChange={(checked) => {
+                updateLineItemMutation.mutate({ 
+                  id: item.id, 
+                  data: { isTariffApplicable: checked === true },
+                  skipInvalidation: false
+                });
+              }}
+              data-testid={`checkbox-tariff-${item.id}`}
+            />
+          </div>
+        </td>
+
         {/* Actions - Always visible */}
         <td className="px-3 py-1 text-center">
           <Button
@@ -1722,6 +1739,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                 <col style={{width: '100px'}} /> {/* Margin$ */}
                 <col style={{width: '140px'}} /> {/* Total */}
                 <col style={{width: '70px'}} /> {/* Taxable */}
+                <col style={{width: '70px'}} /> {/* Tariff */}
                 <col style={{width: '80px'}} /> {/* Actions */}
               </colgroup>
               <thead>
@@ -1752,6 +1770,9 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                   </th>
                   <th className="border-r border-gray-300 px-2 py-2 text-center text-sm font-medium text-gray-700">
                     Taxable
+                  </th>
+                  <th className="border-r border-gray-300 px-2 py-2 text-center text-sm font-medium text-gray-700">
+                    Tariff
                   </th>
                   <th className="px-3 py-2 text-center text-sm font-medium text-gray-700">
                     Actions
