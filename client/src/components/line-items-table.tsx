@@ -1913,7 +1913,9 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                     newItem.quantity,
                     newItem.unitPrice,
                     newItem.markupType,
-                    newItem.markupValue
+                    newItem.markupValue,
+                    newItem.discountType,
+                    newItem.discountValue
                   )
                 )}
               </div>
