@@ -83,10 +83,24 @@ export function SundanceCatalogConfigurator({
   const handleInsert = () => {
     const items = Object.entries(quantities)
       .filter(([_, qty]) => qty > 0)
-      .map(([productId, quantity]) => ({
-        productId: parseInt(productId),
-        quantity,
-      }));
+      .map(([productId, quantity]) => {
+        const product = products!.find(p => p.id === parseInt(productId));
+        return {
+          productId: parseInt(productId),
+          quantity,
+          // Include full product snapshot for historical accuracy
+          productSnapshot: {
+            name: product!.name,
+            description: product!.description,
+            category: product!.category,
+            manufacturer: product!.manufacturer,
+            retailPrice: product!.retailPrice,
+            unit: product!.unit,
+            defaultDiscountType: product!.defaultDiscountType,
+            defaultDiscountValue: product!.defaultDiscountValue,
+          }
+        };
+      });
 
     if (items.length === 0) {
       toast({
@@ -122,13 +136,13 @@ export function SundanceCatalogConfigurator({
   const selectedCount = Object.values(quantities).filter(q => q > 0).length;
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="mb-4 p-4 bg-muted rounded-lg">
+    <div className="flex flex-col" style={{ height: 'calc(80vh - 200px)' }}>
+      <div className="mb-4 p-4 bg-muted rounded-lg flex-shrink-0">
         <h3 className="font-semibold text-lg">Sundance Louvered Roof</h3>
         <p className="text-sm text-muted-foreground">Cover any space with a Sundance Louvered Roof to enjoy more time outside</p>
       </div>
 
-      <ScrollArea className="flex-1 -mx-6 px-6">
+      <ScrollArea className="flex-1 -mx-6 px-6 min-h-0">
         <div className="space-y-6 pb-4">
           {Object.entries(categorizedProducts).map(([category, categoryProducts]) => (
             <div key={category} className="space-y-3">
@@ -176,7 +190,7 @@ export function SundanceCatalogConfigurator({
         </div>
       </ScrollArea>
 
-      <div className="mt-4 pt-4 border-t space-y-4">
+      <div className="mt-4 pt-4 border-t space-y-4 flex-shrink-0">
         <div className="flex justify-between items-center px-4">
           <div className="text-sm text-muted-foreground">
             {selectedCount} {selectedCount === 1 ? 'item' : 'items'} selected
