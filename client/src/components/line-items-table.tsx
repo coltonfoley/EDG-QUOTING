@@ -1280,7 +1280,15 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                     <div className="font-semibold mb-1">Cost Calculation:</div>
                     <div>Retail Price: {formatCurrency(parseFloat(item.retailPrice.toString()))}</div>
                     <div>
-                      Manufacturer Discount: {item.discountType === 'percentage' ? `${item.discountValue}%` : formatCurrency(parseFloat(item.discountValue.toString()))}
+                      Manufacturer Discount: {(() => {
+                        const retail = parseFloat(item.retailPrice.toString());
+                        const cost = parseFloat(getCurrentValue(item.id, 'unitPrice'));
+                        const discountAmount = retail - cost;
+                        const discountPercent = retail > 0 ? (discountAmount / retail * 100).toFixed(1) : 0;
+                        return discountAmount > 0 
+                          ? `${formatCurrency(discountAmount)} (${discountPercent}%)`
+                          : 'No manufacturer discount';
+                      })()}
                     </div>
                     <div className="border-t border-gray-600 mt-1 pt-1">
                       Your Cost: {formatCurrency(parseFloat(getCurrentValue(item.id, 'unitPrice')))}
