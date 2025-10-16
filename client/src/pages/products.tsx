@@ -50,7 +50,7 @@ export default function Products() {
     }
   });
 
-  const form = useForm<ProductFormData>({
+  const form = useForm<ProductFormData & { cost?: string }>({
     resolver: zodResolver(productFormSchema),
     defaultValues: {
       name: "",
@@ -58,8 +58,9 @@ export default function Products() {
       manufacturer: "",
       productType: "simple",
       retailPrice: "0",
-      defaultDiscountType: "percentage",
+      defaultDiscountType: "dollar",
       defaultDiscountValue: "0",
+      cost: "0",
       unit: "each",
     },
   });
@@ -111,7 +112,19 @@ export default function Products() {
   });
 
 
-  const handleSubmit = (data: ProductFormData) => {
+  const handleSubmit = (formData: ProductFormData & { cost?: string }) => {
+    // Calculate manufacturer discount from retail - cost
+    const retail = parseFloat(formData.retailPrice || "0");
+    const cost = parseFloat(formData.cost || "0");
+    const manufacturerDiscount = Math.max(0, retail - cost);
+    
+    // Prepare data with calculated discount
+    const data: ProductFormData = {
+      ...formData,
+      defaultDiscountType: "dollar",
+      defaultDiscountValue: manufacturerDiscount.toFixed(2),
+    };
+    
     if (editingProduct) {
       updateProductMutation.mutate({ id: editingProduct.id, data });
     } else {
@@ -123,6 +136,16 @@ export default function Products() {
   const handleEdit = (product: Product) => {
     setEditingProduct(product);
     
+    // Calculate cost from retail - discount for display
+    const retail = parseFloat(product.retailPrice || "0");
+    const discountValue = parseFloat(product.defaultDiscountValue || "0");
+    let cost = 0;
+    if (product.defaultDiscountType === "percentage") {
+      cost = retail * (1 - discountValue / 100);
+    } else {
+      cost = Math.max(0, retail - discountValue);
+    }
+    
     form.reset({
       name: product.name,
       description: product.description || "",
@@ -131,6 +154,7 @@ export default function Products() {
       retailPrice: product.retailPrice,
       defaultDiscountType: product.defaultDiscountType,
       defaultDiscountValue: product.defaultDiscountValue,
+      cost: cost.toFixed(2),
       unit: product.unit || "each",
       minLength: product.minLength,
       maxLength: product.maxLength,
@@ -389,104 +413,87 @@ export default function Products() {
                     <div className="space-y-4">
                       <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
                         <p className="text-sm text-blue-800">
-                          <strong>Pricing:</strong> Enter the Retail Price (MSRP) from the manufacturer. Your actual cost will be calculated by applying the manufacturer discount below.
+                          <strong>Pricing:</strong> Enter the Retail Price (MSRP) and Your Cost. The system will calculate the manufacturer discount automatically.
                         </p>
                       </div>
                       
-                      <FormField
-                        control={form.control}
-                        name="retailPrice"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Retail Price</FormLabel>
-                            <FormControl>
-                              <Input 
-                                type="number" 
-                                step="0.01" 
-                                {...field} 
-                                value={field.value || ""} 
-                                placeholder="MSRP or list price" 
-                              />
-                            </FormControl>
-                            <p className="text-xs text-gray-500">Manufacturer's suggested retail price</p>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <FormField
+                          control={form.control}
+                          name="retailPrice"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Retail Price (MSRP)</FormLabel>
+                              <FormControl>
+                                <Input 
+                                  type="number" 
+                                  step="0.01" 
+                                  {...field} 
+                                  value={field.value || ""} 
+                                  placeholder="Manufacturer's list price" 
+                                  data-testid="input-retail-price"
+                                />
+                              </FormControl>
+                              <p className="text-xs text-gray-500">Manufacturer's suggested retail price</p>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        
+                        <FormField
+                          control={form.control}
+                          name="cost"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Your Cost</FormLabel>
+                              <FormControl>
+                                <Input 
+                                  type="number" 
+                                  step="0.01" 
+                                  {...field} 
+                                  value={field.value || ""} 
+                                  placeholder="What you pay" 
+                                  data-testid="input-cost"
+                                />
+                              </FormControl>
+                              <p className="text-xs text-gray-500">
+                                {form.watch("retailPrice") && form.watch("cost") 
+                                  ? `Discount: $${Math.max(0, parseFloat(form.watch("retailPrice") || "0") - parseFloat(form.watch("cost") || "0")).toFixed(2)}` 
+                                  : "Your actual cost for this product"}
+                              </p>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
                     </div>
                   )}
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="unit"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Unit</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value || ""}>
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              <SelectItem value="each">Each</SelectItem>
-                              <SelectItem value="sq ft">Sq Ft</SelectItem>
-                              <SelectItem value="linear ft">Linear Ft</SelectItem>
-                              <SelectItem value="cubic yard">Cubic Yard</SelectItem>
-                              <SelectItem value="hour">Hour</SelectItem>
-                              <SelectItem value="day">Day</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-
-                  {/* Manufacturer Discount Section */}
-                  <div className="grid grid-cols-1 md:grid-cols-1 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="defaultDiscountValue"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>
-                            Manufacturer Discount
-                            {form.watch("retailPrice") && (
-                              <span className="text-xs text-gray-500 font-normal ml-2">(applied to retail price)</span>
-                            )}
-                          </FormLabel>
-                          <div className="flex space-x-1">
-                            <FormControl>
-                              <Input type="number" step="0.01" {...field} className="flex-1" />
-                            </FormControl>
-                            <FormField
-                              control={form.control}
-                              name="defaultDiscountType"
-                              render={({ field: discountField }) => (
-                                <Select onValueChange={discountField.onChange} defaultValue={discountField.value}>
-                                  <SelectTrigger className="w-16">
-                                    <SelectValue />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="percentage">%</SelectItem>
-                                    <SelectItem value="dollar">$</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                              )}
-                            />
-                          </div>
-                          <p className="text-xs text-gray-500">
-                            {form.watch("retailPrice") 
-                              ? `Your discount off retail price (Cost = ${formatCurrency(parseFloat(form.watch("retailPrice") || "0"))} - discount)` 
-                              : "Leave at 0 if using direct cost"}
-                          </p>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
+                  <FormField
+                    control={form.control}
+                    name="unit"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Unit</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value || ""}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="each">Each</SelectItem>
+                            <SelectItem value="sq ft">Sq Ft</SelectItem>
+                            <SelectItem value="linear ft">Linear Ft</SelectItem>
+                            <SelectItem value="cubic yard">Cubic Yard</SelectItem>
+                            <SelectItem value="hour">Hour</SelectItem>
+                            <SelectItem value="day">Day</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                     </TabsContent>
                     
                   </Tabs>
