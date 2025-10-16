@@ -57,8 +57,7 @@ export default function Products() {
       description: "",
       manufacturer: "",
       productType: "simple",
-      retailPrice: undefined,
-      defaultUnitPrice: "0",
+      retailPrice: "0",
       defaultDiscountType: "percentage",
       defaultDiscountValue: "0",
       unit: "each",
@@ -130,7 +129,6 @@ export default function Products() {
       manufacturer: product.manufacturer || "",
       productType: product.productType || "simple",
       retailPrice: product.retailPrice,
-      defaultUnitPrice: product.defaultUnitPrice,
       defaultDiscountType: product.defaultDiscountType,
       defaultDiscountValue: product.defaultDiscountValue,
       unit: product.unit || "each",
@@ -391,58 +389,30 @@ export default function Products() {
                     <div className="space-y-4">
                       <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
                         <p className="text-sm text-blue-800">
-                          <strong>Pricing Options:</strong> Enter either a Retail Price with Manufacturer Discount, OR enter your Direct Cost. 
-                          If you enter a retail price, your cost will be calculated automatically.
+                          <strong>Pricing:</strong> Enter the Retail Price (MSRP) from the manufacturer. Your actual cost will be calculated by applying the manufacturer discount below.
                         </p>
                       </div>
                       
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <FormField
-                          control={form.control}
-                          name="retailPrice"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Retail Price (Optional)</FormLabel>
-                              <FormControl>
-                                <Input 
-                                  type="number" 
-                                  step="0.01" 
-                                  {...field} 
-                                  value={field.value || ""} 
-                                  placeholder="MSRP or list price" 
-                                />
-                              </FormControl>
-                              <p className="text-xs text-gray-500">Manufacturer's suggested retail price</p>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        
-                        <FormField
-                          control={form.control}
-                          name="defaultUnitPrice"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>
-                                {form.watch("retailPrice") ? "Cost (Calculated)" : "Direct Cost"}
-                              </FormLabel>
-                              <FormControl>
-                                <Input 
-                                  type="number" 
-                                  step="0.01" 
-                                  {...field}
-                                  disabled={!!form.watch("retailPrice")}
-                                  placeholder={form.watch("retailPrice") ? "Auto-calculated from retail" : "Your cost"}
-                                />
-                              </FormControl>
-                              <p className="text-xs text-gray-500">
-                                {form.watch("retailPrice") ? "Retail - manufacturer discount" : "Your actual cost"}
-                              </p>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      </div>
+                      <FormField
+                        control={form.control}
+                        name="retailPrice"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Retail Price</FormLabel>
+                            <FormControl>
+                              <Input 
+                                type="number" 
+                                step="0.01" 
+                                {...field} 
+                                value={field.value || ""} 
+                                placeholder="MSRP or list price" 
+                              />
+                            </FormControl>
+                            <p className="text-xs text-gray-500">Manufacturer's suggested retail price</p>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
                     </div>
                   )}
 
@@ -772,9 +742,17 @@ export default function Products() {
                             <span className="font-medium">
                               {product.productType === "configurable" ? (
                                 <span className="text-gray-500">Dimensional Pricing</span>
-                              ) : (
-                                `${formatCurrency(product.defaultUnitPrice)} per ${product.unit}`
-                              )}
+                              ) : (() => {
+                                const retail = parseFloat(product.retailPrice?.toString() || "0");
+                                const discountValue = parseFloat(product.defaultDiscountValue?.toString() || "0");
+                                let cost = 0;
+                                if (product.defaultDiscountType === "percentage") {
+                                  cost = retail * (1 - discountValue / 100);
+                                } else {
+                                  cost = Math.max(0, retail - discountValue);
+                                }
+                                return `${formatCurrency(cost)} per ${product.unit}`;
+                              })()}
                             </span>
                           </div>
                         </div>
@@ -900,9 +878,17 @@ function ProductTable({ products, onEdit, onDelete, onManagePricing }: ProductTa
                 <TableCell className="text-right font-medium">
                   {product.productType === "configurable" ? (
                     <span className="text-sm text-gray-500">Dimensional</span>
-                  ) : (
-                    formatCurrency(product.defaultUnitPrice)
-                  )}
+                  ) : (() => {
+                    const retail = parseFloat(product.retailPrice?.toString() || "0");
+                    const discountValue = parseFloat(product.defaultDiscountValue?.toString() || "0");
+                    let cost = 0;
+                    if (product.defaultDiscountType === "percentage") {
+                      cost = retail * (1 - discountValue / 100);
+                    } else {
+                      cost = Math.max(0, retail - discountValue);
+                    }
+                    return formatCurrency(cost);
+                  })()}
                 </TableCell>
                 <TableCell>
                   <div className="flex gap-1">

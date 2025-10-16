@@ -182,8 +182,7 @@ export const products = pgTable("products", {
   manufacturer: text("manufacturer").notNull(),
   productType: text("product_type").notNull().default("simple"), // simple, configurable
   // Pricing fields
-  retailPrice: decimal("retail_price", { precision: 10, scale: 2 }), // Optional MSRP/list price
-  defaultUnitPrice: decimal("default_unit_price", { precision: 10, scale: 2 }).notNull(), // Direct cost OR calculated from retail
+  retailPrice: decimal("retail_price", { precision: 10, scale: 2 }).notNull(), // MSRP/list price from manufacturer
   // Manufacturer discount (applied to retail price to get our cost)
   defaultDiscountType: text("default_discount_type").notNull().default("percentage"),
   defaultDiscountValue: decimal("default_discount_value", { precision: 10, scale: 2 }).notNull().default("0"),
@@ -392,8 +391,7 @@ export const insertProductSchema = createInsertSchema(products).omit({
   createdAt: true,
 }).extend({
   manufacturer: z.string().min(1, "Manufacturer is required"),
-  defaultUnitPrice: z.union([z.string(), z.number()]).transform(val => typeof val === 'string' ? val : val.toString()),
-  defaultMarkupValue: z.union([z.string(), z.number()]).transform(val => typeof val === 'string' ? val : val.toString()),
+  retailPrice: z.union([z.string(), z.number()]).transform(val => typeof val === 'string' ? val : val.toString()),
   defaultDiscountValue: z.union([z.string(), z.number()]).transform(val => typeof val === 'string' ? val : val.toString()),
   minLength: z.union([z.string(), z.number(), z.null()]).transform(val => val === null ? null : (typeof val === 'string' ? val : val.toString())).optional(),
   maxLength: z.union([z.string(), z.number(), z.null()]).transform(val => val === null ? null : (typeof val === 'string' ? val : val.toString())).optional(),
