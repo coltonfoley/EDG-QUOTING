@@ -3003,32 +3003,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let itemPosition = groupItems.length;
 
       // Create line items using product snapshots for historical accuracy
-      console.log('Creating line items, count:', items.length);
       for (const item of items) {
         const snapshot = item.productSnapshot;
-        console.log('Creating line item for product:', snapshot.name, 'quantity:', item.quantity);
 
-        try {
-          await storage.createLineItem({
-            quoteId,
-            productId: item.productId,
-            description: snapshot.name,
-            quantity: item.quantity.toString(),
-            retailPrice: snapshot.retailPrice,
-            unitPrice: snapshot.retailPrice,
-            markupType: snapshot.defaultDiscountType,
-            markupValue: snapshot.defaultDiscountValue,
-            discountType: "percentage",
-            discountValue: "0",
-            isTaxable: true,
-            groupId,
-            position: itemPosition++,
-          });
-          console.log('Successfully created line item');
-        } catch (lineItemError) {
-          console.error('Error creating line item:', lineItemError);
-          throw lineItemError;
-        }
+        await storage.createLineItem({
+          quoteId,
+          productId: item.productId,
+          description: snapshot.name,
+          quantity: item.quantity.toString(),
+          retailPrice: snapshot.retailPrice,
+          unitPrice: snapshot.retailPrice,
+          markupType: snapshot.defaultDiscountType,
+          markupValue: snapshot.defaultDiscountValue,
+          discountType: "percentage",
+          discountValue: "0",
+          isTaxable: true,
+          groupId,
+          position: itemPosition++,
+        });
       }
 
       res.status(201).json({ 
