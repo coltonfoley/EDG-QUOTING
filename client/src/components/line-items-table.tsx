@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Trash2, Plus, Package, Search, Filter, X, FileText, Loader2, GripVertical, Info } from "lucide-react";
+import { Trash2, Plus, Package, Search, Filter, X, FileText, Loader2, GripVertical, Info, Settings } from "lucide-react";
 import { formatCurrency, calculateLineItemTotal, calculateLineItemMargin, applyDiscountToPrice, isValidNumber, clampValue, roundCurrency, generateGroupId, sanitizeNumberString } from "@/lib/utils";
 import { apiRequest, NavigationAbortError } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -36,6 +36,7 @@ import {
   CreateGroupDialog,
   type Group 
 } from './group-components';
+import { ProductConfigurator } from './product-configurator';
 
 interface LineItemsTableProps {
   quoteId: number;
@@ -70,6 +71,9 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
   const [showCreateGroupDialog, setShowCreateGroupDialog] = useState(false);
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
+  
+  // Product configurator state
+  const [showConfiguratorDialog, setShowConfiguratorDialog] = useState(false);
   
   // Debounced save timeout refs
   const debounceTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
@@ -1661,6 +1665,16 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
               </DialogContent>
             </Dialog>
             <Button
+              onClick={() => setShowConfiguratorDialog(true)}
+              variant="outline"
+              className="text-sm"
+              disabled={isUnsavedQuote}
+              data-testid="button-configure-product"
+            >
+              <Settings className="mr-2 h-4 w-4" />
+              Configure Product
+            </Button>
+            <Button
               onClick={() => setShowNewItemForm(true)}
               className="bg-blue-600 hover:bg-blue-700 text-white text-sm"
               disabled={isUnsavedQuote}
@@ -2006,6 +2020,16 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
         open={showCreateGroupDialog}
         onClose={() => setShowCreateGroupDialog(false)}
         onCreateGroup={handleCreateGroup}
+      />
+
+      {/* Product Configurator */}
+      <ProductConfigurator
+        open={showConfiguratorDialog}
+        onOpenChange={setShowConfiguratorDialog}
+        quoteId={quoteId}
+        onConfigInserted={() => {
+          queryClient.invalidateQueries({ queryKey: ['/api/quotes', quoteId] });
+        }}
       />
 
     </div>

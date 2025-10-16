@@ -2928,8 +2928,119 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Product configurator route - inserts group with BOM line items
+  app.post("/api/quotes/:quoteId/configure-product", isAuthenticated, async (req, res) => {
+    try {
+      const params = queryIdParamSchema.safeParse(req.params);
+      if (!params.success) {
+        return res.status(400).json({
+          message: "Invalid request parameters",
+          errors: params.error.errors
+        });
+      }
+
+      const { quoteId } = params.data;
+      const { items } = req.body as { items: { productId: number; quantity: number }[] };
+
+      if (!items || !Array.isArray(items) || items.length === 0) {
+        return res.status(400).json({ message: "Items array is required" });
+      }
+
+      // Fetch all products
+      const productIds = items.map(item => item.productId);
+      const productsData = await db
+        .select()
+        .from(products)
+        .where(and(...productIds.map(id => eq(products.id, id))));
+
+      if (productsData.length !== productIds.length) {
+        return res.status(404).json({ message: "One or more products not found" });
+      }
+
+      // Get manufacturer from first product (all should be same manufacturer)
+      const manufacturer = productsData[0].manufacturer;
+      
+      // Calculate total
+      const total = items.reduce((sum, item) => {
+        const product = productsData.find(p => p.id === item.productId);
+        if (!product) return sum;
+        return sum + (parseFloat(product.retailPrice) * item.quantity);
+      }, 0);
+
+      // Get existing groups to determine position
+      const existingGroups = await storage.getGroupsByQuoteId(quoteId);
+      const maxPosition = existingGroups.length > 0 
+        ? Math.max(...existingGroups.map(g => g.position)) 
+        : -1;
+
+      // Create group with configuration data
+      const groupId = nanoid();
+      const groupTitle = `${manufacturer} Configuration`;
+      
+      await storage.createGroup({
+        id: groupId,
+        quoteId,
+        title: groupTitle,
+        position: maxPosition + 1,
+        isCollapsed: false,
+        configData: { manufacturer, items }
+      });
+
+      // Get existing line items to determine position
+      const existingItems = await storage.getLineItemsByQuoteId(quoteId);
+      const groupItems = existingItems.filter(item => item.groupId === groupId);
+      let itemPosition = groupItems.length;
+
+      // Create line items for each configured product
+      for (const item of items) {
+        const product = productsData.find(p => p.id === item.productId);
+        if (!product) continue;
+
+        await storage.createLineItem({
+          quoteId,
+          productId: product.id,
+          description: product.name,
+          quantity: item.quantity.toString(),
+          retailPrice: product.retailPrice,
+          unitPrice: product.retailPrice,
+          markupType: product.defaultDiscountType,
+          markupValue: product.defaultDiscountValue,
+          discountType: "percentage",
+          discountValue: "0",
+          isTaxable: true,
+          groupId,
+          position: itemPosition++,
+        });
+      }
+
+      res.status(201).json({ 
+        success: true, 
+        groupId,
+        message: "Configuration inserted successfully" 
+      });
+    } catch (error) {
+      console.error("Error creating configuration:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
 
   // Product catalog routes (protected)
+  // Get list of manufacturers
+  app.get("/api/products/manufacturers", isAuthenticated, async (req, res) => {
+    try {
+      const manufacturers = await db
+        .selectDistinct({ manufacturer: products.manufacturer })
+        .from(products)
+        .orderBy(products.manufacturer);
+      
+      res.json(manufacturers.map(m => m.manufacturer).filter(Boolean));
+    } catch (error) {
+      console.error("Error fetching manufacturers:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
   app.get("/api/products", isAuthenticated, async (req, res) => {
     try {
       // Parse query parameters for filtering

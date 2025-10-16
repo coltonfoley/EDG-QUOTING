@@ -244,6 +244,7 @@ export const groups = pgTable("groups", {
   title: text("title").notNull(),
   position: integer("position").notNull().default(0), // sortable index among groups
   isCollapsed: boolean("is_collapsed").default(false), // UI state for collapsing groups
+  configData: jsonb("config_data"), // JSON object storing full configuration for editing later
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => [
