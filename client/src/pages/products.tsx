@@ -23,7 +23,9 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { insertProductSchema, type Product, type ProductWithDetails } from "@shared/schema";
 import { z } from "zod";
 
-const productFormSchema = insertProductSchema;
+const productFormSchema = insertProductSchema.extend({
+  cost: z.string().optional(), // Frontend-only field for cost input
+});
 type ProductFormData = z.infer<typeof productFormSchema>;
 
 export default function Products() {
@@ -50,7 +52,7 @@ export default function Products() {
     }
   });
 
-  const form = useForm<ProductFormData & { cost?: string }>({
+  const form = useForm<ProductFormData>({
     resolver: zodResolver(productFormSchema),
     defaultValues: {
       name: "",
@@ -112,16 +114,17 @@ export default function Products() {
   });
 
 
-  const handleSubmit = (formData: ProductFormData & { cost?: string }) => {
+  const handleSubmit = (formData: ProductFormData) => {
     // Calculate manufacturer discount from retail - cost
     const retail = parseFloat(formData.retailPrice || "0");
     const cost = parseFloat(formData.cost || "0");
     const manufacturerDiscount = Math.max(0, retail - cost);
     
-    // Prepare data with calculated discount
-    const data: ProductFormData = {
-      ...formData,
-      defaultDiscountType: "dollar",
+    // Prepare data with calculated discount, omitting the frontend-only cost field
+    const { cost: _, ...productData } = formData;
+    const data = {
+      ...productData,
+      defaultDiscountType: "dollar" as const,
       defaultDiscountValue: manufacturerDiscount.toFixed(2),
     };
     
