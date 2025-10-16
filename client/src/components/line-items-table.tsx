@@ -59,7 +59,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
   const [showNewItemForm, setShowNewItemForm] = useState(false);
   const [showProductDialog, setShowProductDialog] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedManufacturer, setSelectedManufacturer] = useState<string>("all");
+  const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [showDimensionDialog, setShowDimensionDialog] = useState(false);
   const [selectedConfigurableProduct, setSelectedConfigurableProduct] = useState<Product | null>(null);
   const [dimensions, setDimensions] = useState({ length: "", width: "" });
@@ -1484,10 +1484,10 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
   };
 
   // Product filtering logic
-  const manufacturers = useMemo(() => {
+  const categories = useMemo(() => {
     if (!products) return [];
-    const uniqueManufacturers = Array.from(new Set(products.map(p => p.manufacturer || "Unknown")));
-    return uniqueManufacturers.sort();
+    const uniqueCategories = Array.from(new Set(products.map(p => p.category || "Uncategorized")));
+    return uniqueCategories.sort();
   }, [products]);
 
   const filteredProducts = useMemo(() => {
@@ -1498,21 +1498,21 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
         product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (product.description || "").toLowerCase().includes(searchTerm.toLowerCase());
       
-      const productManufacturer = product.manufacturer || "Unknown";
-      const matchesManufacturer = selectedManufacturer === "all" || 
-        productManufacturer === selectedManufacturer;
+      const productCategory = product.category || "Uncategorized";
+      const matchesCategory = selectedCategory === "all" || 
+        productCategory === selectedCategory;
       
-      return matchesSearch && matchesManufacturer;
+      return matchesSearch && matchesCategory;
     });
-  }, [products, searchTerm, selectedManufacturer]);
+  }, [products, searchTerm, selectedCategory]);
 
   const groupedProducts = useMemo(() => {
     return filteredProducts.reduce((groups, product) => {
-      const manufacturer = product.manufacturer || "Unknown";
-      if (!groups[manufacturer]) {
-        groups[manufacturer] = [];
+      const category = product.category || "Uncategorized";
+      if (!groups[category]) {
+        groups[category] = [];
       }
-      groups[manufacturer].push(product);
+      groups[category].push(product);
       return groups;
     }, {} as Record<string, Product[]>);
   }, [filteredProducts]);
@@ -1569,20 +1569,20 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                       />
                     </div>
                     
-                    <Select value={selectedManufacturer} onValueChange={setSelectedManufacturer}>
-                      <SelectTrigger className="w-48" data-testid="select-manufacturer-filter">
+                    <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                      <SelectTrigger className="w-48" data-testid="select-category-filter">
                         <SelectValue>
                           <div className="flex items-center gap-2">
                             <Filter className="h-4 w-4" />
-                            {selectedManufacturer === "all" ? "All Manufacturers" : selectedManufacturer}
+                            {selectedCategory === "all" ? "All Categories" : selectedCategory}
                           </div>
                         </SelectValue>
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="all">All Manufacturers</SelectItem>
-                        {manufacturers.map((manufacturer) => (
-                          <SelectItem key={manufacturer} value={manufacturer}>
-                            {manufacturer}
+                        <SelectItem value="all">All Categories</SelectItem>
+                        {categories.map((category) => (
+                          <SelectItem key={category} value={category}>
+                            {category}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -1593,7 +1593,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                       size="sm"
                       onClick={() => {
                         setSearchTerm("");
-                        setSelectedManufacturer("all");
+                        setSelectedCategory("all");
                       }}
                       className="px-3"
                       data-testid="button-clear-filters"
@@ -1609,10 +1609,10 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                         No products found matching your criteria.
                       </div>
                     ) : (
-                      Object.entries(groupedProducts).map(([manufacturer, products]) => (
-                        <div key={manufacturer} className="border-b border-gray-200 last:border-b-0">
+                      Object.entries(groupedProducts).map(([category, products]) => (
+                        <div key={category} className="border-b border-gray-200 last:border-b-0">
                           <div className="bg-gray-50 px-4 py-2 font-medium text-sm text-gray-700 border-b border-gray-200">
-                            {manufacturer} ({products.length})
+                            {category} ({products.length})
                           </div>
                           <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                             {products.map((product) => (
