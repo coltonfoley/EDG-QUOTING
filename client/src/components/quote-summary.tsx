@@ -249,11 +249,13 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
       discountType: item.discountType,
       discountValue: item.discountValue,
       isTaxable: item.isTaxable,
+      isTariffApplicable: item.isTariffApplicable,
     })),
     quote.taxRate ?? 0,
     quote.discount ?? 0,
     quote.shipping ?? 0,
-    quote.isShippingTaxable ?? true
+    quote.isShippingTaxable ?? true,
+    quote.tariffRate ?? 0
   );
 
   return (
