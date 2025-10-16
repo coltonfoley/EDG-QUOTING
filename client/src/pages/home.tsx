@@ -58,7 +58,9 @@ export default function Home() {
       quote.lineItems,
       quote.taxRate ? parseFloat(quote.taxRate.toString()) : 0,
       quote.discount ? parseFloat(quote.discount.toString()) : 0,
-      quote.shipping ? parseFloat(quote.shipping.toString()) : 0
+      quote.shipping ? parseFloat(quote.shipping.toString()) : 0,
+      quote.isShippingTaxable ?? true,
+      quote.tariffRate ? parseFloat(quote.tariffRate.toString()) : 0
     );
     return totals.totalMarkup;
   }
@@ -113,7 +115,9 @@ export default function Home() {
               q.lineItems,
               q.taxRate ? parseFloat(q.taxRate.toString()) : 0,
               q.discount ? parseFloat(q.discount.toString()) : 0,
-              q.shipping ? parseFloat(q.shipping.toString()) : 0
+              q.shipping ? parseFloat(q.shipping.toString()) : 0,
+              q.isShippingTaxable ?? true,
+              q.tariffRate ? parseFloat(q.tariffRate.toString()) : 0
             );
             totalMarkup += totals.totalMarkup;
             // Calculate actual base cost (after manufacturer discounts)
