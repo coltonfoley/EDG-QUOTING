@@ -121,9 +121,23 @@ export function CSVProductImporter() {
     );
   };
 
+  const parsePrice = (priceStr: string): number | null => {
+    // Remove currency symbols, commas, and spaces
+    const cleaned = priceStr.trim().replace(/[$,\s]/g, '');
+    
+    // Check if it's empty or just a dash/hyphen
+    if (!cleaned || cleaned === '-' || cleaned === '–' || cleaned === '—') {
+      return null;
+    }
+    
+    const value = parseFloat(cleaned);
+    return isNaN(value) ? null : value;
+  };
+
   const generatePreview = () => {
     const validationErrors: string[] = [];
     const preview: PreviewProduct[] = [];
+    let skippedRows = 0;
 
     const nameMapping = columnMappings.find(m => m.productField === 'name');
     const categoryMapping = columnMappings.find(m => m.productField === 'category');
@@ -153,28 +167,27 @@ export function CSVProductImporter() {
       const unit = unitMapping ? String(row[unitMapping.csvColumn] || '').trim() || undefined : undefined;
       const description = descMapping ? String(row[descMapping.csvColumn] || '').trim() || undefined : undefined;
       
-      const retailPriceStr = retailPriceMapping ? String(row[retailPriceMapping.csvColumn] || '0') : '0';
-      const costStr = costMapping ? String(row[costMapping.csvColumn] || '0') : '0';
+      const retailPriceStr = retailPriceMapping ? String(row[retailPriceMapping.csvColumn] || '') : '';
+      const costStr = costMapping ? String(row[costMapping.csvColumn] || '') : '';
 
       if (!name) {
-        validationErrors.push(`Row ${rowNum}: Missing product name`);
+        skippedRows++;
+        return; // Skip rows without names
+      }
+
+      const retailPrice = parsePrice(retailPriceStr);
+      const cost = costMapping ? parsePrice(costStr) : 0;
+
+      // Skip rows with no valid retail price
+      if (retailPrice === null || retailPrice <= 0) {
+        skippedRows++;
         return;
       }
 
-      const retailPrice = parseFloat(retailPriceStr.replace(/[^0-9.-]/g, ''));
-      const cost = parseFloat(costStr.replace(/[^0-9.-]/g, ''));
+      // If cost is not mapped or invalid, default to 0
+      const actualCost = cost !== null && cost >= 0 ? cost : 0;
 
-      if (isNaN(retailPrice) || retailPrice <= 0) {
-        validationErrors.push(`Row ${rowNum}: Invalid retail price '${retailPriceStr}'`);
-        return;
-      }
-
-      if (isNaN(cost) || cost < 0) {
-        validationErrors.push(`Row ${rowNum}: Invalid cost '${costStr}'`);
-        return;
-      }
-
-      const manufacturerDiscount = retailPrice - cost;
+      const manufacturerDiscount = retailPrice - actualCost;
       const margin = retailPrice > 0 ? ((manufacturerDiscount / retailPrice) * 100) : 0;
 
       preview.push({
@@ -183,7 +196,7 @@ export function CSVProductImporter() {
         unit,
         description,
         retailPrice,
-        cost,
+        cost: actualCost,
         manufacturerDiscount,
         margin,
       });
@@ -196,6 +209,15 @@ export function CSVProductImporter() {
 
     setPreviewData(preview);
     setErrors([]);
+    
+    // Show info about skipped rows if any
+    if (skippedRows > 0) {
+      toast({
+        title: "Rows Skipped",
+        description: `${skippedRows} rows skipped (missing name or invalid price)`,
+      });
+    }
+    
     setStep('preview');
   };
 
