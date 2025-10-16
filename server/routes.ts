@@ -2940,31 +2940,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const { quoteId } = params.data;
-      const { items } = req.body as { items: { productId: number; quantity: number }[] };
+      const { items } = req.body as { 
+        items: { 
+          productId: number; 
+          quantity: number;
+          productSnapshot: any;
+        }[] 
+      };
 
       if (!items || !Array.isArray(items) || items.length === 0) {
         return res.status(400).json({ message: "Items array is required" });
       }
 
-      // Fetch all products
-      const productIds = items.map(item => item.productId);
-      const productsData = await db
-        .select()
-        .from(products)
-        .where(and(...productIds.map(id => eq(products.id, id))));
-
-      if (productsData.length !== productIds.length) {
-        return res.status(404).json({ message: "One or more products not found" });
+      // Validate that all items have product snapshots with required fields
+      for (const item of items) {
+        if (!item.productSnapshot) {
+          return res.status(400).json({ message: "Product snapshot is required for all items" });
+        }
+        const required = ['name', 'manufacturer', 'retailPrice', 'defaultDiscountType', 'defaultDiscountValue'];
+        for (const field of required) {
+          if (item.productSnapshot[field] === undefined) {
+            return res.status(400).json({ message: `Product snapshot missing required field: ${field}` });
+          }
+        }
       }
 
-      // Get manufacturer from first product (all should be same manufacturer)
-      const manufacturer = productsData[0].manufacturer;
+      // Get manufacturer from first product snapshot
+      const manufacturer = items[0].productSnapshot.manufacturer;
       
-      // Calculate total
+      // Calculate total from snapshots
       const total = items.reduce((sum, item) => {
-        const product = productsData.find(p => p.id === item.productId);
-        if (!product) return sum;
-        return sum + (parseFloat(product.retailPrice) * item.quantity);
+        return sum + (parseFloat(item.productSnapshot.retailPrice) * item.quantity);
       }, 0);
 
       // Get existing groups to determine position
@@ -2973,7 +2979,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ? Math.max(...existingGroups.map(g => g.position)) 
         : -1;
 
-      // Create group with configuration data
+      // Create group with full configuration data (manufacturer + product snapshots)
       const groupId = nanoid();
       const groupTitle = `${manufacturer} Configuration`;
       
@@ -2983,7 +2989,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         title: groupTitle,
         position: maxPosition + 1,
         isCollapsed: false,
-        configData: { manufacturer, items }
+        configData: { 
+          manufacturer, 
+          items,
+          configuredAt: new Date().toISOString(),
+          total
+        }
       });
 
       // Get existing line items to determine position
@@ -2991,20 +3002,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const groupItems = existingItems.filter(item => item.groupId === groupId);
       let itemPosition = groupItems.length;
 
-      // Create line items for each configured product
+      // Create line items using product snapshots for historical accuracy
       for (const item of items) {
-        const product = productsData.find(p => p.id === item.productId);
-        if (!product) continue;
+        const snapshot = item.productSnapshot;
 
         await storage.createLineItem({
           quoteId,
-          productId: product.id,
-          description: product.name,
+          productId: item.productId,
+          description: snapshot.name,
           quantity: item.quantity.toString(),
-          retailPrice: product.retailPrice,
-          unitPrice: product.retailPrice,
-          markupType: product.defaultDiscountType,
-          markupValue: product.defaultDiscountValue,
+          retailPrice: snapshot.retailPrice,
+          unitPrice: snapshot.retailPrice,
+          markupType: snapshot.defaultDiscountType,
+          markupValue: snapshot.defaultDiscountValue,
           discountType: "percentage",
           discountValue: "0",
           isTaxable: true,
