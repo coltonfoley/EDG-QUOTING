@@ -25,6 +25,7 @@ interface QuoteSummaryProps {
 
 export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
   const [localTaxRate, setLocalTaxRate] = useState<string>("");
+  const [localTariffRate, setLocalTariffRate] = useState<string>("");
   const [localDiscount, setLocalDiscount] = useState<string>("");
   const [localShipping, setLocalShipping] = useState<string>("");
   const [localNotes, setLocalNotes] = useState<string>("");
@@ -379,7 +380,7 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <div>
                 <Label htmlFor="taxRate">Tax Rate (%)</Label>
                 <Input
@@ -395,6 +396,24 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
                     setLocalTaxRate("");
                   }}
                   className="mt-1"
+                />
+              </div>
+              <div>
+                <Label htmlFor="tariffRate">Tariff Rate (%) - Internal</Label>
+                <Input
+                  id="tariffRate"
+                  type="number"
+                  step="0.1"
+                  value={localTariffRate || quote.tariffRate || ""}
+                  onChange={(e) => setLocalTariffRate(e.target.value)}
+                  onBlur={(e) => {
+                    if (localTariffRate !== "" && localTariffRate !== quote.tariffRate) {
+                      onUpdateQuote("tariffRate", localTariffRate);
+                    }
+                    setLocalTariffRate("");
+                  }}
+                  className="mt-1"
+                  data-testid="input-tariff-rate"
                 />
               </div>
               <div>
