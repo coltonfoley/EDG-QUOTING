@@ -91,6 +91,7 @@ export const quotes = pgTable("quotes", {
   estimatedStartDate: text("estimated_start_date"),
   notes: text("notes"),
   taxRate: decimal("tax_rate", { precision: 5, scale: 2 }).default("0"),
+  tariffRate: decimal("tariff_rate", { precision: 5, scale: 2 }).default("0"), // tariff percentage to increase cost
   discount: decimal("discount", { precision: 5, scale: 2 }).default("0"),
   shipping: decimal("shipping", { precision: 10, scale: 2 }).default("0"),
   isShippingTaxable: boolean("is_shipping_taxable").default(true), // whether shipping is subject to sales tax
@@ -269,6 +270,7 @@ export const lineItems = pgTable("line_items", {
   baseProductId: integer("base_product_id"), // reference to base product for accessories
   isAccessory: boolean("is_accessory").default(false),
   isTaxable: boolean("is_taxable").default(true), // whether this line item is subject to sales tax
+  isTariffApplicable: boolean("is_tariff_applicable").default(false), // whether tariff applies to this line item
   // Grouping and ordering fields
   groupId: text("group_id"), // nullable = ungrouped items
   position: integer("position").notNull().default(0), // sortable index within its group
@@ -365,6 +367,7 @@ export const insertQuoteSchema = createInsertSchema(quotes).omit({
   updatedAt: true,
 }).extend({
   taxRate: z.union([z.string(), z.number(), z.null()]).transform(val => val === null ? "0" : (typeof val === 'string' ? val : val.toString())),
+  tariffRate: z.union([z.string(), z.number(), z.null()]).transform(val => val === null ? "0" : (typeof val === 'string' ? val : val.toString())),
   discount: z.union([z.string(), z.number(), z.null()]).transform(val => val === null ? "0" : (typeof val === 'string' ? val : val.toString())),
   shipping: z.union([z.string(), z.number(), z.null()]).transform(val => val === null ? "0" : (typeof val === 'string' ? val : val.toString())),
   isShippingTaxable: z.boolean().default(true),
