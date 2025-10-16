@@ -3602,7 +3602,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       for (const product of products) {
         try {
-          const { name, category, unit, description, retailPrice, cost } = product;
+          const { name, manufacturer, category, unit, description, retailPrice, cost } = product;
 
           if (!name || typeof retailPrice !== 'number' || typeof cost !== 'number') {
             errors.push(`Invalid product data for: ${name || 'unnamed'}`);
@@ -3627,8 +3627,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             };
             
             // Only update optional fields if they were mapped and have values
-            if (category !== undefined) {
-              updateData.manufacturer = category;
+            if (manufacturer !== undefined) {
+              updateData.manufacturer = manufacturer;
             }
             if (unit !== undefined) {
               updateData.unit = unit;
@@ -3644,7 +3644,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const productData = {
               name: name.trim(),
               description: description || '',
-              manufacturer: category || 'Imported',
+              manufacturer: manufacturer || category || 'Imported', // Use manufacturer if provided, otherwise category, otherwise default
               retailPrice: retailPrice.toString(),
               defaultDiscountType: 'dollar' as const,
               defaultDiscountValue: manufacturerDiscount.toString(),
