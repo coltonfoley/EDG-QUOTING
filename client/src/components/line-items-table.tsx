@@ -59,7 +59,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
   const [showNewItemForm, setShowNewItemForm] = useState(false);
   const [showProductDialog, setShowProductDialog] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState<string>("all");
+  const [selectedManufacturer, setSelectedManufacturer] = useState<string>("all");
   const [showDimensionDialog, setShowDimensionDialog] = useState(false);
   const [selectedConfigurableProduct, setSelectedConfigurableProduct] = useState<Product | null>(null);
   const [dimensions, setDimensions] = useState({ length: "", width: "" });
@@ -1484,10 +1484,10 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
   };
 
   // Product filtering logic
-  const categories = useMemo(() => {
+  const manufacturers = useMemo(() => {
     if (!products) return [];
-    const uniqueCategories = Array.from(new Set(products.map(p => p.category || "Uncategorized")));
-    return uniqueCategories.sort();
+    const uniqueManufacturers = Array.from(new Set(products.map(p => p.manufacturer || "Unknown")));
+    return uniqueManufacturers.sort();
   }, [products]);
 
   const filteredProducts = useMemo(() => {
@@ -1498,13 +1498,13 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
         product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (product.description || "").toLowerCase().includes(searchTerm.toLowerCase());
       
-      const productCategory = product.category || "Uncategorized";
-      const matchesCategory = selectedCategory === "all" || 
-        productCategory === selectedCategory;
+      const productManufacturer = product.manufacturer || "Unknown";
+      const matchesManufacturer = selectedManufacturer === "all" || 
+        productManufacturer === selectedManufacturer;
       
-      return matchesSearch && matchesCategory;
+      return matchesSearch && matchesManufacturer;
     });
-  }, [products, searchTerm, selectedCategory]);
+  }, [products, searchTerm, selectedManufacturer]);
 
   const groupedProducts = useMemo(() => {
     return filteredProducts.reduce((groups, product) => {
@@ -1569,20 +1569,20 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                       />
                     </div>
                     
-                    <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                      <SelectTrigger className="w-48" data-testid="select-category-filter">
+                    <Select value={selectedManufacturer} onValueChange={setSelectedManufacturer}>
+                      <SelectTrigger className="w-48" data-testid="select-manufacturer-filter">
                         <SelectValue>
                           <div className="flex items-center gap-2">
                             <Filter className="h-4 w-4" />
-                            {selectedCategory === "all" ? "All Categories" : selectedCategory}
+                            {selectedManufacturer === "all" ? "All Manufacturers" : selectedManufacturer}
                           </div>
                         </SelectValue>
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="all">All Categories</SelectItem>
-                        {categories.map((category) => (
-                          <SelectItem key={category} value={category}>
-                            {category}
+                        <SelectItem value="all">All Manufacturers</SelectItem>
+                        {manufacturers.map((manufacturer) => (
+                          <SelectItem key={manufacturer} value={manufacturer}>
+                            {manufacturer}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -1593,7 +1593,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
                       size="sm"
                       onClick={() => {
                         setSearchTerm("");
-                        setSelectedCategory("all");
+                        setSelectedManufacturer("all");
                       }}
                       className="px-3"
                       data-testid="button-clear-filters"
