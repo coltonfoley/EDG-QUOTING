@@ -48,9 +48,8 @@ import {
 } from "./validation-schemas";
 import multer from "multer";
 import * as XLSX from "xlsx";
-import { extractProductsFromImage, extractProductsFromText, extractQuoteDataFromImages, extractQuoteDataFromPDF } from "./openai";
+import { extractQuoteDataFromImages, extractQuoteDataFromPDF } from "./openai";
 import { convertPDFToImagesServer } from "./quoteImageUtils";
-import type { ExtractedProduct } from "./openai";
 import { ObjectStorageService, ObjectNotFoundError, objectStorageClient } from "./objectStorage";
 import { ObjectPermission } from "./objectAcl";
 import type { InsertQuote } from "@shared/schema";
