@@ -3006,13 +3006,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       for (const item of items) {
         const snapshot = item.productSnapshot;
 
+        // Calculate our actual cost by applying the default discount to retail price
+        let unitPrice = parseFloat(snapshot.retailPrice);
+        if (snapshot.defaultDiscountType === 'percentage') {
+          const discountPercent = parseFloat(snapshot.defaultDiscountValue) / 100;
+          unitPrice = unitPrice * (1 - discountPercent);
+        } else if (snapshot.defaultDiscountType === 'dollar') {
+          unitPrice = unitPrice - parseFloat(snapshot.defaultDiscountValue);
+        }
+
         await storage.createLineItem({
           quoteId,
           productId: item.productId,
           description: snapshot.name,
           quantity: item.quantity.toString(),
           retailPrice: snapshot.retailPrice,
-          unitPrice: snapshot.retailPrice,
+          unitPrice: unitPrice.toFixed(2),
           markupType: snapshot.defaultDiscountType,
           markupValue: snapshot.defaultDiscountValue,
           discountType: "percentage",
