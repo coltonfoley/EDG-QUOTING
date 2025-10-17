@@ -19,7 +19,6 @@ import { UserPlus, Shield, User as UserIcon, Trash2, Edit, FileSpreadsheet, Pack
 import { z } from "zod";
 import type { User, Product } from "@shared/schema";
 import { CSVProductImporter } from "@/components/csv-product-importer";
-import { PDFProductImporter } from "@/components/pdf-product-importer";
 
 const createUserSchema = z.object({
   username: z.string().min(3, "Username must be at least 3 characters"),
@@ -577,19 +576,6 @@ export default function AdminPage() {
             </Form>
           </DialogContent>
         </Dialog>
-        {/* PDF Product Importer Section */}
-        <Card className="mt-8">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <FileText className="h-5 w-5" />
-              PDF Product Importer
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <PDFProductImporter />
-          </CardContent>
-        </Card>
-
         {/* CSV Product Importer Section */}
         <Card className="mt-8">
           <CardHeader>
