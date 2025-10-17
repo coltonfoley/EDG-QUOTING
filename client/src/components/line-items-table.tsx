@@ -41,9 +41,10 @@ import { ProductConfigurator } from './product-configurator';
 interface LineItemsTableProps {
   quoteId: number;
   lineItems: LineItem[];
+  tariffRate: string | number;
 }
 
-export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
+export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTableProps) {
   // Check if quote is new (not saved yet)
   const isUnsavedQuote = !quoteId || quoteId === 0;
   
@@ -1180,7 +1181,9 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
       currentMarkupType,
       currentMarkupValue,
       item.discountType,
-      item.discountValue
+      item.discountValue,
+      tariffRate,
+      item.isTariffApplicable || false
     );
 
     return (
