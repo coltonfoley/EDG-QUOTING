@@ -3,8 +3,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useQuery } from '@tanstack/react-query';
+import { apiRequest } from '@/lib/queryClient';
 import { SundanceCatalogConfigurator } from './sundance-catalog-configurator';
+import { TemplateBasedConfigurator } from './template-based-configurator';
 import { Loader2 } from 'lucide-react';
+import type { ConfiguratorTemplate } from '@shared/schema';
 
 interface ProductConfiguratorProps {
   open: boolean;
@@ -25,6 +28,21 @@ export function ProductConfigurator({
     queryKey: ['/api/products/manufacturers'],
     enabled: open,
   });
+
+  // Load configurator templates to check if template-based configurator exists
+  const { data: templates } = useQuery<ConfiguratorTemplate[]>({
+    queryKey: ['/api/configurator-templates'],
+    queryFn: async () => {
+      const response = await apiRequest('GET', '/api/configurator-templates');
+      return response.json();
+    },
+    enabled: open && !!selectedManufacturer,
+  });
+
+  // Check if selected manufacturer has an active template
+  const hasTemplate = templates?.some(
+    t => t.manufacturer === selectedManufacturer && t.isActive
+  );
 
   const handleClose = () => {
     setSelectedManufacturer('');
@@ -70,17 +88,25 @@ export function ProductConfigurator({
           </div>
         ) : (
           <>
-            {selectedManufacturer === 'Sundance' && (
+            {/* Use template-based configurator if template exists */}
+            {hasTemplate ? (
+              <TemplateBasedConfigurator
+                manufacturer={selectedManufacturer}
+                quoteId={quoteId}
+                onInsert={handleConfigInserted}
+                onCancel={handleClose}
+              />
+            ) : selectedManufacturer === 'Sundance' ? (
+              /* Fallback to legacy Sundance configurator */
               <SundanceCatalogConfigurator
                 quoteId={quoteId}
                 onInsert={handleConfigInserted}
                 onCancel={handleClose}
               />
-            )}
-            {selectedManufacturer !== 'Sundance' && (
+            ) : (
               <div className="text-center py-12 text-muted-foreground">
                 <p>Configurator for {selectedManufacturer} coming soon.</p>
-                <p className="text-sm mt-2">Currently only Sundance catalog-style configurator is available.</p>
+                <p className="text-sm mt-2">No template configured for this manufacturer yet.</p>
                 <Button onClick={handleClose} className="mt-4" data-testid="button-close-placeholder">
                   Close
                 </Button>
