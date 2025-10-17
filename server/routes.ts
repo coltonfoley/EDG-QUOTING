@@ -3674,6 +3674,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
             if (manufacturer !== undefined) {
               updateData.manufacturer = manufacturer;
             }
+            if (category !== undefined) {
+              updateData.category = category;
+            }
             if (unit !== undefined) {
               updateData.unit = unit;
             }
@@ -3684,11 +3687,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
             await storage.updateProduct(existingProduct.id, updateData);
             updated++;
           } else {
-            // Create new product - use defaults for unmapped fields
+            // Create new product - respect field mappings, use sensible defaults for unmapped fields
             const productData = {
               name: name.trim(),
               description: description || '',
-              manufacturer: manufacturer || category || 'Imported', // Use manufacturer if provided, otherwise category, otherwise default
+              manufacturer: manufacturer || 'Unknown',
+              category: category,
               retailPrice: retailPrice.toString(),
               defaultDiscountType: 'dollar' as const,
               defaultDiscountValue: manufacturerDiscount.toString(),
