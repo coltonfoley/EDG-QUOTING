@@ -4,6 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
 import { Upload, FileSpreadsheet, AlertCircle, CheckCircle, Calculator } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -31,6 +33,7 @@ export function PricingTableUploader({ productId, onUploadComplete }: PricingTab
   const [errors, setErrors] = useState<string[]>([]);
   const [skippedCount, setSkippedCount] = useState<number>(0);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [sourceUnit, setSourceUnit] = useState<"feet" | "inches" | "meters">("feet");
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -60,7 +63,8 @@ export function PricingTableUploader({ productId, onUploadComplete }: PricingTab
   const uploadMutation = useMutation({
     mutationFn: async (pricingData: PricingData[]) => {
       const response = await apiRequest("POST", `/api/products/${productId}/pricing-tables/bulk-upload`, {
-        pricingData
+        pricingData,
+        sourceUnit
       });
       return response.json();
     },
@@ -267,6 +271,24 @@ export function PricingTableUploader({ productId, onUploadComplete }: PricingTab
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="space-y-4">
+          {/* Source Unit Selector */}
+          <div className="space-y-2">
+            <Label htmlFor="source-unit">Source Dimension Unit</Label>
+            <Select value={sourceUnit} onValueChange={(value: "feet" | "inches" | "meters") => setSourceUnit(value)}>
+              <SelectTrigger id="source-unit" className="w-full sm:w-64" data-testid="select-source-unit">
+                <SelectValue placeholder="Select unit" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="feet">Feet (ft) - Common for US manufacturers</SelectItem>
+                <SelectItem value="inches">Inches (in) - Direct measurement</SelectItem>
+                <SelectItem value="meters">Meters (m) - Metric system</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-sm text-gray-500">
+              Select the unit used in your CSV file. All dimensions will be converted to inches for storage.
+            </p>
+          </div>
+
           <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
             <Upload className="mx-auto h-12 w-12 text-gray-400 mb-4" />
             <div className="space-y-2">
@@ -281,6 +303,7 @@ export function PricingTableUploader({ productId, onUploadComplete }: PricingTab
               onChange={handleFileChange}
               className="mt-4 max-w-xs mx-auto"
               disabled={isProcessing || uploadMutation.isPending}
+              data-testid="input-pricing-file"
             />
           </div>
 
