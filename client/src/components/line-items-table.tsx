@@ -1959,7 +1959,9 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
                     newItem.markupType,
                     newItem.markupValue,
                     newItem.discountType,
-                    newItem.discountValue
+                    newItem.discountValue,
+                    tariffRate,
+                    false
                   )
                 )}
               </div>
