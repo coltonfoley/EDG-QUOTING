@@ -46,7 +46,7 @@ export function TemplateBasedConfigurator({
   const { toast } = useToast();
   const [fieldStates, setFieldStates] = useState<Record<string, FieldState>>({});
 
-  // Load template by manufacturer
+  // Load all templates to find the one for this manufacturer
   const { data: templates, isLoading: templatesLoading } = useQuery<ConfiguratorTemplate[]>({
     queryKey: ['/api/configurator-templates'],
     queryFn: async () => {
@@ -55,7 +55,17 @@ export function TemplateBasedConfigurator({
     },
   });
 
-  const template = templates?.find(t => t.manufacturer === manufacturer && t.isActive);
+  const templateMeta = templates?.find(t => t.manufacturer === manufacturer && t.isActive);
+
+  // Load the full template with fields and rules
+  const { data: template, isLoading: templateLoading } = useQuery<any>({
+    queryKey: ['/api/configurator-templates', templateMeta?.id],
+    queryFn: async () => {
+      const response = await apiRequest('GET', `/api/configurator-templates/${templateMeta?.id}`);
+      return response.json();
+    },
+    enabled: !!templateMeta?.id,
+  });
 
   // Load products for product_list and category_products fields
   const { data: products } = useQuery<Product[]>({
@@ -475,7 +485,7 @@ export function TemplateBasedConfigurator({
     }
   };
 
-  if (templatesLoading) {
+  if (templatesLoading || templateLoading) {
     return (
       <div className="flex items-center justify-center p-8">
         <Loader2 className="w-8 h-8 animate-spin" />
@@ -483,7 +493,7 @@ export function TemplateBasedConfigurator({
     );
   }
 
-  if (!template) {
+  if (!templateMeta || !template) {
     return (
       <Card>
         <CardContent className="p-8 text-center">
