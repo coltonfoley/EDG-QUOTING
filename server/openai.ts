@@ -107,6 +107,23 @@ const ExtractedProductsSchema = z.object({
 
 export type ExtractedProduct = z.infer<typeof ExtractedProductSchema>;
 
+// Schema for manufacturer price list extraction
+const ManufacturerProductSchema = z.object({
+  name: z.string(),
+  price: z.number(),
+  unit: z.string(),
+  category: z.string().nullable().optional(),
+  description: z.string().nullable().optional(),
+});
+
+const ManufacturerPriceListSchema = z.object({
+  manufacturer: z.string(),
+  products: z.array(ManufacturerProductSchema),
+});
+
+export type ManufacturerProduct = z.infer<typeof ManufacturerProductSchema>;
+export type ManufacturerPriceList = z.infer<typeof ManufacturerPriceListSchema>;
+
 // Schema for extracted quote data
 const ExtractedLineItemSchema = z.object({
   description: z.string().nullable().optional(),
@@ -907,4 +924,132 @@ function calculateExtractionConfidence(extracted: ExtractedQuote | ExtractedQuot
   const finalConfidence = Math.min(1, confidence / maxScore);
   
   return Number(finalConfidence.toFixed(2));
+}
+
+/**
+ * Extract products from a manufacturer price list PDF
+ * Uses OpenAI's native PDF support to extract structured product data
+ */
+export async function extractProductsFromManufacturerPDF(
+  pdfBuffer: Buffer
+): Promise<ManufacturerPriceList | null> {
+  try {
+    const cacheKey = textExtractionCache.generateKey(pdfBuffer.toString('base64').slice(0, 1000));
+    const cached = textExtractionCache.get(cacheKey);
+    
+    if (cached) {
+      console.log('📋 Using cached manufacturer product extraction');
+      return cached;
+    }
+
+    console.log('🤖 Extracting products from manufacturer PDF using OpenAI...');
+
+    const base64Pdf = pdfBuffer.toString('base64');
+    const dataUrl = `data:application/pdf;base64,${base64Pdf}`;
+
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        {
+          role: "system",
+          content: `You are an expert at extracting product information from manufacturer price lists and catalogs.
+Extract all products with their details from the provided PDF.
+
+IMPORTANT INSTRUCTIONS:
+1. Identify the manufacturer name from the document (usually in header or title)
+2. Extract ALL products listed with their prices
+3. For each product extract: name, price, unit of measure (each, per foot, sq ft, etc.), category (if clear from sections/headers), and description (if available)
+4. Preserve the exact product names as written
+5. For prices: extract the numeric value only (e.g., "$97.00 each" becomes 97.00)
+6. For units: standardize to common units (each, linear ft, sq ft, pack, set, etc.)
+7. For categories: use section headers or product groupings from the PDF (e.g., "Motor Accessories", "Remotes", "Replacement Screens")
+8. Skip any non-product text like headers, footers, terms, or general information
+
+Return a JSON object with manufacturer name and array of products.`
+        },
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: "Extract all products from this manufacturer price list PDF."
+            },
+            {
+              type: "image_url",
+              image_url: {
+                url: dataUrl
+              }
+            }
+          ]
+        }
+      ],
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "manufacturer_price_list",
+          strict: true,
+          schema: {
+            type: "object",
+            properties: {
+              manufacturer: {
+                type: "string",
+                description: "The manufacturer or company name from the price list"
+              },
+              products: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    name: {
+                      type: "string",
+                      description: "The product name exactly as listed"
+                    },
+                    price: {
+                      type: "number",
+                      description: "The numeric price value"
+                    },
+                    unit: {
+                      type: "string",
+                      description: "The unit of measure (each, linear ft, sq ft, pack, etc.)"
+                    },
+                    category: {
+                      type: ["string", "null"],
+                      description: "Product category based on section headers or groupings"
+                    },
+                    description: {
+                      type: ["string", "null"],
+                      description: "Additional product description or notes if available"
+                    }
+                  },
+                  required: ["name", "price", "unit", "category", "description"],
+                  additionalProperties: false
+                }
+              }
+            },
+            required: ["manufacturer", "products"],
+            additionalProperties: false
+          }
+        }
+      },
+      temperature: 0.1,
+      max_tokens: 16000
+    });
+
+    const content = response.choices[0]?.message?.content;
+    if (!content) {
+      console.error('❌ No content in OpenAI response');
+      return null;
+    }
+
+    const parsed = JSON.parse(content);
+    const validated = ManufacturerPriceListSchema.parse(parsed);
+    
+    textExtractionCache.set(cacheKey, validated);
+    console.log(`✅ Extracted ${validated.products.length} products from ${validated.manufacturer}`);
+    
+    return validated;
+  } catch (error) {
+    console.error('❌ Error extracting products from manufacturer PDF:', error);
+    return null;
+  }
 }
