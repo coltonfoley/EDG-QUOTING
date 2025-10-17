@@ -108,20 +108,22 @@ function parseMatrixData(data: any[], calculateBasePrice: (retailPrice: number) 
   headerDimensions.sort((a, b) => a - b);
   rowDimensions.sort((a, b) => a - b);
   
-  // Generate pricing entries with ranges (midpoint method)
+  // Generate pricing entries with discrete ranges (whole-foot increments)
   for (let rowIndex = 0; rowIndex < rowDimensions.length; rowIndex++) {
     const widthValue = rowDimensions[rowIndex];
     const widthMin = widthValue;
+    // Use next value minus 0.01 as max, or current + 0.99 for last entry
     const widthMax = rowIndex < rowDimensions.length - 1 
-      ? (widthValue + rowDimensions[rowIndex + 1]) / 2
-      : widthValue + (rowDimensions[rowIndex] - (rowDimensions[rowIndex - 1] || widthValue - 1));
+      ? rowDimensions[rowIndex + 1] - 0.01
+      : widthValue + 0.99;
     
     for (let colIndex = 0; colIndex < headerDimensions.length; colIndex++) {
       const lengthValue = headerDimensions[colIndex];
       const lengthMin = lengthValue;
+      // Use next value minus 0.01 as max, or current + 0.99 for last entry
       const lengthMax = colIndex < headerDimensions.length - 1
-        ? (lengthValue + headerDimensions[colIndex + 1]) / 2
-        : lengthValue + (headerDimensions[colIndex] - (headerDimensions[colIndex - 1] || lengthValue - 1));
+        ? headerDimensions[colIndex + 1] - 0.01
+        : lengthValue + 0.99;
       
       // Find corresponding row in data
       const dataRow = data.find(row => {
