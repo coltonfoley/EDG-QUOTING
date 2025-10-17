@@ -168,8 +168,8 @@ export function CSVProductImporter() {
       const rowNum = index + 1;
       const name = nameMapping ? String(row[nameMapping.csvColumn] || '').trim() : '';
       
-      // Only include mapped fields - undefined if not mapped
-      const manufacturer = manufacturerMapping ? String(row[manufacturerMapping.csvColumn] || '').trim() || undefined : undefined;
+      // Only include mapped fields - use defaults when not mapped to match backend behavior
+      const manufacturer = manufacturerMapping ? String(row[manufacturerMapping.csvColumn] || '').trim() || 'Unknown' : 'Unknown';
       const category = categoryMapping ? String(row[categoryMapping.csvColumn] || '').trim() || undefined : undefined;
       const unit = unitMapping ? String(row[unitMapping.csvColumn] || '').trim() || undefined : undefined;
       const description = descMapping ? String(row[descMapping.csvColumn] || '').trim() || undefined : undefined;
