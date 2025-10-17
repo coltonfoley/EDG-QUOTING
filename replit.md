@@ -47,7 +47,17 @@ Preferred communication style: Simple, everyday language.
     - Email integration for sending quotes and e-signature links.
     - Bulk product adjustment and price list uploading.
     - Cost tracking for true margin visibility in imported items.
-    - **Product Configurator System**: Manufacturer-specific configurators (Sundance catalog-style) that insert grouped line items with complete product snapshots stored in configData for historical accuracy. Cache invalidation pattern requires invalidating both quote and groups queries.
+    - **Product Configurator System**: 
+        - **Legacy**: Hardcoded Sundance catalog-style configurator (maintained for backward compatibility)
+        - **Template-Based (NEW)**: Data-driven configurator system that eliminates feature creep when adding new manufacturers
+            - **Admin UI**: Template Manager with visual builders for fields and conditional rules
+            - **Dynamic Rendering**: TemplateBasedConfigurator renders any manufacturer configurator from database templates
+            - **Conditional Logic**: Rule engine for show/hide/enable/disable/set_value field actions based on user selections
+            - **Field Types**: text, number, select, checkbox, product_list, category_products
+            - **Auto-Routing**: ProductConfigurator intelligently routes to template-based configurator if template exists, otherwise falls back to legacy
+            - **Historical Accuracy**: Complete product snapshots stored in configData for quote integrity
+            - **POC**: Progressive Motor & Accessories template demonstrates full system functionality with 8 fields and 5 conditional rules
+        - Cache invalidation pattern requires invalidating both quote and groups queries.
 
 ## External Dependencies
 
