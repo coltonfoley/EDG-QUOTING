@@ -468,6 +468,57 @@ export const insertQuoteProductRenderingSchema = createInsertSchema(quoteProduct
   uploadedAt: true,
 });
 
+// Configurator Templates - Define manufacturer-specific product configurators
+export const configuratorTemplates = pgTable("configurator_templates", {
+  id: serial("id").primaryKey(),
+  manufacturer: text("manufacturer").notNull().unique(), // e.g., "Sundance", "Progressive"
+  name: text("name").notNull(), // Display name for the configurator
+  description: text("description"), // Description of what this configurator does
+  layoutType: text("layout_type").notNull().default("catalog"), // catalog, wizard, form
+  isActive: boolean("is_active").default(true), // Enable/disable without deleting
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_configurator_templates_manufacturer").on(table.manufacturer),
+  index("idx_configurator_templates_active").on(table.isActive),
+]);
+
+// Template Fields - Define fields for each configurator template
+export const templateFields = pgTable("template_fields", {
+  id: serial("id").primaryKey(),
+  templateId: integer("template_id").notNull().references(() => configuratorTemplates.id, { onDelete: "cascade" }),
+  fieldName: text("field_name").notNull(), // unique identifier for the field (e.g., "width", "color")
+  fieldLabel: text("field_label").notNull(), // Display label (e.g., "Width (inches)")
+  fieldType: text("field_type").notNull(), // text, number, select, checkbox, product_list, category_products
+  isRequired: boolean("is_required").default(false),
+  defaultValue: text("default_value"), // Default value for the field
+  validationRules: jsonb("validation_rules"), // { min, max, pattern, etc. }
+  fieldOptions: jsonb("field_options"), // For select/radio fields: [{ value, label }]
+  displayOrder: integer("display_order").default(0),
+  category: text("category"), // For grouping fields in the UI
+  helpText: text("help_text"), // Helper text to display
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_template_fields_template_id").on(table.templateId),
+  index("idx_template_fields_display_order").on(table.templateId, table.displayOrder),
+]);
+
+// Field Rules - Define conditional logic for field visibility and validation
+export const fieldRules = pgTable("field_rules", {
+  id: serial("id").primaryKey(),
+  templateId: integer("template_id").notNull().references(() => configuratorTemplates.id, { onDelete: "cascade" }),
+  triggerFieldName: text("trigger_field_name").notNull(), // Field that triggers the rule
+  triggerCondition: text("trigger_condition").notNull(), // equals, not_equals, greater_than, less_than, contains
+  triggerValue: text("trigger_value").notNull(), // Value to check against
+  actionType: text("action_type").notNull(), // show_field, hide_field, enable_field, disable_field, set_value
+  targetFieldName: text("target_field_name").notNull(), // Field affected by the rule
+  actionValue: text("action_value"), // Optional value to set (for set_value action)
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_field_rules_template_id").on(table.templateId),
+  index("idx_field_rules_trigger_field").on(table.triggerFieldName),
+]);
+
 export const insertIssueReportSchema = createInsertSchema(issueReports).omit({
   id: true,
   createdAt: true,
@@ -487,6 +538,42 @@ export const insertApiKeySchema = createInsertSchema(apiKeys).omit({
   lastUsedAt: true,
 });
 
+// Configurator template insert schemas
+export const insertConfiguratorTemplateSchema = createInsertSchema(configuratorTemplates).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  manufacturer: z.string().min(1, "Manufacturer is required"),
+  name: z.string().min(1, "Template name is required"),
+  layoutType: z.enum(["catalog", "wizard", "form"]).default("catalog"),
+  isActive: z.boolean().default(true),
+});
+
+export const insertTemplateFieldSchema = createInsertSchema(templateFields).omit({
+  id: true,
+  createdAt: true,
+}).extend({
+  templateId: z.number().int().positive(),
+  fieldName: z.string().min(1, "Field name is required"),
+  fieldLabel: z.string().min(1, "Field label is required"),
+  fieldType: z.enum(["text", "number", "select", "checkbox", "product_list", "category_products"]),
+  isRequired: z.boolean().default(false),
+  displayOrder: z.number().int().min(0).default(0),
+});
+
+export const insertFieldRuleSchema = createInsertSchema(fieldRules).omit({
+  id: true,
+  createdAt: true,
+}).extend({
+  templateId: z.number().int().positive(),
+  triggerFieldName: z.string().min(1, "Trigger field is required"),
+  triggerCondition: z.enum(["equals", "not_equals", "greater_than", "less_than", "contains"]),
+  triggerValue: z.string().min(1, "Trigger value is required"),
+  actionType: z.enum(["show_field", "hide_field", "enable_field", "disable_field", "set_value"]),
+  targetFieldName: z.string().min(1, "Target field is required"),
+});
+
 
 // Type exports
 export type ApiKey = typeof apiKeys.$inferSelect;
@@ -503,6 +590,9 @@ export type QuoteCoverPhoto = typeof quoteCoverPhotos.$inferSelect;
 export type QuoteProductRendering = typeof quoteProductRenderings.$inferSelect;
 export type IssueReport = typeof issueReports.$inferSelect;
 export type QuickBooksSettings = typeof quickbooksSettings.$inferSelect;
+export type ConfiguratorTemplate = typeof configuratorTemplates.$inferSelect;
+export type TemplateField = typeof templateFields.$inferSelect;
+export type FieldRule = typeof fieldRules.$inferSelect;
 
 export type InsertApiKey = z.infer<typeof insertApiKeySchema>;
 export type InsertAccount = z.infer<typeof insertAccountSchema>;
@@ -517,6 +607,9 @@ export type InsertProductAccessory = z.infer<typeof insertProductAccessorySchema
 export type InsertQuoteCoverPhoto = z.infer<typeof insertQuoteCoverPhotoSchema>;
 export type InsertQuoteProductRendering = z.infer<typeof insertQuoteProductRenderingSchema>;
 export type InsertIssueReport = z.infer<typeof insertIssueReportSchema>;
+export type InsertConfiguratorTemplate = z.infer<typeof insertConfiguratorTemplateSchema>;
+export type InsertTemplateField = z.infer<typeof insertTemplateFieldSchema>;
+export type InsertFieldRule = z.infer<typeof insertFieldRuleSchema>;
 
 export type QuoteWithDetails = Quote & {
   account?: Account; // Optional since accountId can be null
