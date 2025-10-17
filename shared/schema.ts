@@ -81,6 +81,7 @@ export const quickbooksSettings = pgTable("quickbooks_settings", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// @ts-expect-error - TypeScript can't infer type for self-referencing foreign keys
 export const quotes = pgTable("quotes", {
   id: serial("id").primaryKey(),
   quoteNumber: text("quote_number").notNull().unique(),
