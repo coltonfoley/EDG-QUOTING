@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useLayoutEffect, useCallback, useRef, memo } from "react";
+import React, { useState, useMemo, useEffect, useLayoutEffect, useCallback, useRef, memo } from "react";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -1733,17 +1733,7 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
           <div className="overflow-x-auto">
             <table className="w-full border border-gray-300 divide-y divide-gray-300">
               <colgroup>
-                <col style={{width: '40px'}} />
-                <col style={{width: '26%'}} />
-                <col style={{width: '80px'}} />
-                <col style={{width: '100px'}} />
-                <col style={{width: '160px'}} />
-                <col style={{width: '120px'}} />
-                <col style={{width: '100px'}} />
-                <col style={{width: '140px'}} />
-                <col style={{width: '70px'}} />
-                <col style={{width: '70px'}} />
-                <col style={{width: '80px'}} />
+                <col style={{width: '40px'}} /><col style={{width: '26%'}} /><col style={{width: '80px'}} /><col style={{width: '100px'}} /><col style={{width: '160px'}} /><col style={{width: '120px'}} /><col style={{width: '100px'}} /><col style={{width: '140px'}} /><col style={{width: '70px'}} /><col style={{width: '70px'}} /><col style={{width: '80px'}} />
               </colgroup>
               <thead>
                 <tr className="bg-gray-100">
@@ -1810,9 +1800,8 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
                   const groupItems = groupedLineItems.grouped[group.id] || [];
                   
                   return (
-                    <>
+                    <React.Fragment key={group.id}>
                       <GroupHeader
-                        key={group.id}
                         group={group}
                         lineItems={groupItems}
                         onToggleCollapse={handleToggleGroupCollapse}
@@ -1845,7 +1834,7 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
                           onAddItem={() => setShowNewItemForm(true)}
                         />
                       )}
-                    </>
+                    </React.Fragment>
                   );
                 })}
 
