@@ -3472,17 +3472,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
+      // Determine conversion factor based on source unit
+      const sourceUnit = validatedData.data.sourceUnit || 'feet';
+      let conversionFactor: number;
+      
+      switch (sourceUnit) {
+        case 'feet':
+          conversionFactor = 12; // feet to inches
+          break;
+        case 'meters':
+          conversionFactor = 39.3701; // meters to inches
+          break;
+        case 'inches':
+          conversionFactor = 1; // no conversion needed
+          break;
+        default:
+          conversionFactor = 12; // default to feet
+      }
+
       // Clear existing pricing tables for this product
       await storage.deletePricingTablesByProductId(params.data.productId);
 
       const results = [];
       for (const item of validatedData.data.pricingData) {
+        // Convert all dimensions to inches before storing
+        const lengthMinInches = item.lengthMin * conversionFactor;
+        const lengthMaxInches = item.lengthMax * conversionFactor;
+        const widthMinInches = item.widthMin * conversionFactor;
+        const widthMaxInches = item.widthMax * conversionFactor;
+
         const pricingTable = await storage.createPricingTable({
           productId: params.data.productId,
-          lengthMin: item.lengthMin.toString(),
-          lengthMax: item.lengthMax.toString(),
-          widthMin: item.widthMin.toString(),
-          widthMax: item.widthMax.toString(),
+          lengthMin: lengthMinInches.toFixed(2),
+          lengthMax: lengthMaxInches.toFixed(2),
+          widthMin: widthMinInches.toFixed(2),
+          widthMax: widthMaxInches.toFixed(2),
           retailPrice: item.retailPrice.toString(),
           basePrice: item.basePrice.toString()
         });
@@ -3490,7 +3514,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       res.status(201).json({ 
-        message: `Successfully uploaded ${results.length} pricing entries`,
+        message: `Successfully uploaded ${results.length} pricing entries (converted from ${sourceUnit} to inches)`,
         data: results
       });
     } catch (error) {

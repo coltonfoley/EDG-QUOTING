@@ -724,7 +724,8 @@ export const bulkUploadPricingSchema = z.object({
   }).refine(data => data.lengthMin < data.lengthMax && data.widthMin < data.widthMax, 
     "Min values must be less than max values"))
   .min(1, "At least one pricing entry is required")
-  .max(1000, "Cannot upload more than 1000 pricing entries at once")
+  .max(1000, "Cannot upload more than 1000 pricing entries at once"),
+  sourceUnit: z.enum(['feet', 'inches', 'meters']).optional().default('feet')
 });
 
 // Contract template validation (reuse from base)
