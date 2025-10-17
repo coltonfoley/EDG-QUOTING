@@ -27,6 +27,140 @@ interface PricingData {
   basePrice: number;
 }
 
+/**
+ * Parses a numeric value with optional unit suffix (e.g., "7'", "12\"", "2.5m")
+ */
+function parseNumericValue(value: string): { value: number; unit: 'feet' | 'inches' | 'meters' | null } {
+  const cleaned = value.trim().replace(/,/g, '');
+  
+  if (cleaned.includes("'") || cleaned.toLowerCase().includes('ft')) {
+    return { value: parseFloat(cleaned), unit: 'feet' };
+  } else if (cleaned.includes('"') || cleaned.toLowerCase().includes('in')) {
+    return { value: parseFloat(cleaned), unit: 'inches' };
+  } else if (cleaned.toLowerCase().includes('m')) {
+    return { value: parseFloat(cleaned), unit: 'meters' };
+  }
+  
+  const num = parseFloat(cleaned);
+  return { value: isNaN(num) ? 0 : num, unit: null };
+}
+
+/**
+ * Detects if parsed CSV data is in matrix format
+ */
+function isMatrixFormat(data: any[]): boolean {
+  if (data.length < 2) return false;
+  
+  const firstRow = data[0];
+  const keys = Object.keys(firstRow);
+  
+  // Matrix format: First key is a label (like "Height"), other keys are dimension values
+  if (keys.length < 3) return false;
+  
+  // Check if keys (except first) contain numeric values
+  const dimensionKeys = keys.slice(1);
+  const hasNumericKeys = dimensionKeys.some(key => {
+    const parsed = parseNumericValue(key);
+    return parsed.value > 0;
+  });
+  
+  // Check if first column values are numeric
+  const firstColumnValues = data.map(row => row[keys[0]]);
+  const hasNumericFirstColumn = firstColumnValues.some(val => {
+    if (typeof val !== 'string') return false;
+    const parsed = parseNumericValue(val);
+    return parsed.value > 0;
+  });
+  
+  return hasNumericKeys && hasNumericFirstColumn;
+}
+
+/**
+ * Parses matrix format CSV and converts to range-based pricing entries
+ */
+function parseMatrixData(data: any[], calculateBasePrice: (retailPrice: number) => number): PricingData[] {
+  const entries: PricingData[] = [];
+  const firstRow = data[0];
+  const keys = Object.keys(firstRow);
+  
+  // Parse header dimension values (columns)
+  const headerDimensions: number[] = [];
+  keys.slice(1).forEach(key => {
+    const parsed = parseNumericValue(key);
+    if (parsed.value > 0) {
+      headerDimensions.push(parsed.value);
+    }
+  });
+  
+  // Parse first column dimension values (rows) and prices
+  const rowDimensions: number[] = [];
+  data.forEach(row => {
+    const firstColValue = row[keys[0]];
+    if (typeof firstColValue === 'string') {
+      const parsed = parseNumericValue(firstColValue);
+      if (parsed.value > 0) {
+        rowDimensions.push(parsed.value);
+      }
+    }
+  });
+  
+  // Sort dimensions
+  headerDimensions.sort((a, b) => a - b);
+  rowDimensions.sort((a, b) => a - b);
+  
+  // Generate pricing entries with ranges (midpoint method)
+  for (let rowIndex = 0; rowIndex < rowDimensions.length; rowIndex++) {
+    const widthValue = rowDimensions[rowIndex];
+    const widthMin = widthValue;
+    const widthMax = rowIndex < rowDimensions.length - 1 
+      ? (widthValue + rowDimensions[rowIndex + 1]) / 2
+      : widthValue + (rowDimensions[rowIndex] - (rowDimensions[rowIndex - 1] || widthValue - 1));
+    
+    for (let colIndex = 0; colIndex < headerDimensions.length; colIndex++) {
+      const lengthValue = headerDimensions[colIndex];
+      const lengthMin = lengthValue;
+      const lengthMax = colIndex < headerDimensions.length - 1
+        ? (lengthValue + headerDimensions[colIndex + 1]) / 2
+        : lengthValue + (headerDimensions[colIndex] - (headerDimensions[colIndex - 1] || lengthValue - 1));
+      
+      // Find corresponding row in data
+      const dataRow = data.find(row => {
+        const firstColValue = row[keys[0]];
+        if (typeof firstColValue === 'string') {
+          const parsed = parseNumericValue(firstColValue);
+          return Math.abs(parsed.value - widthValue) < 0.01;
+        }
+        return false;
+      });
+      
+      if (dataRow) {
+        const priceKey = keys[colIndex + 1];
+        const priceValue = dataRow[priceKey];
+        
+        if (priceValue !== undefined && priceValue !== null) {
+          const priceStr = String(priceValue).replace(/,/g, '').trim();
+          const retailPrice = parseFloat(priceStr);
+          
+          // Skip N/A, empty, or invalid prices
+          if (!isNaN(retailPrice) && retailPrice > 0) {
+            const basePrice = calculateBasePrice(retailPrice);
+            entries.push({
+              lengthMin,
+              lengthMax,
+              widthMin,
+              widthMax,
+              retailPrice,
+              basePrice
+            });
+          }
+        }
+      }
+    }
+  }
+  
+  return entries;
+}
+
 export function PricingTableUploader({ productId, onUploadComplete }: PricingTableUploaderProps) {
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<PricingData[]>([]);
@@ -34,6 +168,7 @@ export function PricingTableUploader({ productId, onUploadComplete }: PricingTab
   const [skippedCount, setSkippedCount] = useState<number>(0);
   const [isProcessing, setIsProcessing] = useState(false);
   const [sourceUnit, setSourceUnit] = useState<"feet" | "inches" | "meters">("feet");
+  const [isMatrixFormatDetected, setIsMatrixFormatDetected] = useState<boolean>(false);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -203,6 +338,7 @@ export function PricingTableUploader({ productId, onUploadComplete }: PricingTab
     setErrors([]);
     setPreview([]);
     setSkippedCount(0);
+    setIsMatrixFormatDetected(false);
 
     try {
       if (!product) {
@@ -221,16 +357,35 @@ export function PricingTableUploader({ productId, onUploadComplete }: PricingTab
         return;
       }
 
-      const { valid, errors, skipped } = validatePricingData(jsonData);
+      // Detect format: matrix or range-based
+      const isMatrix = isMatrixFormat(jsonData);
+      setIsMatrixFormatDetected(isMatrix);
+
+      let validData: PricingData[] = [];
+      let errorMessages: string[] = [];
+      let skipped = 0;
+
+      if (isMatrix) {
+        try {
+          validData = parseMatrixData(jsonData, calculateBasePrice);
+        } catch (error) {
+          errorMessages.push(`Matrix parsing error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+      } else {
+        const result = validatePricingData(jsonData);
+        validData = result.valid;
+        errorMessages = result.errors;
+        skipped = result.skipped;
+      }
       
-      if (errors.length > 0) {
-        setErrors(errors);
+      if (errorMessages.length > 0) {
+        setErrors(errorMessages);
       }
       
       setSkippedCount(skipped);
       
-      if (valid.length > 0) {
-        setPreview(valid.slice(0, 10)); // Show first 10 rows for preview
+      if (validData.length > 0) {
+        setPreview(validData.slice(0, 10)); // Show first 10 rows for preview
       }
 
     } catch (error) {
@@ -251,8 +406,16 @@ export function PricingTableUploader({ productId, onUploadComplete }: PricingTab
       const sheet = workbook.Sheets[sheetName];
       const jsonData = XLSX.utils.sheet_to_json(sheet);
       
-      const { valid } = validatePricingData(jsonData);
-      uploadMutation.mutate(valid);
+      let validData: PricingData[] = [];
+      
+      if (isMatrixFormatDetected) {
+        validData = parseMatrixData(jsonData, calculateBasePrice);
+      } else {
+        const { valid } = validatePricingData(jsonData);
+        validData = valid;
+      }
+      
+      uploadMutation.mutate(validData);
     };
 
     processFile();
@@ -316,18 +479,33 @@ export function PricingTableUploader({ productId, onUploadComplete }: PricingTab
             </Alert>
           )}
 
+          {/* Format Detection Alert */}
+          {isMatrixFormatDetected && (
+            <Alert className="border-green-200 bg-green-50">
+              <CheckCircle className="h-4 w-4 text-green-600" />
+              <AlertDescription className="text-green-800">
+                <strong>Matrix Format Detected!</strong> Your pricing matrix will be automatically converted to range-based pricing. 
+                Dimensions from the header and first column will be used to create ranges.
+              </AlertDescription>
+            </Alert>
+          )}
+
           {/* Expected Format Info */}
-          <Alert>
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>
-              <strong>Expected format:</strong> Your file should have columns: "LengthMin", "LengthMax", "WidthMin", "WidthMax", and "RetailPrice". 
-              Each row represents a size band (e.g., Length 12.0-12.5 × Width 8.0-8.5 = $2,500).
-              <br />
-              <strong>Retail Pricing:</strong> Upload retail/manufacturer prices - cost prices will be calculated automatically using the product's discount settings.
-              <br />
-              <strong>N/A values:</strong> Use "N/A" or leave empty for non-manufacturable size combinations - these will be skipped automatically.
-            </AlertDescription>
-          </Alert>
+          {!isMatrixFormatDetected && (
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                <strong>Expected format:</strong> Your file should have columns: "LengthMin", "LengthMax", "WidthMin", "WidthMax", and "RetailPrice". 
+                Each row represents a size band (e.g., Length 12.0-12.5 × Width 8.0-8.5 = $2,500).
+                <br />
+                <strong>Retail Pricing:</strong> Upload retail/manufacturer prices - cost prices will be calculated automatically using the product's discount settings.
+                <br />
+                <strong>N/A values:</strong> Use "N/A" or leave empty for non-manufacturable size combinations - these will be skipped automatically.
+                <br /><br />
+                <strong>Matrix Format Support:</strong> Alternatively, upload a pricing matrix with dimensions in the header (e.g., 7', 8', 9') and first column (e.g., 4', 5', 6'), with prices in cells.
+              </AlertDescription>
+            </Alert>
+          )}
 
           {/* Discount Info */}
           {product && (
