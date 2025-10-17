@@ -820,3 +820,22 @@ export const submitSignatureSchema = z.object({
   signerType: z.enum(["client", "company"], { errorMap: () => ({ message: "Signer type must be 'client' or 'company'" }) })
 });
 
+// Configurator Template validation schemas
+export { 
+  insertConfiguratorTemplateSchema,
+  insertTemplateFieldSchema,
+  insertFieldRuleSchema
+} from "@shared/schema";
+
+export const templateIdParamSchema = z.object({
+  templateId: z.string().regex(/^\d+$/, "Template ID must be a valid positive integer").transform(val => parseInt(val))
+});
+
+export const fieldIdParamSchema = z.object({
+  fieldId: z.string().regex(/^\d+$/, "Field ID must be a valid positive integer").transform(val => parseInt(val))
+});
+
+export const ruleIdParamSchema = z.object({
+  ruleId: z.string().regex(/^\d+$/, "Rule ID must be a valid positive integer").transform(val => parseInt(val))
+});
+
