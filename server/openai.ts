@@ -885,31 +885,20 @@ export async function extractDimensionalProductFromPDF(pdfBuffer: Buffer): Promi
   try {
     console.log(`📄 Processing PDF for dimensional product extraction (${(pdfBuffer.length / 1024 / 1024).toFixed(2)}MB)`);
     
-    // Convert PDF to images for vision processing
-    const { convertPDFToImagesServer } = await import('./quoteImageUtils');
-    const images = await convertPDFToImagesServer(pdfBuffer);
+    // Extract text from PDF using PDF.js
+    const textContent = await extractTextFromPDF(pdfBuffer);
     
-    if (!images || images.length === 0) {
-      throw new Error('Failed to convert PDF to images');
+    if (!textContent || textContent.trim().length === 0) {
+      throw new Error('Failed to extract text from PDF');
     }
     
-    console.log(`📸 Converted PDF to ${images.length} images, processing with vision API`);
+    console.log(`📝 Extracted ${textContent.length} characters of text from PDF`);
     
-    // Build image content for OpenAI
-    const imageContent = images.map((img) => {
-      return [
-        {
-          type: "text" as const,
-          text: `Page ${img.index + 1}:`,
-        },
-        {
-          type: "image_url" as const,
-          image_url: {
-            url: `data:image/jpeg;base64,${img.imageBase64}`,
-          },
-        },
-      ];
-    }).flat();
+    // Truncate if too long
+    const maxTextLength = 30000;
+    const truncatedText = textContent.length > maxTextLength 
+      ? textContent.substring(0, maxTextLength) + "\n... (truncated)"
+      : textContent;
 
     const response = await openai.chat.completions.create({
       model: "gpt-5", // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
