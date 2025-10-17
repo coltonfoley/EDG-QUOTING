@@ -224,6 +224,7 @@ export default function QuoteBuilder() {
     estimatedStartDate: "",
     notes: "",
     taxRate: "8.5",
+    tariffRate: "0",
     discount: "0",
     shipping: "0",
     isShippingTaxable: true,
@@ -394,6 +395,7 @@ export default function QuoteBuilder() {
         <LineItemsTable
           quoteId={currentQuote.id || 0}
           lineItems={currentQuote.lineItems}
+          tariffRate={currentQuote.tariffRate || "0"}
         />
 
         {/* Quote Summary - Show for both new and existing quotes */}
