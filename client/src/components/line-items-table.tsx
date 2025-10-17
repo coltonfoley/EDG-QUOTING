@@ -1388,7 +1388,7 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
         <td className="border-r border-gray-300 px-2 py-1 text-center">
           <div className="flex justify-center">
             <Checkbox
-              checked={item.isTariffApplicable === true}
+              checked={!!item.isTariffApplicable}
               onCheckedChange={(checked) => {
                 updateLineItemMutation.mutate({ 
                   id: item.id, 
@@ -1730,17 +1730,17 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
           <div className="overflow-x-auto">
             <table className="w-full border border-gray-300 divide-y divide-gray-300">
               <colgroup>
-                <col style={{width: '40px'}} /> {/* Drag Handle */}
-                <col style={{width: '26%'}} /> {/* Description */}
-                <col style={{width: '80px'}} /> {/* Quantity */}
-                <col style={{width: '100px'}} /> {/* Cost */}
-                <col style={{width: '160px'}} /> {/* Markup% */}
-                <col style={{width: '120px'}} /> {/* Price */}
-                <col style={{width: '100px'}} /> {/* Margin$ */}
-                <col style={{width: '140px'}} /> {/* Total */}
-                <col style={{width: '70px'}} /> {/* Taxable */}
-                <col style={{width: '70px'}} /> {/* Tariff */}
-                <col style={{width: '80px'}} /> {/* Actions */}
+                <col style={{width: '40px'}} />
+                <col style={{width: '26%'}} />
+                <col style={{width: '80px'}} />
+                <col style={{width: '100px'}} />
+                <col style={{width: '160px'}} />
+                <col style={{width: '120px'}} />
+                <col style={{width: '100px'}} />
+                <col style={{width: '140px'}} />
+                <col style={{width: '70px'}} />
+                <col style={{width: '70px'}} />
+                <col style={{width: '80px'}} />
               </colgroup>
               <thead>
                 <tr className="bg-gray-100">
