@@ -1171,7 +1171,9 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
       currentMarkupType,
       currentMarkupValue,
       item.discountType,
-      item.discountValue
+      item.discountValue,
+      tariffRate,
+      item.isTariffApplicable || false
     );
     
     // Calculate total
