@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { FileText, Bookmark, Plus, Eye, Send, Mail, CheckCircle, AlertCircle, Clock, Link2, Copy, Download, PenTool } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -346,6 +346,9 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
                     <DialogContent className="max-w-4xl">
                       <DialogHeader>
                         <DialogTitle>{quote.contractTemplate.title}</DialogTitle>
+                        <DialogDescription>
+                          Preview the contract terms for this quote
+                        </DialogDescription>
                       </DialogHeader>
                       <div className="max-h-96 overflow-y-auto">
                         <pre className="whitespace-pre-wrap text-sm">{quote.contractTemplate.terms}</pre>
@@ -684,6 +687,9 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Signing Link Generated</DialogTitle>
+            <DialogDescription>
+              Share this link with your client to sign the quote electronically
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <Alert>
@@ -751,6 +757,9 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Sign Quote as Company</DialogTitle>
+            <DialogDescription>
+              Add your company signature to finalize the quote
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <Alert>

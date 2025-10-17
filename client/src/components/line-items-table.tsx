@@ -3,7 +3,7 @@ import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -1585,6 +1585,9 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
               <DialogContent className="max-w-4xl max-h-[80vh] overflow-hidden">
                 <DialogHeader>
                   <DialogTitle>Select Product from Catalog</DialogTitle>
+                  <DialogDescription>
+                    Browse and search products to add to your quote
+                  </DialogDescription>
                 </DialogHeader>
                 
                 <div className="flex flex-col h-full max-h-[70vh]">
@@ -1983,6 +1986,9 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Enter Dimensions</DialogTitle>
+            <DialogDescription>
+              Specify product dimensions to calculate pricing
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>
