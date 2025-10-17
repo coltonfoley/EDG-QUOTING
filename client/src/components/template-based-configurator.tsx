@@ -138,13 +138,18 @@ export function TemplateBasedConfigurator({
     defaultValues,
   });
 
-  // Initialize field states
+  // Initialize field states (hide fields that are targets of show_field rules)
   useEffect(() => {
     if (template?.fields) {
+      // Find fields that are targets of show_field rules (should start hidden)
+      const showFieldTargets = new Set(
+        template.rules?.filter(r => r.actionType === 'show_field').map(r => r.targetFieldName) || []
+      );
+      
       const initialStates: Record<string, FieldState> = {};
       template.fields.forEach((field: TemplateField) => {
         initialStates[field.fieldName] = {
-          visible: true,
+          visible: !showFieldTargets.has(field.fieldName), // Hide if target of show_field rule
           enabled: true,
           value: defaultValues[field.fieldName],
         };
@@ -158,11 +163,15 @@ export function TemplateBasedConfigurator({
   useEffect(() => {
     if (!template?.rules || !template?.fields) return;
 
-    // Start with default states (all fields visible and enabled)
+    // Start with default states (show_field targets start hidden)
+    const showFieldTargets = new Set(
+      template.rules.filter(r => r.actionType === 'show_field').map(r => r.targetFieldName)
+    );
+    
     const newStates: Record<string, FieldState> = {};
     template.fields.forEach((field: TemplateField) => {
       newStates[field.fieldName] = {
-        visible: true,
+        visible: !showFieldTargets.has(field.fieldName), // Hide if target of show_field rule
         enabled: true,
         value: formValues[field.fieldName],
       };
