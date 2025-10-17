@@ -1188,7 +1188,6 @@ export function LineItemsTable({ quoteId, lineItems }: LineItemsTableProps) {
         ref={setNodeRef}
         style={style}
         {...attributes}
-        key={item.id}
         className="hover:bg-gray-50"
         data-testid={`row-line-item-${item.id}`}
       >
