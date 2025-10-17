@@ -3634,10 +3634,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Admin access required" });
       }
 
-      const { products } = req.body;
+      const { products, manufacturer, discountType, discountValue } = req.body;
 
       if (!products || !Array.isArray(products)) {
         return res.status(400).json({ message: "Products array is required" });
+      }
+
+      if (!manufacturer || typeof manufacturer !== 'string') {
+        return res.status(400).json({ message: "Manufacturer is required" });
       }
 
       let created = 0;
@@ -3646,15 +3650,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       for (const product of products) {
         try {
-          const { name, manufacturer, category, unit, description, retailPrice, cost } = product;
+          const { name, category, unit, description, retailPrice } = product;
 
-          if (!name || typeof retailPrice !== 'number' || typeof cost !== 'number') {
+          if (!name || typeof retailPrice !== 'number') {
             errors.push(`Invalid product data for: ${name || 'unnamed'}`);
             continue;
           }
-
-          // Calculate manufacturer discount from the difference
-          const manufacturerDiscount = retailPrice - cost;
 
           // Check if product already exists by name (case-insensitive)
           const allProducts = await storage.getAllProducts();
@@ -3663,17 +3664,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
           );
 
           if (existingProduct) {
-            // Update existing product - only update fields that are explicitly provided
+            // Update existing product
             const updateData: any = {
+              manufacturer: manufacturer.trim(),
               retailPrice: retailPrice.toString(),
-              defaultDiscountType: 'dollar',
-              defaultDiscountValue: manufacturerDiscount.toString(),
+              defaultDiscountType: discountType || 'percentage',
+              defaultDiscountValue: discountValue ? discountValue.toString() : '0',
             };
             
-            // Only update optional fields if they were mapped and have values
-            if (manufacturer !== undefined) {
-              updateData.manufacturer = manufacturer;
-            }
+            // Only update optional fields if they have values
             if (category !== undefined) {
               updateData.category = category;
             }
@@ -3687,15 +3686,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
             await storage.updateProduct(existingProduct.id, updateData);
             updated++;
           } else {
-            // Create new product - respect field mappings, use sensible defaults for unmapped fields
+            // Create new product
             const productData = {
               name: name.trim(),
               description: description || '',
-              manufacturer: manufacturer || 'Unknown',
+              manufacturer: manufacturer.trim(),
               category: category,
               retailPrice: retailPrice.toString(),
-              defaultDiscountType: 'dollar' as const,
-              defaultDiscountValue: manufacturerDiscount.toString(),
+              defaultDiscountType: (discountType || 'percentage') as const,
+              defaultDiscountValue: discountValue ? discountValue.toString() : '0',
               unit: unit || 'each',
             };
             
