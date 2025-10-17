@@ -362,7 +362,7 @@ export default function QuoteBuilder() {
                             )}
                           </div>
                           <p className="text-sm text-gray-600">
-                            Created: {new Date(version.createdAt).toLocaleDateString()}
+                            Created: {version.createdAt ? new Date(version.createdAt).toLocaleDateString() : 'N/A'}
                           </p>
                           <p className="text-sm text-gray-600">
                             Project: {version.projectName || "Untitled"}
