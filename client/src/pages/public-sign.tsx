@@ -39,6 +39,9 @@ interface SigningQuoteData {
   customContractTerms: string | null;
   clientSignedAt: string | null;
   companySignedAt: string | null;
+  esigIncludePricing?: boolean;
+  esigIncludeImages?: boolean;
+  esigIncludeContract?: boolean;
 }
 
 export default function PublicSignPage() {
@@ -97,24 +100,54 @@ export default function PublicSignPage() {
       pdf.addFileToVFS('Barlow-SemiBold.ttf', barlowSemiBoldBase64);
       pdf.addFont('Barlow-SemiBold.ttf', 'Barlow-SemiBold', 'normal');
 
-      // Mock company data for preview
+      // Company data
       const company = {
-        name: 'Your Company',
-        address: '123 Main St',
-        phone: '(555) 123-4567',
-        email: 'info@company.com'
+        name: 'EDG Patio & Shade',
+        address: '1802 Holian Drive, Spring Grove, IL 60081',
+        phone: '+1 (815) 581-0138',
+        email: 'info@edgpatioshade.com'
       };
 
-      // Get contract text from template or custom terms
-      const contractText = (quoteData as any).contractTemplate?.terms || (quoteData as any).customContractTerms || '';
+      // Get PDF preferences from quote data (with defaults)
+      const showPricing = quoteData.esigIncludePricing ?? true;
+      const includeImages = quoteData.esigIncludeImages ?? false;
+      const includeContract = quoteData.esigIncludeContract ?? true;
+
+      // Get contract text if includeContract is true
+      let contractText = '';
+      if (includeContract) {
+        contractText = (quoteData as any).contractTemplate?.terms || (quoteData as any).customContractTerms || '';
+      }
+
+      // Load product renderings if includeImages is true
+      let renderImages: Array<{ dataUrl: string; format: 'PNG' | 'JPEG' }> = [];
+      if (includeImages) {
+        try {
+          // Fetch product renderings for this quote
+          const response = await fetch(`/api/quotes/${quoteData.id}/product-renderings`);
+          if (response.ok) {
+            const renderings = await response.json();
+            const imageResults = await Promise.allSettled(
+              renderings.map(async (rendering: any) => {
+                return await normalizeImageToDataUrl(rendering.storageUrl);
+              })
+            );
+            renderImages = imageResults
+              .filter((r): r is PromiseFulfilledResult<{ dataUrl: string; format: 'PNG' | 'JPEG' }> => r.status === 'fulfilled')
+              .map(r => r.value);
+          }
+        } catch (error) {
+          console.warn('Failed to load product renderings:', error);
+        }
+      }
 
       await generateBrandedSequencePDF({
         pdf,
         company,
         quote: quoteData as any,
-        renderImages: [],
+        renderImages,
         contractText,
-        showPricing: true,
+        showPricing,
         clientLogoDataUrl: null
       });
 
@@ -171,8 +204,18 @@ export default function PublicSignPage() {
       const response = await apiRequest('GET', `/api/signatures/${token}/full`);
       const fullQuote: QuoteWithDetails = await response.json();
       
+      // Use stored PDF preferences
+      const includeImages = fullQuote.esigIncludeImages ?? false;
+      const includePricing = fullQuote.esigIncludePricing ?? true;
+      const includeContract = fullQuote.esigIncludeContract ?? true;
+      
       // Generate PDF
-      const pdfBlob = await generateSignedPDF({ quote: fullQuote, includeImages: false });
+      const pdfBlob = await generateSignedPDF({ 
+        quote: fullQuote, 
+        includeImages,
+        includePricing,
+        includeContract
+      });
       
       // Download
       downloadSignedPDF(pdfBlob, fullQuote);
