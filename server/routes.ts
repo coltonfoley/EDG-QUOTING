@@ -2010,10 +2010,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Use existing signing token if available, otherwise generate a new one
       const signingToken = quote.signingToken || nanoid(32);
       
-      // Update quote with e-signature enabled and token (preserve existing signatures)
+      // Extract PDF preferences from request body (with defaults)
+      const esigIncludePricing = req.body.esigIncludePricing ?? true;
+      const esigIncludeImages = req.body.esigIncludeImages ?? false;
+      const esigIncludeContract = req.body.esigIncludeContract ?? true;
+      
+      // Update quote with e-signature enabled, token, and PDF preferences
       const updatedQuote = await storage.updateQuote(params.data.id, {
         enableESignature: true,
-        signingToken
+        signingToken,
+        esigIncludePricing,
+        esigIncludeImages,
+        esigIncludeContract
         // Note: We no longer reset signatures - they persist permanently
       });
 
@@ -2167,7 +2175,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         contractTemplate: quote.contractTemplate,
         customContractTerms: quote.customContractTerms,
         clientSignedAt: quote.clientSignedAt,
-        companySignedAt: quote.companySignedAt
+        companySignedAt: quote.companySignedAt,
+        // E-Signature PDF preferences
+        esigIncludePricing: quote.esigIncludePricing ?? true,
+        esigIncludeImages: quote.esigIncludeImages ?? false,
+        esigIncludeContract: quote.esigIncludeContract ?? true
       });
     } catch (error) {
       console.error("Error getting signature info:", error);

@@ -17,6 +17,7 @@ import type { QuoteWithDetails, ContractTemplate } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
 import { generateSignedPDF, downloadSignedPDF } from "@/lib/generate-signed-pdf";
 import { SignatureCanvas, SignatureData } from "@/components/signature-canvas";
+import { ESignatureOptionsModal } from "@/components/esignature-options-modal";
 
 interface QuoteSummaryProps {
   quote: QuoteWithDetails;
@@ -34,6 +35,7 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
   const [signingLink, setSigningLink] = useState<string>("");
   const [showCompanySignDialog, setShowCompanySignDialog] = useState(false);
   const [companySignature, setCompanySignature] = useState<SignatureData | null>(null);
+  const [showESignatureOptionsModal, setShowESignatureOptionsModal] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -73,8 +75,18 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
       const response = await apiRequest('GET', `/api/quotes/${quote.id}`);
       const fullQuote: QuoteWithDetails = await response.json();
       
+      // Use stored PDF preferences
+      const includeImages = fullQuote.esigIncludeImages ?? false;
+      const includePricing = fullQuote.esigIncludePricing ?? true;
+      const includeContract = fullQuote.esigIncludeContract ?? true;
+      
       // Generate PDF
-      const pdfBlob = await generateSignedPDF({ quote: fullQuote, includeImages: false });
+      const pdfBlob = await generateSignedPDF({ 
+        quote: fullQuote, 
+        includeImages,
+        includePricing,
+        includeContract
+      });
       
       // Download
       downloadSignedPDF(pdfBlob, fullQuote);
@@ -195,9 +207,21 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
       setSigningLink(link);
       setShowSigningLinkDialog(true);
     } else {
-      // No token - generate a new one
-      generateSigningLinkMutation.mutate();
+      // No token - open the options modal to configure preferences
+      setShowESignatureOptionsModal(true);
     }
+  };
+
+  // Handle successful link generation from the modal
+  const handleESignatureLinkGenerated = (signingToken: string) => {
+    const link = `${window.location.origin}/sign/${signingToken}`;
+    setSigningLink(link);
+    setShowSigningLinkDialog(true);
+    
+    // Invalidate query to refetch with updated data
+    queryClient.invalidateQueries({ 
+      queryKey: [`/api/quotes/${quote.id}`]
+    });
   };
 
   const copySigningLink = () => {
@@ -806,6 +830,14 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* E-Signature Options Modal */}
+      <ESignatureOptionsModal
+        quote={quote}
+        open={showESignatureOptionsModal}
+        onOpenChange={setShowESignatureOptionsModal}
+        onSuccess={handleESignatureLinkGenerated}
+      />
       </div>
     </>
   );

@@ -7,6 +7,8 @@ import { normalizeImageToDataUrl } from './pdf-image-pipeline';
 interface GenerateSignedPDFOptions {
   quote: QuoteWithDetails;
   includeImages?: boolean;
+  includePricing?: boolean;
+  includeContract?: boolean;
 }
 
 /**
@@ -14,7 +16,7 @@ interface GenerateSignedPDFOptions {
  * This is the official legally-binding document for both parties
  */
 export async function generateSignedPDF(options: GenerateSignedPDFOptions): Promise<Blob> {
-  const { quote, includeImages = false } = options;
+  const { quote, includeImages = false, includePricing = true, includeContract = true } = options;
 
   // Create PDF instance
   const pdf = new jsPDF({ unit: 'mm', format: 'letter' });
@@ -46,12 +48,15 @@ export async function generateSignedPDF(options: GenerateSignedPDFOptions): Prom
     email: 'info@edgpatioshade.com'
   };
 
-  // Get contract text (combine notes with contract terms)
-  const parts = [];
-  if (quote.notes?.trim()) parts.push(quote.notes.trim());
-  if (quote.customContractTerms?.trim()) parts.push(quote.customContractTerms.trim());
-  else if (quote.contractTemplate?.terms?.trim()) parts.push(quote.contractTemplate.terms.trim());
-  const contractText = parts.join('\n\n');
+  // Get contract text (combine notes with contract terms) if includeContract is true
+  let contractText = '';
+  if (includeContract) {
+    const parts = [];
+    if (quote.notes?.trim()) parts.push(quote.notes.trim());
+    if (quote.customContractTerms?.trim()) parts.push(quote.customContractTerms.trim());
+    else if (quote.contractTemplate?.terms?.trim()) parts.push(quote.contractTemplate.terms.trim());
+    contractText = parts.join('\n\n');
+  }
 
   // Get client logo if available
   let clientLogoDataUrl: string | null = null;
@@ -71,7 +76,7 @@ export async function generateSignedPDF(options: GenerateSignedPDFOptions): Prom
     quote,
     renderImages: normalizedImages,
     contractText,
-    showPricing: true,
+    showPricing: includePricing,
     clientLogoDataUrl
   });
 

@@ -110,6 +110,10 @@ export const quotes = pgTable("quotes", {
   companySignatureData: jsonb("company_signature_data"), // { type: 'draw'|'type', imageData: string, name: string }
   companySignedAt: timestamp("company_signed_at"),
   companySignedIp: text("company_signed_ip"),
+  // E-Signature PDF preferences
+  esigIncludePricing: boolean("esig_include_pricing").default(true), // show pricing in signed PDF
+  esigIncludeImages: boolean("esig_include_images").default(false), // include product renderings in signed PDF
+  esigIncludeContract: boolean("esig_include_contract").default(true), // include contract terms in signed PDF
   // QuickBooks sync fields
   qbEstimateId: text("qb_estimate_id"), // QuickBooks estimate ID
   qbSyncStatus: text("qb_sync_status"), // null, 'pending', 'synced', 'error'
