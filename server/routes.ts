@@ -4,7 +4,7 @@ import { storage } from "./storage";
 import { z } from "zod";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import { db } from "./db";
-import { accounts, products, configuratorTemplates, templateFields, fieldRules } from "@shared/schema";
+import { accounts, products } from "@shared/schema";
 import { eq, or, ilike, and } from "drizzle-orm";
 import {
   insertAccountSchema,
@@ -44,13 +44,7 @@ import {
   createQuoteSchema,
   CreateQuoteBody,
   signatureTokenParamSchema,
-  submitSignatureSchema,
-  insertConfiguratorTemplateSchema,
-  insertTemplateFieldSchema,
-  insertFieldRuleSchema,
-  templateIdParamSchema,
-  fieldIdParamSchema,
-  ruleIdParamSchema
+  submitSignatureSchema
 } from "./validation-schemas";
 import multer from "multer";
 import * as XLSX from "xlsx";
@@ -3640,14 +3634,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Admin access required" });
       }
 
-      const { products, manufacturer, discountType, discountValue } = req.body;
+      const { products } = req.body;
 
       if (!products || !Array.isArray(products)) {
         return res.status(400).json({ message: "Products array is required" });
-      }
-
-      if (!manufacturer || typeof manufacturer !== 'string') {
-        return res.status(400).json({ message: "Manufacturer is required" });
       }
 
       let created = 0;
@@ -3656,12 +3646,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       for (const product of products) {
         try {
-          const { name, category, unit, description, retailPrice } = product;
+          const { name, manufacturer, category, unit, description, retailPrice, cost } = product;
 
-          if (!name || typeof retailPrice !== 'number') {
+          if (!name || typeof retailPrice !== 'number' || typeof cost !== 'number') {
             errors.push(`Invalid product data for: ${name || 'unnamed'}`);
             continue;
           }
+
+          // Calculate manufacturer discount from the difference
+          const manufacturerDiscount = retailPrice - cost;
 
           // Check if product already exists by name (case-insensitive)
           const allProducts = await storage.getAllProducts();
@@ -3670,17 +3663,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
           );
 
           if (existingProduct) {
-            // Update existing product
+            // Update existing product - only update fields that are explicitly provided
             const updateData: any = {
-              manufacturer: manufacturer.trim(),
               retailPrice: retailPrice.toString(),
-              defaultDiscountType: discountType || 'percentage',
-              defaultDiscountValue: discountValue ? discountValue.toString() : '0',
+              defaultDiscountType: 'dollar',
+              defaultDiscountValue: manufacturerDiscount.toString(),
             };
             
-            // Only update optional fields if they have values
-            if (category !== undefined) {
-              updateData.category = category;
+            // Only update optional fields if they were mapped and have values
+            if (manufacturer !== undefined) {
+              updateData.manufacturer = manufacturer;
             }
             if (unit !== undefined) {
               updateData.unit = unit;
@@ -3692,15 +3684,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
             await storage.updateProduct(existingProduct.id, updateData);
             updated++;
           } else {
-            // Create new product
+            // Create new product - use defaults for unmapped fields
             const productData = {
               name: name.trim(),
               description: description || '',
-              manufacturer: manufacturer.trim(),
-              category: category,
+              manufacturer: manufacturer || category || 'Imported', // Use manufacturer if provided, otherwise category, otherwise default
               retailPrice: retailPrice.toString(),
-              defaultDiscountType: (discountType || 'percentage') as const,
-              defaultDiscountValue: discountValue ? discountValue.toString() : '0',
+              defaultDiscountType: 'dollar' as const,
+              defaultDiscountValue: manufacturerDiscount.toString(),
               unit: unit || 'each',
             };
             
@@ -4148,339 +4139,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       
       res.status(500).json({ message: error.message || 'Failed to sync quote to QuickBooks' });
-    }
-  });
-
-  // ============================================================================
-  // CONFIGURATOR TEMPLATE ROUTES (Isolated System for Template-Based Configurators)
-  // ============================================================================
-
-  // Get all configurator templates
-  app.get("/api/configurator-templates", isAuthenticated, async (req, res) => {
-    try {
-      const templates = await db
-        .select()
-        .from(configuratorTemplates)
-        .orderBy(configuratorTemplates.manufacturer);
-      
-      res.json(templates);
-    } catch (error) {
-      console.error("Error fetching configurator templates:", error);
-      res.status(500).json({ message: "Internal server error" });
-    }
-  });
-
-  // Get a single configurator template with all fields and rules
-  app.get("/api/configurator-templates/:templateId", isAuthenticated, async (req, res) => {
-    try {
-      const params = templateIdParamSchema.safeParse(req.params);
-      if (!params.success) {
-        return res.status(400).json({ 
-          message: "Invalid template ID", 
-          errors: params.error.errors 
-        });
-      }
-
-      const [template] = await db
-        .select()
-        .from(configuratorTemplates)
-        .where(eq(configuratorTemplates.id, params.data.templateId));
-
-      if (!template) {
-        return res.status(404).json({ message: "Template not found" });
-      }
-
-      const fields = await db
-        .select()
-        .from(templateFields)
-        .where(eq(templateFields.templateId, params.data.templateId))
-        .orderBy(templateFields.displayOrder);
-
-      const rules = await db
-        .select()
-        .from(fieldRules)
-        .where(eq(fieldRules.templateId, params.data.templateId));
-
-      res.json({
-        ...template,
-        fields,
-        rules
-      });
-    } catch (error) {
-      console.error("Error fetching configurator template:", error);
-      res.status(500).json({ message: "Internal server error" });
-    }
-  });
-
-  // Create a new configurator template
-  app.post("/api/configurator-templates", isAuthenticated, async (req, res) => {
-    try {
-      const validatedData = insertConfiguratorTemplateSchema.safeParse(req.body);
-      if (!validatedData.success) {
-        return res.status(400).json({ 
-          message: "Invalid template data", 
-          errors: validatedData.error.errors 
-        });
-      }
-
-      const [template] = await db
-        .insert(configuratorTemplates)
-        .values(validatedData.data)
-        .returning();
-
-      res.status(201).json(template);
-    } catch (error: any) {
-      if (error.code === '23505') {
-        return res.status(409).json({ 
-          message: "A template for this manufacturer already exists" 
-        });
-      }
-      console.error("Error creating configurator template:", error);
-      res.status(500).json({ message: "Internal server error" });
-    }
-  });
-
-  // Update a configurator template
-  app.patch("/api/configurator-templates/:templateId", isAuthenticated, async (req, res) => {
-    try {
-      const params = templateIdParamSchema.safeParse(req.params);
-      if (!params.success) {
-        return res.status(400).json({ 
-          message: "Invalid template ID", 
-          errors: params.error.errors 
-        });
-      }
-
-      const validatedData = insertConfiguratorTemplateSchema.partial().safeParse(req.body);
-      if (!validatedData.success) {
-        return res.status(400).json({ 
-          message: "Invalid template data", 
-          errors: validatedData.error.errors 
-        });
-      }
-
-      const [updated] = await db
-        .update(configuratorTemplates)
-        .set({ ...validatedData.data, updatedAt: new Date() })
-        .where(eq(configuratorTemplates.id, params.data.templateId))
-        .returning();
-
-      if (!updated) {
-        return res.status(404).json({ message: "Template not found" });
-      }
-
-      res.json(updated);
-    } catch (error) {
-      console.error("Error updating configurator template:", error);
-      res.status(500).json({ message: "Internal server error" });
-    }
-  });
-
-  // Delete a configurator template
-  app.delete("/api/configurator-templates/:templateId", isAuthenticated, async (req, res) => {
-    try {
-      const params = templateIdParamSchema.safeParse(req.params);
-      if (!params.success) {
-        return res.status(400).json({ 
-          message: "Invalid template ID", 
-          errors: params.error.errors 
-        });
-      }
-
-      await db
-        .delete(configuratorTemplates)
-        .where(eq(configuratorTemplates.id, params.data.templateId));
-
-      res.status(204).send();
-    } catch (error) {
-      console.error("Error deleting configurator template:", error);
-      res.status(500).json({ message: "Internal server error" });
-    }
-  });
-
-  // Add field to template
-  app.post("/api/configurator-templates/:templateId/fields", isAuthenticated, async (req, res) => {
-    try {
-      const params = templateIdParamSchema.safeParse(req.params);
-      if (!params.success) {
-        return res.status(400).json({ 
-          message: "Invalid template ID", 
-          errors: params.error.errors 
-        });
-      }
-
-      const validatedData = insertTemplateFieldSchema.safeParse({
-        ...req.body,
-        templateId: params.data.templateId
-      });
-      
-      if (!validatedData.success) {
-        return res.status(400).json({ 
-          message: "Invalid field data", 
-          errors: validatedData.error.errors 
-        });
-      }
-
-      const [field] = await db
-        .insert(templateFields)
-        .values(validatedData.data)
-        .returning();
-
-      res.status(201).json(field);
-    } catch (error) {
-      console.error("Error adding template field:", error);
-      res.status(500).json({ message: "Internal server error" });
-    }
-  });
-
-  // Update a template field
-  app.patch("/api/configurator-templates/:templateId/fields/:fieldId", isAuthenticated, async (req, res) => {
-    try {
-      const fieldParams = fieldIdParamSchema.safeParse(req.params);
-      if (!fieldParams.success) {
-        return res.status(400).json({ 
-          message: "Invalid field ID", 
-          errors: fieldParams.error.errors 
-        });
-      }
-
-      const validatedData = insertTemplateFieldSchema.partial().safeParse(req.body);
-      if (!validatedData.success) {
-        return res.status(400).json({ 
-          message: "Invalid field data", 
-          errors: validatedData.error.errors 
-        });
-      }
-
-      const [updated] = await db
-        .update(templateFields)
-        .set(validatedData.data)
-        .where(eq(templateFields.id, fieldParams.data.fieldId))
-        .returning();
-
-      if (!updated) {
-        return res.status(404).json({ message: "Field not found" });
-      }
-
-      res.json(updated);
-    } catch (error) {
-      console.error("Error updating template field:", error);
-      res.status(500).json({ message: "Internal server error" });
-    }
-  });
-
-  // Delete a template field
-  app.delete("/api/configurator-templates/:templateId/fields/:fieldId", isAuthenticated, async (req, res) => {
-    try {
-      const fieldParams = fieldIdParamSchema.safeParse(req.params);
-      if (!fieldParams.success) {
-        return res.status(400).json({ 
-          message: "Invalid field ID", 
-          errors: fieldParams.error.errors 
-        });
-      }
-
-      await db
-        .delete(templateFields)
-        .where(eq(templateFields.id, fieldParams.data.fieldId));
-
-      res.status(204).send();
-    } catch (error) {
-      console.error("Error deleting template field:", error);
-      res.status(500).json({ message: "Internal server error" });
-    }
-  });
-
-  // Add rule to template
-  app.post("/api/configurator-templates/:templateId/rules", isAuthenticated, async (req, res) => {
-    try {
-      const params = templateIdParamSchema.safeParse(req.params);
-      if (!params.success) {
-        return res.status(400).json({ 
-          message: "Invalid template ID", 
-          errors: params.error.errors 
-        });
-      }
-
-      const validatedData = insertFieldRuleSchema.safeParse({
-        ...req.body,
-        templateId: params.data.templateId
-      });
-      
-      if (!validatedData.success) {
-        return res.status(400).json({ 
-          message: "Invalid rule data", 
-          errors: validatedData.error.errors 
-        });
-      }
-
-      const [rule] = await db
-        .insert(fieldRules)
-        .values(validatedData.data)
-        .returning();
-
-      res.status(201).json(rule);
-    } catch (error) {
-      console.error("Error adding field rule:", error);
-      res.status(500).json({ message: "Internal server error" });
-    }
-  });
-
-  // Update a field rule
-  app.patch("/api/configurator-templates/:templateId/rules/:ruleId", isAuthenticated, async (req, res) => {
-    try {
-      const ruleParams = ruleIdParamSchema.safeParse(req.params);
-      if (!ruleParams.success) {
-        return res.status(400).json({ 
-          message: "Invalid rule ID", 
-          errors: ruleParams.error.errors 
-        });
-      }
-
-      const validatedData = insertFieldRuleSchema.partial().safeParse(req.body);
-      if (!validatedData.success) {
-        return res.status(400).json({ 
-          message: "Invalid rule data", 
-          errors: validatedData.error.errors 
-        });
-      }
-
-      const [updated] = await db
-        .update(fieldRules)
-        .set(validatedData.data)
-        .where(eq(fieldRules.id, ruleParams.data.ruleId))
-        .returning();
-
-      if (!updated) {
-        return res.status(404).json({ message: "Rule not found" });
-      }
-
-      res.json(updated);
-    } catch (error) {
-      console.error("Error updating field rule:", error);
-      res.status(500).json({ message: "Internal server error" });
-    }
-  });
-
-  // Delete a field rule
-  app.delete("/api/configurator-templates/:templateId/rules/:ruleId", isAuthenticated, async (req, res) => {
-    try {
-      const ruleParams = ruleIdParamSchema.safeParse(req.params);
-      if (!ruleParams.success) {
-        return res.status(400).json({ 
-          message: "Invalid rule ID", 
-          errors: ruleParams.error.errors 
-        });
-      }
-
-      await db
-        .delete(fieldRules)
-        .where(eq(fieldRules.id, ruleParams.data.ruleId));
-
-      res.status(204).send();
-    } catch (error) {
-      console.error("Error deleting field rule:", error);
-      res.status(500).json({ message: "Internal server error" });
     }
   });
 

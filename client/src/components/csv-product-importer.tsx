@@ -16,21 +16,27 @@ interface CSVRow {
 
 interface ColumnMapping {
   csvColumn: string;
-  productField: 'name' | 'category' | 'retailPrice' | 'unit' | 'description' | 'skip';
+  productField: 'name' | 'manufacturer' | 'category' | 'retailPrice' | 'cost' | 'unit' | 'description' | 'skip';
 }
 
 interface PreviewProduct {
   name: string;
+  manufacturer?: string;
   category?: string;
   unit?: string;
   description?: string;
   retailPrice: number;
+  cost: number;
+  manufacturerDiscount: number;
+  margin: number;
 }
 
 const PRODUCT_FIELDS = [
   { value: 'name', label: 'Product Name' },
+  { value: 'manufacturer', label: 'Manufacturer' },
   { value: 'category', label: 'Category' },
   { value: 'retailPrice', label: 'Retail/Dealer Price' },
+  { value: 'cost', label: 'Your Cost' },
   { value: 'unit', label: 'Unit' },
   { value: 'description', label: 'Description' },
   { value: 'skip', label: 'Skip this column' },
@@ -44,9 +50,6 @@ export function CSVProductImporter() {
   const [previewData, setPreviewData] = useState<PreviewProduct[]>([]);
   const [step, setStep] = useState<'upload' | 'mapping' | 'preview'>('upload');
   const [errors, setErrors] = useState<string[]>([]);
-  const [manufacturer, setManufacturer] = useState<string>('');
-  const [discountType, setDiscountType] = useState<'percentage' | 'dollar'>('percentage');
-  const [discountValue, setDiscountValue] = useState<string>('0');
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -58,11 +61,17 @@ export function CSVProductImporter() {
       if (lowerCol.includes('name') || lowerCol.includes('product') || lowerCol.includes('description') && lowerCol.length < 15) {
         return { csvColumn: col, productField: 'name' };
       }
+      if (lowerCol.includes('manufacturer') || lowerCol.includes('brand') || lowerCol.includes('mfr')) {
+        return { csvColumn: col, productField: 'manufacturer' };
+      }
       if (lowerCol.includes('category') || lowerCol.includes('type')) {
         return { csvColumn: col, productField: 'category' };
       }
-      if (lowerCol.includes('retail') || lowerCol.includes('dealer') || lowerCol.includes('msrp') || lowerCol.includes('list price') || lowerCol.includes('price')) {
+      if (lowerCol.includes('retail') || lowerCol.includes('dealer') || lowerCol.includes('msrp') || lowerCol.includes('list price')) {
         return { csvColumn: col, productField: 'retailPrice' };
+      }
+      if (lowerCol.includes('cost') || lowerCol.includes('your price') || lowerCol.includes('net')) {
+        return { csvColumn: col, productField: 'cost' };
       }
       if (lowerCol.includes('unit') || lowerCol.includes('uom') || lowerCol === 'um') {
         return { csvColumn: col, productField: 'unit' };
@@ -136,8 +145,10 @@ export function CSVProductImporter() {
     let skippedRows = 0;
 
     const nameMapping = columnMappings.find(m => m.productField === 'name');
+    const manufacturerMapping = columnMappings.find(m => m.productField === 'manufacturer');
     const categoryMapping = columnMappings.find(m => m.productField === 'category');
     const retailPriceMapping = columnMappings.find(m => m.productField === 'retailPrice');
+    const costMapping = columnMappings.find(m => m.productField === 'cost');
     const unitMapping = columnMappings.find(m => m.productField === 'unit');
     const descMapping = columnMappings.find(m => m.productField === 'description');
 
@@ -154,30 +165,48 @@ export function CSVProductImporter() {
     }
 
     csvData.forEach((row, index) => {
+      const rowNum = index + 1;
       const name = nameMapping ? String(row[nameMapping.csvColumn] || '').trim() : '';
+      
+      // Only include mapped fields - undefined if not mapped
+      const manufacturer = manufacturerMapping ? String(row[manufacturerMapping.csvColumn] || '').trim() || undefined : undefined;
       const category = categoryMapping ? String(row[categoryMapping.csvColumn] || '').trim() || undefined : undefined;
       const unit = unitMapping ? String(row[unitMapping.csvColumn] || '').trim() || undefined : undefined;
       const description = descMapping ? String(row[descMapping.csvColumn] || '').trim() || undefined : undefined;
+      
       const retailPriceStr = retailPriceMapping ? String(row[retailPriceMapping.csvColumn] || '') : '';
+      const costStr = costMapping ? String(row[costMapping.csvColumn] || '') : '';
 
       if (!name) {
         skippedRows++;
-        return;
+        return; // Skip rows without names
       }
 
       const retailPrice = parsePrice(retailPriceStr);
+      const cost = costMapping ? parsePrice(costStr) : 0;
 
+      // Skip rows with no valid retail price
       if (retailPrice === null || retailPrice <= 0) {
         skippedRows++;
         return;
       }
 
+      // If cost is not mapped or invalid, default to 0
+      const actualCost = cost !== null && cost >= 0 ? cost : 0;
+
+      const manufacturerDiscount = retailPrice - actualCost;
+      const margin = retailPrice > 0 ? ((manufacturerDiscount / retailPrice) * 100) : 0;
+
       preview.push({
         name,
+        manufacturer,
         category,
         unit,
         description,
         retailPrice,
+        cost: actualCost,
+        manufacturerDiscount,
+        margin,
       });
     });
 
@@ -189,6 +218,7 @@ export function CSVProductImporter() {
     setPreviewData(preview);
     setErrors([]);
     
+    // Show info about skipped rows if any
     if (skippedRows > 0) {
       toast({
         title: "Rows Skipped",
@@ -200,12 +230,9 @@ export function CSVProductImporter() {
   };
 
   const importMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (products: PreviewProduct[]) => {
       const response = await apiRequest("POST", "/api/admin/import-csv-products", {
-        products: previewData,
-        manufacturer,
-        discountType,
-        discountValue: parseFloat(discountValue) || 0
+        products
       });
       return response.json();
     },
@@ -234,12 +261,7 @@ export function CSVProductImporter() {
   });
 
   const handleImport = () => {
-    if (!manufacturer.trim()) {
-      setErrors(["Please enter a manufacturer name"]);
-      return;
-    }
-    setErrors([]);
-    importMutation.mutate();
+    importMutation.mutate(previewData);
   };
 
   const resetImporter = () => {
@@ -250,36 +272,18 @@ export function CSVProductImporter() {
     setPreviewData([]);
     setStep('upload');
     setErrors([]);
-    setManufacturer('');
-    setDiscountType('percentage');
-    setDiscountValue('0');
   };
 
   const downloadSampleCSV = () => {
     const sampleData = [
-      { 'Product Name': 'Example Product 1', 'Category': 'Materials', 'Dealer Price': '100.00', 'Unit': 'each' },
-      { 'Product Name': 'Example Product 2', 'Category': 'Labor', 'Dealer Price': '150.00', 'Unit': 'hour' },
+      { 'Product Name': 'Example Product 1', 'Category': 'Materials', 'Dealer Price': '100.00', 'Your Cost': '70.00', 'Unit': 'each' },
+      { 'Product Name': 'Example Product 2', 'Category': 'Labor', 'Dealer Price': '150.00', 'Your Cost': '100.00', 'Unit': 'hour' },
     ];
     
     const ws = XLSX.utils.json_to_sheet(sampleData);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Products");
     XLSX.writeFile(wb, "sample_products.csv");
-  };
-
-  const calculateCost = (retailPrice: number): number => {
-    const discount = parseFloat(discountValue) || 0;
-    if (discountType === 'percentage') {
-      return retailPrice * (1 - discount / 100);
-    } else {
-      return Math.max(0, retailPrice - discount);
-    }
-  };
-
-  const calculateMargin = (retailPrice: number): number => {
-    const cost = calculateCost(retailPrice);
-    const discountAmount = retailPrice - cost;
-    return retailPrice > 0 ? (discountAmount / retailPrice) * 100 : 0;
   };
 
   return (
@@ -403,65 +407,16 @@ export function CSVProductImporter() {
             <Alert>
               <CheckCircle className="h-4 w-4" />
               <AlertDescription>
-                Found {previewData.length} valid products. Set manufacturer and discount details below.
+                Found {previewData.length} valid products. Review below and click Import to add them to your catalog.
               </AlertDescription>
             </Alert>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-gray-50 rounded-lg">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Manufacturer</label>
-                <Input
-                  type="text"
-                  placeholder="Enter manufacturer name"
-                  value={manufacturer}
-                  onChange={(e) => setManufacturer(e.target.value)}
-                  data-testid="input-manufacturer"
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Discount Type</label>
-                <Select value={discountType} onValueChange={(value: 'percentage' | 'dollar') => setDiscountType(value)}>
-                  <SelectTrigger data-testid="select-discount-type">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="percentage">Percentage (%)</SelectItem>
-                    <SelectItem value="dollar">Dollar Amount ($)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Discount Value</label>
-                <Input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  placeholder={discountType === 'percentage' ? '0' : '0.00'}
-                  value={discountValue}
-                  onChange={(e) => setDiscountValue(e.target.value)}
-                  data-testid="input-discount-value"
-                />
-              </div>
-            </div>
-
-            {errors.length > 0 && (
-              <Alert variant="destructive">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>
-                  {errors.map((error, index) => (
-                    <div key={index}>{error}</div>
-                  ))}
-                </AlertDescription>
-              </Alert>
-            )}
 
             <div className="bg-gray-50 p-4 rounded-lg max-h-96 overflow-auto">
               <table className="w-full text-sm">
                 <thead className="sticky top-0 bg-gray-100">
                   <tr className="border-b">
                     <th className="text-left py-2 px-2">Name</th>
+                    <th className="text-left py-2 px-2">Manufacturer</th>
                     <th className="text-left py-2 px-2">Category</th>
                     <th className="text-left py-2 px-2">Unit</th>
                     <th className="text-right py-2 px-2">Retail Price</th>
@@ -471,23 +426,18 @@ export function CSVProductImporter() {
                   </tr>
                 </thead>
                 <tbody>
-                  {previewData.map((product, index) => {
-                    const cost = calculateCost(product.retailPrice);
-                    const discount = product.retailPrice - cost;
-                    const margin = calculateMargin(product.retailPrice);
-                    
-                    return (
-                      <tr key={index} className="border-b" data-testid={`row-preview-${index}`}>
-                        <td className="py-1 px-2">{product.name}</td>
-                        <td className="py-1 px-2">{product.category || '-'}</td>
-                        <td className="py-1 px-2">{product.unit || '-'}</td>
-                        <td className="py-1 px-2 text-right">${product.retailPrice.toFixed(2)}</td>
-                        <td className="py-1 px-2 text-right text-green-600">${cost.toFixed(2)}</td>
-                        <td className="py-1 px-2 text-right text-blue-600">${discount.toFixed(2)}</td>
-                        <td className="py-1 px-2 text-right text-purple-600">{margin.toFixed(1)}%</td>
-                      </tr>
-                    );
-                  })}
+                  {previewData.map((product, index) => (
+                    <tr key={index} className="border-b" data-testid={`row-preview-${index}`}>
+                      <td className="py-1 px-2">{product.name}</td>
+                      <td className="py-1 px-2">{product.manufacturer || '-'}</td>
+                      <td className="py-1 px-2">{product.category || '-'}</td>
+                      <td className="py-1 px-2">{product.unit || '-'}</td>
+                      <td className="py-1 px-2 text-right">${product.retailPrice.toFixed(2)}</td>
+                      <td className="py-1 px-2 text-right text-green-600">${product.cost.toFixed(2)}</td>
+                      <td className="py-1 px-2 text-right text-blue-600">${product.manufacturerDiscount.toFixed(2)}</td>
+                      <td className="py-1 px-2 text-right text-purple-600">{product.margin.toFixed(1)}%</td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
