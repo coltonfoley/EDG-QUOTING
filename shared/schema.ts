@@ -423,6 +423,7 @@ export const insertPricingTableSchema = createInsertSchema(pricingTables).omit({
   widthMax: z.union([z.string(), z.number()]).transform(val => typeof val === 'string' ? val : val.toString()),
   retailPrice: z.union([z.string(), z.number()]).transform(val => typeof val === 'string' ? val : val.toString()),
   basePrice: z.union([z.string(), z.number()]).transform(val => typeof val === 'string' ? val : val.toString()),
+  housingCode: z.string().optional().nullable(),
 });
 
 export const insertProductAccessorySchema = createInsertSchema(productAccessories).omit({
