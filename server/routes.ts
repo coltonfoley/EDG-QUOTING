@@ -2064,9 +2064,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { sendEmail } = await import("./gmail");
 
       // Get the base URL from environment or construct it
-      const baseUrl = process.env.REPLIT_DEV_DOMAIN 
-        ? `https://${process.env.REPLIT_DEV_DOMAIN}` 
-        : req.get('origin') || `${req.protocol}://${req.get('host')}`;
+      // Prioritize production domain (REPLIT_DOMAINS) over dev domain
+      const baseUrl = process.env.REPLIT_DOMAINS
+        ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}` // Use the first published domain
+        : process.env.REPLIT_DEV_DOMAIN 
+          ? `https://${process.env.REPLIT_DEV_DOMAIN}` 
+          : req.get('origin') || `${req.protocol}://${req.get('host')}`;
       
       const signingUrl = `${baseUrl}/sign/${quote.signingToken}`;
 
