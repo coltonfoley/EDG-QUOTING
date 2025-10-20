@@ -220,6 +220,7 @@ export const pricingTables = pgTable("pricing_tables", {
   widthMax: decimal("width_max", { precision: 8, scale: 2 }).notNull(),
   retailPrice: decimal("retail_price", { precision: 10, scale: 2 }).notNull(),
   basePrice: decimal("base_price", { precision: 10, scale: 2 }).notNull(),
+  housingCode: text("housing_code"), // Housing code for configurable products (e.g., H6EX, H75EX, H85EX)
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => [
   index("idx_pricing_tables_product_id").on(table.productId),
