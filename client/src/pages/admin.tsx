@@ -15,7 +15,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
-import { UserPlus, Shield, User as UserIcon, Trash2, Edit, FileSpreadsheet, Package, Settings, FileText, DollarSign, Code } from "lucide-react";
+import { UserPlus, Shield, User as UserIcon, Trash2, Edit, FileSpreadsheet, Package, Settings, FileText, DollarSign } from "lucide-react";
 import { z } from "zod";
 import type { User, Product } from "@shared/schema";
 import { CSVProductImporter } from "@/components/csv-product-importer";
@@ -241,14 +241,6 @@ export default function AdminPage() {
             >
               <DollarSign className="inline mr-2 h-4 w-4" />
               QuickBooks
-            </Link>
-            <Link 
-              href="/admin/configurators"
-              className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-edg-black hover:border-b-2 hover:border-gray-300 transition-colors"
-              data-testid="link-admin-configurators"
-            >
-              <Code className="inline mr-2 h-4 w-4" />
-              Configurators
             </Link>
           </div>
         </div>

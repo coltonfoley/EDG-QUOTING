@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { AppHeader } from "@/components/app-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -190,22 +190,9 @@ export default function Products() {
 
   const categories = useMemo(() => {
     if (!products) return [];
-    
-    // Filter categories based on selected manufacturer
-    const relevantProducts = selectedManufacturer === "all" 
-      ? products 
-      : products.filter(p => (p.manufacturer || "Unknown") === selectedManufacturer);
-    
-    const uniqueCategories = Array.from(new Set(relevantProducts.map(p => p.category || "Uncategorized").filter(Boolean)));
+    const uniqueCategories = Array.from(new Set(products.map(p => p.category || "Uncategorized").filter(Boolean)));
     return uniqueCategories.sort();
-  }, [products, selectedManufacturer]);
-
-  // Reset category when manufacturer changes if selected category is not available
-  useEffect(() => {
-    if (selectedCategory !== "all" && !categories.includes(selectedCategory)) {
-      setSelectedCategory("all");
-    }
-  }, [selectedManufacturer, categories, selectedCategory]);
+  }, [products]);
 
   const filteredProducts = useMemo(() => {
     if (!products) return [];
