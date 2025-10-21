@@ -161,11 +161,12 @@ export function calculateLineItemTotal(
  * 
  * Margin Calculation:
  * - Applies manufacturer discount to base cost first
- * - Applies tariff to increase cost (if applicable)
- * - Calculates markup amount on the tariff-adjusted cost
+ * - Calculates markup amount on the discounted cost (BEFORE tariff)
  * - Returns the markup amount as the margin
  * 
- * This ensures margin reflects actual profit after manufacturer discounts and tariffs.
+ * Note: Tariff is NOT included in margin calculation as it's a pass-through cost,
+ * similar to sales tax. Tariff still applies to customer price (in calculateLineItemTotal),
+ * but doesn't count as our profit margin.
  * 
  * @param quantity - Number of items
  * @param unitPrice - Price per item
@@ -173,8 +174,8 @@ export function calculateLineItemTotal(
  * @param markupValue - Markup amount
  * @param discountType - Manufacturer discount type
  * @param discountValue - Manufacturer discount amount
- * @param tariffRate - Tariff percentage to increase cost
- * @param isTariffApplicable - Whether tariff should be applied to this item
+ * @param tariffRate - Tariff percentage (not used in margin calculation, kept for signature compatibility)
+ * @param isTariffApplicable - Whether tariff applies (not used in margin calculation, kept for signature compatibility)
  * @returns Margin amount rounded to 2 decimal places
  */
 export function calculateLineItemMargin(
@@ -192,14 +193,12 @@ export function calculateLineItemMargin(
   const price = typeof unitPrice === 'string' ? parseFloat(sanitizeNumberString(unitPrice)) : unitPrice;
   const markup = typeof markupValue === 'string' ? parseFloat(sanitizeNumberString(markupValue)) : markupValue;
   const discount = typeof discountValue === 'string' ? parseFloat(sanitizeNumberString(discountValue)) : discountValue;
-  const tariff = typeof tariffRate === 'string' ? parseFloat(sanitizeNumberString(tariffRate)) : tariffRate;
 
   // Validate inputs
   if (!isValidNumber(qty) || qty <= 0 || qty > 999999) return 0;
   if (!isValidNumber(price) || price < 0 || price > 10000000) return 0;
   if (isNaN(markup) || !Number.isFinite(markup) || markup < -10000000 || markup > 10000000) return 0;
   if (!isValidNumber(discount) || discount < 0) return 0;
-  if (!isValidNumber(tariff) || tariff < 0) return 0;
 
   // Clamp values to safe ranges
   const safeQty = clampValue(qty, 0.01, 999999);
@@ -208,7 +207,6 @@ export function calculateLineItemMargin(
   const safeDiscount = discountType === 'percentage' 
     ? clampValue(discount, 0, 100)
     : clampValue(discount, 0, 10000000);
-  const safeTariff = clampValue(tariff, 0, 100);
 
   // Calculate base total with overflow protection
   const baseTotal = safeMultiply(safeQty, safePrice);
@@ -224,17 +222,11 @@ export function calculateLineItemMargin(
     }
   }
   
-  // Apply tariff to increase cost (if applicable)
-  let afterTariff = afterDiscount;
-  if (isTariffApplicable && safeTariff > 0) {
-    const tariffAmount = safeMultiply(afterDiscount, safeDivide(safeTariff, 100));
-    afterTariff = safeAdd(afterDiscount, tariffAmount);
-  }
-  
-  // Calculate markup on the tariff-adjusted amount
+  // Calculate markup on the DISCOUNTED cost (WITHOUT tariff)
+  // Tariff is a pass-through cost and should not count as profit margin
   let marginAmount = 0;
   if (markupType === 'percentage') {
-    marginAmount = safeMultiply(afterTariff, safeDivide(safeMarkup, 100));
+    marginAmount = safeMultiply(afterDiscount, safeDivide(safeMarkup, 100));
   } else {
     marginAmount = safeMarkup;
   }
@@ -268,11 +260,11 @@ export function calculateLineItemMargin(
  * @param taxRate - Tax percentage (0-100)
  * @param discount - Quote-level discount percentage (0-100)
  * @param shipping - Fixed shipping amount (0-1,000,000)
- * @param isShippingTaxable - Whether shipping is subject to sales tax (defaults to true)
+ * @param isShippingTaxable - Whether shipping is subject to sales tax (defaults to false)
  * @param tariffRate - Tariff percentage to increase cost (0-100)
  * @returns Object with subtotal, discounts, tax, total, and margin
  */
-export function calculateQuoteTotals(lineItems: any[], taxRate: number | string = 0, discount: number | string = 0, shipping: number | string = 0, isShippingTaxable: boolean = true, tariffRate: number | string = 0) {
+export function calculateQuoteTotals(lineItems: any[], taxRate: number | string = 0, discount: number | string = 0, shipping: number | string = 0, isShippingTaxable: boolean = false, tariffRate: number | string = 0) {
   // Safely parse and validate inputs
   const tax = typeof taxRate === 'string' ? parseFloat(sanitizeNumberString(taxRate)) : taxRate;
   const disc = typeof discount === 'string' ? parseFloat(sanitizeNumberString(discount)) : discount;

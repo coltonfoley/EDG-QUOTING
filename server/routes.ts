@@ -1302,7 +1302,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         taxRate: baseQuoteData.taxRate || "0",
         discount: baseQuoteData.discount || "0", 
         shipping: baseQuoteData.shipping || "0",
-        isShippingTaxable: true,
+        isShippingTaxable: false,
         dealStage: baseQuoteData.dealStage || "new_lead",
         jobsiteAddress: baseQuoteData.jobsiteAddress || undefined,
         lostReason: baseQuoteData.lostReason || undefined,
@@ -1586,7 +1586,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             taxRate: '0',
             discount: '0',
             shipping: '0',
-            isShippingTaxable: true,
+            isShippingTaxable: false,
             dealStage: 'new_lead' as const
           };
 
@@ -1679,7 +1679,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               taxRate: extractedQuote.taxRate?.toString() || '0',
               discount: '0',
               shipping: '0',
-              isShippingTaxable: true,
+              isShippingTaxable: false,
               dealStage: 'new_lead' as const
             };
 

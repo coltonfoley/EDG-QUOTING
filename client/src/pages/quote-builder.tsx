@@ -227,7 +227,7 @@ export default function QuoteBuilder() {
     tariffRate: "0",
     discount: "0",
     shipping: "0",
-    isShippingTaxable: true,
+    isShippingTaxable: false,
     dealStage: "new_lead",
     lostReason: null,
     contractTemplateId: null,
