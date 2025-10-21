@@ -1298,7 +1298,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         projectName: baseQuoteData.projectName || "",
         projectAddress: baseQuoteData.projectAddress || "",
         estimatedStartDate: baseQuoteData.estimatedStartDate || "",
-        notes: baseQuoteData.notes || "UNLESS OTHERWISE STATED, PRICING DOES NOT INCLUDE LIFT, FRAMING, FOOTINGS, AND/OR ELECTRICAL",
+        notes: baseQuoteData.notes || "",
         taxRate: baseQuoteData.taxRate || "0",
         discount: baseQuoteData.discount || "0", 
         shipping: baseQuoteData.shipping || "0",
