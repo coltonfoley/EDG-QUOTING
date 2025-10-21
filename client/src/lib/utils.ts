@@ -334,8 +334,24 @@ export function calculateQuoteTotals(lineItems: any[], taxRate: number | string 
     }
   }
 
+  // Calculate markup by summing individual line item margins (excludes tariff from profit)
+  let totalMarkup = 0;
+  for (const item of lineItems) {
+    const marginAmount = calculateLineItemMargin(
+      item.quantity,
+      item.unitPrice,
+      item.markupType,
+      item.markupValue,
+      item.discountType || "percentage",
+      item.discountValue || 0,
+      tariffRate,
+      item.isTariffApplicable || false
+    );
+    totalMarkup = safeAdd(totalMarkup, marginAmount);
+  }
+  totalMarkup = Math.max(0, totalMarkup);
+  
   // Calculate markup, discount, tax with proper order of operations
-  const totalMarkup = Math.max(0, subtotal - baseCost + totalManufacturerDiscount);
   const discountAmount = safeDiscount > 0 ? safeMultiply(subtotal, safeDivide(safeDiscount, 100)) : 0;
   const afterDiscount = Math.max(0, subtotal - discountAmount);
   
