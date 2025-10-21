@@ -203,7 +203,9 @@ function calculateInvestmentTotals(quote: any) {
       item.markupType,
       item.markupValue,
       item.discountType || 'percentage',
-      item.discountValue || 0
+      item.discountValue || 0,
+      quote.tariffRate || 0,
+      item.isTariffApplicable || false
     );
     subtotal += total;
     
@@ -589,7 +591,9 @@ export function drawLineItemsSection(pdf: jsPDF, opts: DrawLineItemsSectionOpts)
         item.markupType,
         item.markupValue,
         item.discountType || 'percentage',
-        item.discountValue || 0
+        item.discountValue || 0,
+        quote.tariffRate || 0,
+        item.isTariffApplicable || false
       );
       const unitPrice = qty > 0 ? total / qty : 0;
 
