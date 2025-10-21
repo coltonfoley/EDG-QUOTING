@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -30,6 +30,7 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
   const [localDiscount, setLocalDiscount] = useState<string>("");
   const [localShipping, setLocalShipping] = useState<string>("");
   const [localNotes, setLocalNotes] = useState<string>("");
+  const [isEditingNotes, setIsEditingNotes] = useState(false);
   const [localCustomContractTerms, setLocalCustomContractTerms] = useState<string>("");
   const [showSigningLinkDialog, setShowSigningLinkDialog] = useState(false);
   const [signingLink, setSigningLink] = useState<string>("");
@@ -39,6 +40,12 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
+  // Sync localNotes with quote.notes when not editing
+  useEffect(() => {
+    if (!isEditingNotes) {
+      setLocalNotes(quote.notes || "");
+    }
+  }, [quote.notes, isEditingNotes]);
 
   // Fetch available contract templates
   const { data: contractTemplates = [] } = useQuery<ContractTemplate[]>({
@@ -298,13 +305,14 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
               <Textarea
                 id="notes"
                 rows={4}
-                value={localNotes || quote.notes || ""}
+                value={localNotes}
+                onFocus={() => setIsEditingNotes(true)}
                 onChange={(e) => setLocalNotes(e.target.value)}
-                onBlur={(e) => {
-                  if (localNotes !== "" && localNotes !== quote.notes) {
+                onBlur={() => {
+                  if (localNotes !== quote.notes) {
                     onUpdateQuote("notes", localNotes);
                   }
-                  setLocalNotes("");
+                  setIsEditingNotes(false);
                 }}
                 placeholder="Add project notes, terms, or special conditions..."
                 className="mt-1"
