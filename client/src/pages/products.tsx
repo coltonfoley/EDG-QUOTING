@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { AppHeader } from "@/components/app-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -190,9 +190,20 @@ export default function Products() {
 
   const categories = useMemo(() => {
     if (!products) return [];
-    const uniqueCategories = Array.from(new Set(products.map(p => p.category || "Uncategorized").filter(Boolean)));
+    
+    const productsToConsider = selectedManufacturer === "all" 
+      ? products 
+      : products.filter(p => (p.manufacturer || "Unknown") === selectedManufacturer);
+    
+    const uniqueCategories = Array.from(new Set(productsToConsider.map(p => p.category || "Uncategorized").filter(Boolean)));
     return uniqueCategories.sort();
-  }, [products]);
+  }, [products, selectedManufacturer]);
+
+  useEffect(() => {
+    if (selectedCategory !== "all" && !categories.includes(selectedCategory)) {
+      setSelectedCategory("all");
+    }
+  }, [selectedManufacturer, categories, selectedCategory]);
 
   const filteredProducts = useMemo(() => {
     if (!products) return [];
