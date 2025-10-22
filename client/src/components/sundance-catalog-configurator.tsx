@@ -7,7 +7,7 @@ import { Loader2 } from 'lucide-react';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import { formatCurrency } from '@/lib/utils';
-import type { Product } from '@shared/schema';
+import type { Product, Color, ProductColor } from '@shared/schema';
 
 interface SundanceCatalogConfiguratorProps {
   quoteId: number;
@@ -23,6 +23,10 @@ interface ProductQuantity {
   [productId: number]: number;
 }
 
+interface ProductColorSelection {
+  [productId: number]: number[]; // Array of selected color IDs
+}
+
 export function SundanceCatalogConfigurator({ 
   quoteId, 
   onInsert, 
@@ -30,6 +34,7 @@ export function SundanceCatalogConfigurator({
 }: SundanceCatalogConfiguratorProps) {
   const { toast } = useToast();
   const [quantities, setQuantities] = useState<ProductQuantity>({});
+  const [selectedColors, setSelectedColors] = useState<ProductColorSelection>({});
 
   const { data: products, isLoading } = useQuery<Product[]>({
     queryKey: ['/api/products', 'Sundance'],
@@ -37,6 +42,26 @@ export function SundanceCatalogConfigurator({
       const response = await apiRequest('GET', '/api/products?manufacturer=Sundance');
       return response.json();
     },
+  });
+
+  // Fetch all product colors for Sundance products
+  const { data: productColorsMap } = useQuery<Record<number, (ProductColor & { color: Color })[]>>({
+    queryKey: ['/api/product-colors', 'Sundance'],
+    queryFn: async () => {
+      if (!products) return {};
+      const colorMap: Record<number, (ProductColor & { color: Color })[]> = {};
+      
+      for (const product of products) {
+        const response = await apiRequest('GET', `/api/products/${product.id}/colors`);
+        const colors = await response.json();
+        if (colors.length > 0) {
+          colorMap[product.id] = colors;
+        }
+      }
+      
+      return colorMap;
+    },
+    enabled: !!products && products.length > 0,
   });
 
   const insertMutation = useMutation({
@@ -81,11 +106,31 @@ export function SundanceCatalogConfigurator({
     }));
   };
 
+  const handleColorToggle = (productId: number, colorId: number) => {
+    setSelectedColors(prev => {
+      const current = prev[productId] || [];
+      const exists = current.includes(colorId);
+      
+      return {
+        ...prev,
+        [productId]: exists 
+          ? current.filter(id => id !== colorId)
+          : [...current, colorId]
+      };
+    });
+  };
+
   const handleInsert = () => {
     const items = Object.entries(quantities)
       .filter(([_, qty]) => qty > 0)
       .map(([productId, quantity]) => {
         const product = products!.find(p => p.id === parseInt(productId));
+        const colors = selectedColors[parseInt(productId)] || [];
+        const colorDetails = colors.map(colorId => {
+          const productColorEntry = productColorsMap?.[parseInt(productId)]?.find(pc => pc.colorId === colorId);
+          return productColorEntry?.color;
+        }).filter(Boolean);
+
         return {
           productId: parseInt(productId),
           quantity,
@@ -99,6 +144,10 @@ export function SundanceCatalogConfigurator({
             unit: product!.unit,
             defaultDiscountType: product!.defaultDiscountType,
             defaultDiscountValue: product!.defaultDiscountValue,
+          },
+          // Include selected colors in configData
+          configData: {
+            colors: colorDetails,
           }
         };
       });
@@ -161,7 +210,11 @@ export function SundanceCatalogConfigurator({
                   {category}
                 </h4>
                 <div className="space-y-2">
-                  {categoryProducts.map((product) => (
+                  {categoryProducts.map((product) => {
+                    const productColors = productColorsMap?.[product.id] || [];
+                    const hasColors = productColors.length > 0;
+                    
+                    return (
                     <div 
                       key={product.id} 
                       className="grid grid-cols-[1fr_100px_120px_120px] gap-4 items-center p-3 rounded hover:bg-muted/50 transition-colors"
@@ -174,6 +227,28 @@ export function SundanceCatalogConfigurator({
                         {product.description && (
                           <div className="text-xs text-muted-foreground truncate" title={product.description}>
                             {product.description}
+                          </div>
+                        )}
+                        {hasColors && (
+                          <div className="flex gap-1 mt-2 flex-wrap">
+                            {productColors.map((pc) => (
+                              <button
+                                key={pc.color.id}
+                                onClick={() => handleColorToggle(product.id, pc.color.id)}
+                                className={`w-6 h-6 rounded-full border-2 transition-all ${
+                                  selectedColors[product.id]?.includes(pc.color.id)
+                                    ? 'border-blue-500 scale-110 shadow-md'
+                                    : 'border-gray-300 hover:border-gray-400'
+                                }`}
+                                style={{ backgroundColor: pc.color.hexCode }}
+                                title={pc.color.name}
+                                data-testid={`color-${product.id}-${pc.color.id}`}
+                              >
+                                {selectedColors[product.id]?.includes(pc.color.id) && (
+                                  <span className="text-white text-xs font-bold">✓</span>
+                                )}
+                              </button>
+                            ))}
                           </div>
                         )}
                       </div>
@@ -194,7 +269,8 @@ export function SundanceCatalogConfigurator({
                         {formatCurrency((quantities[product.id] || 0) * parseFloat(product.retailPrice))}
                       </div>
                     </div>
-                  ))}
+                  );
+                  })}
                 </div>
               </div>
             ))}

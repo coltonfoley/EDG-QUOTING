@@ -244,6 +244,27 @@ export const productAccessories = pgTable("product_accessories", {
   index("idx_product_accessories_accessory_product").on(table.accessoryProductId),
 ]);
 
+// Colors table - predefined color options for products
+export const colors = pgTable("colors", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(), // e.g., "White", "Black", "Bronze"
+  hexCode: text("hex_code").notNull(), // e.g., "#FFFFFF", "#000000"
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_colors_name").on(table.name),
+]);
+
+// Product colors - junction table linking products to their available colors
+export const productColors = pgTable("product_colors", {
+  id: serial("id").primaryKey(),
+  productId: integer("product_id").notNull(),
+  colorId: integer("color_id").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_product_colors_product_id").on(table.productId),
+  index("idx_product_colors_color_id").on(table.colorId),
+]);
+
 // Groups table for organizing line items
 export const groups = pgTable("groups", {
   id: text("id").primaryKey(), // UUID for groups
@@ -435,6 +456,16 @@ export const insertProductAccessorySchema = createInsertSchema(productAccessorie
   createdAt: true,
 });
 
+export const insertColorSchema = createInsertSchema(colors).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertProductColorSchema = createInsertSchema(productColors).omit({
+  id: true,
+  createdAt: true,
+});
+
 export const insertGroupSchema = createInsertSchema(groups).omit({
   createdAt: true,
   updatedAt: true,
@@ -505,6 +536,8 @@ export type Group = typeof groups.$inferSelect;
 export type ContractTemplate = typeof contractTemplates.$inferSelect;
 export type PricingTable = typeof pricingTables.$inferSelect;
 export type ProductAccessory = typeof productAccessories.$inferSelect;
+export type Color = typeof colors.$inferSelect;
+export type ProductColor = typeof productColors.$inferSelect;
 export type QuoteCoverPhoto = typeof quoteCoverPhotos.$inferSelect;
 export type QuoteProductRendering = typeof quoteProductRenderings.$inferSelect;
 export type IssueReport = typeof issueReports.$inferSelect;
@@ -520,6 +553,8 @@ export type InsertGroup = z.infer<typeof insertGroupSchema>;
 export type InsertContractTemplate = z.infer<typeof insertContractTemplateSchema>;
 export type InsertPricingTable = z.infer<typeof insertPricingTableSchema>;
 export type InsertProductAccessory = z.infer<typeof insertProductAccessorySchema>;
+export type InsertColor = z.infer<typeof insertColorSchema>;
+export type InsertProductColor = z.infer<typeof insertProductColorSchema>;
 export type InsertQuoteCoverPhoto = z.infer<typeof insertQuoteCoverPhotoSchema>;
 export type InsertQuoteProductRendering = z.infer<typeof insertQuoteProductRenderingSchema>;
 export type InsertIssueReport = z.infer<typeof insertIssueReportSchema>;

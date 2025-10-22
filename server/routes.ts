@@ -4,7 +4,7 @@ import { storage } from "./storage";
 import { z } from "zod";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import { db } from "./db";
-import { accounts, products } from "@shared/schema";
+import { accounts, products, insertColorSchema, insertProductColorSchema } from "@shared/schema";
 import { eq, or, ilike, and } from "drizzle-orm";
 import {
   insertAccountSchema,
@@ -3405,6 +3405,97 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const deleted = await storage.deleteProductAccessory(id);
       if (!deleted) {
         return res.status(404).json({ message: "Product accessory not found" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // Color routes
+  app.get("/api/colors", isAuthenticated, async (req, res) => {
+    try {
+      const colors = await storage.getAllColors();
+      res.json(colors);
+    } catch (error) {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.post("/api/colors", isAuthenticated, async (req, res) => {
+    try {
+      const colorData = insertColorSchema.parse(req.body);
+      const color = await storage.createColor(colorData);
+      res.status(201).json(color);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid color data", errors: error.errors });
+      }
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.put("/api/colors/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const colorData = insertColorSchema.partial().parse(req.body);
+      const color = await storage.updateColor(id, colorData);
+      if (!color) {
+        return res.status(404).json({ message: "Color not found" });
+      }
+      res.json(color);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid color data", errors: error.errors });
+      }
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.delete("/api/colors/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const deleted = await storage.deleteColor(id);
+      if (!deleted) {
+        return res.status(404).json({ message: "Color not found" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // Product color routes
+  app.get("/api/products/:productId/colors", isAuthenticated, async (req, res) => {
+    try {
+      const productId = parseInt(req.params.productId);
+      const productColors = await storage.getProductColors(productId);
+      res.json(productColors);
+    } catch (error) {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.post("/api/products/:productId/colors", isAuthenticated, async (req, res) => {
+    try {
+      const productId = parseInt(req.params.productId);
+      const productColorData = insertProductColorSchema.parse({ ...req.body, productId });
+      const productColor = await storage.createProductColor(productColorData);
+      res.status(201).json(productColor);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid product color data", errors: error.errors });
+      }
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.delete("/api/product-colors/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const deleted = await storage.deleteProductColor(id);
+      if (!deleted) {
+        return res.status(404).json({ message: "Product color not found" });
       }
       res.status(204).send();
     } catch (error) {
