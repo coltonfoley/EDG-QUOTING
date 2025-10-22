@@ -1,4 +1,4 @@
-import { accounts, customers, quotes, lineItems, groups, products, users, apiKeys, contractTemplates, pricingTables, productAccessories, quoteCoverPhotos, quoteProductRenderings, issueReports, quickbooksSettings, type Account, type Customer, type Quote, type LineItem, type Group, type Product, type User, type ApiKey, type ContractTemplate, type PricingTable, type ProductAccessory, type QuoteCoverPhoto, type QuoteProductRendering, type IssueReport, type QuickBooksSettings, type InsertAccount, type InsertCustomer, type InsertQuote, type InsertLineItem, type InsertGroup, type InsertProduct, type InsertUser, type InsertApiKey, type InsertContractTemplate, type InsertPricingTable, type InsertProductAccessory, type InsertQuoteCoverPhoto, type InsertQuoteProductRendering, type InsertIssueReport, type QuoteWithDetails, type ProductWithDetails } from "@shared/schema";
+import { accounts, customers, quotes, lineItems, groups, products, users, apiKeys, contractTemplates, pricingTables, productAccessories, colors, productColors, quoteCoverPhotos, quoteProductRenderings, issueReports, quickbooksSettings, type Account, type Customer, type Quote, type LineItem, type Group, type Product, type User, type ApiKey, type ContractTemplate, type PricingTable, type ProductAccessory, type Color, type ProductColor, type QuoteCoverPhoto, type QuoteProductRendering, type IssueReport, type QuickBooksSettings, type InsertAccount, type InsertCustomer, type InsertQuote, type InsertLineItem, type InsertGroup, type InsertProduct, type InsertUser, type InsertApiKey, type InsertContractTemplate, type InsertPricingTable, type InsertProductAccessory, type InsertColor, type InsertProductColor, type InsertQuoteCoverPhoto, type InsertQuoteProductRendering, type InsertIssueReport, type QuoteWithDetails, type ProductWithDetails } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, asc, inArray, sql, and, ne, or, ilike } from "drizzle-orm";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
@@ -104,6 +104,19 @@ export interface IStorage {
   createProductAccessory(accessory: InsertProductAccessory): Promise<ProductAccessory>;
   updateProductAccessory(id: number, accessory: Partial<InsertProductAccessory>): Promise<ProductAccessory | undefined>;
   deleteProductAccessory(id: number): Promise<boolean>;
+
+  // Color methods
+  getAllColors(): Promise<Color[]>;
+  getColor(id: number): Promise<Color | undefined>;
+  createColor(color: InsertColor): Promise<Color>;
+  updateColor(id: number, color: Partial<InsertColor>): Promise<Color | undefined>;
+  deleteColor(id: number): Promise<boolean>;
+
+  // Product color methods
+  getProductColors(productId: number): Promise<(ProductColor & { color: Color })[]>;
+  createProductColor(productColor: InsertProductColor): Promise<ProductColor>;
+  deleteProductColor(id: number): Promise<boolean>;
+  deleteProductColorsByProductId(productId: number): Promise<boolean>;
 
   // Line item methods
   getLineItem(id: number): Promise<LineItem | undefined>;
@@ -1804,6 +1817,70 @@ export class DatabaseStorage implements IStorage {
 
   async deleteProductAccessory(id: number): Promise<boolean> {
     const result = await db.delete(productAccessories).where(eq(productAccessories.id, id));
+    return (result.rowCount || 0) > 0;
+  }
+
+  // Color methods
+  async getAllColors(): Promise<Color[]> {
+    return await db.select().from(colors).orderBy(asc(colors.name));
+  }
+
+  async getColor(id: number): Promise<Color | undefined> {
+    const [color] = await db.select().from(colors).where(eq(colors.id, id));
+    return color || undefined;
+  }
+
+  async createColor(insertColor: InsertColor): Promise<Color> {
+    const [color] = await db.insert(colors).values(insertColor).returning();
+    return color;
+  }
+
+  async updateColor(id: number, colorData: Partial<InsertColor>): Promise<Color | undefined> {
+    const [updated] = await db
+      .update(colors)
+      .set(colorData)
+      .where(eq(colors.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteColor(id: number): Promise<boolean> {
+    const result = await db.delete(colors).where(eq(colors.id, id));
+    return (result.rowCount || 0) > 0;
+  }
+
+  // Product color methods
+  async getProductColors(productId: number): Promise<(ProductColor & { color: Color })[]> {
+    const productColorLinks = await db
+      .select({
+        id: productColors.id,
+        productId: productColors.productId,
+        colorId: productColors.colorId,
+        createdAt: productColors.createdAt,
+        color: colors,
+      })
+      .from(productColors)
+      .leftJoin(colors, eq(productColors.colorId, colors.id))
+      .where(eq(productColors.productId, productId));
+
+    return productColorLinks as (ProductColor & { color: Color })[];
+  }
+
+  async createProductColor(insertProductColor: InsertProductColor): Promise<ProductColor> {
+    const [productColor] = await db
+      .insert(productColors)
+      .values(insertProductColor)
+      .returning();
+    return productColor;
+  }
+
+  async deleteProductColor(id: number): Promise<boolean> {
+    const result = await db.delete(productColors).where(eq(productColors.id, id));
+    return (result.rowCount || 0) > 0;
+  }
+
+  async deleteProductColorsByProductId(productId: number): Promise<boolean> {
+    const result = await db.delete(productColors).where(eq(productColors.productId, productId));
     return (result.rowCount || 0) > 0;
   }
 
