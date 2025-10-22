@@ -1222,6 +1222,34 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
             className="border-0 bg-transparent p-1 text-sm focus:ring-1 focus:ring-blue-500"
             data-testid={`input-description-${item.id}`}
           />
+          {(() => {
+            try {
+              const configData = item.configData ? (typeof item.configData === 'string' ? JSON.parse(item.configData) : item.configData) : null;
+              const colors = configData?.colors;
+              if (colors && Array.isArray(colors) && colors.length > 0) {
+                return (
+                  <div className="flex gap-1 mt-1 flex-wrap">
+                    {colors.map((color: { name: string; hexCode: string }, idx: number) => (
+                      <div 
+                        key={idx}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-100 rounded text-xs"
+                        data-testid={`color-badge-${item.id}-${idx}`}
+                      >
+                        <div 
+                          className="w-3 h-3 rounded-full border border-gray-300"
+                          style={{ backgroundColor: color.hexCode }}
+                        />
+                        <span>{color.name}</span>
+                      </div>
+                    ))}
+                  </div>
+                );
+              }
+            } catch (e) {
+              // Silent fail if configData is malformed
+            }
+            return null;
+          })()}
           {validationErrors[`${item.id}-description`] && (
             <div className="text-xs text-red-500 mt-1">{validationErrors[`${item.id}-description`]}</div>
           )}
