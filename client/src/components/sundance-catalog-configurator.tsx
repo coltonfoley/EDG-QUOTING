@@ -33,11 +33,11 @@ interface CategoryColorSelection {
 
 // Category order matching the PDF
 const CATEGORY_ORDER = [
-  'extrusion',
-  'gutters',
-  'louvers',
-  'posts',
-  'motors',
+  'Extrusion',
+  'Gutters',
+  'Louvers',
+  'Posts',
+  'Motors',
   'Control Box, Remote, and Rain Sensor',
   'Connection Brackets - Fasteners - Caulk',
   'Shop Drawings',
