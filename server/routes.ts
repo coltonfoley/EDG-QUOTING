@@ -2994,6 +2994,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           productId: number; 
           quantity: number;
           productSnapshot: any;
+          configData?: any;
         }[] 
       };
 
@@ -3081,6 +3082,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           isTaxable: true,
           groupId,
           position: itemPosition++,
+          configData: item.configData ? JSON.stringify(item.configData) : undefined,
         });
       }
 
