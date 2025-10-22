@@ -3468,6 +3468,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Product color routes
+  app.get("/api/products/colors/batch", isAuthenticated, async (req, res) => {
+    try {
+      const productIdsParam = req.query.productIds as string;
+      if (!productIdsParam) {
+        return res.status(400).json({ message: "productIds query parameter is required" });
+      }
+      const productIds = productIdsParam.split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id));
+      const productColorsMap = await storage.getBatchProductColors(productIds);
+      res.json(productColorsMap);
+    } catch (error) {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
   app.get("/api/products/:productId/colors", isAuthenticated, async (req, res) => {
     try {
       const productId = parseInt(req.params.productId);
