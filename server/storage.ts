@@ -114,6 +114,7 @@ export interface IStorage {
 
   // Product color methods
   getProductColors(productId: number): Promise<(ProductColor & { color: Color })[]>;
+  getBatchProductColors(productIds: number[]): Promise<Record<number, (ProductColor & { color: Color })[]>>;
   createProductColor(productColor: InsertProductColor): Promise<ProductColor>;
   deleteProductColor(id: number): Promise<boolean>;
   deleteProductColorsByProductId(productId: number): Promise<boolean>;
@@ -1864,6 +1865,35 @@ export class DatabaseStorage implements IStorage {
       .where(eq(productColors.productId, productId));
 
     return productColorLinks as (ProductColor & { color: Color })[];
+  }
+
+  async getBatchProductColors(productIds: number[]): Promise<Record<number, (ProductColor & { color: Color })[]>> {
+    if (productIds.length === 0) {
+      return {};
+    }
+
+    const productColorLinks = await db
+      .select({
+        id: productColors.id,
+        productId: productColors.productId,
+        colorId: productColors.colorId,
+        createdAt: productColors.createdAt,
+        color: colors,
+      })
+      .from(productColors)
+      .leftJoin(colors, eq(productColors.colorId, colors.id))
+      .where(inArray(productColors.productId, productIds));
+
+    // Group by productId
+    const result: Record<number, (ProductColor & { color: Color })[]> = {};
+    for (const link of productColorLinks as (ProductColor & { color: Color })[]) {
+      if (!result[link.productId]) {
+        result[link.productId] = [];
+      }
+      result[link.productId].push(link);
+    }
+
+    return result;
   }
 
   async createProductColor(insertProductColor: InsertProductColor): Promise<ProductColor> {
