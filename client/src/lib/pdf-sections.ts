@@ -565,7 +565,21 @@ export function drawLineItemsSection(pdf: jsPDF, opts: DrawLineItemsSectionOpts)
 
   lineItems.forEach((item: any, index: number) => {
     const descLines = pdf.splitTextToSize(item.description || '', contentW * 0.48);
-    const rowHeight = Math.max(descLines.length * 5, 8);
+    
+    // Parse colors from configData if available
+    let colorText = '';
+    try {
+      const configData = item.configData ? (typeof item.configData === 'string' ? JSON.parse(item.configData) : item.configData) : null;
+      if (configData?.colors && Array.isArray(configData.colors) && configData.colors.length > 0) {
+        const colorNames = configData.colors.map((c: any) => c.name).join(', ');
+        colorText = `Colors: ${colorNames}`;
+      }
+    } catch (e) {
+      // Silent fail if configData is malformed
+    }
+    
+    const colorLines = colorText ? pdf.splitTextToSize(colorText, contentW * 0.48) : [];
+    const rowHeight = Math.max((descLines.length + colorLines.length) * 5, 8);
 
     y = ensureSpace(pdf, y, rowHeight, {
       marginTop: margin,
@@ -583,6 +597,16 @@ export function drawLineItemsSection(pdf: jsPDF, opts: DrawLineItemsSectionOpts)
       const priceW = contentW * 0.17;
 
       pdf.text(descLines, margin, y);
+      
+      // Add colors below description if they exist
+      if (colorLines.length > 0) {
+        const colorY = y + (descLines.length * 5);
+        pdf.setFontSize(9);
+        pdf.setTextColor(100, 100, 100);
+        pdf.text(colorLines, margin, colorY);
+        pdf.setFontSize(10);
+        pdf.setTextColor(0, 0, 0);
+      }
 
       const qty = parseFloat(item.quantity || '0');
       const total = calculateLineItemTotal(
@@ -604,6 +628,17 @@ export function drawLineItemsSection(pdf: jsPDF, opts: DrawLineItemsSectionOpts)
       const descW = contentW * 0.75;
 
       pdf.text(descLines, margin, y);
+      
+      // Add colors below description if they exist
+      if (colorLines.length > 0) {
+        const colorY = y + (descLines.length * 5);
+        pdf.setFontSize(9);
+        pdf.setTextColor(100, 100, 100);
+        pdf.text(colorLines, margin, colorY);
+        pdf.setFontSize(10);
+        pdf.setTextColor(0, 0, 0);
+      }
+      
       pdf.text(parseFloat(item.quantity || '0').toString(), margin + descW, y);
     }
 
