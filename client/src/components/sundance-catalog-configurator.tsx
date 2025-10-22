@@ -27,6 +27,23 @@ interface ProductColorSelection {
   [productId: number]: number[]; // Array of selected color IDs
 }
 
+interface CategoryColorSelection {
+  [category: string]: number | null; // Selected color ID for category
+}
+
+// Category order matching the PDF
+const CATEGORY_ORDER = [
+  'Extrusions',
+  'Gutters',
+  'Louvers',
+  'Posts',
+  'Motors',
+  'Control Box, Remote, and Rain Sensor',
+  'Connection Brackets - Fasteners - Caulk',
+  'Shop Drawings',
+  'Sales & Marketing'
+];
+
 export function SundanceCatalogConfigurator({ 
   quoteId, 
   onInsert, 
@@ -35,6 +52,7 @@ export function SundanceCatalogConfigurator({
   const { toast } = useToast();
   const [quantities, setQuantities] = useState<ProductQuantity>({});
   const [selectedColors, setSelectedColors] = useState<ProductColorSelection>({});
+  const [categoryColors, setCategoryColors] = useState<CategoryColorSelection>({});
 
   const { data: products, isLoading } = useQuery<Product[]>({
     queryKey: ['/api/products', 'Sundance'],
@@ -87,6 +105,7 @@ export function SundanceCatalogConfigurator({
     },
   });
 
+  // Categorize products and maintain specified order
   const categorizedProducts: CategoryProducts = products?.reduce((acc, product) => {
     const category = product.category || 'Other';
     if (!acc[category]) {
@@ -96,6 +115,12 @@ export function SundanceCatalogConfigurator({
     return acc;
   }, {} as CategoryProducts) || {};
 
+  // Get ordered categories (matching PDF order, then any additional categories)
+  const orderedCategories = [
+    ...CATEGORY_ORDER.filter(cat => categorizedProducts[cat]),
+    ...Object.keys(categorizedProducts).filter(cat => !CATEGORY_ORDER.includes(cat))
+  ];
+
   const handleQuantityChange = (productId: number, value: string) => {
     const numValue = parseInt(value) || 0;
     if (numValue < 0) return;
@@ -103,6 +128,13 @@ export function SundanceCatalogConfigurator({
     setQuantities(prev => ({
       ...prev,
       [productId]: numValue,
+    }));
+  };
+
+  const handleCategoryColorChange = (category: string, colorId: number | null) => {
+    setCategoryColors(prev => ({
+      ...prev,
+      [category]: colorId
     }));
   };
 
@@ -120,13 +152,51 @@ export function SundanceCatalogConfigurator({
     });
   };
 
+  // Get all unique colors available in a category
+  const getCategoryColors = (category: string): (ProductColor & { color: Color })[] => {
+    const categoryProducts = categorizedProducts[category] || [];
+    const colorMap = new Map<number, ProductColor & { color: Color }>();
+    
+    categoryProducts.forEach(product => {
+      const productColors = productColorsMap?.[product.id] || [];
+      productColors.forEach(pc => {
+        if (!colorMap.has(pc.colorId)) {
+          colorMap.set(pc.colorId, pc);
+        }
+      });
+    });
+    
+    return Array.from(colorMap.values());
+  };
+
+  // Get effective color for a product (individual override or category default)
+  const getEffectiveColors = (productId: number, category: string): number[] => {
+    // If product has individual color selection, use that
+    if (selectedColors[productId] && selectedColors[productId].length > 0) {
+      return selectedColors[productId];
+    }
+    
+    // Otherwise, use category color if available and product supports this color
+    const categoryColorId = categoryColors[category];
+    if (categoryColorId) {
+      const productColors = productColorsMap?.[productId] || [];
+      const hasColor = productColors.some(pc => pc.colorId === categoryColorId);
+      if (hasColor) {
+        return [categoryColorId];
+      }
+    }
+    
+    return [];
+  };
+
   const handleInsert = () => {
     const items = Object.entries(quantities)
       .filter(([_, qty]) => qty > 0)
       .map(([productId, quantity]) => {
         const product = products!.find(p => p.id === parseInt(productId));
-        const colors = selectedColors[parseInt(productId)] || [];
-        const colorDetails = colors.map(colorId => {
+        const category = product?.category || 'Other';
+        const effectiveColors = getEffectiveColors(parseInt(productId), category);
+        const colorDetails = effectiveColors.map(colorId => {
           const productColorEntry = productColorsMap?.[parseInt(productId)]?.find(pc => pc.colorId === colorId);
           return productColorEntry?.color;
         }).filter(Boolean);
@@ -204,76 +274,142 @@ export function SundanceCatalogConfigurator({
 
         <ScrollArea className="flex-1 min-h-0">
           <div className="space-y-6 pb-4 pr-2">
-            {Object.entries(categorizedProducts).map(([category, categoryProducts]) => (
-              <div key={category} className="space-y-3">
-                <h4 className="font-semibold text-sm bg-gray-100 dark:bg-gray-800 px-3 py-2 rounded">
-                  {category}
-                </h4>
-                <div className="space-y-2">
-                  {categoryProducts.map((product) => {
-                    const productColors = productColorsMap?.[product.id] || [];
-                    const hasColors = productColors.length > 0;
-                    
-                    return (
-                    <div 
-                      key={product.id} 
-                      className="grid grid-cols-[1fr_100px_120px_120px] gap-4 items-center p-3 rounded hover:bg-muted/50 transition-colors"
-                      data-testid={`product-${product.id}`}
-                    >
-                      <div className="min-w-0">
-                        <div className="font-medium text-sm truncate" title={product.name}>
-                          {product.name}
-                        </div>
-                        {product.description && (
-                          <div className="text-xs text-muted-foreground truncate" title={product.description}>
-                            {product.description}
-                          </div>
-                        )}
-                        {hasColors && (
-                          <div className="flex gap-1 mt-2 flex-wrap">
-                            {productColors.map((pc) => (
+            {orderedCategories.map((category) => {
+              const categoryProducts = categorizedProducts[category];
+              const categoryAvailableColors = getCategoryColors(category);
+              const hasCategoryColors = categoryAvailableColors.length > 0;
+              
+              return (
+                <div key={category} className="space-y-3">
+                  <div className="bg-gray-100 dark:bg-gray-800 px-3 py-2 rounded">
+                    <div className="flex items-center justify-between gap-4">
+                      <h4 className="font-semibold text-sm">
+                        {category}
+                      </h4>
+                      {hasCategoryColors && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-muted-foreground">Category Color:</span>
+                          <div className="flex gap-1">
+                            <button
+                              onClick={() => handleCategoryColorChange(category, null)}
+                              className={`w-6 h-6 rounded-full border-2 transition-all flex items-center justify-center ${
+                                !categoryColors[category]
+                                  ? 'border-blue-500 bg-white dark:bg-gray-700'
+                                  : 'border-gray-300 hover:border-gray-400 bg-white dark:bg-gray-700'
+                              }`}
+                              title="No category color"
+                              data-testid={`category-color-none-${category}`}
+                            >
+                              <span className="text-xs text-gray-400">∅</span>
+                            </button>
+                            {categoryAvailableColors.map((pc) => (
                               <button
                                 key={pc.color.id}
-                                onClick={() => handleColorToggle(product.id, pc.color.id)}
+                                onClick={() => handleCategoryColorChange(category, pc.color.id)}
                                 className={`w-6 h-6 rounded-full border-2 transition-all ${
-                                  selectedColors[product.id]?.includes(pc.color.id)
+                                  categoryColors[category] === pc.color.id
                                     ? 'border-blue-500 scale-110 shadow-md'
                                     : 'border-gray-300 hover:border-gray-400'
                                 }`}
                                 style={{ backgroundColor: pc.color.hexCode }}
                                 title={pc.color.name}
-                                data-testid={`color-${product.id}-${pc.color.id}`}
+                                data-testid={`category-color-${category}-${pc.color.id}`}
                               >
-                                {selectedColors[product.id]?.includes(pc.color.id) && (
+                                {categoryColors[category] === pc.color.id && (
                                   <span className="text-white text-xs font-bold">✓</span>
                                 )}
                               </button>
                             ))}
                           </div>
-                        )}
-                      </div>
-                      <div className="text-right">
-                        <Input
-                          type="number"
-                          min="0"
-                          value={quantities[product.id] || 0}
-                          onChange={(e) => handleQuantityChange(product.id, e.target.value)}
-                          className="h-9 text-center"
-                          data-testid={`input-quantity-${product.id}`}
-                        />
-                      </div>
-                      <div className="text-right text-sm font-medium" data-testid={`text-unit-price-${product.id}`}>
-                        {formatCurrency(parseFloat(product.retailPrice))}
-                      </div>
-                      <div className="text-right text-sm font-semibold" data-testid={`text-total-${product.id}`}>
-                        {formatCurrency((quantities[product.id] || 0) * parseFloat(product.retailPrice))}
-                      </div>
+                        </div>
+                      )}
                     </div>
-                  );
-                  })}
+                  </div>
+                  <div className="space-y-2">
+                    {categoryProducts.map((product) => {
+                      const productColors = productColorsMap?.[product.id] || [];
+                      const hasColors = productColors.length > 0;
+                      const effectiveColors = getEffectiveColors(product.id, category);
+                      const hasIndividualOverride = selectedColors[product.id]?.length > 0;
+                      
+                      return (
+                      <div 
+                        key={product.id} 
+                        className="grid grid-cols-[1fr_100px_120px_120px] gap-4 items-center p-3 rounded hover:bg-muted/50 transition-colors"
+                        data-testid={`product-${product.id}`}
+                      >
+                        <div className="min-w-0">
+                          <div className="font-medium text-sm truncate" title={product.name}>
+                            {product.name}
+                          </div>
+                          {product.description && (
+                            <div className="text-xs text-muted-foreground truncate" title={product.description}>
+                              {product.description}
+                            </div>
+                          )}
+                          {hasColors && (
+                            <div className="flex gap-1 mt-2 flex-wrap items-center">
+                              {hasIndividualOverride && (
+                                <span className="text-xs text-blue-600 dark:text-blue-400 mr-1" title="Individual color override">
+                                  ⚡
+                                </span>
+                              )}
+                              {!hasIndividualOverride && effectiveColors.length > 0 && (
+                                <span className="text-xs text-muted-foreground mr-1" title="Using category color">
+                                  ↓
+                                </span>
+                              )}
+                              {productColors.map((pc) => {
+                                const isSelected = selectedColors[product.id]?.includes(pc.color.id);
+                                const isEffective = effectiveColors.includes(pc.color.id);
+                                
+                                return (
+                                  <button
+                                    key={pc.color.id}
+                                    onClick={() => handleColorToggle(product.id, pc.color.id)}
+                                    className={`w-6 h-6 rounded-full border-2 transition-all ${
+                                      isSelected
+                                        ? 'border-blue-500 scale-110 shadow-md'
+                                        : isEffective && !hasIndividualOverride
+                                        ? 'border-green-400 scale-105'
+                                        : 'border-gray-300 hover:border-gray-400'
+                                    }`}
+                                    style={{ backgroundColor: pc.color.hexCode }}
+                                    title={`${pc.color.name}${isEffective && !isSelected ? ' (from category)' : ''}`}
+                                    data-testid={`color-${product.id}-${pc.color.id}`}
+                                  >
+                                    {isSelected && (
+                                      <span className="text-white text-xs font-bold">✓</span>
+                                    )}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                        <div className="text-right">
+                          <Input
+                            type="number"
+                            min="0"
+                            value={quantities[product.id] || 0}
+                            onChange={(e) => handleQuantityChange(product.id, e.target.value)}
+                            className="h-9 text-center"
+                            data-testid={`input-quantity-${product.id}`}
+                          />
+                        </div>
+                        <div className="text-right text-sm font-medium" data-testid={`text-unit-price-${product.id}`}>
+                          {formatCurrency(parseFloat(product.retailPrice))}
+                        </div>
+                        <div className="text-right text-sm font-semibold" data-testid={`text-total-${product.id}`}>
+                          {formatCurrency((quantities[product.id] || 0) * parseFloat(product.retailPrice))}
+                        </div>
+                      </div>
+                    );
+                    })}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </ScrollArea>
       </div>
