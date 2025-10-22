@@ -62,20 +62,15 @@ export function SundanceCatalogConfigurator({
     },
   });
 
-  // Fetch all product colors for Sundance products
+  // Fetch all product colors for Sundance products using batch endpoint
   const { data: productColorsMap } = useQuery<Record<number, (ProductColor & { color: Color })[]>>({
     queryKey: ['/api/product-colors', 'Sundance'],
     queryFn: async () => {
-      if (!products) return {};
-      const colorMap: Record<number, (ProductColor & { color: Color })[]> = {};
+      if (!products || products.length === 0) return {};
       
-      for (const product of products) {
-        const response = await apiRequest('GET', `/api/products/${product.id}/colors`);
-        const colors = await response.json();
-        if (colors.length > 0) {
-          colorMap[product.id] = colors;
-        }
-      }
+      const productIds = products.map(p => p.id).join(',');
+      const response = await apiRequest('GET', `/api/products/colors/batch?productIds=${productIds}`);
+      const colorMap = await response.json();
       
       return colorMap;
     },
