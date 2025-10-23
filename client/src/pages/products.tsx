@@ -12,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Package, Edit, Trash2, Search, Grid, List, Filter, X, Settings, Camera, FileText, Image, Loader2 } from "lucide-react";
+import { Plus, Package, Edit, Trash2, Search, Grid, List, Filter, X, Settings, Camera, FileText, Image, Loader2, Palette } from "lucide-react";
 import { DimensionalPricingManager } from "@/components/dimensional-pricing-manager";
 import { LoadingSpinner } from "@/components/loading-spinner";
 import { formatCurrency } from "@/lib/utils";
@@ -20,11 +20,13 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { insertProductSchema, type Product, type ProductWithDetails } from "@shared/schema";
+import { insertProductSchema, type Product, type ProductWithDetails, type Color } from "@shared/schema";
 import { z } from "zod";
+import { Checkbox } from "@/components/ui/checkbox";
 
 const productFormSchema = insertProductSchema.extend({
   cost: z.string().optional(), // Frontend-only field for cost input
+  selectedColorIds: z.array(z.number()).optional(), // Frontend-only field for color selection
 });
 type ProductFormData = z.infer<typeof productFormSchema>;
 
@@ -53,6 +55,15 @@ export default function Products() {
     }
   });
 
+  const { data: allColors } = useQuery<Color[]>({
+    queryKey: ["/api/colors"],
+  });
+
+  const { data: productColors } = useQuery<Array<{ id: number; productId: number; colorId: number; color: Color }>>({
+    queryKey: ["/api/products", editingProduct?.id, "colors"],
+    enabled: !!editingProduct?.id,
+  });
+
   const form = useForm<ProductFormData>({
     resolver: zodResolver(productFormSchema),
     defaultValues: {
@@ -66,6 +77,7 @@ export default function Products() {
       defaultDiscountValue: "0",
       cost: "0",
       unit: "each",
+      selectedColorIds: [],
     },
   });
 
@@ -116,14 +128,14 @@ export default function Products() {
   });
 
 
-  const handleSubmit = (formData: ProductFormData) => {
+  const handleSubmit = async (formData: ProductFormData) => {
     // Calculate manufacturer discount from retail - cost
     const retail = parseFloat(formData.retailPrice || "0");
     const cost = parseFloat(formData.cost || "0");
     const manufacturerDiscount = Math.max(0, retail - cost);
     
-    // Prepare data with calculated discount, omitting the frontend-only cost field
-    const { cost: _, ...productData } = formData;
+    // Prepare data with calculated discount, omitting frontend-only fields
+    const { cost: _, selectedColorIds, ...productData } = formData;
     const data = {
       ...productData,
       defaultDiscountType: "dollar" as const,
@@ -131,9 +143,51 @@ export default function Products() {
     };
     
     if (editingProduct) {
-      updateProductMutation.mutate({ id: editingProduct.id, data });
+      // Update product first
+      await updateProductMutation.mutateAsync({ id: editingProduct.id, data });
+      
+      // Update color associations
+      if (selectedColorIds) {
+        await updateProductColors(editingProduct.id, selectedColorIds);
+      }
     } else {
-      createProductMutation.mutate(data);
+      // Create product first
+      const newProduct = await createProductMutation.mutateAsync(data);
+      
+      // Add color associations
+      if (selectedColorIds && selectedColorIds.length > 0 && newProduct?.id) {
+        await updateProductColors(newProduct.id, selectedColorIds);
+      }
+    }
+  };
+
+  const updateProductColors = async (productId: number, selectedColorIds: number[]) => {
+    try {
+      // Get current product colors
+      const currentColors = await fetch(`/api/products/${productId}/colors`).then(res => res.json());
+      const currentColorIds = currentColors.map((pc: any) => pc.colorId);
+      
+      // Remove colors that are no longer selected
+      const colorsToRemove = currentColors.filter((pc: any) => !selectedColorIds.includes(pc.colorId));
+      for (const pc of colorsToRemove) {
+        await apiRequest("DELETE", `/api/product-colors/${pc.id}`);
+      }
+      
+      // Add newly selected colors
+      const colorsToAdd = selectedColorIds.filter(colorId => !currentColorIds.includes(colorId));
+      for (const colorId of colorsToAdd) {
+        await apiRequest("POST", `/api/products/${productId}/colors`, { colorId });
+      }
+      
+      // Invalidate queries
+      queryClient.invalidateQueries({ queryKey: ["/api/products", productId, "colors"] });
+    } catch (error) {
+      console.error("Error updating product colors:", error);
+      toast({ 
+        title: "Warning", 
+        description: "Product saved but there was an issue updating colors", 
+        variant: "destructive" 
+      });
     }
   };
 
@@ -166,9 +220,18 @@ export default function Products() {
       maxLength: product.maxLength,
       minWidth: product.minWidth,
       maxWidth: product.maxWidth,
+      selectedColorIds: [], // Will be populated when productColors loads
     });
     setIsDialogOpen(true);
   };
+
+  // Update selected colors when editing product and colors are loaded
+  useEffect(() => {
+    if (editingProduct && productColors) {
+      const colorIds = productColors.map(pc => pc.colorId);
+      form.setValue("selectedColorIds", colorIds);
+    }
+  }, [editingProduct, productColors, form]);
 
   const handleDelete = (id: number) => {
     if (confirm("Are you sure you want to delete this product?")) {
@@ -535,6 +598,58 @@ export default function Products() {
                       </FormItem>
                     )}
                   />
+
+                  {/* Color Selection */}
+                  {allColors && allColors.length > 0 && (
+                    <FormField
+                      control={form.control}
+                      name="selectedColorIds"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="flex items-center gap-2">
+                            <Palette className="h-4 w-4" />
+                            Available Colors
+                          </FormLabel>
+                          <FormControl>
+                            <div className="grid grid-cols-2 md:grid-cols-3 gap-3 p-4 border rounded-md bg-gray-50">
+                              {allColors.map((color) => (
+                                <div key={color.id} className="flex items-center space-x-2">
+                                  <Checkbox
+                                    id={`color-${color.id}`}
+                                    checked={field.value?.includes(color.id)}
+                                    onCheckedChange={(checked) => {
+                                      const currentValues = field.value || [];
+                                      if (checked) {
+                                        field.onChange([...currentValues, color.id]);
+                                      } else {
+                                        field.onChange(currentValues.filter((id) => id !== color.id));
+                                      }
+                                    }}
+                                    data-testid={`checkbox-color-${color.id}`}
+                                  />
+                                  <label
+                                    htmlFor={`color-${color.id}`}
+                                    className="flex items-center gap-2 cursor-pointer text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                                  >
+                                    <div
+                                      className="w-6 h-6 rounded-full border-2 border-gray-300"
+                                      style={{ backgroundColor: color.hexCode }}
+                                      title={color.hexCode}
+                                    />
+                                    <span>{color.name}</span>
+                                  </label>
+                                </div>
+                              ))}
+                            </div>
+                          </FormControl>
+                          <p className="text-xs text-gray-500">
+                            Select the colors available for this product
+                          </p>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
                     </TabsContent>
                     
                   </Tabs>
