@@ -341,6 +341,19 @@ export const issueReports = pgTable("issue_reports", {
 
 
 
+// Secondary contact schema for multi-contact accounts
+export const secondaryContactSchema = z.object({
+  id: z.string(), // unique identifier for the contact
+  firstName: z.string().min(1, "First name is required"),
+  lastName: z.string().min(1, "Last name is required"),
+  email: z.string().email("Valid email is required"),
+  phone: z.string().min(1, "Phone is required"),
+  role: z.string().optional(), // e.g., "Operations Manager", "Purchasing Director"
+  isPrimary: z.boolean().optional().default(false), // flag to indicate primary contact
+});
+
+export type SecondaryContact = z.infer<typeof secondaryContactSchema>;
+
 // Insert schemas for accounts and contacts
 export const insertAccountSchema = createInsertSchema(accounts).omit({
   id: true,
@@ -364,7 +377,7 @@ export const insertAccountSchema = createInsertSchema(accounts).omit({
   // Client-specific fields for unified model
   firstName: z.string().optional().nullable(),
   lastName: z.string().optional().nullable(),
-  secondaryContacts: z.any().optional().nullable(), // JSONB field for additional contacts
+  secondaryContacts: z.array(secondaryContactSchema).optional().nullable(), // Array of additional contacts
 });
 
 // Legacy alias for backward compatibility

@@ -1,13 +1,15 @@
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
-import { insertAccountSchema, type Account, type InsertAccount } from "@shared/schema";
+import { insertAccountSchema, type Account, type InsertAccount, type SecondaryContact } from "@shared/schema";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { SecondaryContactsManager } from "@/components/SecondaryContactsManager";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { z } from "zod";
@@ -34,6 +36,8 @@ const accountFormSchema = insertAccountSchema.extend({
   ]),
   paymentTerms: z.string().optional(),
   billingAddress: z.string().optional()
+}).omit({
+  secondaryContacts: true, // Handle separately to avoid validation issues
 });
 
 type AccountFormData = z.infer<typeof accountFormSchema>;
@@ -46,6 +50,9 @@ interface AccountFormProps {
 
 export function AccountForm({ account, onSuccess, onCancel }: AccountFormProps) {
   const { toast } = useToast();
+  const [secondaryContacts, setSecondaryContacts] = useState<SecondaryContact[]>(
+    (account?.secondaryContacts as SecondaryContact[]) || []
+  );
   
   const form = useForm<AccountFormData>({
     resolver: zodResolver(accountFormSchema),
@@ -85,7 +92,8 @@ export function AccountForm({ account, onSuccess, onCancel }: AccountFormProps) 
     // Auto-generate name from firstName and lastName if not provided
     const submissionData = {
       ...data,
-      name: data.name || `${data.firstName} ${data.lastName}`.trim()
+      name: data.name || `${data.firstName} ${data.lastName}`.trim(),
+      secondaryContacts: secondaryContacts.length > 0 ? secondaryContacts : null
     };
     createAccountMutation.mutate(submissionData);
   };
@@ -281,6 +289,13 @@ export function AccountForm({ account, onSuccess, onCancel }: AccountFormProps) 
             </FormItem>
           )}
         />
+
+        <div className="border-t pt-6">
+          <SecondaryContactsManager
+            contacts={secondaryContacts}
+            onChange={setSecondaryContacts}
+          />
+        </div>
 
         <div className="flex justify-end gap-4">
           <Button 
