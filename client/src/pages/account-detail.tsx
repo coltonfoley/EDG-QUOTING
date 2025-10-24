@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useRoute, useLocation } from "wouter";
 import { AppHeader } from "@/components/app-header";
@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Building2, Briefcase, Edit, ChevronLeft, User, FolderPlus, Users, Mail, Phone } from "lucide-react";
+import { Building2, Briefcase, Edit, ChevronLeft, User, FolderPlus, Users, Mail, Phone, ChevronDown, ChevronRight, FileStack } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
@@ -31,6 +31,7 @@ export default function AccountDetail() {
   const { isAuthenticated } = useAuth();
   
   const [editAccountOpen, setEditAccountOpen] = useState(false);
+  const [expandedProjects, setExpandedProjects] = useState<Set<number>>(new Set());
 
   const { data: account, isLoading, error } = useQuery<AccountDetails>({
     queryKey: [`/api/accounts/${accountId}/details`],
@@ -128,6 +129,41 @@ export default function AccountDetail() {
   const secondaryContacts = Array.isArray(account?.secondaryContacts) 
     ? (account.secondaryContacts as SecondaryContact[]) 
     : [];
+
+  // Group quotes by project (using parentQuoteId or self-reference)
+  const groupedQuotes = useMemo(() => {
+    if (!account?.quotes) return [];
+    
+    // Create a map of quote families
+    const quoteMap = new Map<number, Quote[]>();
+    
+    account.quotes.forEach(quote => {
+      const rootId = quote.parentQuoteId || quote.id;
+      if (!quoteMap.has(rootId)) {
+        quoteMap.set(rootId, []);
+      }
+      quoteMap.get(rootId)!.push(quote);
+    });
+    
+    // Sort each group by version number and return as array
+    return Array.from(quoteMap.values()).map(versions => {
+      const sorted = versions.sort((a, b) => (a.versionNumber || 1) - (b.versionNumber || 1));
+      const latestVersion = sorted.find(q => q.isLatestVersion) || sorted[sorted.length - 1];
+      return {
+        versions: sorted,
+        latestVersion,
+        projectName: latestVersion.projectName || latestVersion.quoteNumber,
+        hasMultipleVersions: sorted.length > 1
+      };
+    }).sort((a, b) => {
+      // Sort by latest version's creation date
+      const aDate = new Date(a.latestVersion.createdAt || 0);
+      const bDate = new Date(b.latestVersion.createdAt || 0);
+      return bDate.getTime() - aDate.getTime();
+    });
+  }, [account?.quotes]);
+
+  const projectCount = groupedQuotes.length;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -254,10 +290,10 @@ export default function AccountDetail() {
                 <div>
                   <CardTitle className="flex items-center gap-2">
                     <Briefcase className="h-5 w-5" />
-                    Quotes
+                    Projects & Quotes
                   </CardTitle>
                   <CardDescription>
-                    {account.quotes?.length || 0} quote{account.quotes?.length !== 1 ? 's' : ''} for this client
+                    {projectCount} project{projectCount !== 1 ? 's' : ''} • {account.quotes?.length || 0} total quote{account.quotes?.length !== 1 ? 's' : ''}
                   </CardDescription>
                 </div>
                 <Button
@@ -272,36 +308,119 @@ export default function AccountDetail() {
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {account.quotes.length === 0 ? (
+                {groupedQuotes.length === 0 ? (
                   <p className="text-center py-8 text-gray-500">
                     No quotes yet. Create your first quote to get started.
                   </p>
                 ) : (
-                  account.quotes.map(quote => (
-                    <div 
-                      key={quote.id}
-                      className="p-4 border rounded-lg hover:bg-gray-50 transition-colors cursor-pointer"
-                      onClick={() => navigate(`/quotes/${quote.id}/edit`)}
-                      data-testid={`card-quote-${quote.id}`}
-                    >
-                      <div className="flex justify-between items-start">
-                        <div className="flex-1">
-                          <p className="font-medium text-gray-900">
-                            {quote.projectName || quote.quoteNumber}
-                          </p>
-                          <p className="text-sm text-gray-500 mt-1">
-                            {quote.projectAddress || 'No address specified'}
-                          </p>
-                          <p className="text-sm text-gray-600 mt-2">
-                            Created {quote.createdAt ? format(new Date(quote.createdAt), 'MMM d, yyyy') : 'N/A'}
-                          </p>
+                  groupedQuotes.map((project, index) => {
+                    const mainQuote = project.latestVersion;
+                    const rootId = mainQuote.parentQuoteId || mainQuote.id;
+                    const isOpen = expandedProjects.has(rootId);
+                    
+                    const toggleExpanded = () => {
+                      const newExpanded = new Set(expandedProjects);
+                      if (isOpen) {
+                        newExpanded.delete(rootId);
+                      } else {
+                        newExpanded.add(rootId);
+                      }
+                      setExpandedProjects(newExpanded);
+                    };
+                    
+                    return (
+                      <div 
+                        key={mainQuote.id}
+                        className="border rounded-lg overflow-hidden"
+                        data-testid={`card-project-${index}`}
+                      >
+                        {/* Main Quote Display */}
+                        <div 
+                          className="p-4 hover:bg-gray-50 transition-colors cursor-pointer"
+                          onClick={() => navigate(`/quotes/${mainQuote.id}/edit`)}
+                        >
+                          <div className="flex justify-between items-start">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2">
+                                <p className="font-medium text-gray-900">
+                                  {mainQuote.projectName || mainQuote.quoteNumber}
+                                </p>
+                                {project.hasMultipleVersions && (
+                                  <Badge variant="outline" className="text-xs">
+                                    <FileStack className="h-3 w-3 mr-1" />
+                                    {project.versions.length} versions
+                                  </Badge>
+                                )}
+                                <Badge variant="secondary" className="text-xs">
+                                  v{mainQuote.versionNumber || 1}
+                                </Badge>
+                              </div>
+                              <p className="text-sm text-gray-500 mt-1">
+                                {mainQuote.projectAddress || 'No address specified'}
+                              </p>
+                              <p className="text-sm text-gray-600 mt-2">
+                                Latest: {mainQuote.createdAt ? format(new Date(mainQuote.createdAt), 'MMM d, yyyy') : 'N/A'}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Badge className={getDealStageColor(mainQuote.dealStage || 'new_lead')}>
+                                {getDealStageLabel(mainQuote.dealStage || 'new_lead')}
+                              </Badge>
+                              {project.hasMultipleVersions && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    toggleExpanded();
+                                  }}
+                                  data-testid={`button-toggle-versions-${index}`}
+                                >
+                                  {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                                </Button>
+                              )}
+                            </div>
+                          </div>
                         </div>
-                        <Badge className={getDealStageColor(quote.dealStage || 'new_lead')}>
-                          {getDealStageLabel(quote.dealStage || 'new_lead')}
-                        </Badge>
+
+                        {/* Version History - Collapsible */}
+                        {project.hasMultipleVersions && isOpen && (
+                          <div className="border-t bg-gray-50 px-4 py-2">
+                            <p className="text-xs font-medium text-gray-600 mb-2">All Versions:</p>
+                            <div className="space-y-1">
+                              {project.versions.map(version => (
+                                <div
+                                  key={version.id}
+                                  className="flex items-center justify-between p-2 hover:bg-white rounded cursor-pointer transition-colors"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    navigate(`/quotes/${version.id}/edit`);
+                                  }}
+                                  data-testid={`card-version-${version.id}`}
+                                >
+                                  <div className="flex items-center gap-2 text-sm">
+                                    <span className="font-mono text-gray-600">v{version.versionNumber || 1}</span>
+                                    <span className="text-gray-500">{version.quoteNumber}</span>
+                                    {version.isLatestVersion && (
+                                      <Badge variant="default" className="text-xs">Latest</Badge>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs text-gray-500">
+                                      {version.createdAt ? format(new Date(version.createdAt), 'MMM d, yyyy') : 'N/A'}
+                                    </span>
+                                    <Badge className={getDealStageColor(version.dealStage || 'new_lead')} variant="outline">
+                                      {getDealStageLabel(version.dealStage || 'new_lead')}
+                                    </Badge>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             </CardContent>
