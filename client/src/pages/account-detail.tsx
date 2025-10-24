@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useRoute, useLocation } from "wouter";
 import { AppHeader } from "@/components/app-header";
@@ -131,37 +131,33 @@ export default function AccountDetail() {
     : [];
 
   // Group quotes by project (using parentQuoteId or self-reference)
-  const groupedQuotes = useMemo(() => {
-    if (!account?.quotes) return [];
-    
-    // Create a map of quote families
-    const quoteMap = new Map<number, Quote[]>();
-    
-    account.quotes.forEach(quote => {
-      const rootId = quote.parentQuoteId || quote.id;
-      if (!quoteMap.has(rootId)) {
-        quoteMap.set(rootId, []);
-      }
-      quoteMap.get(rootId)!.push(quote);
-    });
-    
-    // Sort each group by version number and return as array
-    return Array.from(quoteMap.values()).map(versions => {
-      const sorted = versions.sort((a, b) => (a.versionNumber || 1) - (b.versionNumber || 1));
-      const latestVersion = sorted.find(q => q.isLatestVersion) || sorted[sorted.length - 1];
-      return {
-        versions: sorted,
-        latestVersion,
-        projectName: latestVersion.projectName || latestVersion.quoteNumber,
-        hasMultipleVersions: sorted.length > 1
-      };
-    }).sort((a, b) => {
-      // Sort by latest version's creation date
-      const aDate = new Date(a.latestVersion.createdAt || 0);
-      const bDate = new Date(b.latestVersion.createdAt || 0);
-      return bDate.getTime() - aDate.getTime();
-    });
-  }, [account?.quotes]);
+  // Create a map of quote families
+  const quoteMap = new Map<number, Quote[]>();
+  
+  account.quotes.forEach(quote => {
+    const rootId = quote.parentQuoteId || quote.id;
+    if (!quoteMap.has(rootId)) {
+      quoteMap.set(rootId, []);
+    }
+    quoteMap.get(rootId)!.push(quote);
+  });
+  
+  // Sort each group by version number and return as array
+  const groupedQuotes = Array.from(quoteMap.values()).map(versions => {
+    const sorted = versions.sort((a, b) => (a.versionNumber || 1) - (b.versionNumber || 1));
+    const latestVersion = sorted.find(q => q.isLatestVersion) || sorted[sorted.length - 1];
+    return {
+      versions: sorted,
+      latestVersion,
+      projectName: latestVersion.projectName || latestVersion.quoteNumber,
+      hasMultipleVersions: sorted.length > 1
+    };
+  }).sort((a, b) => {
+    // Sort by latest version's creation date
+    const aDate = new Date(a.latestVersion.createdAt || 0);
+    const bDate = new Date(b.latestVersion.createdAt || 0);
+    return bDate.getTime() - aDate.getTime();
+  });
 
   const projectCount = groupedQuotes.length;
 
