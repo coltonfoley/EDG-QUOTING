@@ -8,13 +8,13 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Building2, Briefcase, Edit, ChevronLeft, User, FolderPlus } from "lucide-react";
+import { Building2, Briefcase, Edit, ChevronLeft, User, FolderPlus, Users, Mail, Phone } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { AccountForm } from "@/components/forms/account-form";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { Account, Quote } from "@shared/schema";
+import type { Account, Quote, SecondaryContact } from "@shared/schema";
 import { format } from "date-fns";
 import { getDealStageColor, getDealStageLabel } from "@shared/dealStageConstants";
 
@@ -125,6 +125,10 @@ export default function AccountDetail() {
     );
   }
 
+  const secondaryContacts = Array.isArray(account?.secondaryContacts) 
+    ? (account.secondaryContacts as SecondaryContact[]) 
+    : [];
+
   return (
     <div className="min-h-screen bg-gray-50">
       <AppHeader />
@@ -196,6 +200,48 @@ export default function AccountDetail() {
                 </p>
               </div>
             </div>
+
+            {/* Secondary Contacts Section */}
+            {secondaryContacts.length > 0 && (
+              <div className="mt-6 pt-6 border-t">
+                <div className="flex items-center gap-2 mb-4">
+                  <Users className="h-5 w-5 text-gray-600" />
+                  <h3 className="text-lg font-semibold">Additional Contacts</h3>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {secondaryContacts.map((contact) => (
+                    <div 
+                      key={contact.id} 
+                      className="p-4 border rounded-lg bg-gray-50"
+                      data-testid={`card-contact-${contact.id}`}
+                    >
+                      <div className="font-medium text-gray-900">
+                        {contact.firstName} {contact.lastName}
+                      </div>
+                      {contact.role && (
+                        <div className="text-sm text-gray-600 mt-1">
+                          {contact.role}
+                        </div>
+                      )}
+                      <div className="mt-3 space-y-1">
+                        <div className="flex items-center gap-2 text-sm text-gray-600">
+                          <Mail className="h-3 w-3" />
+                          <a href={`mailto:${contact.email}`} className="hover:text-blue-600">
+                            {contact.email}
+                          </a>
+                        </div>
+                        <div className="flex items-center gap-2 text-sm text-gray-600">
+                          <Phone className="h-3 w-3" />
+                          <a href={`tel:${contact.phone}`} className="hover:text-blue-600">
+                            {contact.phone}
+                          </a>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
 
