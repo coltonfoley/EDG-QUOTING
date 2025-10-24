@@ -61,6 +61,14 @@ export default function Products() {
 
   const { data: productColors } = useQuery<Array<{ id: number; productId: number; colorId: number; color: Color }>>({
     queryKey: ["/api/products", editingProduct?.id, "colors"],
+    queryFn: async () => {
+      if (!editingProduct?.id) return [];
+      const response = await fetch(`/api/products/${editingProduct.id}/colors`);
+      if (!response.ok) {
+        throw new Error("Failed to fetch product colors");
+      }
+      return response.json();
+    },
     enabled: !!editingProduct?.id,
   });
 
