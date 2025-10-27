@@ -125,7 +125,7 @@ export function drawStandardCover(pdf: jsPDF, opts: DrawStandardCoverOpts): void
   pdf.addImage(coverDataUrl, format, 0, 0, pageW, pageH);
 }
 
-export function drawProjectDetailsPage(pdf: jsPDF, opts: DrawProjectDetailsPageOpts): void {
+export async function drawProjectDetailsPage(pdf: jsPDF, opts: DrawProjectDetailsPageOpts): Promise<void> {
   const { company, quote, coverDataUrl, logoDataUrl, margin, contentW, pageW, pageH, showPricing } = opts;
 
   pdf.addPage();
@@ -181,11 +181,23 @@ export function drawProjectDetailsPage(pdf: jsPDF, opts: DrawProjectDetailsPageO
   
   // Add client logo image only if provided
   if (coverDataUrl) {
-    const imgW = contentW;
-    const imgH = imgW * 0.6;
+    const boxW = contentW;
+    const boxH = 100; // Maximum height for cover photo
     const imgFormat = detectImageFormat(coverDataUrl);
-    pdf.addImage(coverDataUrl, imgFormat, margin, y, imgW, imgH);
-    y += imgH;
+    
+    try {
+      const dims = await getImageDimensions(coverDataUrl);
+      const { w: imgW, h: imgH } = getAspectFitBox(dims.width, dims.height, boxW, boxH);
+      const { x: imgX, y: imgY } = getCenteredOrigin(margin, y, boxW, boxH, imgW, imgH);
+      
+      pdf.addImage(coverDataUrl, imgFormat, imgX, imgY, imgW, imgH);
+      y += boxH;
+    } catch (error) {
+      console.error('Error rendering cover photo:', error);
+      // Fallback to centered box if dimension detection fails
+      pdf.addImage(coverDataUrl, imgFormat, margin, y, boxW, boxH);
+      y += boxH;
+    }
   }
 
   // Add branded footer
