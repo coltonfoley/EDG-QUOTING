@@ -115,20 +115,46 @@ export function AddressAutocomplete({
 
     const initAutocomplete = async () => {
       try {
+        // Verify google.maps is available
+        if (!window.google || !window.google.maps) {
+          throw new Error("Google Maps API not loaded");
+        }
+
+        console.log("Google Maps API loaded, importing places library...");
+        
         // Import the places library
-        await google.maps.importLibrary("places");
+        const placesLib = await google.maps.importLibrary("places");
+        console.log("Places library imported:", placesLib);
 
         // Create the new PlaceAutocompleteElement
         const placeAutocomplete = new google.maps.places.PlaceAutocompleteElement({
           includedRegionCodes: ["us"]
         });
 
+        console.log("PlaceAutocompleteElement created:", placeAutocomplete);
+
         // Store reference
         autocompleteElementRef.current = placeAutocomplete;
 
         // Add to container
         if (containerRef.current) {
+          console.log("Appending autocomplete element to container...");
           containerRef.current.appendChild(placeAutocomplete);
+          console.log("Autocomplete element appended. Container children:", containerRef.current.children.length);
+          
+          // Wait a moment for the element to render, then check its structure
+          setTimeout(() => {
+            const inputElement = placeAutocomplete.querySelector('input');
+            console.log("PlaceAutocompleteElement input found:", inputElement);
+            if (inputElement) {
+              console.log("Input placeholder:", inputElement.placeholder);
+              console.log("Input value:", inputElement.value);
+            } else {
+              console.warn("No input element found in PlaceAutocompleteElement");
+            }
+          }, 100);
+        } else {
+          console.error("Container ref is null!");
         }
 
         // Listen for place selection with the correct event name
@@ -220,6 +246,8 @@ export function AddressAutocomplete({
         };
       } catch (error) {
         console.error("Error initializing Google Places Autocomplete:", error);
+        console.error("Error details:", error instanceof Error ? error.message : String(error));
+        console.error("Error stack:", error instanceof Error ? error.stack : "No stack trace");
         setError("Failed to initialize address autocomplete");
       }
     };
