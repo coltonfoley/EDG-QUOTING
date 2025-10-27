@@ -1,7 +1,7 @@
 import jsPDF from 'jspdf';
 import { ensureSpace, measureAcceptanceBlock } from '@/lib/pdf-utils';
 import { formatCurrency, calculateLineItemTotal } from '@/lib/utils';
-import { getImageDimensions, getAspectFitBox, getCenteredOrigin } from '@/lib/pdf-image-pipeline';
+import { getImageDimensions, getAspectFitBox, getCenteredOrigin, normalizeImageToDataUrl } from '@/lib/pdf-image-pipeline';
 
 const EDG_TEAL = [66, 255, 193] as const;
 
@@ -183,19 +183,21 @@ export async function drawProjectDetailsPage(pdf: jsPDF, opts: DrawProjectDetail
   if (coverDataUrl) {
     const boxW = contentW;
     const boxH = 100; // Maximum height for cover photo
-    const imgFormat = detectImageFormat(coverDataUrl);
+    
+    // Normalize image to apply EXIF orientation correction
+    const { dataUrl: normalizedCover, format: imgFormat } = await normalizeImageToDataUrl(coverDataUrl);
     
     try {
-      const dims = await getImageDimensions(coverDataUrl);
+      const dims = await getImageDimensions(normalizedCover);
       const { w: imgW, h: imgH } = getAspectFitBox(dims.width, dims.height, boxW, boxH);
       const { x: imgX, y: imgY } = getCenteredOrigin(margin, y, boxW, boxH, imgW, imgH);
       
-      pdf.addImage(coverDataUrl, imgFormat, imgX, imgY, imgW, imgH);
+      pdf.addImage(normalizedCover, imgFormat, imgX, imgY, imgW, imgH);
       y += boxH;
     } catch (error) {
       console.error('Error rendering cover photo:', error);
       // Fallback to centered box if dimension detection fails
-      pdf.addImage(coverDataUrl, imgFormat, margin, y, boxW, boxH);
+      pdf.addImage(normalizedCover, imgFormat, margin, y, boxW, boxH);
       y += boxH;
     }
   }
@@ -508,19 +510,21 @@ export async function drawRenderingsPages(pdf: jsPDF, opts: DrawRenderingsPagesO
     const boxY = y + relativeIndex * (boxH + gap);
 
     const img = images[imgIndex];
-    const format = detectImageFormat(img.dataUrl);
+    
+    // Normalize image to apply EXIF orientation correction
+    const { dataUrl: normalizedImage, format } = await normalizeImageToDataUrl(img.dataUrl);
 
     // Get image dimensions and calculate aspect-fit size
     try {
-      const dims = await getImageDimensions(img.dataUrl);
+      const dims = await getImageDimensions(normalizedImage);
       const { w: imgW, h: imgH } = getAspectFitBox(dims.width, dims.height, boxW, boxH);
       const { x: imgX, y: imgY } = getCenteredOrigin(margin, boxY, boxW, boxH, imgW, imgH);
 
-      pdf.addImage(img.dataUrl, format, imgX, imgY, imgW, imgH);
+      pdf.addImage(normalizedImage, format, imgX, imgY, imgW, imgH);
     } catch (error) {
       console.error('Error rendering image:', error);
       // Fallback to centered box if dimension detection fails
-      pdf.addImage(img.dataUrl, format, margin, boxY, boxW, boxH);
+      pdf.addImage(normalizedImage, format, margin, boxY, boxW, boxH);
     }
 
     imgIndex++;
