@@ -95,17 +95,8 @@ export const quotes = pgTable("quotes", {
   quoteNumber: text("quote_number").notNull().unique(),
   accountId: integer("account_id").references(() => accounts.id, { onDelete: "set null" }), // Reference to accounts table
   projectName: text("project_name"),
-  projectAddress: text("project_address"), // Legacy field, kept for backward compatibility
-  // Structured project address fields for Google Places integration
-  projectStreetAddress: text("project_street_address"),
-  projectAddressLine2: text("project_address_line_2"),
-  projectCity: text("project_city"),
-  projectState: text("project_state"),
-  projectZipCode: text("project_zip_code"),
-  projectCountry: text("project_country"),
-  projectPlaceId: text("project_place_id"),
   jobsiteAddress: text("jobsite_address"), // Legacy field, kept for backward compatibility
-  // Structured jobsite address fields for Google Places integration (if different from project address)
+  // Structured jobsite address fields for Google Places integration
   jobsiteStreetAddress: text("jobsite_street_address"),
   jobsiteAddressLine2: text("jobsite_address_line_2"),
   jobsiteCity: text("jobsite_city"),
