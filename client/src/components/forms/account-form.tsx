@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { SecondaryContactsManager } from "@/components/SecondaryContactsManager";
+import { AddressAutocomplete } from "@/components/address-autocomplete";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { z } from "zod";
@@ -35,7 +36,14 @@ const accountFormSchema = insertAccountSchema.extend({
     "other"
   ]),
   paymentTerms: z.string().optional(),
-  billingAddress: z.string().optional()
+  billingAddress: z.string().optional(),
+  streetAddress: z.string().optional(),
+  addressLine2: z.string().optional(),
+  city: z.string().optional(),
+  state: z.string().optional(),
+  zipCode: z.string().optional(),
+  country: z.string().optional(),
+  placeId: z.string().optional()
 }).omit({
   secondaryContacts: true, // Handle separately to avoid validation issues
 });
@@ -65,9 +73,33 @@ export function AccountForm({ account, onSuccess, onCancel }: AccountFormProps) 
       company: account?.company || "",
       accountType: (account?.accountType as "homeowner" | "general_contractor" | "commercial" | "property_manager" | "architect" | "developer" | "subcontractor" | "government" | "nonprofit" | "other") || "homeowner",
       paymentTerms: account?.paymentTerms || "net_30",
-      billingAddress: account?.billingAddress || ""
+      billingAddress: account?.billingAddress || "",
+      streetAddress: account?.streetAddress || "",
+      addressLine2: account?.addressLine2 || "",
+      city: account?.city || "",
+      state: account?.state || "",
+      zipCode: account?.zipCode || "",
+      country: account?.country || "",
+      placeId: account?.placeId || ""
     }
   });
+
+  const handleAddressSelect = (components: {
+    streetAddress: string;
+    addressLine2: string;
+    city: string;
+    state: string;
+    zipCode: string;
+    country: string;
+    placeId: string;
+  }) => {
+    form.setValue("streetAddress", components.streetAddress);
+    form.setValue("city", components.city);
+    form.setValue("state", components.state);
+    form.setValue("zipCode", components.zipCode);
+    form.setValue("country", components.country);
+    form.setValue("placeId", components.placeId);
+  };
 
   const createAccountMutation = useMutation({
     mutationFn: async (data: AccountFormData) => {
@@ -271,24 +303,105 @@ export function AccountForm({ account, onSuccess, onCancel }: AccountFormProps) 
           />
         </div>
 
-        <FormField
-          control={form.control}
-          name="billingAddress"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Billing Address</FormLabel>
-              <FormControl>
-                <Textarea 
-                  placeholder="123 Main St, City, State ZIP" 
-                  {...field} 
-                  rows={3}
-                  data-testid="textarea-billing-address"
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+        <div className="space-y-4">
+          <h3 className="text-sm font-medium">Billing Address</h3>
+          <FormField
+            control={form.control}
+            name="billingAddress"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Street Address *</FormLabel>
+                <FormControl>
+                  <AddressAutocomplete
+                    value={field.value || ""}
+                    onChange={field.onChange}
+                    onAddressSelect={handleAddressSelect}
+                    placeholder="Start typing an address..."
+                    testId="input-billing-address"
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <FormField
+              control={form.control}
+              name="addressLine2"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Apt, Suite, etc. (optional)</FormLabel>
+                  <FormControl>
+                    <Input 
+                      placeholder="Apt 4B" 
+                      {...field} 
+                      data-testid="input-address-line2"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="city"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>City</FormLabel>
+                  <FormControl>
+                    <Input 
+                      placeholder="City" 
+                      {...field} 
+                      data-testid="input-city"
+                      readOnly
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="state"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>State</FormLabel>
+                  <FormControl>
+                    <Input 
+                      placeholder="State" 
+                      {...field} 
+                      data-testid="input-state"
+                      readOnly
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="zipCode"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>ZIP Code</FormLabel>
+                  <FormControl>
+                    <Input 
+                      placeholder="ZIP" 
+                      {...field} 
+                      data-testid="input-zipcode"
+                      readOnly
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+        </div>
 
         <div className="border-t pt-6">
           <SecondaryContactsManager
