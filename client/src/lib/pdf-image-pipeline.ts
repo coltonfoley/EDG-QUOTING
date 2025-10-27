@@ -94,7 +94,10 @@ function blobToDataUrl(blob: Blob): Promise<string> {
  * Returns orientation value (1-8) or 1 if not found/not JPEG
  */
 async function getExifOrientation(blob: Blob): Promise<number> {
+  console.log('[EXIF] Checking EXIF orientation for blob type:', blob.type, 'size:', blob.size);
+  
   if (!blob.type.toLowerCase().includes('jpeg') && !blob.type.toLowerCase().includes('jpg')) {
+    console.log('[EXIF] Not a JPEG, returning orientation 1');
     return 1; // Not a JPEG, no EXIF
   }
 
@@ -103,7 +106,10 @@ async function getExifOrientation(blob: Blob): Promise<number> {
     const view = new DataView(buffer);
 
     // Check for JPEG SOI marker (0xFFD8)
-    if (view.getUint16(0) !== 0xFFD8) return 1;
+    if (view.getUint16(0) !== 0xFFD8) {
+      console.log('[EXIF] No JPEG SOI marker found, returning orientation 1');
+      return 1;
+    }
 
     let offset = 2;
     while (offset < view.byteLength) {
@@ -137,7 +143,9 @@ async function getExifOrientation(blob: Blob): Promise<number> {
             const tag = view.getUint16(tagOffset, littleEndian);
             
             if (tag === 0x0112) { // Orientation tag
-              return view.getUint16(tagOffset + 8, littleEndian);
+              const orientation = view.getUint16(tagOffset + 8, littleEndian);
+              console.log('[EXIF] Found orientation tag:', orientation);
+              return orientation;
             }
           }
         }
@@ -149,9 +157,10 @@ async function getExifOrientation(blob: Blob): Promise<number> {
       }
     }
   } catch (e) {
-    console.warn('Failed to read EXIF orientation:', e);
+    console.warn('[EXIF] Failed to read EXIF orientation:', e);
   }
 
+  console.log('[EXIF] No orientation tag found, returning orientation 1');
   return 1; // Default: no rotation
 }
 
