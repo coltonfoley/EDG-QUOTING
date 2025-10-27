@@ -32,7 +32,7 @@ interface AddressAutocompleteProps {
 const loadGooglePlacesScript = (): Promise<void> => {
   return new Promise((resolve, reject) => {
     // Already loaded
-    if (window.googleMapsLoaded && window.google?.maps?.places) {
+    if (window.googleMapsLoaded && window.google?.maps) {
       resolve();
       return;
     }
@@ -40,7 +40,7 @@ const loadGooglePlacesScript = (): Promise<void> => {
     // Already loading
     if (window.googleMapsLoading) {
       const checkInterval = setInterval(() => {
-        if (window.googleMapsLoaded && window.google?.maps?.places) {
+        if (window.googleMapsLoaded && window.google?.maps) {
           clearInterval(checkInterval);
           resolve();
         }
@@ -57,8 +57,9 @@ const loadGooglePlacesScript = (): Promise<void> => {
 
     window.googleMapsLoading = true;
 
+    // Use the bootstrap loader approach for the new API
     const script = document.createElement("script");
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&loading=async`;
     script.async = true;
     script.defer = true;
     
@@ -88,8 +89,8 @@ export function AddressAutocomplete({
   const [isLoading, setIsLoading] = useState(false);
   const [isScriptLoaded, setIsScriptLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const autocompleteElementRef = useRef<any>(null);
 
   useEffect(() => {
     setIsLoading(true);
@@ -108,103 +109,169 @@ export function AddressAutocomplete({
   }, []);
 
   useEffect(() => {
-    if (!isScriptLoaded || !inputRef.current) return;
+    if (!isScriptLoaded || !containerRef.current || disabled) return;
 
-    try {
-      autocompleteRef.current = new google.maps.places.Autocomplete(inputRef.current, {
-        types: ["address"],
-        componentRestrictions: { country: "us" },
-        fields: ["address_components", "formatted_address", "place_id"]
-      });
+    let cleanup: (() => void) | null = null;
 
-      autocompleteRef.current.addListener("place_changed", () => {
-        const place = autocompleteRef.current?.getPlace();
-        
-        if (!place || !place.address_components) {
-          return;
-        }
+    const initAutocomplete = async () => {
+      try {
+        // Import the places library
+        await google.maps.importLibrary("places");
 
-        const components: AddressComponents = {
-          streetAddress: "",
-          addressLine2: "",
-          city: "",
-          state: "",
-          zipCode: "",
-          country: "",
-          placeId: place.place_id || ""
-        };
-
-        let streetNumber = "";
-        let route = "";
-        let subpremise = "";
-
-        place.address_components.forEach((component) => {
-          const types = component.types;
-
-          if (types.includes("street_number")) {
-            streetNumber = component.long_name;
-          }
-          if (types.includes("route")) {
-            route = component.long_name;
-          }
-          if (types.includes("subpremise")) {
-            subpremise = component.long_name;
-          }
-          if (types.includes("locality")) {
-            components.city = component.long_name;
-          }
-          if (types.includes("administrative_area_level_1")) {
-            components.state = component.short_name;
-          }
-          if (types.includes("postal_code")) {
-            components.zipCode = component.long_name;
-          }
-          if (types.includes("country")) {
-            components.country = component.long_name;
-          }
+        // Create the new PlaceAutocompleteElement
+        const placeAutocomplete = new google.maps.places.PlaceAutocompleteElement({
+          includedRegionCodes: ["us"]
         });
 
-        components.streetAddress = `${streetNumber} ${route}`.trim();
-        if (subpremise) {
-          components.addressLine2 = subpremise;
-        }
-        
-        const formattedAddress = place.formatted_address || components.streetAddress;
-        onChange(formattedAddress);
-        onAddressSelect(components);
-      });
-    } catch (error) {
-      console.error("Error initializing Google Places Autocomplete:", error);
-    }
+        // Store reference
+        autocompleteElementRef.current = placeAutocomplete;
 
-    return () => {
-      if (autocompleteRef.current) {
-        google.maps.event.clearInstanceListeners(autocompleteRef.current);
+        // Add to container
+        if (containerRef.current) {
+          containerRef.current.appendChild(placeAutocomplete);
+        }
+
+        // Listen for place selection with the correct event name
+        const handlePlaceSelect = async (event: any) => {
+          try {
+            // Handle both possible event structures
+            const placePrediction = event.placePrediction || event.detail?.place || event.detail?.placePrediction;
+            if (!placePrediction) {
+              console.warn("No place prediction found in event:", event);
+              return;
+            }
+
+            // Convert to Place object
+            const place = placePrediction.toPlace ? placePrediction.toPlace() : placePrediction;
+
+            // Fetch the fields we need
+            await place.fetchFields({
+              fields: ["addressComponents", "formattedAddress", "id"]
+            });
+
+            const addressComponents = place.addressComponents;
+            if (!addressComponents) return;
+
+            const components: AddressComponents = {
+              streetAddress: "",
+              addressLine2: "",
+              city: "",
+              state: "",
+              zipCode: "",
+              country: "",
+              placeId: place.id || ""
+            };
+
+            let streetNumber = "";
+            let route = "";
+            let subpremise = "";
+
+            addressComponents.forEach((component: any) => {
+              const types = component.types;
+
+              if (types.includes("street_number")) {
+                streetNumber = component.longText;
+              }
+              if (types.includes("route")) {
+                route = component.longText;
+              }
+              if (types.includes("subpremise")) {
+                subpremise = component.longText;
+              }
+              if (types.includes("locality")) {
+                components.city = component.longText;
+              }
+              if (types.includes("administrative_area_level_1")) {
+                components.state = component.shortText;
+              }
+              if (types.includes("postal_code")) {
+                components.zipCode = component.longText;
+              }
+              if (types.includes("country")) {
+                components.country = component.longText;
+              }
+            });
+
+            components.streetAddress = `${streetNumber} ${route}`.trim();
+            if (subpremise) {
+              components.addressLine2 = subpremise;
+            }
+
+            const formattedAddress = place.formattedAddress || components.streetAddress;
+            onChange(formattedAddress);
+            onAddressSelect(components);
+          } catch (err) {
+            console.error("Error processing place selection:", err);
+          }
+        };
+
+        placeAutocomplete.addEventListener("gmp-select", handlePlaceSelect);
+
+        cleanup = () => {
+          placeAutocomplete.removeEventListener("gmp-select", handlePlaceSelect);
+          if (containerRef.current && autocompleteElementRef.current) {
+            try {
+              containerRef.current.removeChild(autocompleteElementRef.current);
+            } catch (e) {
+              // Element might already be removed
+            }
+          }
+          autocompleteElementRef.current = null;
+        };
+      } catch (error) {
+        console.error("Error initializing Google Places Autocomplete:", error);
+        setError("Failed to initialize address autocomplete");
       }
     };
-  }, [isScriptLoaded, onChange, onAddressSelect]);
+
+    initAutocomplete();
+
+    return () => {
+      if (cleanup) cleanup();
+    };
+  }, [isScriptLoaded, onChange, onAddressSelect, disabled]);
+
+  if (error) {
+    return (
+      <div className="relative">
+        <Input
+          type="text"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          disabled={disabled}
+          data-testid={testId}
+          className="pr-10"
+        />
+        <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+          <MapPin className="h-4 w-4 text-muted-foreground" />
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="relative">
-      <Input
-        ref={inputRef}
-        type="text"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        disabled={disabled || !isScriptLoaded}
-        data-testid={testId}
-        className="pr-10"
-      />
-      <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
-        {isLoading ? (
-          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-        ) : isScriptLoaded ? (
-          <MapPin className="h-4 w-4 text-muted-foreground" />
-        ) : (
-          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-        )}
-      </div>
+    <div className="w-full">
+      {!isScriptLoaded ? (
+        <div className="relative">
+          <Input
+            type="text"
+            placeholder="Loading address autocomplete..."
+            disabled
+            data-testid={testId}
+            className="pr-10"
+          />
+          <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+          </div>
+        </div>
+      ) : (
+        <div 
+          ref={containerRef} 
+          data-testid={testId} 
+          className="w-full [&_input]:w-full [&_input]:px-3 [&_input]:py-2 [&_input]:text-sm [&_input]:rounded-md [&_input]:border [&_input]:border-input [&_input]:bg-background [&_input]:ring-offset-background [&_input]:placeholder:text-muted-foreground [&_input]:focus-visible:outline-none [&_input]:focus-visible:ring-2 [&_input]:focus-visible:ring-ring [&_input]:focus-visible:ring-offset-2"
+        />
+      )}
     </div>
   );
 }
