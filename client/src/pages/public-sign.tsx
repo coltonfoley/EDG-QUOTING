@@ -20,7 +20,7 @@ interface SigningQuoteData {
   id: number;
   quoteNumber: string | null;
   projectName: string | null;
-  projectAddress: string | null;
+  jobsiteAddress: string | null;
   accountName: string;
   lineItems: Array<{
     id: number;
