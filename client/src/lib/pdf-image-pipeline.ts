@@ -110,52 +110,90 @@ function blobToDataUrl(blob: Blob): Promise<string> {
 }
 
 /**
- * Converts an image to a specific format using canvas
+ * Loads an image with EXIF orientation correction applied
+ * Uses createImageBitmap when available for automatic EXIF handling
  */
-function convertImageViaCanvas(blob: Blob, targetFormat: 'PNG' | 'JPEG'): Promise<string> {
+async function loadCorrectedImageBitmap(blob: Blob): Promise<ImageBitmap | HTMLImageElement> {
+  // Modern browsers: respects EXIF Orientation automatically
+  if ('createImageBitmap' in window) {
+    try {
+      const bmp = await createImageBitmap(blob, { 
+        imageOrientation: 'from-image' as ImageOrientation
+      });
+      return bmp;
+    } catch (e) {
+      console.warn('createImageBitmap failed, falling back to Image:', e);
+      // Fall through to Image fallback
+    }
+  }
+  
+  // Fallback: plain Image (may not apply EXIF correctly)
   return new Promise((resolve, reject) => {
     const img = new Image();
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-
-    if (!ctx) {
-      reject(new Error('Failed to get canvas context'));
-      return;
-    }
-
+    const url = URL.createObjectURL(blob);
+    
     img.onload = () => {
-      canvas.width = img.width;
-      canvas.height = img.height;
-
-      // For JPEG, fill white background (JPEG doesn't support transparency)
-      if (targetFormat === 'JPEG') {
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-      }
-
-      ctx.drawImage(img, 0, 0);
-
-      const mimeType = targetFormat === 'PNG' ? 'image/png' : 'image/jpeg';
-      const quality = targetFormat === 'JPEG' ? 0.92 : undefined;
-
-      canvas.toBlob((convertedBlob) => {
-        if (convertedBlob) {
-          blobToDataUrl(convertedBlob).then(resolve).catch(reject);
-        } else {
-          reject(new Error('Failed to convert image'));
-        }
-      }, mimeType, quality);
-      
-      // Clean up
-      URL.revokeObjectURL(img.src);
+      URL.revokeObjectURL(url);
+      resolve(img);
     };
-
+    
     img.onerror = () => {
-      URL.revokeObjectURL(img.src);
-      reject(new Error('Failed to load image for conversion'));
+      URL.revokeObjectURL(url);
+      reject(new Error('Failed to load image'));
     };
+    
+    img.src = url;
+  });
+}
 
-    img.src = URL.createObjectURL(blob);
+/**
+ * Converts an image to a specific format using canvas, with EXIF orientation correction
+ */
+async function convertImageViaCanvas(blob: Blob, targetFormat: 'PNG' | 'JPEG'): Promise<string> {
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+
+  if (!ctx) {
+    throw new Error('Failed to get canvas context');
+  }
+
+  // Load image with EXIF correction
+  const img = await loadCorrectedImageBitmap(blob);
+  
+  // Get dimensions (works for both ImageBitmap and HTMLImageElement)
+  let width: number;
+  let height: number;
+  
+  if (img instanceof ImageBitmap) {
+    width = img.width;
+    height = img.height;
+  } else {
+    width = img.naturalWidth;
+    height = img.naturalHeight;
+  }
+  
+  canvas.width = width;
+  canvas.height = height;
+
+  // For JPEG, fill white background (JPEG doesn't support transparency)
+  if (targetFormat === 'JPEG') {
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
+
+  ctx.drawImage(img as CanvasImageSource, 0, 0);
+
+  const mimeType = targetFormat === 'PNG' ? 'image/png' : 'image/jpeg';
+  const quality = targetFormat === 'JPEG' ? 0.92 : undefined;
+
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((convertedBlob) => {
+      if (convertedBlob) {
+        blobToDataUrl(convertedBlob).then(resolve).catch(reject);
+      } else {
+        reject(new Error('Failed to convert image'));
+      }
+    }, mimeType, quality);
   });
 }
 
