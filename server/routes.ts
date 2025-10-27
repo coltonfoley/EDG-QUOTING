@@ -48,6 +48,7 @@ import {
 } from "./validation-schemas";
 import multer from "multer";
 import * as XLSX from "xlsx";
+import sharp from "sharp";
 import { extractQuoteDataFromImages, extractQuoteDataFromPDF } from "./openai";
 import { convertPDFToImagesServer } from "./quoteImageUtils";
 import { ObjectStorageService, ObjectNotFoundError, objectStorageClient } from "./objectStorage";
@@ -403,7 +404,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Set ACL policy after successful upload
+  // Set ACL policy after successful upload + normalize image with Sharp
   app.post("/api/images/finalize-upload", isAuthenticated, async (req, res) => {
     try {
       // Validate request body
@@ -424,7 +425,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const objectStorageService = new ObjectStorageService();
       
-      // Set ACL policy - making images public for now (quotes are shareable)
+      try {
+        // 1. Download the uploaded image from object storage
+        console.log(`📥 Downloading image for normalization: ${objectPath}`);
+        const objectFile = await objectStorageService.getObjectEntityFile(objectPath);
+        const [fileContents] = await objectFile.download();
+        
+        // 2. Normalize the image with Sharp (auto-orient + quality optimization)
+        console.log(`🔧 Normalizing image with Sharp...`);
+        const normalizedBuffer = await sharp(fileContents)
+          .rotate() // Auto-orient based on EXIF data - THIS FIXES THE ROTATION ISSUE
+          .resize({
+            width: 2400,
+            height: 1800,
+            fit: 'inside', // Preserve aspect ratio, no distortion
+            withoutEnlargement: true,
+          })
+          .jpeg({ quality: 85, mozjpeg: true })
+          .toBuffer();
+        
+        // 3. Re-upload the normalized image to the same location
+        console.log(`📤 Re-uploading normalized image...`);
+        await objectFile.save(normalizedBuffer, {
+          contentType: 'image/jpeg',
+          metadata: {
+            cacheControl: 'public, max-age=31536000',
+          },
+        });
+        
+        console.log(`✅ Image normalized and saved`);
+      } catch (normalizeError) {
+        console.warn(`⚠️ Image normalization failed, proceeding without normalization:`, normalizeError);
+        // Continue with ACL setup even if normalization fails
+      }
+      
+      // 4. Set ACL policy - making images public for now (quotes are shareable)
       const normalizedPath = await objectStorageService.trySetObjectEntityAclPolicy(
         objectPath,
         {
