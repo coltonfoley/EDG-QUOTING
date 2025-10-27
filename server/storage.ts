@@ -1200,6 +1200,7 @@ export class DatabaseStorage implements IStorage {
         notes: originalQuote.notes,
         taxRate: originalQuote.taxRate,
         discount: originalQuote.discount,
+        tariffRate: originalQuote.tariffRate,
         shipping: originalQuote.shipping,
         isShippingTaxable: originalQuote.isShippingTaxable,
         dealStage: originalQuote.dealStage,
