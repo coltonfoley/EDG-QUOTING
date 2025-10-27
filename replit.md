@@ -70,12 +70,14 @@ Preferred communication style: Simple, everyday language.
     - **QuickBooks**: API integration for creating Estimates.
     - **Gmail connector**: For sending emails with quote details and signing links.
     - **html2canvas and jsPDF**: For client-side PDF generation.
+    - **Sharp**: Server-side image processing library for EXIF rotation during uploads.
+- **Image Upload Pipeline** (`server/routes.ts`):
+    - **Server-Side EXIF Rotation**: Images are automatically rotated during upload to fix sideways phone photos
+        - Uses Sharp's `.rotate()` method which reads EXIF orientation tags (1-8) and applies the correct rotation
+        - Processing happens before saving to Google Cloud Storage, ensuring all stored images are correctly oriented
+        - Applies to both cover photos (`/api/quotes/:quoteId/cover-photos`) and product renderings (`/api/quotes/:quoteId/product-renderings`)
+        - Once stored, images display correctly everywhere: browser preview, PDF generation, and all future uses
+        - Eliminates the need for client-side orientation handling since images are permanently corrected in storage
 - **PDF Image Pipeline** (`client/src/lib/pdf-image-pipeline.ts`):
-    - **EXIF Orientation Handling**: Comprehensive solution for fixing sideways phone photos in PDFs
-        - Reads JPEG EXIF orientation tags (1-8) directly from binary data
-        - Applies manual canvas transformations for all 8 orientation values
-        - Dual-path optimization: fast ImageBitmap for normal images, manual rotation for rotated images
-        - Works consistently across all browsers, including Safari/iOS where createImageBitmap ignores imageOrientation
-        - Image caching with normalizeImageToDataUrl prevents repeated conversions
     - **Image Processing**: Aspect-fit sizing preserves natural image proportions in PDFs
     - **Dimension Calculation**: Returns post-rotation dimensions (swaps width/height for 90° rotations)
