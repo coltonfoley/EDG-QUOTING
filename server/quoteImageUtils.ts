@@ -6,6 +6,38 @@ interface PDFPageImage {
   imageBase64: string;
 }
 
+interface NormalizeImageOptions {
+  maxW?: number;
+  maxH?: number;
+}
+
+/**
+ * Normalizes an uploaded image for PDF generation
+ * - Auto-orients based on EXIF data
+ * - Resizes to fit within maxW x maxH while preserving aspect ratio
+ * - Outputs high-quality JPEG
+ */
+export async function normalizeImage(
+  buf: Buffer,
+  opts?: NormalizeImageOptions
+): Promise<Buffer> {
+  const maxW = opts?.maxW ?? 2400; // Reasonable cap for PDFs
+  const maxH = opts?.maxH ?? 1800;
+
+  const out = await sharp(buf)
+    .rotate() // Auto-orient based on EXIF
+    .resize({
+      width: maxW,
+      height: maxH,
+      fit: 'inside', // Preserve aspect ratio, no cropping
+      withoutEnlargement: true,
+    })
+    .jpeg({ quality: 85, mozjpeg: true })
+    .toBuffer();
+
+  return out;
+}
+
 /**
  * Server-side PDF to images conversion using Sharp with Puppeteer fallback
  * Pure vision-based processing - NO text extraction
