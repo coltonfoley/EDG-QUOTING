@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import { Building2, Briefcase, Edit, ChevronLeft, User, FolderPlus, Users, Mail, Phone, ChevronDown, ChevronRight, FileStack } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
@@ -426,15 +427,17 @@ export default function AccountDetail() {
 
       {/* Edit Client Dialog */}
       <Dialog open={editAccountOpen} onOpenChange={setEditAccountOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
           <DialogHeader>
             <DialogTitle>Edit Client</DialogTitle>
           </DialogHeader>
-          <AccountForm 
-            account={account}
-            onSuccess={handleAccountUpdated}
-            onCancel={() => setEditAccountOpen(false)}
-          />
+          <ScrollArea className="flex-1 pr-6">
+            <AccountForm 
+              account={account}
+              onSuccess={handleAccountUpdated}
+              onCancel={() => setEditAccountOpen(false)}
+            />
+          </ScrollArea>
         </DialogContent>
       </Dialog>
 
