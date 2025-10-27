@@ -49,7 +49,15 @@ export const accounts = pgTable("accounts", {
   company: text("company"), // Company name for business clients
   accountType: text("account_type").notNull().default("homeowner"), // general_contractor, homeowner, commercial
   paymentTerms: text("payment_terms").default("net_30"), // net_30, net_60, due_on_receipt, etc.
-  billingAddress: text("billing_address"),
+  billingAddress: text("billing_address"), // Legacy field, kept for backward compatibility
+  // Structured address fields for Google Places integration
+  streetAddress: text("street_address"),
+  addressLine2: text("address_line_2"), // Apt, Suite, etc.
+  city: text("city"),
+  state: text("state"),
+  zipCode: text("zip_code"),
+  country: text("country"),
+  placeId: text("place_id"), // Google Places ID for verification
   // Client-specific fields for unified model
   firstName: text("first_name"), // Individual's first name (optional for company-only accounts)
   lastName: text("last_name"), // Individual's last name (optional for company-only accounts)
