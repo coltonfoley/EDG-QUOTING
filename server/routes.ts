@@ -1891,7 +1891,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Ensure optional fields are properly handled
       const quoteData: Partial<InsertQuote> = {
         ...parsedData,
-        jobsiteAddress: parsedData.jobsiteAddress === null ? undefined : parsedData.jobsiteAddress,
         lostReason: parsedData.lostReason === null ? undefined : parsedData.lostReason,
       };
       

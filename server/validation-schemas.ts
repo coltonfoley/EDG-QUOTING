@@ -159,9 +159,14 @@ export const insertQuoteSchema = baseQuoteSchema.extend({
 
   dealStage: z.enum(["new_lead", "qualifying", "consultation_scheduled", "building_estimate", "quote_sent", "closed_won", "closed_lost", "on_hold"]).default("new_lead"),
   lostReason: z.string().max(500, "Lost reason is too long").optional().nullable(),
-  jobsiteAddress: z.string().max(1000, "Jobsite address is too long").optional().nullable(),
   projectName: z.string().min(1, "Project name is required").max(500, "Project name is too long"),
-  projectAddress: z.string().max(1000, "Project address is too long").optional(),
+  jobsiteStreetAddress: z.string().max(500, "Street address is too long").optional(),
+  jobsiteAddressLine2: z.string().max(500, "Address line 2 is too long").optional(),
+  jobsiteCity: z.string().max(200, "City is too long").optional(),
+  jobsiteState: z.string().max(100, "State is too long").optional(),
+  jobsiteZipCode: z.string().max(20, "ZIP code is too long").optional(),
+  jobsiteCountry: z.string().max(100, "Country is too long").optional(),
+  jobsitePlaceId: z.string().max(500, "Place ID is too long").optional(),
   estimatedStartDate: z.string().optional(),
   notes: z.string().max(5000, "Notes are too long").optional(),
   taxRate: z.union([z.string(), z.number(), z.null()])
@@ -216,8 +221,13 @@ export const createQuoteSchema = z.object({
   
   // Quote project details
   projectName: z.string().min(1, "Project name is required").max(500, "Project name is too long"),
-  projectAddress: z.string().max(1000, "Project address is too long").optional(),
-  jobsiteAddress: z.string().max(1000, "Jobsite address is too long").optional().nullable(),
+  jobsiteStreetAddress: z.string().max(500, "Street address is too long").optional(),
+  jobsiteAddressLine2: z.string().max(500, "Address line 2 is too long").optional(),
+  jobsiteCity: z.string().max(200, "City is too long").optional(),
+  jobsiteState: z.string().max(100, "State is too long").optional(),
+  jobsiteZipCode: z.string().max(20, "ZIP code is too long").optional(),
+  jobsiteCountry: z.string().max(100, "Country is too long").optional(),
+  jobsitePlaceId: z.string().max(500, "Place ID is too long").optional(),
   estimatedStartDate: z.string().optional(),
   notes: z.string().max(5000, "Notes are too long").optional(),
   
@@ -277,9 +287,14 @@ export const updateQuoteSchema = z.object({
 
   dealStage: z.enum(["new_lead", "qualifying", "consultation_scheduled", "building_estimate", "quote_sent", "closed_won", "closed_lost", "on_hold"]).optional(),
   lostReason: z.string().max(500, "Lost reason is too long").optional().nullable(),
-  jobsiteAddress: z.string().max(1000, "Jobsite address is too long").optional().nullable(),
   projectName: z.string().max(500, "Project name is too long").optional(),
-  projectAddress: z.string().max(1000, "Project address is too long").optional(),
+  jobsiteStreetAddress: z.string().max(500, "Street address is too long").optional(),
+  jobsiteAddressLine2: z.string().max(500, "Address line 2 is too long").optional(),
+  jobsiteCity: z.string().max(200, "City is too long").optional(),
+  jobsiteState: z.string().max(100, "State is too long").optional(),
+  jobsiteZipCode: z.string().max(20, "ZIP code is too long").optional(),
+  jobsiteCountry: z.string().max(100, "Country is too long").optional(),
+  jobsitePlaceId: z.string().max(500, "Place ID is too long").optional(),
   estimatedStartDate: z.string().optional(),
   notes: z.string().max(5000, "Notes are too long").optional(),
   // Align with insertQuoteSchema coercion for tax/discount/shipping
