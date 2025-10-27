@@ -68,6 +68,10 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
   const [isUploading, setIsUploading] = useState(false);
   const [generatedPdfUrl, setGeneratedPdfUrl] = useState<string | null>(null);
   
+  // Drag-and-drop state for visual feedback
+  const [isDraggingOverCover, setIsDraggingOverCover] = useState(false);
+  const [isDraggingOverRenderings, setIsDraggingOverRenderings] = useState(false);
+  
   // Contract state and logic - recompute on each render to catch quote updates
   const hasContractData = Boolean(quote.notes?.trim() || quote.contractTemplate || quote.customContractTerms?.trim());
   const [includeContract, setIncludeContract] = useState(hasContractData);
@@ -387,6 +391,95 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
     }
   };
 
+  // Drag-and-drop handlers
+  const handleDragOver = (e: React.DragEvent, type: 'cover' | 'renderings') => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (type === 'cover') {
+      setIsDraggingOverCover(true);
+    } else {
+      setIsDraggingOverRenderings(true);
+    }
+  };
+
+  const handleDragLeave = (e: React.DragEvent, type: 'cover' | 'renderings') => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (type === 'cover') {
+      setIsDraggingOverCover(false);
+    } else {
+      setIsDraggingOverRenderings(false);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent, type: 'cover' | 'renderings') => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (type === 'cover') {
+      setIsDraggingOverCover(false);
+    } else {
+      setIsDraggingOverRenderings(false);
+    }
+
+    const files = e.dataTransfer?.files;
+    if (files && files.length > 0) {
+      handleFileUpload(files, type);
+    }
+  };
+
+  // Clipboard paste handler
+  const handlePaste = (e: ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+
+    const imageFiles: File[] = [];
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (item.type.startsWith('image/')) {
+        const file = item.getAsFile();
+        if (file) {
+          imageFiles.push(file);
+        }
+      }
+    }
+
+    if (imageFiles.length > 0) {
+      // Determine which section to upload to based on context
+      // If cover page is enabled and no cover photo exists, upload as cover
+      // Otherwise, upload to renderings
+      if (includeCoverPage && !coverPhoto) {
+        const dataTransfer = new DataTransfer();
+        imageFiles.forEach(file => dataTransfer.items.add(file));
+        handleFileUpload(dataTransfer.files, 'cover');
+        
+        toast({
+          title: "Screenshot pasted",
+          description: "Image pasted as project cover",
+        });
+      } else {
+        const dataTransfer = new DataTransfer();
+        imageFiles.forEach(file => dataTransfer.items.add(file));
+        handleFileUpload(dataTransfer.files, 'renderings');
+        
+        toast({
+          title: "Screenshot pasted",
+          description: `${imageFiles.length} image(s) added to visuals & details`,
+        });
+      }
+    }
+  };
+
+  // Add paste event listener when dialog is open
+  useEffect(() => {
+    if (open) {
+      window.addEventListener('paste', handlePaste);
+      return () => {
+        window.removeEventListener('paste', handlePaste);
+      };
+    }
+  }, [open, includeCoverPage, coverPhoto]);
+
   // Helper function to load the logo
   const loadLogo = async (): Promise<{ dataUrl: string; width: number; height: number } | null> => {
     try {
@@ -613,11 +706,20 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
               <CardContent>
                 {!coverPhoto ? (
                   <div 
-                    className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center cursor-pointer hover:border-gray-400 transition-colors"
+                    className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-all ${
+                      isDraggingOverCover 
+                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-950' 
+                        : 'border-gray-300 hover:border-gray-400'
+                    }`}
                     onClick={() => coverPhotoRef.current?.click()}
+                    onDragOver={(e) => handleDragOver(e, 'cover')}
+                    onDragLeave={(e) => handleDragLeave(e, 'cover')}
+                    onDrop={(e) => handleDrop(e, 'cover')}
                   >
-                    <Upload className="w-8 h-8 mx-auto mb-2 text-gray-400" />
-                    <p className="text-sm text-gray-600">Click to upload project cover image</p>
+                    <Upload className={`w-8 h-8 mx-auto mb-2 ${isDraggingOverCover ? 'text-blue-500' : 'text-gray-400'}`} />
+                    <p className={`text-sm ${isDraggingOverCover ? 'text-blue-700 dark:text-blue-300 font-medium' : 'text-gray-600'}`}>
+                      {isDraggingOverCover ? 'Drop image here' : 'Drag & drop, paste (Ctrl+V), or click to upload'}
+                    </p>
                     <p className="text-xs text-gray-500">PNG, JPG up to 100MB</p>
                   </div>
                 ) : (
@@ -664,11 +766,20 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
             <CardContent>
               {productRenderings.length === 0 ? (
                 <div 
-                  className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center cursor-pointer hover:border-gray-400 transition-colors"
+                  className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-all ${
+                    isDraggingOverRenderings 
+                      ? 'border-blue-500 bg-blue-50 dark:bg-blue-950' 
+                      : 'border-gray-300 hover:border-gray-400'
+                  }`}
                   onClick={() => renderingsRef.current?.click()}
+                  onDragOver={(e) => handleDragOver(e, 'renderings')}
+                  onDragLeave={(e) => handleDragLeave(e, 'renderings')}
+                  onDrop={(e) => handleDrop(e, 'renderings')}
                 >
-                  <Upload className="w-8 h-8 mx-auto mb-2 text-gray-400" />
-                  <p className="text-sm text-gray-600">Click to upload visual assets (renderings, photos, details)</p>
+                  <Upload className={`w-8 h-8 mx-auto mb-2 ${isDraggingOverRenderings ? 'text-blue-500' : 'text-gray-400'}`} />
+                  <p className={`text-sm ${isDraggingOverRenderings ? 'text-blue-700 dark:text-blue-300 font-medium' : 'text-gray-600'}`}>
+                    {isDraggingOverRenderings ? 'Drop images here' : 'Drag & drop, paste (Ctrl+V), or click to upload'}
+                  </p>
                   <p className="text-xs text-gray-500">PNG, JPG up to 100MB each (max 5 images)</p>
                 </div>
               ) : (
@@ -697,14 +808,25 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
                   </div>
                   
                   {productRenderings.length < 5 && (
-                    <Button 
-                      variant="outline" 
-                      onClick={() => renderingsRef.current?.click()}
-                      className="w-full"
+                    <div
+                      className={`border-2 border-dashed rounded-lg p-3 transition-all ${
+                        isDraggingOverRenderings 
+                          ? 'border-blue-500 bg-blue-50 dark:bg-blue-950' 
+                          : 'border-gray-200'
+                      }`}
+                      onDragOver={(e) => handleDragOver(e, 'renderings')}
+                      onDragLeave={(e) => handleDragLeave(e, 'renderings')}
+                      onDrop={(e) => handleDrop(e, 'renderings')}
                     >
-                      <Upload className="w-4 h-4 mr-2" />
-                      Add More Images
-                    </Button>
+                      <Button 
+                        variant="outline" 
+                        onClick={() => renderingsRef.current?.click()}
+                        className="w-full"
+                      >
+                        <Upload className="w-4 h-4 mr-2" />
+                        {isDraggingOverRenderings ? 'Drop Images Here' : 'Add More Images (Drag, Paste, or Click)'}
+                      </Button>
+                    </div>
                   )}
                 </div>
               )}
