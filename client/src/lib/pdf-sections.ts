@@ -1,6 +1,7 @@
 import jsPDF from 'jspdf';
 import { ensureSpace, measureAcceptanceBlock } from '@/lib/pdf-utils';
 import { formatCurrency, calculateLineItemTotal } from '@/lib/utils';
+import { getImageDimensions, getAspectFitBox, getCenteredOrigin } from '@/lib/pdf-image-pipeline';
 
 const EDG_TEAL = [66, 255, 193] as const;
 
@@ -455,7 +456,7 @@ function drawCompactCompanyAcceptanceBlock(
   }
 }
 
-export function drawRenderingsPages(pdf: jsPDF, opts: DrawRenderingsPagesOpts): void {
+export async function drawRenderingsPages(pdf: jsPDF, opts: DrawRenderingsPagesOpts): Promise<void> {
   const { images, logoDataUrl, company, margin, contentW, pageW, pageH } = opts;
 
   if (images.length === 0) return;
@@ -471,8 +472,8 @@ export function drawRenderingsPages(pdf: jsPDF, opts: DrawRenderingsPagesOpts): 
 
   const imagesPerPage = 2;
   const gap = 10;
-  const imgW = contentW;
-  const imgH = imgW * 0.6; // Slightly wider aspect ratio for larger display
+  const boxW = contentW;
+  const boxH = 120; // Maximum height for each image slot
 
   let currentPage = 0;
   let imgIndex = 0;
@@ -492,13 +493,23 @@ export function drawRenderingsPages(pdf: jsPDF, opts: DrawRenderingsPagesOpts): 
     const pageStartIndex = currentPage * imagesPerPage;
     const relativeIndex = imgIndex - pageStartIndex;
 
-    const imgX = margin;
-    const imgY = y + relativeIndex * (imgH + gap);
+    const boxY = y + relativeIndex * (boxH + gap);
 
     const img = images[imgIndex];
     const format = detectImageFormat(img.dataUrl);
 
-    pdf.addImage(img.dataUrl, format, imgX, imgY, imgW, imgH);
+    // Get image dimensions and calculate aspect-fit size
+    try {
+      const dims = await getImageDimensions(img.dataUrl);
+      const { w: imgW, h: imgH } = getAspectFitBox(dims.width, dims.height, boxW, boxH);
+      const { x: imgX, y: imgY } = getCenteredOrigin(margin, boxY, boxW, boxH, imgW, imgH);
+
+      pdf.addImage(img.dataUrl, format, imgX, imgY, imgW, imgH);
+    } catch (error) {
+      console.error('Error rendering image:', error);
+      // Fallback to centered box if dimension detection fails
+      pdf.addImage(img.dataUrl, format, margin, boxY, boxW, boxH);
+    }
 
     imgIndex++;
   }
