@@ -48,7 +48,14 @@ interface ExtractedCustomer {
   email?: string | null;
   phone?: string | null;
   company?: string | null;
-  address?: string | null;
+  address?: string | null; // Legacy flat address field
+  // Structured address fields
+  streetAddress?: string | null;
+  addressLine2?: string | null;
+  city?: string | null;
+  state?: string | null;
+  zipCode?: string | null;
+  country?: string | null;
 }
 
 interface ExtractedQuote {

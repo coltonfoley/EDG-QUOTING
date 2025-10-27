@@ -121,7 +121,14 @@ const ExtractedCustomerSchema = z.object({
   email: z.string().nullable().optional(),
   phone: z.string().nullable().optional(),
   company: z.string().nullable().optional(),
-  address: z.string().nullable().optional(),
+  address: z.string().nullable().optional(), // Legacy flat address
+  // Structured address fields
+  streetAddress: z.string().nullable().optional(),
+  addressLine2: z.string().nullable().optional(),
+  city: z.string().nullable().optional(),
+  state: z.string().nullable().optional(),
+  zipCode: z.string().nullable().optional(),
+  country: z.string().nullable().optional(),
 });
 
 const ExtractedQuoteSchema = z.object({
@@ -403,7 +410,19 @@ ${textContent}
 
 Return JSON with these fields (ALL OPTIONAL):
 {
-  "customer": {"name": string|null, "email": string|null, "phone": string|null, "company": string|null, "address": string|null},
+  "customer": {
+    "name": string|null, 
+    "email": string|null, 
+    "phone": string|null, 
+    "company": string|null, 
+    "address": string|null,
+    "streetAddress": string|null,
+    "addressLine2": string|null,
+    "city": string|null,
+    "state": string|null,
+    "zipCode": string|null,
+    "country": string|null
+  },
   "quoteNumber": string|null,
   "date": string|null,
   "projectDescription": string|null,
@@ -421,7 +440,8 @@ Return JSON with these fields (ALL OPTIONAL):
 CRITICAL RULES:
 - ALWAYS include ALL top-level fields in your response - NEVER omit any field
 - Use null for any missing or unavailable data - do NOT omit fields entirely
-- For customer: if no customer info found, return {"name": null, "email": null, "phone": null, "company": null, "address": null}
+- For customer: if no customer info found, return {"name": null, "email": null, "phone": null, "company": null, "address": null, "streetAddress": null, "addressLine2": null, "city": null, "state": null, "zipCode": null, "country": null}
+- For customer address: provide both the full "address" string AND structured fields (streetAddress, city, state, zipCode, country) when possible
 - For lineItems: if no line items found, return empty array []
 - Extract ACTUAL data from the text, not example/placeholder data
 - Use NUMERIC values for all prices, quantities, totals
@@ -451,7 +471,10 @@ CRITICAL RULES:
     const extracted = ExtractedQuoteSchema.parse(parsedContent);
 
     // Normalize customer and lineItems to ensure consistent defaults
-    extracted.customer = extracted.customer ?? { name: null, email: null, phone: null, company: null, address: null };
+    extracted.customer = extracted.customer ?? { 
+      name: null, email: null, phone: null, company: null, address: null,
+      streetAddress: null, addressLine2: null, city: null, state: null, zipCode: null, country: null
+    };
     extracted.lineItems = extracted.lineItems ?? [];
 
     // Calculate confidence if not present
@@ -652,7 +675,19 @@ async function processImagesInSingleCall(images: Array<{index: number, imageBase
           
           Return JSON with these fields (ALL OPTIONAL):
           {
-            "customer": {"name": string|null, "email": string|null, "phone": string|null, "company": string|null, "address": string|null},
+            "customer": {
+              "name": string|null, 
+              "email": string|null, 
+              "phone": string|null, 
+              "company": string|null, 
+              "address": string|null,
+              "streetAddress": string|null,
+              "addressLine2": string|null,
+              "city": string|null,
+              "state": string|null,
+              "zipCode": string|null,
+              "country": string|null
+            },
             "quoteNumber": string|null,
             "date": string|null,
             "projectDescription": string|null,
@@ -671,7 +706,8 @@ async function processImagesInSingleCall(images: Array<{index: number, imageBase
           CRITICAL RULES:
           - ALWAYS include ALL top-level fields in your response - NEVER omit any field
           - Use null for any missing or unavailable data - do NOT omit fields entirely
-          - For customer: if no customer info found, return {"name": null, "email": null, "phone": null, "company": null, "address": null}
+          - For customer: if no customer info found, return {"name": null, "email": null, "phone": null, "company": null, "address": null, "streetAddress": null, "addressLine2": null, "city": null, "state": null, "zipCode": null, "country": null}
+          - For customer address: provide both the full "address" string AND structured fields (streetAddress, city, state, zipCode, country) when possible
           - For lineItems: if no line items found, return empty array []
           - Use NUMERIC values for all prices, quantities, totals (never strings)
           - Only extract clearly visible information
@@ -710,7 +746,10 @@ async function processImagesInSingleCall(images: Array<{index: number, imageBase
     const extracted = ExtractedQuoteWithPageRefsSchema.parse(parsedContent);
     
     // Normalize customer and lineItems to ensure consistent defaults
-    extracted.customer = extracted.customer ?? { name: null, email: null, phone: null, company: null, address: null };
+    extracted.customer = extracted.customer ?? { 
+      name: null, email: null, phone: null, company: null, address: null,
+      streetAddress: null, addressLine2: null, city: null, state: null, zipCode: null, country: null
+    };
     extracted.lineItems = extracted.lineItems ?? [];
     
     // Calculate and add confidence score if not already present
@@ -750,7 +789,10 @@ async function consolidateQuoteParts(parts: ExtractedQuoteWithPageRefs[]): Promi
   try {
     // Consolidate multiple extraction results into a single quote
     const consolidated: ExtractedQuote = {
-      customer: { name: null, email: null, phone: null, company: null, address: null },
+      customer: { 
+        name: null, email: null, phone: null, company: null, address: null,
+        streetAddress: null, addressLine2: null, city: null, state: null, zipCode: null, country: null
+      },
       quoteNumber: null,
       date: null,
       projectDescription: null,

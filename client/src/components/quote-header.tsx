@@ -183,9 +183,7 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
     placeId: string;
   }) => {
     form.setValue("projectStreetAddress", components.streetAddress);
-    if (components.addressLine2) {
-      form.setValue("projectAddressLine2", components.addressLine2);
-    }
+    form.setValue("projectAddressLine2", components.addressLine2 || "");
     form.setValue("projectCity", components.city);
     form.setValue("projectState", components.state);
     form.setValue("projectZipCode", components.zipCode);
@@ -203,9 +201,7 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
     placeId: string;
   }) => {
     form.setValue("jobsiteStreetAddress", components.streetAddress);
-    if (components.addressLine2) {
-      form.setValue("jobsiteAddressLine2", components.addressLine2);
-    }
+    form.setValue("jobsiteAddressLine2", components.addressLine2 || "");
     form.setValue("jobsiteCity", components.city);
     form.setValue("jobsiteState", components.state);
     form.setValue("jobsiteZipCode", components.zipCode);
