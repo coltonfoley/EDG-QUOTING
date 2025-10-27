@@ -1150,7 +1150,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Helper function to handle customer attachment based on attachCustomer behavior
   async function handleCustomerAttachment(
-    customerData: { name?: string | null; email?: string | null; phone?: string | null; company?: string | null; address?: string | null },
+    customerData: { 
+      name?: string | null; 
+      email?: string | null; 
+      phone?: string | null; 
+      company?: string | null; 
+      address?: string | null; // Legacy flat address
+      // Structured address fields
+      streetAddress?: string | null;
+      addressLine2?: string | null;
+      city?: string | null;
+      state?: string | null;
+      zipCode?: string | null;
+      country?: string | null;
+    },
     attachCustomer: 'auto' | 'none' | 'match_only',
     existingCustomerId?: number
   ): Promise<{ accountId: number | null; wasCreated: boolean }> {
@@ -1195,7 +1208,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         company: customerData.company || undefined,
         accountType: 'commercial' as const,
         paymentTerms: 'net_30' as const,
+        // Use structured address fields if available, otherwise fall back to legacy
         billingAddress: customerData.address || undefined,
+        streetAddress: customerData.streetAddress || undefined,
+        addressLine2: customerData.addressLine2 || undefined,
+        city: customerData.city || undefined,
+        state: customerData.state || undefined,
+        zipCode: customerData.zipCode || undefined,
+        country: customerData.country || undefined,
       };
 
       const newClient = await storage.createClient(clientData, {
@@ -1265,7 +1285,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         company: customerData.company || undefined,
         accountType: 'homeowner' as const,
         paymentTerms: 'net_30' as const,
+        // Use structured address fields if available, otherwise fall back to legacy
         billingAddress: customerData.address || undefined,
+        streetAddress: customerData.streetAddress || undefined,
+        addressLine2: customerData.addressLine2 || undefined,
+        city: customerData.city || undefined,
+        state: customerData.state || undefined,
+        zipCode: customerData.zipCode || undefined,
+        country: customerData.country || undefined,
       };
 
       console.log('Creating new client for import (unified model):', clientData);
@@ -1534,7 +1561,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
             email: z.string().nullable().optional(),
             phone: z.string().nullable().optional(),
             company: z.string().nullable().optional(),
-            address: z.string().nullable().optional(),
+            address: z.string().nullable().optional(), // Legacy flat address
+            // Structured address fields
+            streetAddress: z.string().nullable().optional(),
+            addressLine2: z.string().nullable().optional(),
+            city: z.string().nullable().optional(),
+            state: z.string().nullable().optional(),
+            zipCode: z.string().nullable().optional(),
+            country: z.string().nullable().optional(),
           }),
           quoteNumber: z.string().nullable().optional(),
           date: z.string().nullable().optional(),
