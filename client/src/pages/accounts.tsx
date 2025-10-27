@@ -12,7 +12,6 @@ import { Plus, Building2, Briefcase, Search, Trash2 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { AccountForm } from "@/components/forms/account-form";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -363,16 +362,18 @@ export default function Accounts() {
 
       {/* Create Client Dialog */}
       <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
-          <DialogHeader>
-            <DialogTitle>Create New Client</DialogTitle>
-          </DialogHeader>
-          <ScrollArea className="flex-1 pr-6">
-            <AccountForm 
-              onSuccess={handleAccountCreated}
-              onCancel={() => setCreateDialogOpen(false)}
-            />
-          </ScrollArea>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden p-0">
+          <div className="flex flex-col max-h-[90vh]">
+            <DialogHeader className="px-6 pt-6 pb-4">
+              <DialogTitle>Create New Client</DialogTitle>
+            </DialogHeader>
+            <div className="overflow-y-auto px-6 pb-6">
+              <AccountForm 
+                onSuccess={handleAccountCreated}
+                onCancel={() => setCreateDialogOpen(false)}
+              />
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
