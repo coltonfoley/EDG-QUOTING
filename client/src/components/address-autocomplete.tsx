@@ -21,8 +21,6 @@ interface AddressComponents {
 }
 
 interface AddressAutocompleteProps {
-  value: string;
-  onChange: (value: string) => void;
   onAddressSelect: (components: AddressComponents) => void;
   placeholder?: string;
   disabled?: boolean;
@@ -92,8 +90,6 @@ const loadGooglePlacesScript = (): Promise<void> => {
 };
 
 export function AddressAutocomplete({
-  value,
-  onChange,
   onAddressSelect,
   placeholder = "Start typing an address...",
   disabled = false,
@@ -236,8 +232,6 @@ export function AddressAutocomplete({
               components.addressLine2 = subpremise;
             }
 
-            const formattedAddress = place.formattedAddress || components.streetAddress;
-            onChange(formattedAddress);
             onAddressSelect(components);
           } catch (err) {
             console.error("Error processing place selection:", err);
@@ -270,15 +264,13 @@ export function AddressAutocomplete({
     return () => {
       if (cleanup) cleanup();
     };
-  }, [isScriptLoaded, onChange, onAddressSelect, disabled]);
+  }, [isScriptLoaded, onAddressSelect, disabled]);
 
   if (error) {
     return (
       <div className="relative">
         <Input
           type="text"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
           disabled={disabled}
           data-testid={testId}
