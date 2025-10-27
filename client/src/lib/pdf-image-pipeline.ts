@@ -156,24 +156,10 @@ async function getExifOrientation(blob: Blob): Promise<number> {
 }
 
 /**
- * Loads an image with EXIF orientation correction applied
- * Uses createImageBitmap when available, falls back to manual rotation
+ * Loads an image as HTMLImageElement for manual EXIF rotation
+ * Always uses HTMLImageElement to ensure consistent behavior across all browsers
  */
-async function loadCorrectedImageBitmap(blob: Blob): Promise<ImageBitmap | HTMLImageElement> {
-  // Modern browsers: respects EXIF Orientation automatically
-  if ('createImageBitmap' in window) {
-    try {
-      const bmp = await createImageBitmap(blob, { 
-        imageOrientation: 'from-image' as ImageOrientation
-      });
-      return bmp;
-    } catch (e) {
-      console.warn('createImageBitmap failed, falling back to manual rotation:', e);
-      // Fall through to manual rotation fallback
-    }
-  }
-  
-  // Fallback: load image and we'll apply rotation manually in convertImageViaCanvas
+async function loadImageElement(blob: Blob): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     const url = URL.createObjectURL(blob);
@@ -238,6 +224,7 @@ function applyExifOrientation(
 
 /**
  * Converts an image to a specific format using canvas, with EXIF orientation correction
+ * Uses ImageBitmap for normal images (orientation 1), manual rotation for others
  */
 async function convertImageViaCanvas(blob: Blob, targetFormat: 'PNG' | 'JPEG'): Promise<string> {
   const canvas = document.createElement('canvas');
@@ -247,30 +234,47 @@ async function convertImageViaCanvas(blob: Blob, targetFormat: 'PNG' | 'JPEG'): 
     throw new Error('Failed to get canvas context');
   }
 
-  // Load image with EXIF correction (if browser supports it)
-  const img = await loadCorrectedImageBitmap(blob);
+  // Read EXIF orientation first
+  const orientation = await getExifOrientation(blob);
   
-  // Get dimensions (works for both ImageBitmap and HTMLImageElement)
-  let width: number;
-  let height: number;
-  let needsManualRotation = false;
-  
-  if (img instanceof ImageBitmap) {
-    // createImageBitmap already applied orientation
-    width = img.width;
-    height = img.height;
-  } else {
-    // HTMLImageElement - need to manually apply EXIF orientation
-    width = img.naturalWidth;
-    height = img.naturalHeight;
-    needsManualRotation = true;
+  // For normal orientation, use ImageBitmap for better performance
+  if (orientation === 1 && 'createImageBitmap' in window) {
+    try {
+      const img = await createImageBitmap(blob);
+      canvas.width = img.width;
+      canvas.height = img.height;
+      
+      if (targetFormat === 'JPEG') {
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      }
+      
+      ctx.drawImage(img, 0, 0);
+      
+      const mimeType = targetFormat === 'PNG' ? 'image/png' : 'image/jpeg';
+      const quality = targetFormat === 'JPEG' ? 0.92 : undefined;
+      
+      return new Promise((resolve, reject) => {
+        canvas.toBlob((convertedBlob) => {
+          if (convertedBlob) {
+            blobToDataUrl(convertedBlob).then(resolve).catch(reject);
+          } else {
+            reject(new Error('Failed to convert image'));
+          }
+        }, mimeType, quality);
+      });
+    } catch (e) {
+      console.warn('createImageBitmap failed, falling back to manual rotation:', e);
+      // Fall through to manual rotation
+    }
   }
   
-  // Read EXIF orientation for manual rotation (if needed)
-  let orientation = 1;
-  if (needsManualRotation) {
-    orientation = await getExifOrientation(blob);
-  }
+  // For rotated images or browsers without createImageBitmap, use manual rotation
+  const img = await loadImageElement(blob);
+  
+  // Get original image dimensions
+  const width = img.naturalWidth;
+  const height = img.naturalHeight;
   
   // Determine canvas dimensions based on orientation
   // Orientations 5, 6, 7, 8 rotate 90°, swapping width/height
@@ -284,10 +288,11 @@ async function convertImageViaCanvas(blob: Blob, targetFormat: 'PNG' | 'JPEG'): 
     ctx.fillRect(0, 0, canvas.width, canvas.height);
   }
 
-  // Apply orientation transformation AFTER setting canvas size
+  // Apply EXIF orientation transformation
   applyExifOrientation(ctx, orientation, width, height);
 
-  ctx.drawImage(img as CanvasImageSource, 0, 0);
+  // Draw the image
+  ctx.drawImage(img, 0, 0);
 
   const mimeType = targetFormat === 'PNG' ? 'image/png' : 'image/jpeg';
   const quality = targetFormat === 'JPEG' ? 0.92 : undefined;
@@ -322,17 +327,35 @@ export function getImageCacheSize(): number {
  * Uses EXIF-aware loading to get correct dimensions after orientation is applied
  */
 export async function getImageDimensions(dataUrl: string): Promise<{ width: number; height: number }> {
-  // Convert data URL to blob for createImageBitmap
+  // Convert data URL to blob
   const response = await fetch(dataUrl);
   const blob = await response.blob();
   
-  const img = await loadCorrectedImageBitmap(blob);
+  // Read EXIF orientation to get correct dimensions
+  const orientation = await getExifOrientation(blob);
   
-  if (img instanceof ImageBitmap) {
-    return { width: img.width, height: img.height };
-  } else {
-    return { width: img.naturalWidth, height: img.naturalHeight };
+  // For normal orientation, use ImageBitmap for better performance
+  if (orientation === 1 && 'createImageBitmap' in window) {
+    try {
+      const img = await createImageBitmap(blob);
+      return { width: img.width, height: img.height };
+    } catch (e) {
+      console.warn('createImageBitmap failed, falling back to HTMLImageElement:', e);
+      // Fall through to HTMLImageElement
+    }
   }
+  
+  // For rotated images or browsers without createImageBitmap
+  const img = await loadImageElement(blob);
+  const width = img.naturalWidth;
+  const height = img.naturalHeight;
+  
+  // Swap dimensions for 90° rotations (orientations 5-8)
+  if (orientation >= 5 && orientation <= 8) {
+    return { width: height, height: width };
+  }
+  
+  return { width, height };
 }
 
 /**
