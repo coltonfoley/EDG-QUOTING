@@ -1,6 +1,7 @@
 import jsPDF from 'jspdf';
 import { ensureSpace, measureAcceptanceBlock } from '@/lib/pdf-utils';
 import { formatCurrency, calculateLineItemTotal } from '@/lib/utils';
+import { getImageDimensions, getAspectFitBox } from '@/lib/pdf-image-pipeline';
 
 const EDG_TEAL = [66, 255, 193] as const;
 
@@ -124,7 +125,7 @@ export function drawStandardCover(pdf: jsPDF, opts: DrawStandardCoverOpts): void
   pdf.addImage(coverDataUrl, format, 0, 0, pageW, pageH);
 }
 
-export function drawProjectDetailsPage(pdf: jsPDF, opts: DrawProjectDetailsPageOpts): void {
+export async function drawProjectDetailsPage(pdf: jsPDF, opts: DrawProjectDetailsPageOpts): Promise<void> {
   const { company, quote, coverDataUrl, logoDataUrl, margin, contentW, pageW, pageH, showPricing } = opts;
 
   pdf.addPage();
@@ -178,10 +179,22 @@ export function drawProjectDetailsPage(pdf: jsPDF, opts: DrawProjectDetailsPageO
 
   y += 10;
   
-  // Add client logo image only if provided
+  // Add client logo image only if provided with proper aspect ratio
   if (coverDataUrl) {
-    const imgW = contentW;
-    const imgH = imgW * 0.6;
+    const maxBoxH = 120; // Maximum height for cover photo
+    let imgW = contentW;
+    let imgH = maxBoxH;
+    
+    try {
+      const dims = await getImageDimensions(coverDataUrl);
+      // Calculate aspect-fit dimensions to preserve the image's natural aspect ratio
+      const fitted = getAspectFitBox(dims.width, dims.height, contentW, maxBoxH);
+      imgW = fitted.w;
+      imgH = fitted.h;
+    } catch (error) {
+      console.warn('Could not get cover photo dimensions, using default:', error);
+    }
+    
     const imgFormat = detectImageFormat(coverDataUrl);
     pdf.addImage(coverDataUrl, imgFormat, margin, y, imgW, imgH);
     y += imgH;
@@ -455,7 +468,7 @@ function drawCompactCompanyAcceptanceBlock(
   }
 }
 
-export function drawRenderingsPages(pdf: jsPDF, opts: DrawRenderingsPagesOpts): void {
+export async function drawRenderingsPages(pdf: jsPDF, opts: DrawRenderingsPagesOpts): Promise<void> {
   const { images, logoDataUrl, company, margin, contentW, pageW, pageH } = opts;
 
   if (images.length === 0) return;
@@ -469,16 +482,37 @@ export function drawRenderingsPages(pdf: jsPDF, opts: DrawRenderingsPagesOpts): 
   pdf.text('Visuals & Details', margin, y);
   y += 15;
 
-  const imagesPerPage = 2;
   const gap = 10;
-  const imgW = contentW;
-  const imgH = imgW * 0.6; // Slightly wider aspect ratio for larger display
+  const maxBoxH = 140; // Maximum height for each image box (adjust for page layout)
 
   let currentPage = 0;
-  let imgIndex = 0;
 
-  while (imgIndex < images.length) {
-    if (imgIndex > 0 && imgIndex % imagesPerPage === 0) {
+  for (let imgIndex = 0; imgIndex < images.length; imgIndex++) {
+    const img = images[imgIndex];
+    const format = detectImageFormat(img.dataUrl);
+
+    // Get actual image dimensions
+    let imgW = contentW;
+    let imgH = maxBoxH;
+    
+    try {
+      const dims = await getImageDimensions(img.dataUrl);
+      // Calculate aspect-fit dimensions to preserve the image's natural aspect ratio
+      const fitted = getAspectFitBox(dims.width, dims.height, contentW, maxBoxH);
+      imgW = fitted.w;
+      imgH = fitted.h;
+    } catch (error) {
+      console.warn('Could not get image dimensions, using default:', error);
+      // Fall back to default dimensions if we can't get the natural size
+    }
+
+    // Check if we need a new page (if current image won't fit)
+    const spaceNeeded = imgH + gap;
+    const footerSpace = 30;
+    const availableSpace = pageH - y - margin - footerSpace;
+
+    if (availableSpace < spaceNeeded && imgIndex > 0) {
+      // Add a new page
       pdf.addPage();
       y = margin;
 
@@ -489,18 +523,12 @@ export function drawRenderingsPages(pdf: jsPDF, opts: DrawRenderingsPagesOpts): 
       currentPage++;
     }
 
-    const pageStartIndex = currentPage * imagesPerPage;
-    const relativeIndex = imgIndex - pageStartIndex;
-
     const imgX = margin;
-    const imgY = y + relativeIndex * (imgH + gap);
-
-    const img = images[imgIndex];
-    const format = detectImageFormat(img.dataUrl);
+    const imgY = y;
 
     pdf.addImage(img.dataUrl, format, imgX, imgY, imgW, imgH);
 
-    imgIndex++;
+    y += imgH + gap;
   }
 
   // Add branded footer to the last page
