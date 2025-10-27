@@ -48,6 +48,7 @@ import {
 } from "./validation-schemas";
 import multer from "multer";
 import * as XLSX from "xlsx";
+import sharp from "sharp";
 import { extractQuoteDataFromImages, extractQuoteDataFromPDF } from "./openai";
 import { convertPDFToImagesServer } from "./quoteImageUtils";
 import { ObjectStorageService, ObjectNotFoundError, objectStorageClient } from "./objectStorage";
