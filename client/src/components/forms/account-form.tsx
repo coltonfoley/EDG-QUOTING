@@ -314,25 +314,18 @@ export function AccountForm({ account, onSuccess, onCancel }: AccountFormProps) 
 
         <div className="space-y-4">
           <h3 className="text-sm font-medium">Billing Address</h3>
-          <FormField
-            control={form.control}
-            name="billingAddress"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Street Address *</FormLabel>
-                <FormControl>
-                  <AddressAutocomplete
-                    value={field.value || ""}
-                    onChange={field.onChange}
-                    onAddressSelect={handleAddressSelect}
-                    placeholder="Start typing an address..."
-                    testId="input-billing-address"
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+          <div>
+            <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+              Street Address *
+            </label>
+            <div className="mt-2">
+              <AddressAutocomplete
+                onAddressSelect={handleAddressSelect}
+                placeholder="Start typing an address..."
+                testId="input-billing-address"
+              />
+            </div>
+          </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <FormField
