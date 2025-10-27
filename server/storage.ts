@@ -71,7 +71,7 @@ export interface IStorage {
   getQuote(id: number): Promise<Quote | undefined>;
   getQuoteWithDetails(id: number): Promise<QuoteWithDetails | undefined>;
   getQuoteBySigningToken(token: string): Promise<QuoteWithDetails | undefined>;
-  getAllQuotes(): Promise<QuoteWithDetails[]>;
+  getAllQuotes(options?: { page?: number; pageSize?: number }): Promise<QuoteWithDetails[]>;
   createQuote(quote: InsertQuote): Promise<Quote>;
   updateQuote(id: number, quote: Partial<InsertQuote>): Promise<Quote | undefined>;
   deleteQuote(id: number): Promise<boolean>;
@@ -304,7 +304,7 @@ export class MemStorage {
     };
   }
 
-  async getAllQuotes(): Promise<QuoteWithDetails[]> {
+  async getAllQuotes(options?: { page?: number; pageSize?: number }): Promise<QuoteWithDetails[]> {
     const result: QuoteWithDetails[] = [];
     
     for (const quote of Array.from(this.quotes.values())) {
@@ -325,8 +325,16 @@ export class MemStorage {
         lineItems: quoteLineItems,
       });
     }
+    const sorted = result.sort((a, b) => new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime());
 
-    return result.sort((a, b) => new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime());
+    if (!options?.pageSize) {
+      return sorted;
+    }
+
+    const safePageSize = Math.max(1, Math.floor(options.pageSize));
+    const safePage = Math.max(1, Math.floor(options.page ?? 1));
+    const start = (safePage - 1) * safePageSize;
+    return sorted.slice(start, start + safePageSize);
   }
 
   async createQuote(insertQuote: InsertQuote): Promise<Quote> {
@@ -907,88 +915,129 @@ export class DatabaseStorage implements IStorage {
     };
   }
 
-  async getAllQuotes(): Promise<QuoteWithDetails[]> {
+  async getAllQuotes(options?: { page?: number; pageSize?: number }): Promise<QuoteWithDetails[]> {
     // Only get latest versions by default to avoid showing old quote revisions
-    const allQuotes = await db.select().from(quotes).where(eq(quotes.isLatestVersion, true));
-    const result: QuoteWithDetails[] = [];
+    const baseQuery = db
+      .select()
+      .from(quotes)
+      .where(eq(quotes.isLatestVersion, true))
+      .orderBy(desc(quotes.createdAt));
 
-    for (const quote of allQuotes) {
-      const accountIdToUse = quote.accountId;
-      let account = null;
-      
-      // Get account if accountId exists
-      if (accountIdToUse) {
-        [account] = await db.select().from(accounts).where(eq(accounts.id, accountIdToUse));
-      }
-      
-      // Process quote even if no account (for unassigned quotes)
-      // Join line items with products to get manufacturer data
-      const quoteLineItemsWithProducts = await db
-          .select({
-            id: lineItems.id,
-            quoteId: lineItems.quoteId,
-            productId: lineItems.productId,
-            description: lineItems.description,
-            quantity: lineItems.quantity,
-            retailPrice: lineItems.retailPrice,
-            unitPrice: lineItems.unitPrice,
-            markupType: lineItems.markupType,
-            markupValue: lineItems.markupValue,
-            discountType: lineItems.discountType,
-            discountValue: lineItems.discountValue,
-            configData: lineItems.configData,
-            baseProductId: lineItems.baseProductId,
-            isAccessory: lineItems.isAccessory,
-            isTaxable: lineItems.isTaxable,
-            isTariffApplicable: lineItems.isTariffApplicable,
-            groupId: lineItems.groupId,
-            position: lineItems.position,
-            productManufacturer: products.manufacturer,
-          })
-          .from(lineItems)
-          .leftJoin(products, eq(lineItems.productId, products.id))
-          .where(eq(lineItems.quoteId, quote.id))
-          .orderBy(asc(lineItems.position));
-        
-        // Add manufacturer field to line items using fallback logic
-        const quoteLineItems = quoteLineItemsWithProducts.map(item => ({
-          id: item.id,
-          quoteId: item.quoteId,
-          productId: item.productId,
-          description: item.description,
-          quantity: item.quantity,
-          retailPrice: item.retailPrice,
-          unitPrice: item.unitPrice,
-          markupType: item.markupType,
-          markupValue: item.markupValue,
-          discountType: item.discountType,
-          discountValue: item.discountValue,
-          configData: item.configData,
-          baseProductId: item.baseProductId,
-          isAccessory: item.isAccessory,
-          isTaxable: item.isTaxable,
-          isTariffApplicable: item.isTariffApplicable,
-          groupId: item.groupId,
-          position: item.position,
-          manufacturer: item.productManufacturer || "Uncategorized",
-        }));
-
-      // Get contract template if referenced
-      let contractTemplate: ContractTemplate | undefined;
-      if (quote.contractTemplateId) {
-        [contractTemplate] = await db.select().from(contractTemplates).where(eq(contractTemplates.id, quote.contractTemplateId));
-      }
-      
-      result.push({
-        ...quote,
-        account: account || undefined,
-        customer: account || undefined, // Legacy alias for backward compatibility
-        lineItems: quoteLineItems,
-        contractTemplate,
-      });
+    let allQuotes;
+    if (options?.pageSize) {
+      const safePageSize = Math.max(1, Math.min(500, Math.floor(options.pageSize)));
+      const safePage = Math.max(1, Math.floor(options.page ?? 1));
+      const offset = (safePage - 1) * safePageSize;
+      allQuotes = await baseQuery.limit(safePageSize).offset(offset);
+    } else {
+      allQuotes = await baseQuery;
     }
 
-    return result.sort((a, b) => new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime());
+    if (allQuotes.length === 0) {
+      return [];
+    }
+
+    const quoteIds = allQuotes.map(quote => quote.id);
+    const accountIds = Array.from(
+      new Set(
+        allQuotes
+          .map(quote => quote.accountId)
+          .filter((id): id is number => typeof id === "number")
+      )
+    );
+    const contractTemplateIds = Array.from(
+      new Set(
+        allQuotes
+          .map(quote => quote.contractTemplateId)
+          .filter((id): id is number => typeof id === "number")
+      )
+    );
+
+    const [accountsList, contractTemplatesList, lineItemRows] = await Promise.all([
+      accountIds.length
+        ? db.select().from(accounts).where(inArray(accounts.id, accountIds))
+        : Promise.resolve([] as Account[]),
+      contractTemplateIds.length
+        ? db.select().from(contractTemplates).where(inArray(contractTemplates.id, contractTemplateIds))
+        : Promise.resolve([] as ContractTemplate[]),
+      db
+        .select({
+          id: lineItems.id,
+          quoteId: lineItems.quoteId,
+          productId: lineItems.productId,
+          description: lineItems.description,
+          quantity: lineItems.quantity,
+          retailPrice: lineItems.retailPrice,
+          unitPrice: lineItems.unitPrice,
+          markupType: lineItems.markupType,
+          markupValue: lineItems.markupValue,
+          discountType: lineItems.discountType,
+          discountValue: lineItems.discountValue,
+          configData: lineItems.configData,
+          baseProductId: lineItems.baseProductId,
+          isAccessory: lineItems.isAccessory,
+          isTaxable: lineItems.isTaxable,
+          isTariffApplicable: lineItems.isTariffApplicable,
+          groupId: lineItems.groupId,
+          position: lineItems.position,
+          productManufacturer: products.manufacturer,
+        })
+        .from(lineItems)
+        .leftJoin(products, eq(lineItems.productId, products.id))
+        .where(inArray(lineItems.quoteId, quoteIds))
+        .orderBy(asc(lineItems.quoteId), asc(lineItems.position))
+    ]);
+
+    const accountMap = new Map(accountsList.map(account => [account.id, account]));
+    const contractTemplateMap = new Map(contractTemplatesList.map(template => [template.id, template]));
+
+    const lineItemsByQuoteId = new Map<number, QuoteWithDetails["lineItems"]>();
+    for (const item of lineItemRows) {
+      const normalizedItem = {
+        id: item.id,
+        quoteId: item.quoteId,
+        productId: item.productId,
+        description: item.description,
+        quantity: item.quantity,
+        retailPrice: item.retailPrice,
+        unitPrice: item.unitPrice,
+        markupType: item.markupType,
+        markupValue: item.markupValue,
+        discountType: item.discountType,
+        discountValue: item.discountValue,
+        configData: item.configData,
+        baseProductId: item.baseProductId,
+        isAccessory: item.isAccessory,
+        isTaxable: item.isTaxable,
+        isTariffApplicable: item.isTariffApplicable,
+        groupId: item.groupId,
+        position: item.position,
+        manufacturer: item.productManufacturer || "Uncategorized",
+      };
+
+      if (!lineItemsByQuoteId.has(item.quoteId)) {
+        lineItemsByQuoteId.set(item.quoteId, []);
+      }
+      lineItemsByQuoteId.get(item.quoteId)!.push(normalizedItem);
+    }
+
+    const quotesWithDetails = allQuotes.map(quote => {
+      const account = typeof quote.accountId === "number" ? accountMap.get(quote.accountId) : undefined;
+      const contractTemplate = typeof quote.contractTemplateId === "number"
+        ? contractTemplateMap.get(quote.contractTemplateId)
+        : undefined;
+      const quoteLineItems = lineItemsByQuoteId.get(quote.id) ?? [];
+
+      return {
+        ...quote,
+        account,
+        customer: account, // Legacy alias for backward compatibility
+        lineItems: quoteLineItems,
+        contractTemplate,
+      };
+    });
+
+    return quotesWithDetails.sort((a, b) => new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime());
   }
 
   async createQuote(insertQuote: InsertQuote): Promise<Quote> {

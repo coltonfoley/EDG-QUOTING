@@ -4,8 +4,8 @@ import { storage } from "./storage";
 import { z } from "zod";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import { db } from "./db";
-import { accounts, products, insertColorSchema, insertProductColorSchema } from "@shared/schema";
-import { eq, or, ilike, and } from "drizzle-orm";
+import { accounts, products, insertColorSchema, insertProductColorSchema, quotes as quotesTable } from "@shared/schema";
+import { eq, or, ilike, and, sql } from "drizzle-orm";
 import {
   insertAccountSchema,
   insertCustomerSchema,
@@ -83,6 +83,11 @@ function formatJobsiteAddress(quote: any): string | null {
   
   return parts.length > 0 ? parts.join(', ') : null;
 }
+
+const quotesQuerySchema = z.object({
+  page: z.coerce.number().int().gte(1).optional(),
+  pageSize: z.coerce.number().int().gte(1).lte(500).optional(),
+});
 
 // Simple in-memory rate limiter for OpenAI API calls
 interface RateLimitEntry {
@@ -1125,7 +1130,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/quotes", isAuthenticated, async (req, res) => {
     try {
       console.log("Attempting to get all quotes...");
-      const quotes = await storage.getAllQuotes();
+      const parsedQuery = quotesQuerySchema.safeParse(req.query);
+      if (!parsedQuery.success) {
+        return res.status(400).json({
+          message: "Invalid query parameters",
+          errors: parsedQuery.error.errors,
+        });
+      }
+
+      const { page, pageSize } = parsedQuery.data;
+      const quotes = await storage.getAllQuotes({ page, pageSize });
+
+      if (pageSize) {
+        const [{ value: totalCount }] = await db
+          .select({ value: sql<number>`count(*)` })
+          .from(quotesTable)
+          .where(eq(quotesTable.isLatestVersion, true));
+
+        const totalPages = totalCount === 0 ? 0 : Math.ceil(totalCount / pageSize);
+        res.setHeader("X-Total-Count", totalCount.toString());
+        res.setHeader("X-Page", String(page ?? 1));
+        res.setHeader("X-Page-Size", pageSize.toString());
+        res.setHeader("X-Total-Pages", totalPages.toString());
+      }
+
       console.log(`Found ${quotes.length} quotes`);
       res.json(quotes);
     } catch (error) {
