@@ -36,7 +36,6 @@ const accountFormSchema = insertAccountSchema.extend({
     "other"
   ]),
   paymentTerms: z.string().optional(),
-  billingAddress: z.string().optional(),
   streetAddress: z.string().optional(),
   addressLine2: z.string().optional(),
   city: z.string().optional(),
@@ -46,6 +45,7 @@ const accountFormSchema = insertAccountSchema.extend({
   placeId: z.string().optional()
 }).omit({
   secondaryContacts: true, // Handle separately to avoid validation issues
+  billingAddress: true, // Remove redundant field - use structured fields instead
 });
 
 type AccountFormData = z.infer<typeof accountFormSchema>;
@@ -73,7 +73,6 @@ export function AccountForm({ account, onSuccess, onCancel }: AccountFormProps) 
       company: account?.company || "",
       accountType: (account?.accountType as "homeowner" | "general_contractor" | "commercial" | "property_manager" | "architect" | "developer" | "subcontractor" | "government" | "nonprofit" | "other") || "homeowner",
       paymentTerms: account?.paymentTerms || "net_30",
-      billingAddress: account?.billingAddress || "",
       streetAddress: account?.streetAddress || "",
       addressLine2: account?.addressLine2 || "",
       city: account?.city || "",
@@ -95,7 +94,6 @@ export function AccountForm({ account, onSuccess, onCancel }: AccountFormProps) 
         company: account.company || "",
         accountType: (account.accountType as "homeowner" | "general_contractor" | "commercial" | "property_manager" | "architect" | "developer" | "subcontractor" | "government" | "nonprofit" | "other") || "homeowner",
         paymentTerms: account.paymentTerms || "net_30",
-        billingAddress: account.billingAddress || "",
         streetAddress: account.streetAddress || "",
         addressLine2: account.addressLine2 || "",
         city: account.city || "",
@@ -149,15 +147,9 @@ export function AccountForm({ account, onSuccess, onCancel }: AccountFormProps) 
 
   const onSubmit = (data: AccountFormData) => {
     // Auto-generate name from firstName and lastName if not provided
-    // Normalize billingAddress from structured fields if they exist
-    const normalizedBillingAddress = data.streetAddress && data.city && data.state && data.zipCode
-      ? `${data.streetAddress}${data.addressLine2 ? ', ' + data.addressLine2 : ''}, ${data.city}, ${data.state} ${data.zipCode}`
-      : data.billingAddress || "";
-    
     const submissionData = {
       ...data,
       name: data.name || `${data.firstName} ${data.lastName}`.trim(),
-      billingAddress: normalizedBillingAddress,
       secondaryContacts: secondaryContacts.length > 0 ? secondaryContacts : null
     };
     createAccountMutation.mutate(submissionData);
