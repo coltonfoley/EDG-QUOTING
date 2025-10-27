@@ -58,7 +58,7 @@ export async function generateBrandedSequencePDF(options: BrandedSequenceOptions
 
   // 2. Project Details Page (section handles its own page creation)
   // Only use client logo if provided (no fallback)
-  await drawProjectDetailsPage(pdf, {
+  drawProjectDetailsPage(pdf, {
     company,
     quote,
     coverDataUrl: clientLogoDataUrl,
@@ -72,7 +72,7 @@ export async function generateBrandedSequencePDF(options: BrandedSequenceOptions
 
   // 3. Gallery / Renderings (if images provided) (section handles its own page creation)
   if (renderImages && renderImages.length > 0) {
-    await drawRenderingsPages(pdf, {
+    drawRenderingsPages(pdf, {
       images: renderImages,
       logoDataUrl: BRAND_LOGO_PNG,
       company,

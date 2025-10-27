@@ -1,7 +1,6 @@
 import jsPDF from 'jspdf';
 import { ensureSpace, measureAcceptanceBlock } from '@/lib/pdf-utils';
 import { formatCurrency, calculateLineItemTotal } from '@/lib/utils';
-import { getImageDimensions, getAspectFitBox, getCenteredOrigin, normalizeImageToDataUrl } from '@/lib/pdf-image-pipeline';
 
 const EDG_TEAL = [66, 255, 193] as const;
 
@@ -125,7 +124,7 @@ export function drawStandardCover(pdf: jsPDF, opts: DrawStandardCoverOpts): void
   pdf.addImage(coverDataUrl, format, 0, 0, pageW, pageH);
 }
 
-export async function drawProjectDetailsPage(pdf: jsPDF, opts: DrawProjectDetailsPageOpts): Promise<void> {
+export function drawProjectDetailsPage(pdf: jsPDF, opts: DrawProjectDetailsPageOpts): void {
   const { company, quote, coverDataUrl, logoDataUrl, margin, contentW, pageW, pageH, showPricing } = opts;
 
   pdf.addPage();
@@ -181,25 +180,11 @@ export async function drawProjectDetailsPage(pdf: jsPDF, opts: DrawProjectDetail
   
   // Add client logo image only if provided
   if (coverDataUrl) {
-    const boxW = contentW;
-    const boxH = 100; // Maximum height for cover photo
-    
-    // Normalize image to apply EXIF orientation correction
-    const { dataUrl: normalizedCover, format: imgFormat } = await normalizeImageToDataUrl(coverDataUrl);
-    
-    try {
-      const dims = await getImageDimensions(normalizedCover);
-      const { w: imgW, h: imgH } = getAspectFitBox(dims.width, dims.height, boxW, boxH);
-      const { x: imgX, y: imgY } = getCenteredOrigin(margin, y, boxW, boxH, imgW, imgH);
-      
-      pdf.addImage(normalizedCover, imgFormat, imgX, imgY, imgW, imgH);
-      y += boxH;
-    } catch (error) {
-      console.error('Error rendering cover photo:', error);
-      // Fallback to centered box if dimension detection fails
-      pdf.addImage(normalizedCover, imgFormat, margin, y, boxW, boxH);
-      y += boxH;
-    }
+    const imgW = contentW;
+    const imgH = imgW * 0.6;
+    const imgFormat = detectImageFormat(coverDataUrl);
+    pdf.addImage(coverDataUrl, imgFormat, margin, y, imgW, imgH);
+    y += imgH;
   }
 
   // Add branded footer
@@ -470,7 +455,7 @@ function drawCompactCompanyAcceptanceBlock(
   }
 }
 
-export async function drawRenderingsPages(pdf: jsPDF, opts: DrawRenderingsPagesOpts): Promise<void> {
+export function drawRenderingsPages(pdf: jsPDF, opts: DrawRenderingsPagesOpts): void {
   const { images, logoDataUrl, company, margin, contentW, pageW, pageH } = opts;
 
   if (images.length === 0) return;
@@ -486,8 +471,8 @@ export async function drawRenderingsPages(pdf: jsPDF, opts: DrawRenderingsPagesO
 
   const imagesPerPage = 2;
   const gap = 10;
-  const boxW = contentW;
-  const boxH = 120; // Maximum height for each image slot
+  const imgW = contentW;
+  const imgH = imgW * 0.6; // Slightly wider aspect ratio for larger display
 
   let currentPage = 0;
   let imgIndex = 0;
@@ -507,25 +492,13 @@ export async function drawRenderingsPages(pdf: jsPDF, opts: DrawRenderingsPagesO
     const pageStartIndex = currentPage * imagesPerPage;
     const relativeIndex = imgIndex - pageStartIndex;
 
-    const boxY = y + relativeIndex * (boxH + gap);
+    const imgX = margin;
+    const imgY = y + relativeIndex * (imgH + gap);
 
     const img = images[imgIndex];
-    
-    // Normalize image to apply EXIF orientation correction
-    const { dataUrl: normalizedImage, format } = await normalizeImageToDataUrl(img.dataUrl);
+    const format = detectImageFormat(img.dataUrl);
 
-    // Get image dimensions and calculate aspect-fit size
-    try {
-      const dims = await getImageDimensions(normalizedImage);
-      const { w: imgW, h: imgH } = getAspectFitBox(dims.width, dims.height, boxW, boxH);
-      const { x: imgX, y: imgY } = getCenteredOrigin(margin, boxY, boxW, boxH, imgW, imgH);
-
-      pdf.addImage(normalizedImage, format, imgX, imgY, imgW, imgH);
-    } catch (error) {
-      console.error('Error rendering image:', error);
-      // Fallback to centered box if dimension detection fails
-      pdf.addImage(normalizedImage, format, margin, boxY, boxW, boxH);
-    }
+    pdf.addImage(img.dataUrl, format, imgX, imgY, imgW, imgH);
 
     imgIndex++;
   }
