@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
@@ -83,6 +83,30 @@ export function AccountForm({ account, onSuccess, onCancel }: AccountFormProps) 
       placeId: account?.placeId || ""
     }
   });
+
+  useEffect(() => {
+    if (account) {
+      form.reset({
+        firstName: account.firstName || "",
+        lastName: account.lastName || "",
+        name: account.name || "",
+        email: account.email || "",
+        phone: account.phone || "",
+        company: account.company || "",
+        accountType: (account.accountType as "homeowner" | "general_contractor" | "commercial" | "property_manager" | "architect" | "developer" | "subcontractor" | "government" | "nonprofit" | "other") || "homeowner",
+        paymentTerms: account.paymentTerms || "net_30",
+        billingAddress: account.billingAddress || "",
+        streetAddress: account.streetAddress || "",
+        addressLine2: account.addressLine2 || "",
+        city: account.city || "",
+        state: account.state || "",
+        zipCode: account.zipCode || "",
+        country: account.country || "",
+        placeId: account.placeId || ""
+      });
+      setSecondaryContacts((account.secondaryContacts as SecondaryContact[]) || []);
+    }
+  }, [account, form]);
 
   const handleAddressSelect = (components: {
     streetAddress: string;
@@ -314,18 +338,35 @@ export function AccountForm({ account, onSuccess, onCancel }: AccountFormProps) 
 
         <div className="space-y-4">
           <h3 className="text-sm font-medium">Billing Address</h3>
-          <div>
-            <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-              Street Address *
+          <div className="space-y-2">
+            <label className="text-sm font-medium leading-none">
+              Search for Address
             </label>
-            <div className="mt-2">
-              <AddressAutocomplete
-                onAddressSelect={handleAddressSelect}
-                placeholder="Start typing an address..."
-                testId="input-billing-address"
-              />
-            </div>
+            <AddressAutocomplete
+              onAddressSelect={handleAddressSelect}
+              placeholder="Start typing an address..."
+              testId="input-billing-address"
+            />
+            <p className="text-xs text-gray-500">Or enter address details manually below</p>
           </div>
+
+          <FormField
+            control={form.control}
+            name="streetAddress"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Street Address *</FormLabel>
+                <FormControl>
+                  <Input 
+                    placeholder="123 Main Street" 
+                    {...field} 
+                    data-testid="input-street-address"
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <FormField
