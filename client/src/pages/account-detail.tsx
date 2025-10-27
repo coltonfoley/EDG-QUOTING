@@ -219,10 +219,19 @@ export default function AccountDetail() {
                 <p className="text-sm text-gray-500">Payment Terms</p>
                 <p className="font-medium">{account.paymentTerms?.replace('_', ' ').toUpperCase() || 'NET 30'}</p>
               </div>
-              {account.billingAddress && (
+              {(account.streetAddress || account.city) && (
                 <div>
                   <p className="text-sm text-gray-500">Billing Address</p>
-                  <p className="font-medium">{account.billingAddress}</p>
+                  <p className="font-medium">
+                    {account.streetAddress}
+                    {account.addressLine2 && `, ${account.addressLine2}`}
+                    {account.city && (
+                      <>
+                        <br />
+                        {account.city}{account.state && `, ${account.state}`} {account.zipCode}
+                      </>
+                    )}
+                  </p>
                 </div>
               )}
               <div>
