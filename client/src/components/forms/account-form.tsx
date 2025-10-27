@@ -94,6 +94,9 @@ export function AccountForm({ account, onSuccess, onCancel }: AccountFormProps) 
     placeId: string;
   }) => {
     form.setValue("streetAddress", components.streetAddress);
+    if (components.addressLine2) {
+      form.setValue("addressLine2", components.addressLine2);
+    }
     form.setValue("city", components.city);
     form.setValue("state", components.state);
     form.setValue("zipCode", components.zipCode);
@@ -122,9 +125,15 @@ export function AccountForm({ account, onSuccess, onCancel }: AccountFormProps) 
 
   const onSubmit = (data: AccountFormData) => {
     // Auto-generate name from firstName and lastName if not provided
+    // Normalize billingAddress from structured fields if they exist
+    const normalizedBillingAddress = data.streetAddress && data.city && data.state && data.zipCode
+      ? `${data.streetAddress}${data.addressLine2 ? ', ' + data.addressLine2 : ''}, ${data.city}, ${data.state} ${data.zipCode}`
+      : data.billingAddress || "";
+    
     const submissionData = {
       ...data,
       name: data.name || `${data.firstName} ${data.lastName}`.trim(),
+      billingAddress: normalizedBillingAddress,
       secondaryContacts: secondaryContacts.length > 0 ? secondaryContacts : null
     };
     createAccountMutation.mutate(submissionData);
@@ -355,7 +364,6 @@ export function AccountForm({ account, onSuccess, onCancel }: AccountFormProps) 
                       placeholder="City" 
                       {...field} 
                       data-testid="input-city"
-                      readOnly
                     />
                   </FormControl>
                   <FormMessage />
@@ -374,7 +382,6 @@ export function AccountForm({ account, onSuccess, onCancel }: AccountFormProps) 
                       placeholder="State" 
                       {...field} 
                       data-testid="input-state"
-                      readOnly
                     />
                   </FormControl>
                   <FormMessage />
@@ -393,7 +400,6 @@ export function AccountForm({ account, onSuccess, onCancel }: AccountFormProps) 
                       placeholder="ZIP" 
                       {...field} 
                       data-testid="input-zipcode"
-                      readOnly
                     />
                   </FormControl>
                   <FormMessage />

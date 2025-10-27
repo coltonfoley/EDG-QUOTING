@@ -5,6 +5,8 @@ import { Loader2, MapPin } from "lucide-react";
 declare global {
   interface Window {
     google: typeof google;
+    googleMapsLoading?: boolean;
+    googleMapsLoaded?: boolean;
   }
 }
 
@@ -27,6 +29,54 @@ interface AddressAutocompleteProps {
   testId?: string;
 }
 
+const loadGooglePlacesScript = (): Promise<void> => {
+  return new Promise((resolve, reject) => {
+    // Already loaded
+    if (window.googleMapsLoaded && window.google?.maps?.places) {
+      resolve();
+      return;
+    }
+
+    // Already loading
+    if (window.googleMapsLoading) {
+      const checkInterval = setInterval(() => {
+        if (window.googleMapsLoaded && window.google?.maps?.places) {
+          clearInterval(checkInterval);
+          resolve();
+        }
+      }, 100);
+      return;
+    }
+
+    const apiKey = import.meta.env.VITE_GOOGLE_PLACES_API_KEY;
+    
+    if (!apiKey) {
+      reject(new Error("Google Places API key is not configured"));
+      return;
+    }
+
+    window.googleMapsLoading = true;
+
+    const script = document.createElement("script");
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
+    script.async = true;
+    script.defer = true;
+    
+    script.onload = () => {
+      window.googleMapsLoaded = true;
+      window.googleMapsLoading = false;
+      resolve();
+    };
+    
+    script.onerror = () => {
+      window.googleMapsLoading = false;
+      reject(new Error("Failed to load Google Places API"));
+    };
+
+    document.head.appendChild(script);
+  });
+};
+
 export function AddressAutocomplete({
   value,
   onChange,
@@ -37,42 +87,24 @@ export function AddressAutocomplete({
 }: AddressAutocompleteProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [isScriptLoaded, setIsScriptLoaded] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
 
   useEffect(() => {
-    const apiKey = import.meta.env.VITE_GOOGLE_PLACES_API_KEY;
-    
-    if (!apiKey) {
-      console.error("Google Places API key is not configured");
-      return;
-    }
-
-    if (window.google?.maps?.places) {
-      setIsScriptLoaded(true);
-      return;
-    }
-
-    const script = document.createElement("script");
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
-    script.async = true;
-    script.defer = true;
-    
-    script.onload = () => {
-      setIsScriptLoaded(true);
-    };
-    
-    script.onerror = () => {
-      console.error("Failed to load Google Places API");
-    };
-
-    document.head.appendChild(script);
-
-    return () => {
-      if (script.parentNode) {
-        script.parentNode.removeChild(script);
-      }
-    };
+    setIsLoading(true);
+    loadGooglePlacesScript()
+      .then(() => {
+        setIsScriptLoaded(true);
+        setError(null);
+      })
+      .catch((err) => {
+        setError(err.message);
+        console.error(err);
+      })
+      .finally(() => {
+        setIsLoading(false);
+      });
   }, []);
 
   useEffect(() => {
@@ -104,6 +136,7 @@ export function AddressAutocomplete({
 
         let streetNumber = "";
         let route = "";
+        let subpremise = "";
 
         place.address_components.forEach((component) => {
           const types = component.types;
@@ -113,6 +146,9 @@ export function AddressAutocomplete({
           }
           if (types.includes("route")) {
             route = component.long_name;
+          }
+          if (types.includes("subpremise")) {
+            subpremise = component.long_name;
           }
           if (types.includes("locality")) {
             components.city = component.long_name;
@@ -129,6 +165,9 @@ export function AddressAutocomplete({
         });
 
         components.streetAddress = `${streetNumber} ${route}`.trim();
+        if (subpremise) {
+          components.addressLine2 = subpremise;
+        }
         
         const formattedAddress = place.formatted_address || components.streetAddress;
         onChange(formattedAddress);
