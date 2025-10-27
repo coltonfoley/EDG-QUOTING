@@ -57,16 +57,29 @@ const loadGooglePlacesScript = (): Promise<void> => {
 
     window.googleMapsLoading = true;
 
-    // Use the bootstrap loader approach for the new API
+    // Use the new bootstrap loader approach
     const script = document.createElement("script");
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&loading=async`;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&loading=async`;
     script.async = true;
     script.defer = true;
     
     script.onload = () => {
-      window.googleMapsLoaded = true;
-      window.googleMapsLoading = false;
-      resolve();
+      // Wait for google.maps to be fully initialized
+      const checkGoogleMaps = () => {
+        if (window.google?.maps?.importLibrary) {
+          window.googleMapsLoaded = true;
+          window.googleMapsLoading = false;
+          console.log("Google Maps API with importLibrary loaded successfully");
+          resolve();
+        } else if (window.google?.maps) {
+          // Old API loaded, try to wait a bit more
+          setTimeout(checkGoogleMaps, 100);
+        } else {
+          window.googleMapsLoading = false;
+          reject(new Error("Google Maps API loaded but google.maps is not available"));
+        }
+      };
+      checkGoogleMaps();
     };
     
     script.onerror = () => {
