@@ -96,7 +96,8 @@ export default function Quotes() {
       (quote.account && quote.account.email.toLowerCase().includes(term)) ||
       (quote.account?.company && quote.account.company.toLowerCase().includes(term)) ||
       (quote.projectName && quote.projectName.toLowerCase().includes(term)) ||
-      (quote.projectAddress && quote.projectAddress.toLowerCase().includes(term))
+      (quote.jobsiteStreetAddress && quote.jobsiteStreetAddress.toLowerCase().includes(term)) ||
+      (quote.jobsiteCity && quote.jobsiteCity.toLowerCase().includes(term))
     );
   }, [quotes, searchTerm]);
 
