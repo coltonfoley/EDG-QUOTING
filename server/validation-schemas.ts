@@ -199,7 +199,7 @@ export const insertQuoteSchema = baseQuoteSchema.extend({
 }).refine((data) => {
   // Enforce mutual exclusivity: cannot have both template and custom terms
   const hasTemplate = data.contractTemplateId !== null && data.contractTemplateId !== undefined;
-  const hasCustomTerms = data.customContractTerms !== null && data.customContractTerms !== undefined && data.customContractTerms.trim() !== "";
+  const hasCustomTerms = data.customContractTerms !== null && data.customContractTerms !== undefined && typeof data.customContractTerms === 'string' && data.customContractTerms.trim() !== "";
   return !(hasTemplate && hasCustomTerms);
 }, {
   message: "Cannot specify both a contract template and custom contract terms",
@@ -271,7 +271,7 @@ export const createQuoteSchema = z.object({
 }).refine((data) => {
   // Enforce mutual exclusivity: cannot have both template and custom terms
   const hasTemplate = data.contractTemplateId !== null && data.contractTemplateId !== undefined;
-  const hasCustomTerms = data.customContractTerms !== null && data.customContractTerms !== undefined && data.customContractTerms.trim() !== "";
+  const hasCustomTerms = data.customContractTerms !== null && data.customContractTerms !== undefined && typeof data.customContractTerms === 'string' && data.customContractTerms.trim() !== "";
   return !(hasTemplate && hasCustomTerms);
 }, {
   message: "Cannot specify both a contract template and custom contract terms",
@@ -335,7 +335,7 @@ export const updateQuoteSchema = z.object({
 }).refine((data) => {
   // Enforce mutual exclusivity: cannot have both template and custom terms
   const hasTemplate = data.contractTemplateId !== null && data.contractTemplateId !== undefined;
-  const hasCustomTerms = data.customContractTerms !== null && data.customContractTerms !== undefined && data.customContractTerms.trim() !== "";
+  const hasCustomTerms = data.customContractTerms !== null && data.customContractTerms !== undefined && typeof data.customContractTerms === 'string' && data.customContractTerms.trim() !== "";
   return !(hasTemplate && hasCustomTerms);
 }, {
   message: "Cannot specify both a contract template and custom contract terms",

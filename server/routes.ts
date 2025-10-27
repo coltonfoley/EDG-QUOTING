@@ -56,6 +56,34 @@ import { ObjectPermission } from "./objectAcl";
 import type { InsertQuote } from "@shared/schema";
 import { nanoid } from "nanoid";
 
+// Helper function to format jobsite address from structured fields
+function formatJobsiteAddress(quote: any): string | null {
+  const parts: string[] = [];
+  
+  if (quote.jobsiteStreetAddress) {
+    parts.push(quote.jobsiteStreetAddress);
+  }
+  
+  if (quote.jobsiteAddressLine2) {
+    parts.push(quote.jobsiteAddressLine2);
+  }
+  
+  const cityStateZip: string[] = [];
+  if (quote.jobsiteCity) cityStateZip.push(quote.jobsiteCity);
+  if (quote.jobsiteState) cityStateZip.push(quote.jobsiteState);
+  if (quote.jobsiteZipCode) cityStateZip.push(quote.jobsiteZipCode);
+  
+  if (cityStateZip.length > 0) {
+    parts.push(cityStateZip.join(', '));
+  }
+  
+  if (quote.jobsiteCountry && quote.jobsiteCountry !== 'United States') {
+    parts.push(quote.jobsiteCountry);
+  }
+  
+  return parts.length > 0 ? parts.join(', ') : null;
+}
+
 // Simple in-memory rate limiter for OpenAI API calls
 interface RateLimitEntry {
   count: number;
@@ -1357,19 +1385,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ...baseQuoteData,
         accountId: resolvedAccountId,
         quoteNumber: `Q-${Date.now()}`, // Auto-generate unique quote number
-        projectName: baseQuoteData.projectName || "",
-        projectAddress: baseQuoteData.projectAddress || "",
-        estimatedStartDate: baseQuoteData.estimatedStartDate || "",
-        notes: baseQuoteData.notes || "",
-        taxRate: baseQuoteData.taxRate || "0",
-        discount: baseQuoteData.discount || "0", 
-        shipping: baseQuoteData.shipping || "0",
         isShippingTaxable: false,
-        dealStage: baseQuoteData.dealStage || "new_lead",
-        jobsiteAddress: baseQuoteData.jobsiteAddress || undefined,
-        lostReason: baseQuoteData.lostReason || undefined,
-        contractTemplateId: baseQuoteData.contractTemplateId || undefined,
-        customContractTerms: baseQuoteData.customContractTerms || undefined,
       };
       
       const quote = await storage.createQuote(quoteData);
@@ -1649,7 +1665,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
             quoteNumber: firstQuote.quoteNumber || `COMBINED-${Date.now()}`,
             accountId: accountId,
             projectName: combinedDescription || `Combined Import: ${combinedFilenames}`,
-            projectAddress: firstQuote.customer.address || '',
+            jobsiteStreetAddress: firstQuote.customer.streetAddress || undefined,
+            jobsiteAddressLine2: firstQuote.customer.addressLine2 || undefined,
+            jobsiteCity: firstQuote.customer.city || undefined,
+            jobsiteState: firstQuote.customer.state || undefined,
+            jobsiteZipCode: firstQuote.customer.zipCode || undefined,
+            jobsiteCountry: firstQuote.customer.country || undefined,
             estimatedStartDate: firstQuote.date || new Date().toISOString().split('T')[0],
             notes: `Combined import from ${importData.extractedQuotes.length} PDFs: ${combinedFilenames}`,
             taxRate: '0',
@@ -1742,7 +1763,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
               quoteNumber: extractedQuote.quoteNumber || `IMP-${Date.now()}`,
               accountId: accountId,
               projectName: extractedQuote.projectDescription || `Imported from ${extractedQuote.filename}`,
-              projectAddress: extractedQuote.customer.address || '',
+              jobsiteStreetAddress: extractedQuote.customer.streetAddress || undefined,
+              jobsiteAddressLine2: extractedQuote.customer.addressLine2 || undefined,
+              jobsiteCity: extractedQuote.customer.city || undefined,
+              jobsiteState: extractedQuote.customer.state || undefined,
+              jobsiteZipCode: extractedQuote.customer.zipCode || undefined,
+              jobsiteCountry: extractedQuote.customer.country || undefined,
               estimatedStartDate: extractedQuote.date || new Date().toISOString().split('T')[0],
               notes: extractedQuote.notes ? `Imported from PDF: ${extractedQuote.filename}\n\n${extractedQuote.notes}` : `Imported from PDF: ${extractedQuote.filename}`,
               taxRate: extractedQuote.taxRate?.toString() || '0',
@@ -2165,7 +2191,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             <h2 style="color: #000000; margin-top: 0; font-size: 20px; border-bottom: 2px solid #14b8a6; padding-bottom: 10px;">Quote Details</h2>
             <p style="color: #1a1a1a;"><strong>Quote Number:</strong> ${quote.quoteNumber}</p>
             <p style="color: #1a1a1a;"><strong>Project:</strong> ${quote.projectName || 'N/A'}</p>
-            ${quote.projectAddress ? `<p style="color: #1a1a1a;"><strong>Address:</strong> ${quote.projectAddress}</p>` : ''}
+            ${formatJobsiteAddress(quote) ? `<p style="color: #1a1a1a;"><strong>Jobsite Address:</strong> ${formatJobsiteAddress(quote)}</p>` : ''}
           </div>
           
           <div style="text-align: center; margin: 30px 0;">
@@ -2236,7 +2262,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         id: quote.id,
         quoteNumber: quote.quoteNumber,
         projectName: quote.projectName,
-        projectAddress: quote.projectAddress,
+        jobsiteAddress: formatJobsiteAddress(quote),
         accountName: quote.account?.name || quote.customer?.name || "N/A",
         lineItems: quote.lineItems || [],
         taxRate: quote.taxRate,
