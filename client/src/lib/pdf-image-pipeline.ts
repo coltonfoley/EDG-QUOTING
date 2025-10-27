@@ -172,3 +172,70 @@ export function clearImageCache(): void {
 export function getImageCacheSize(): number {
   return imageCache.size;
 }
+
+/**
+ * Calculates the dimensions to fit an image within a box while preserving aspect ratio.
+ * Uses "contain" strategy - entire image visible, may have letterboxing.
+ * 
+ * @param imgW - Natural width of the image
+ * @param imgH - Natural height of the image
+ * @param boxW - Maximum width of the container
+ * @param boxH - Maximum height of the container
+ * @returns Object with scaled width and height that fit within the box
+ */
+export function getAspectFitBox(
+  imgW: number,
+  imgH: number,
+  boxW: number,
+  boxH: number
+): { w: number; h: number } {
+  const scale = Math.min(boxW / imgW, boxH / imgH);
+  return {
+    w: imgW * scale,
+    h: imgH * scale,
+  };
+}
+
+/**
+ * Calculates the centered position for an image within a box.
+ * 
+ * @param boxX - X position of the container
+ * @param boxY - Y position of the container
+ * @param boxW - Width of the container
+ * @param boxH - Height of the container
+ * @param w - Width of the content to center
+ * @param h - Height of the content to center
+ * @returns Object with centered x and y coordinates
+ */
+export function getCenteredOrigin(
+  boxX: number,
+  boxY: number,
+  boxW: number,
+  boxH: number,
+  w: number,
+  h: number
+): { x: number; y: number } {
+  const x = boxX + (boxW - w) / 2;
+  const y = boxY + (boxH - h) / 2;
+  return { x, y };
+}
+
+/**
+ * Gets the natural dimensions of an image from a data URL.
+ * This is needed to calculate aspect ratios before embedding in PDF.
+ * 
+ * @param dataUrl - Image data URL
+ * @returns Promise with image width and height
+ */
+export function getImageDimensions(dataUrl: string): Promise<{ width: number; height: number }> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      resolve({ width: img.width, height: img.height });
+    };
+    img.onerror = () => {
+      reject(new Error('Failed to load image to get dimensions'));
+    };
+    img.src = dataUrl;
+  });
+}
