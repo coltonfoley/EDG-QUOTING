@@ -5,6 +5,33 @@ import { getImageDimensions, getAspectFitBox, getCenteredOrigin } from '@/lib/pd
 
 const EDG_TEAL = [66, 255, 193] as const;
 
+function formatJobsiteAddress(quote: any): string {
+  const parts: string[] = [];
+  
+  if (quote.jobsiteStreetAddress) {
+    parts.push(quote.jobsiteStreetAddress);
+  }
+  
+  if (quote.jobsiteAddressLine2) {
+    parts.push(quote.jobsiteAddressLine2);
+  }
+  
+  const cityStateZip: string[] = [];
+  if (quote.jobsiteCity) cityStateZip.push(quote.jobsiteCity);
+  if (quote.jobsiteState) cityStateZip.push(quote.jobsiteState);
+  if (quote.jobsiteZipCode) cityStateZip.push(quote.jobsiteZipCode);
+  
+  if (cityStateZip.length > 0) {
+    parts.push(cityStateZip.join(', '));
+  }
+  
+  if (quote.jobsiteCountry && quote.jobsiteCountry !== 'United States') {
+    parts.push(quote.jobsiteCountry);
+  }
+  
+  return parts.length > 0 ? parts.join('\n') : 'N/A';
+}
+
 interface BrandedFooterOpts {
   pdf: jsPDF;
   logoDataUrl: string;
@@ -170,9 +197,10 @@ export async function drawProjectDetailsPage(pdf: jsPDF, opts: DrawProjectDetail
   y += 15;
 
   pdf.setFont('Barlow-SemiBold', 'normal');
-  pdf.text('Address', col1X, y);
+  pdf.text('Jobsite Address', col1X, y);
   pdf.setFont('Barlow-Regular', 'normal');
-  const addressLines = pdf.splitTextToSize(quote.projectAddress || 'N/A', colW);
+  const formattedAddress = formatJobsiteAddress(quote);
+  const addressLines = pdf.splitTextToSize(formattedAddress, colW);
   pdf.text(addressLines, col1X, y + 5);
 
   y += Math.max(5 + addressLines.length * 5, 15);
