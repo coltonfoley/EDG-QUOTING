@@ -318,7 +318,7 @@ export function AccountForm({ account, onSuccess, onCancel }: AccountFormProps) 
                     <SelectItem value="50_percent_down">50% Down, Balance Due on Completion</SelectItem>
                     <SelectItem value="progress_payments">Progress Payments</SelectItem>
                     <SelectItem value="2_10_net_30">2/10 Net 30 (2% discount if paid within 10 days)</SelectItem>
-                    <SelectItem value="cog">COG (Cash on Delivery)</SelectItem>
+                    <SelectItem value="cog">COD (Cash on Delivery)</SelectItem>
                     <SelectItem value="prepaid">Prepaid</SelectItem>
                   </SelectContent>
                 </Select>
