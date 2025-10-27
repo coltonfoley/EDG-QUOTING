@@ -21,11 +21,29 @@ import { cn } from "@/lib/utils";
 import { debounce } from "lodash";
 import { DEAL_STAGES } from "@shared/dealStageConstants";
 import { ClientComboboxWithCreate } from "@/components/client-combobox-with-create";
+import { AddressAutocomplete } from "@/components/address-autocomplete";
 
+// Form schema extends the insert schema with new structured address fields
 const quoteFormSchema = insertQuoteSchema.extend({
-  quoteNumber: z.string().optional(), // Auto-generated on server
+  quoteNumber: z.string().optional(), // Override for form
   accountId: z.number().nullable().optional(),
   dealStage: z.string().default("new_lead"),
+  // Add new structured project address fields
+  projectStreetAddress: z.string().optional(),
+  projectAddressLine2: z.string().optional(),
+  projectCity: z.string().optional(),
+  projectState: z.string().optional(),
+  projectZipCode: z.string().optional(),
+  projectCountry: z.string().optional(),
+  projectPlaceId: z.string().optional(),
+  // Add new structured jobsite address fields
+  jobsiteStreetAddress: z.string().optional(),
+  jobsiteAddressLine2: z.string().optional(),
+  jobsiteCity: z.string().optional(),
+  jobsiteState: z.string().optional(),
+  jobsiteZipCode: z.string().optional(),
+  jobsiteCountry: z.string().optional(),
+  jobsitePlaceId: z.string().optional(),
 });
 
 type QuoteFormData = z.infer<typeof quoteFormSchema>;
@@ -52,7 +70,20 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
     defaultValues: {
       quoteNumber: quote?.quoteNumber || "",
       projectName: quote?.projectName || "",
-      projectAddress: quote?.projectAddress || "",
+      projectStreetAddress: quote?.projectStreetAddress || "",
+      projectAddressLine2: quote?.projectAddressLine2 || "",
+      projectCity: quote?.projectCity || "",
+      projectState: quote?.projectState || "",
+      projectZipCode: quote?.projectZipCode || "",
+      projectCountry: quote?.projectCountry || "",
+      projectPlaceId: quote?.projectPlaceId || "",
+      jobsiteStreetAddress: quote?.jobsiteStreetAddress || "",
+      jobsiteAddressLine2: quote?.jobsiteAddressLine2 || "",
+      jobsiteCity: quote?.jobsiteCity || "",
+      jobsiteState: quote?.jobsiteState || "",
+      jobsiteZipCode: quote?.jobsiteZipCode || "",
+      jobsiteCountry: quote?.jobsiteCountry || "",
+      jobsitePlaceId: quote?.jobsitePlaceId || "",
       estimatedStartDate: quote?.estimatedStartDate || "",
       dealStage: quote?.dealStage || "new_lead",
       taxRate: quote?.taxRate || "0",
@@ -71,7 +102,20 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
       form.reset({
         quoteNumber: quote.quoteNumber || "",
         projectName: quote.projectName || "",
-        projectAddress: quote.projectAddress || "",
+        projectStreetAddress: quote.projectStreetAddress || "",
+        projectAddressLine2: quote.projectAddressLine2 || "",
+        projectCity: quote.projectCity || "",
+        projectState: quote.projectState || "",
+        projectZipCode: quote.projectZipCode || "",
+        projectCountry: quote.projectCountry || "",
+        projectPlaceId: quote.projectPlaceId || "",
+        jobsiteStreetAddress: quote.jobsiteStreetAddress || "",
+        jobsiteAddressLine2: quote.jobsiteAddressLine2 || "",
+        jobsiteCity: quote.jobsiteCity || "",
+        jobsiteState: quote.jobsiteState || "",
+        jobsiteZipCode: quote.jobsiteZipCode || "",
+        jobsiteCountry: quote.jobsiteCountry || "",
+        jobsitePlaceId: quote.jobsitePlaceId || "",
         estimatedStartDate: quote.estimatedStartDate || "",
         dealStage: quote.dealStage || "new_lead",
         taxRate: quote.taxRate || "0",
@@ -128,6 +172,46 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
     }
   };
 
+
+  const handleProjectAddressSelect = (components: {
+    streetAddress: string;
+    addressLine2: string;
+    city: string;
+    state: string;
+    zipCode: string;
+    country: string;
+    placeId: string;
+  }) => {
+    form.setValue("projectStreetAddress", components.streetAddress);
+    if (components.addressLine2) {
+      form.setValue("projectAddressLine2", components.addressLine2);
+    }
+    form.setValue("projectCity", components.city);
+    form.setValue("projectState", components.state);
+    form.setValue("projectZipCode", components.zipCode);
+    form.setValue("projectCountry", components.country);
+    form.setValue("projectPlaceId", components.placeId);
+  };
+
+  const handleJobsiteAddressSelect = (components: {
+    streetAddress: string;
+    addressLine2: string;
+    city: string;
+    state: string;
+    zipCode: string;
+    country: string;
+    placeId: string;
+  }) => {
+    form.setValue("jobsiteStreetAddress", components.streetAddress);
+    if (components.addressLine2) {
+      form.setValue("jobsiteAddressLine2", components.addressLine2);
+    }
+    form.setValue("jobsiteCity", components.city);
+    form.setValue("jobsiteState", components.state);
+    form.setValue("jobsiteZipCode", components.zipCode);
+    form.setValue("jobsiteCountry", components.country);
+    form.setValue("jobsitePlaceId", components.placeId);
+  };
 
   const handleSubmit = (data: QuoteFormData) => {
     onSave(data);
@@ -272,19 +356,274 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
                       </FormItem>
                     )}
                   />
-                  <FormField
-                    control={form.control}
-                    name="projectAddress"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Project Address (Optional)</FormLabel>
-                        <FormControl>
-                          <Textarea rows={2} placeholder="Enter project address" {...field} value={field.value || ""} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-sm font-medium leading-none">
+                        Search for Project Address
+                      </label>
+                      <AddressAutocomplete
+                        onAddressSelect={handleProjectAddressSelect}
+                        placeholder="Start typing project address..."
+                        testId="input-project-address-autocomplete"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">Or enter address details manually below</p>
+                    </div>
+
+                    <FormField
+                      control={form.control}
+                      name="projectStreetAddress"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Street Address</FormLabel>
+                          <FormControl>
+                            <Input 
+                              placeholder="123 Main Street" 
+                              {...field} 
+                              value={field.value || ""}
+                              data-testid="input-project-street-address"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <FormField
+                        control={form.control}
+                        name="projectAddressLine2"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Apt, Suite, etc. (optional)</FormLabel>
+                            <FormControl>
+                              <Input 
+                                placeholder="Apt 4B" 
+                                {...field} 
+                                value={field.value || ""}
+                                data-testid="input-project-address-line2"
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="projectCity"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>City</FormLabel>
+                            <FormControl>
+                              <Input 
+                                placeholder="City" 
+                                {...field} 
+                                value={field.value || ""}
+                                data-testid="input-project-city"
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <FormField
+                        control={form.control}
+                        name="projectState"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>State</FormLabel>
+                            <FormControl>
+                              <Input 
+                                placeholder="State" 
+                                {...field} 
+                                value={field.value || ""}
+                                data-testid="input-project-state"
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="projectZipCode"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>ZIP Code</FormLabel>
+                            <FormControl>
+                              <Input 
+                                placeholder="ZIP" 
+                                {...field} 
+                                value={field.value || ""}
+                                data-testid="input-project-zip"
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="projectCountry"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Country</FormLabel>
+                            <FormControl>
+                              <Input 
+                                placeholder="Country" 
+                                {...field} 
+                                value={field.value || ""}
+                                data-testid="input-project-country"
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-3 border-t pt-4 mt-4">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-sm font-semibold text-charcoal">Jobsite Address (if different)</h4>
+                      <span className="text-xs text-gray-500">Optional</span>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium leading-none">
+                        Search for Jobsite Address
+                      </label>
+                      <AddressAutocomplete
+                        onAddressSelect={handleJobsiteAddressSelect}
+                        placeholder="Start typing jobsite address..."
+                        testId="input-jobsite-address-autocomplete"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">Or enter address details manually below</p>
+                    </div>
+
+                    <FormField
+                      control={form.control}
+                      name="jobsiteStreetAddress"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Street Address</FormLabel>
+                          <FormControl>
+                            <Input 
+                              placeholder="123 Main Street" 
+                              {...field} 
+                              value={field.value || ""}
+                              data-testid="input-jobsite-street-address"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <FormField
+                        control={form.control}
+                        name="jobsiteAddressLine2"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Apt, Suite, etc. (optional)</FormLabel>
+                            <FormControl>
+                              <Input 
+                                placeholder="Apt 4B" 
+                                {...field} 
+                                value={field.value || ""}
+                                data-testid="input-jobsite-address-line2"
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="jobsiteCity"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>City</FormLabel>
+                            <FormControl>
+                              <Input 
+                                placeholder="City" 
+                                {...field} 
+                                value={field.value || ""}
+                                data-testid="input-jobsite-city"
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <FormField
+                        control={form.control}
+                        name="jobsiteState"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>State</FormLabel>
+                            <FormControl>
+                              <Input 
+                                placeholder="State" 
+                                {...field} 
+                                value={field.value || ""}
+                                data-testid="input-jobsite-state"
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="jobsiteZipCode"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>ZIP Code</FormLabel>
+                            <FormControl>
+                              <Input 
+                                placeholder="ZIP" 
+                                {...field} 
+                                value={field.value || ""}
+                                data-testid="input-jobsite-zip"
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="jobsiteCountry"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Country</FormLabel>
+                            <FormControl>
+                              <Input 
+                                placeholder="Country" 
+                                {...field} 
+                                value={field.value || ""}
+                                data-testid="input-jobsite-country"
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                  </div>
+
                   <FormField
                     control={form.control}
                     name="estimatedStartDate"
