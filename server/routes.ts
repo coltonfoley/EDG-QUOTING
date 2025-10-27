@@ -2383,6 +2383,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const file = req.file;
       const objectStorageService = new ObjectStorageService();
       
+      // Apply EXIF rotation to fix sideways phone photos
+      // Sharp's rotate() automatically reads and applies EXIF orientation
+      const processedImageBuffer = await sharp(file.buffer)
+        .rotate() // Auto-rotate based on EXIF orientation
+        .toBuffer();
+      
       // Create a custom path for the cover photo
       const sanitizedFilename = file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
       const timestamp = Date.now();
@@ -2401,7 +2407,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const bucket = objectStorageClient.bucket(bucketName);
       const cloudFile = bucket.file(objectName);
       
-      await cloudFile.save(file.buffer, {
+      await cloudFile.save(processedImageBuffer, {
         metadata: {
           contentType: file.mimetype,
         },
@@ -2454,6 +2460,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const file = req.file;
       const objectStorageService = new ObjectStorageService();
       
+      // Apply EXIF rotation to fix sideways phone photos
+      // Sharp's rotate() automatically reads and applies EXIF orientation
+      const processedImageBuffer = await sharp(file.buffer)
+        .rotate() // Auto-rotate based on EXIF orientation
+        .toBuffer();
+      
       // Create a custom path for the visual asset
       const sanitizedFilename = file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
       const timestamp = Date.now();
@@ -2472,7 +2484,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const bucket = objectStorageClient.bucket(bucketName);
       const cloudFile = bucket.file(objectName);
       
-      await cloudFile.save(file.buffer, {
+      await cloudFile.save(processedImageBuffer, {
         metadata: {
           contentType: file.mimetype,
         },
