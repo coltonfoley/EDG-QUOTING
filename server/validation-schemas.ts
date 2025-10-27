@@ -29,6 +29,8 @@ export const productIdParamSchema = z.object({
 // Enhanced Account validation
 export const insertAccountSchema = baseAccountSchema.extend({
   name: z.string().min(1, "Name is required").max(255, "Name is too long"),
+  firstName: z.string().max(255, "First name is too long").optional().nullable(),
+  lastName: z.string().max(255, "Last name is too long").optional().nullable(),
   email: z.string().email("Invalid email format").max(255, "Email is too long"),
   phone: z.string()
     .min(10, "Phone number must be at least 10 digits")
@@ -48,7 +50,14 @@ export const insertAccountSchema = baseAccountSchema.extend({
     "other"
   ]).default("homeowner"),
   paymentTerms: z.string().max(100, "Payment terms are too long").optional().nullable(),
-  billingAddress: z.string().max(500, "Billing address is too long").optional().nullable()
+  billingAddress: z.string().max(500, "Billing address is too long").optional().nullable(),
+  streetAddress: z.string().max(500, "Street address is too long").optional().nullable(),
+  addressLine2: z.string().max(255, "Address line 2 is too long").optional().nullable(),
+  city: z.string().max(255, "City is too long").optional().nullable(),
+  state: z.string().max(100, "State is too long").optional().nullable(),
+  zipCode: z.string().max(20, "ZIP code is too long").optional().nullable(),
+  country: z.string().max(255, "Country is too long").optional().nullable(),
+  placeId: z.string().max(500, "Place ID is too long").optional().nullable()
 });
 
 // More lenient update schema for accounts that handles empty strings and partial updates
@@ -56,6 +65,14 @@ export const updateAccountSchema = z.object({
   name: z.preprocess(
     (v) => (v === "" ? undefined : v),
     z.string().min(1, "Name is required").max(255, "Name is too long").optional()
+  ),
+  firstName: z.preprocess(
+    (v) => (v === "" ? null : v),
+    z.string().max(255, "First name is too long").optional().nullable()
+  ),
+  lastName: z.preprocess(
+    (v) => (v === "" ? null : v),
+    z.string().max(255, "Last name is too long").optional().nullable()
   ),
   email: z.preprocess(
     (v) => (v === "" ? undefined : v),
@@ -92,7 +109,36 @@ export const updateAccountSchema = z.object({
   billingAddress: z.preprocess(
     (v) => (v === "" ? null : v),
     z.string().max(500, "Billing address is too long").optional().nullable()
-  )
+  ),
+  streetAddress: z.preprocess(
+    (v) => (v === "" ? null : v),
+    z.string().max(500, "Street address is too long").optional().nullable()
+  ),
+  addressLine2: z.preprocess(
+    (v) => (v === "" ? null : v),
+    z.string().max(255, "Address line 2 is too long").optional().nullable()
+  ),
+  city: z.preprocess(
+    (v) => (v === "" ? null : v),
+    z.string().max(255, "City is too long").optional().nullable()
+  ),
+  state: z.preprocess(
+    (v) => (v === "" ? null : v),
+    z.string().max(100, "State is too long").optional().nullable()
+  ),
+  zipCode: z.preprocess(
+    (v) => (v === "" ? null : v),
+    z.string().max(20, "ZIP code is too long").optional().nullable()
+  ),
+  country: z.preprocess(
+    (v) => (v === "" ? null : v),
+    z.string().max(255, "Country is too long").optional().nullable()
+  ),
+  placeId: z.preprocess(
+    (v) => (v === "" ? null : v),
+    z.string().max(500, "Place ID is too long").optional().nullable()
+  ),
+  secondaryContacts: z.any().optional().nullable()
 });
 
 // Legacy Customer validation for backward compatibility
