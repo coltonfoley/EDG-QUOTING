@@ -1,7 +1,7 @@
 import jsPDF from 'jspdf';
 import { ensureSpace, measureAcceptanceBlock } from '@/lib/pdf-utils';
 import { formatCurrency, calculateLineItemTotal } from '@/lib/utils';
-import { getImageDimensions, getAspectFitBox } from '@/lib/pdf-image-pipeline';
+import { getImageDimensions, getAspectFitBox, getCenteredOrigin } from '@/lib/pdf-image-pipeline';
 
 const EDG_TEAL = [66, 255, 193] as const;
 
@@ -195,9 +195,12 @@ export async function drawProjectDetailsPage(pdf: jsPDF, opts: DrawProjectDetail
       console.warn('Could not get cover photo dimensions, using default:', error);
     }
     
+    // Center the image horizontally and vertically within the box
+    const { x: imgX, y: imgY } = getCenteredOrigin(margin, y, contentW, maxBoxH, imgW, imgH);
+    
     const imgFormat = detectImageFormat(coverDataUrl);
-    pdf.addImage(coverDataUrl, imgFormat, margin, y, imgW, imgH);
-    y += imgH;
+    pdf.addImage(coverDataUrl, imgFormat, imgX, imgY, imgW, imgH);
+    y += maxBoxH;
   }
 
   // Add branded footer
@@ -507,7 +510,7 @@ export async function drawRenderingsPages(pdf: jsPDF, opts: DrawRenderingsPagesO
     }
 
     // Check if we need a new page (if current image won't fit)
-    const spaceNeeded = imgH + gap;
+    const spaceNeeded = maxBoxH + gap;
     const footerSpace = 30;
     const availableSpace = pageH - y - margin - footerSpace;
 
@@ -523,12 +526,12 @@ export async function drawRenderingsPages(pdf: jsPDF, opts: DrawRenderingsPagesO
       currentPage++;
     }
 
-    const imgX = margin;
-    const imgY = y;
+    // Center the image horizontally and vertically within the box
+    const { x: imgX, y: imgY } = getCenteredOrigin(margin, y, contentW, maxBoxH, imgW, imgH);
 
     pdf.addImage(img.dataUrl, format, imgX, imgY, imgW, imgH);
 
-    y += imgH + gap;
+    y += maxBoxH + gap;
   }
 
   // Add branded footer to the last page
