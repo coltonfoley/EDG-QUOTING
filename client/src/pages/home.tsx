@@ -38,7 +38,7 @@ export default function Home() {
     queryKey: ['/api/accounts'],
   });
 
-  // Calculate quote total
+  // Sum line items with markup only; discounts, shipping, and tax adjustments are handled elsewhere
   function calculateQuoteTotal(quote: QuoteWithDetails): number {
     return quote.lineItems.reduce((sum, item) => {
       const qty = parseFloat(item.quantity.toString());
