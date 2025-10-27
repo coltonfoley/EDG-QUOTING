@@ -172,3 +172,57 @@ export function clearImageCache(): void {
 export function getImageCacheSize(): number {
   return imageCache.size;
 }
+
+/**
+ * Gets the natural dimensions of an image from its data URL
+ */
+export function getImageDimensions(dataUrl: string): Promise<{ width: number; height: number }> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    
+    img.onload = () => {
+      resolve({ width: img.naturalWidth, height: img.naturalHeight });
+      URL.revokeObjectURL(img.src);
+    };
+    
+    img.onerror = () => {
+      URL.revokeObjectURL(img.src);
+      reject(new Error('Failed to load image to get dimensions'));
+    };
+    
+    img.src = dataUrl;
+  });
+}
+
+/**
+ * Calculates dimensions to fit an image within a box while preserving aspect ratio
+ * Uses "contain" mode - image will be scaled to fit entirely within the box
+ */
+export function getAspectFitBox(
+  imgW: number,
+  imgH: number,
+  boxW: number,
+  boxH: number
+): { w: number; h: number } {
+  const scale = Math.min(boxW / imgW, boxH / imgH);
+  return {
+    w: imgW * scale,
+    h: imgH * scale,
+  };
+}
+
+/**
+ * Calculates centered position for an image within a box
+ */
+export function getCenteredOrigin(
+  boxX: number,
+  boxY: number,
+  boxW: number,
+  boxH: number,
+  w: number,
+  h: number
+): { x: number; y: number } {
+  const x = boxX + (boxW - w) / 2;
+  const y = boxY + (boxH - h) / 2;
+  return { x, y };
+}
