@@ -28,14 +28,6 @@ const quoteFormSchema = insertQuoteSchema.extend({
   quoteNumber: z.string().optional(), // Override for form
   accountId: z.number().nullable().optional(),
   dealStage: z.string().default("new_lead"),
-  // Add new structured project address fields
-  projectStreetAddress: z.string().optional(),
-  projectAddressLine2: z.string().optional(),
-  projectCity: z.string().optional(),
-  projectState: z.string().optional(),
-  projectZipCode: z.string().optional(),
-  projectCountry: z.string().optional(),
-  projectPlaceId: z.string().optional(),
   // Add new structured jobsite address fields
   jobsiteStreetAddress: z.string().optional(),
   jobsiteAddressLine2: z.string().optional(),
@@ -70,13 +62,6 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
     defaultValues: {
       quoteNumber: quote?.quoteNumber || "",
       projectName: quote?.projectName || "",
-      projectStreetAddress: quote?.projectStreetAddress || "",
-      projectAddressLine2: quote?.projectAddressLine2 || "",
-      projectCity: quote?.projectCity || "",
-      projectState: quote?.projectState || "",
-      projectZipCode: quote?.projectZipCode || "",
-      projectCountry: quote?.projectCountry || "",
-      projectPlaceId: quote?.projectPlaceId || "",
       jobsiteStreetAddress: quote?.jobsiteStreetAddress || "",
       jobsiteAddressLine2: quote?.jobsiteAddressLine2 || "",
       jobsiteCity: quote?.jobsiteCity || "",
@@ -102,13 +87,6 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
       form.reset({
         quoteNumber: quote.quoteNumber || "",
         projectName: quote.projectName || "",
-        projectStreetAddress: quote.projectStreetAddress || "",
-        projectAddressLine2: quote.projectAddressLine2 || "",
-        projectCity: quote.projectCity || "",
-        projectState: quote.projectState || "",
-        projectZipCode: quote.projectZipCode || "",
-        projectCountry: quote.projectCountry || "",
-        projectPlaceId: quote.projectPlaceId || "",
         jobsiteStreetAddress: quote.jobsiteStreetAddress || "",
         jobsiteAddressLine2: quote.jobsiteAddressLine2 || "",
         jobsiteCity: quote.jobsiteCity || "",
@@ -170,25 +148,6 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
     if (quote?.id) {
       updateDealStageMutation.mutate({ dealStage: newDealStage });
     }
-  };
-
-
-  const handleProjectAddressSelect = (components: {
-    streetAddress: string;
-    addressLine2: string;
-    city: string;
-    state: string;
-    zipCode: string;
-    country: string;
-    placeId: string;
-  }) => {
-    form.setValue("projectStreetAddress", components.streetAddress);
-    form.setValue("projectAddressLine2", components.addressLine2 || "");
-    form.setValue("projectCity", components.city);
-    form.setValue("projectState", components.state);
-    form.setValue("projectZipCode", components.zipCode);
-    form.setValue("projectCountry", components.country);
-    form.setValue("projectPlaceId", components.placeId);
   };
 
   const handleJobsiteAddressSelect = (components: {
@@ -353,140 +312,8 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
                     )}
                   />
                   <div className="space-y-3">
-                    <div>
-                      <label className="text-sm font-medium leading-none">
-                        Search for Project Address
-                      </label>
-                      <AddressAutocomplete
-                        onAddressSelect={handleProjectAddressSelect}
-                        placeholder="Start typing project address..."
-                        testId="input-project-address-autocomplete"
-                      />
-                      <p className="text-xs text-gray-500 mt-1">Or enter address details manually below</p>
-                    </div>
-
-                    <FormField
-                      control={form.control}
-                      name="projectStreetAddress"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Street Address</FormLabel>
-                          <FormControl>
-                            <Input 
-                              placeholder="123 Main Street" 
-                              {...field} 
-                              value={field.value || ""}
-                              data-testid="input-project-street-address"
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <FormField
-                        control={form.control}
-                        name="projectAddressLine2"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Apt, Suite, etc. (optional)</FormLabel>
-                            <FormControl>
-                              <Input 
-                                placeholder="Apt 4B" 
-                                {...field} 
-                                value={field.value || ""}
-                                data-testid="input-project-address-line2"
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      <FormField
-                        control={form.control}
-                        name="projectCity"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>City</FormLabel>
-                            <FormControl>
-                              <Input 
-                                placeholder="City" 
-                                {...field} 
-                                value={field.value || ""}
-                                data-testid="input-project-city"
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <FormField
-                        control={form.control}
-                        name="projectState"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>State</FormLabel>
-                            <FormControl>
-                              <Input 
-                                placeholder="State" 
-                                {...field} 
-                                value={field.value || ""}
-                                data-testid="input-project-state"
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      <FormField
-                        control={form.control}
-                        name="projectZipCode"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>ZIP Code</FormLabel>
-                            <FormControl>
-                              <Input 
-                                placeholder="ZIP" 
-                                {...field} 
-                                value={field.value || ""}
-                                data-testid="input-project-zip"
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      <FormField
-                        control={form.control}
-                        name="projectCountry"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Country</FormLabel>
-                            <FormControl>
-                              <Input 
-                                placeholder="Country" 
-                                {...field} 
-                                value={field.value || ""}
-                                data-testid="input-project-country"
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-3 border-t pt-4 mt-4">
                     <div className="flex items-center justify-between">
-                      <h4 className="text-sm font-semibold text-charcoal">Jobsite Address (if different)</h4>
+                      <h4 className="text-sm font-semibold text-charcoal">Jobsite Address</h4>
                       <span className="text-xs text-gray-500">Optional</span>
                     </div>
                     <div>
