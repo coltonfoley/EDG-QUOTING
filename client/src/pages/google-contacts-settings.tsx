@@ -141,44 +141,6 @@ export default function GoogleContactsSettings() {
             )}
           </CardContent>
         </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Setup Instructions</CardTitle>
-            <CardDescription>How to configure the Google Service Account</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-3 text-sm">
-              <div>
-                <p className="font-semibold mb-1">1. Create a Service Account</p>
-                <ul className="list-disc list-inside text-muted-foreground space-y-1 ml-4">
-                  <li>Go to Google Cloud Console</li>
-                  <li>Create a new project or select existing</li>
-                  <li>Enable the "People API"</li>
-                  <li>Create a Service Account</li>
-                  <li>Download the JSON key file</li>
-                </ul>
-              </div>
-              <div>
-                <p className="font-semibold mb-1">2. Share Contacts with Service Account</p>
-                <ul className="list-disc list-inside text-muted-foreground space-y-1 ml-4">
-                  <li>Open Google Contacts</li>
-                  <li>Click "Share" or use delegation settings</li>
-                  <li>Add the service account email (from JSON key)</li>
-                  <li>Grant read access to contacts</li>
-                </ul>
-              </div>
-              <div>
-                <p className="font-semibold mb-1">3. Configure Environment Variable</p>
-                <ul className="list-disc list-inside text-muted-foreground space-y-1 ml-4">
-                  <li>Set GOOGLE_SERVICE_ACCOUNT_KEY with the JSON key content</li>
-                  <li>Restart the application</li>
-                  <li>The system will be ready to sync</li>
-                </ul>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
       </main>
     </div>
   );
