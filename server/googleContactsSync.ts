@@ -45,8 +45,12 @@ export class GoogleContactsSyncEngine {
         
         for (const googleContact of response.contacts) {
           try {
-            await this.importGoogleContact(googleContact);
-            result.imported++;
+            const wasUpdated = await this.importGoogleContact(googleContact);
+            if (wasUpdated) {
+              result.updated++;
+            } else {
+              result.imported++;
+            }
           } catch (error) {
             result.errors.push(`Failed to import contact ${googleContact.resourceName}: ${error instanceof Error ? error.message : 'Unknown error'}`);
           }
@@ -61,16 +65,16 @@ export class GoogleContactsSyncEngine {
     }
   }
 
-  private async importGoogleContact(googleContact: GoogleContactData): Promise<void> {
+  private async importGoogleContact(googleContact: GoogleContactData): Promise<boolean> {
     if (!googleContact.resourceName) {
-      return;
+      return false;
     }
 
     const accountData = this.mapGoogleToAccount(googleContact);
     
     if (!accountData.email || !accountData.phone || !accountData.name) {
-      console.log(`Skipping contact ${googleContact.resourceName} - missing required fields`);
-      return;
+      console.log(`Skipping contact ${googleContact.resourceName} - missing required fields (email: ${!!accountData.email}, phone: ${!!accountData.phone}, name: ${!!accountData.name})`);
+      return false;
     }
 
     const [existingSync] = await db
@@ -100,24 +104,73 @@ export class GoogleContactsSyncEngine {
             googleUpdatedAt: this.getGoogleUpdateTime(googleContact),
           })
           .where(eq(googleContactsSync.id, existingSync.id));
+        
+        return true;
       }
-    } else {
-      const [newAccount] = await db.insert(accounts)
-        .values({
+    }
+
+    const existingAccountByEmail = await db
+      .select()
+      .from(accounts)
+      .where(eq(accounts.email, accountData.email as string))
+      .limit(1);
+
+    if (existingAccountByEmail.length > 0) {
+      const existingAccount = existingAccountByEmail[0];
+      
+      await db.update(accounts)
+        .set({
           ...accountData,
           googleContactId: googleContact.resourceName,
-        } as any)
-        .returning();
+          updatedAt: new Date(),
+        })
+        .where(eq(accounts.id, existingAccount.id));
 
-      await db.insert(googleContactsSync).values({
-        accountId: newAccount.id,
-        googleResourceName: googleContact.resourceName,
-        googleEtag: googleContact.etag,
-        lastSyncedAt: new Date(),
-        googleUpdatedAt: this.getGoogleUpdateTime(googleContact),
-        syncDirection: 'pull',
-      });
+      const [existingSyncForAccount] = await db
+        .select()
+        .from(googleContactsSync)
+        .where(eq(googleContactsSync.accountId, existingAccount.id));
+
+      if (existingSyncForAccount) {
+        await db.update(googleContactsSync)
+          .set({
+            googleResourceName: googleContact.resourceName,
+            googleEtag: googleContact.etag,
+            lastSyncedAt: new Date(),
+            googleUpdatedAt: this.getGoogleUpdateTime(googleContact),
+          })
+          .where(eq(googleContactsSync.id, existingSyncForAccount.id));
+      } else {
+        await db.insert(googleContactsSync).values({
+          accountId: existingAccount.id,
+          googleResourceName: googleContact.resourceName,
+          googleEtag: googleContact.etag,
+          lastSyncedAt: new Date(),
+          googleUpdatedAt: this.getGoogleUpdateTime(googleContact),
+          syncDirection: 'pull',
+        });
+      }
+
+      return true;
     }
+
+    const [newAccount] = await db.insert(accounts)
+      .values({
+        ...accountData,
+        googleContactId: googleContact.resourceName,
+      } as any)
+      .returning();
+
+    await db.insert(googleContactsSync).values({
+      accountId: newAccount.id,
+      googleResourceName: googleContact.resourceName,
+      googleEtag: googleContact.etag,
+      lastSyncedAt: new Date(),
+      googleUpdatedAt: this.getGoogleUpdateTime(googleContact),
+      syncDirection: 'pull',
+    });
+
+    return false;
   }
 
   async pushAccountToGoogle(accountId: number): Promise<void> {
