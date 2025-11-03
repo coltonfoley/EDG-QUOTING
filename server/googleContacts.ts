@@ -1,12 +1,6 @@
 import { google } from 'googleapis';
-import type { OAuth2Client } from 'google-auth-library';
 import type { people_v1 } from 'googleapis';
-
-export interface GoogleOAuthTokens {
-  access_token: string;
-  refresh_token?: string;
-  expiry_date?: number;
-}
+import { JWT } from 'google-auth-library';
 
 export interface GoogleContactData {
   resourceName?: string;
@@ -45,40 +39,40 @@ export interface GoogleContactData {
 }
 
 export class GoogleContactsService {
-  private oauth2Client: OAuth2Client;
+  private jwtClient: JWT;
   private peopleService: people_v1.People;
+  private userEmail: string;
 
-  constructor(tokens: GoogleOAuthTokens) {
-    const clientId = process.env.GOOGLE_CLIENT_ID;
-    const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-    const redirectUri = process.env.GOOGLE_REDIRECT_URI || `${process.env.REPLIT_DEV_DOMAIN}/api/google-contacts/callback`;
-
-    if (!clientId || !clientSecret) {
-      throw new Error('Google OAuth credentials not configured. Please set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET environment variables.');
+  constructor(serviceAccountKey: any, userEmail: string) {
+    if (!serviceAccountKey) {
+      throw new Error('Google Service Account credentials not configured. Please set GOOGLE_SERVICE_ACCOUNT_KEY environment variable.');
     }
 
-    this.oauth2Client = new google.auth.OAuth2(
-      clientId,
-      clientSecret,
-      redirectUri
-    );
+    this.userEmail = userEmail;
 
-    this.oauth2Client.setCredentials({
-      access_token: tokens.access_token,
-      refresh_token: tokens.refresh_token,
-      expiry_date: tokens.expiry_date,
+    this.jwtClient = new JWT({
+      email: serviceAccountKey.client_email,
+      key: serviceAccountKey.private_key,
+      scopes: ['https://www.googleapis.com/auth/contacts'],
+      subject: userEmail, // Impersonate this user
     });
 
-    this.peopleService = google.people({ version: 'v1', auth: this.oauth2Client });
+    this.peopleService = google.people({ version: 'v1', auth: this.jwtClient });
   }
 
-  async refreshTokenIfNeeded(): Promise<GoogleOAuthTokens> {
-    const credentials = await this.oauth2Client.getAccessToken();
-    return {
-      access_token: credentials.token || '',
-      refresh_token: this.oauth2Client.credentials.refresh_token || undefined,
-      expiry_date: this.oauth2Client.credentials.expiry_date || undefined,
-    };
+  static fromEnv(userEmail: string): GoogleContactsService {
+    const serviceAccountKeyJson = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
+    
+    if (!serviceAccountKeyJson) {
+      throw new Error('GOOGLE_SERVICE_ACCOUNT_KEY environment variable not set');
+    }
+
+    try {
+      const serviceAccountKey = JSON.parse(serviceAccountKeyJson);
+      return new GoogleContactsService(serviceAccountKey, userEmail);
+    } catch (error) {
+      throw new Error('Failed to parse GOOGLE_SERVICE_ACCOUNT_KEY JSON');
+    }
   }
 
   async listContacts(pageSize: number = 100, pageToken?: string, syncToken?: string): Promise<{
@@ -261,57 +255,5 @@ export class GoogleContactsService {
     await this.peopleService.people.deleteContact({
       resourceName,
     });
-  }
-
-  static getAuthorizationUrl(userId: number): string {
-    const clientId = process.env.GOOGLE_CLIENT_ID;
-    const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-    const redirectUri = process.env.GOOGLE_REDIRECT_URI || `${process.env.REPLIT_DEV_DOMAIN}/api/google-contacts/callback`;
-
-    if (!clientId || !clientSecret) {
-      throw new Error('Google OAuth credentials not configured');
-    }
-
-    const oauth2Client = new google.auth.OAuth2(
-      clientId,
-      clientSecret,
-      redirectUri
-    );
-
-    const scopes = [
-      'https://www.googleapis.com/auth/contacts',
-      'https://www.googleapis.com/auth/userinfo.email',
-    ];
-
-    return oauth2Client.generateAuthUrl({
-      access_type: 'offline',
-      scope: scopes,
-      state: userId.toString(),
-      prompt: 'consent',
-    });
-  }
-
-  static async exchangeCodeForTokens(code: string): Promise<GoogleOAuthTokens> {
-    const clientId = process.env.GOOGLE_CLIENT_ID;
-    const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-    const redirectUri = process.env.GOOGLE_REDIRECT_URI || `${process.env.REPLIT_DEV_DOMAIN}/api/google-contacts/callback`;
-
-    if (!clientId || !clientSecret) {
-      throw new Error('Google OAuth credentials not configured');
-    }
-
-    const oauth2Client = new google.auth.OAuth2(
-      clientId,
-      clientSecret,
-      redirectUri
-    );
-
-    const { tokens } = await oauth2Client.getToken(code);
-
-    return {
-      access_token: tokens.access_token || '',
-      refresh_token: tokens.refresh_token || undefined,
-      expiry_date: tokens.expiry_date || undefined,
-    };
   }
 }
