@@ -1,72 +1,32 @@
+import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { AppHeader } from "@/components/app-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { CheckCircle2, XCircle, Settings, RefreshCw, Users } from "lucide-react";
-import { useEffect, useState } from "react";
+import { CheckCircle2, XCircle, Settings, RefreshCw, AlertCircle } from "lucide-react";
 
 export default function GoogleContactsSettings() {
   const { toast } = useToast();
+  const [userEmail, setUserEmail] = useState("");
   const [isSyncing, setIsSyncing] = useState(false);
 
   const { data: status, isLoading } = useQuery({
     queryKey: ["/api/google-contacts/status"],
   });
 
-  const connectMutation = useMutation({
-    mutationFn: async () => {
-      const response = await apiRequest("GET", "/api/google-contacts/auth");
-      return await response.json();
-    },
-    onSuccess: (data: any) => {
-      if (data.authUrl) {
-        const width = 600;
-        const height = 700;
-        const left = window.screen.width / 2 - width / 2;
-        const top = window.screen.height / 2 - height / 2;
-        window.open(
-          data.authUrl,
-          'Google OAuth',
-          `width=${width},height=${height},top=${top},left=${left}`
-        );
-      }
-    },
-    onError: () => {
-      toast({
-        title: "Error",
-        description: "Failed to initiate Google connection",
-        variant: "destructive",
-      });
-    },
-  });
-
-  const disconnectMutation = useMutation({
-    mutationFn: async () => {
-      await apiRequest("POST", "/api/google-contacts/disconnect");
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/google-contacts/status"] });
-      toast({
-        title: "Success",
-        description: "Google Contacts disconnected successfully",
-      });
-    },
-    onError: () => {
-      toast({
-        title: "Error",
-        description: "Failed to disconnect Google Contacts",
-        variant: "destructive",
-      });
-    },
-  });
-
   const syncMutation = useMutation({
     mutationFn: async () => {
+      if (!userEmail) {
+        throw new Error('Please enter the Google account email address');
+      }
+
       setIsSyncing(true);
-      const response = await apiRequest("POST", "/api/google-contacts/sync");
+      const response = await apiRequest("POST", "/api/google-contacts/sync", { userEmail });
       return await response.json();
     },
     onSuccess: (data: any) => {
@@ -75,7 +35,7 @@ export default function GoogleContactsSettings() {
       
       toast({
         title: "Sync Complete",
-        description: `Imported ${data.imported} contacts, updated ${data.updated}. ${data.errors?.length > 0 ? `${data.errors.length} errors occurred.` : ''}`,
+        description: `Imported ${data.imported} contacts. ${data.errors?.length > 0 ? `${data.errors.length} errors occurred.` : ''}`,
       });
       setIsSyncing(false);
     },
@@ -89,25 +49,6 @@ export default function GoogleContactsSettings() {
     },
   });
 
-  useEffect(() => {
-    const handleMessage = (event: MessageEvent) => {
-      if (event.data.type === 'GOOGLE_AUTH_SUCCESS') {
-        toast({
-          title: "Success",
-          description: "Google Contacts connected successfully!",
-        });
-        queryClient.invalidateQueries({ queryKey: ["/api/google-contacts/status"] });
-        
-        setTimeout(() => {
-          syncMutation.mutate();
-        }, 1000);
-      }
-    };
-
-    window.addEventListener('message', handleMessage);
-    return () => window.removeEventListener('message', handleMessage);
-  }, [toast]);
-
   if (isLoading) {
     return (
       <div>
@@ -119,8 +60,7 @@ export default function GoogleContactsSettings() {
     );
   }
 
-  const isConnected = (status as any)?.connected;
-  const lastSync = (status as any)?.lastSync;
+  const isConfigured = (status as any)?.configured;
 
   return (
     <div>
@@ -129,7 +69,7 @@ export default function GoogleContactsSettings() {
         <div className="mb-8">
           <h1 className="text-3xl font-bold mb-2">Google Contacts Integration</h1>
           <p className="text-muted-foreground">
-            Sync your contacts between this app and Google Contacts
+            Sync contacts from your team's Google account
           </p>
         </div>
 
@@ -139,70 +79,64 @@ export default function GoogleContactsSettings() {
               <div>
                 <CardTitle className="flex items-center gap-2">
                   <Settings className="h-5 w-5" />
-                  Connection Status
+                  Sync Status
                 </CardTitle>
                 <CardDescription>
-                  Manage your Google Contacts integration
+                  Import contacts from Google Contacts
                 </CardDescription>
               </div>
-              {isConnected ? (
-                <Badge variant="default" className="bg-green-600 hover:bg-green-700" data-testid="badge-connected">
+              {isConfigured ? (
+                <Badge variant="default" className="bg-green-600 hover:bg-green-700" data-testid="badge-configured">
                   <CheckCircle2 className="h-4 w-4 mr-1" />
-                  Connected
+                  Configured
                 </Badge>
               ) : (
-                <Badge variant="destructive" data-testid="badge-disconnected">
+                <Badge variant="destructive" data-testid="badge-not-configured">
                   <XCircle className="h-4 w-4 mr-1" />
-                  Not Connected
+                  Not Configured
                 </Badge>
               )}
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            {isConnected ? (
+            {isConfigured ? (
               <>
-                <div className="flex flex-col gap-4">
-                  <div className="text-sm text-muted-foreground">
-                    {lastSync ? (
-                      <p>Last synced: {new Date(lastSync).toLocaleString()}</p>
-                    ) : (
-                      <p>No sync performed yet</p>
-                    )}
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="user-email">Google Account Email</Label>
+                    <Input
+                      id="user-email"
+                      type="email"
+                      placeholder="contacts@yourcompany.com"
+                      value={userEmail}
+                      onChange={(e) => setUserEmail(e.target.value)}
+                      data-testid="input-email"
+                    />
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Enter the email address of the Google account that contains the contacts to sync
+                    </p>
                   </div>
-                  <div className="flex gap-2">
-                    <Button
-                      onClick={() => syncMutation.mutate()}
-                      disabled={isSyncing || syncMutation.isPending}
-                      data-testid="button-sync"
-                    >
-                      <RefreshCw className={`h-4 w-4 mr-2 ${isSyncing || syncMutation.isPending ? 'animate-spin' : ''}`} />
-                      {isSyncing || syncMutation.isPending ? 'Syncing...' : 'Sync Now'}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={() => disconnectMutation.mutate()}
-                      disabled={disconnectMutation.isPending}
-                      data-testid="button-disconnect"
-                    >
-                      Disconnect
-                    </Button>
-                  </div>
+                  <Button
+                    onClick={() => syncMutation.mutate()}
+                    disabled={isSyncing || syncMutation.isPending || !userEmail}
+                    data-testid="button-sync"
+                  >
+                    <RefreshCw className={`h-4 w-4 mr-2 ${isSyncing || syncMutation.isPending ? 'animate-spin' : ''}`} />
+                    {isSyncing || syncMutation.isPending ? 'Syncing...' : 'Sync Now'}
+                  </Button>
                 </div>
               </>
             ) : (
               <div className="space-y-4">
-                <p className="text-sm text-muted-foreground">
-                  Connect your Google account to automatically sync contacts between this app and Google Contacts.
-                  Changes you make in either place will be reflected in both.
-                </p>
-                <Button
-                  onClick={() => connectMutation.mutate()}
-                  disabled={connectMutation.isPending}
-                  data-testid="button-connect"
-                >
-                  <Users className="h-4 w-4 mr-2" />
-                  Connect Google Contacts
-                </Button>
+                <div className="flex items-start gap-3 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                  <AlertCircle className="h-5 w-5 text-yellow-600 mt-0.5" />
+                  <div>
+                    <p className="font-medium text-yellow-900">Service Account Not Configured</p>
+                    <p className="text-sm text-yellow-700 mt-1">
+                      To enable Google Contacts sync, you need to set up a Service Account. Please contact your administrator.
+                    </p>
+                  </div>
+                </div>
               </div>
             )}
           </CardContent>
@@ -210,30 +144,38 @@ export default function GoogleContactsSettings() {
 
         <Card>
           <CardHeader>
-            <CardTitle>How It Works</CardTitle>
-            <CardDescription>Understanding the two-way sync</CardDescription>
+            <CardTitle>Setup Instructions</CardTitle>
+            <CardDescription>How to configure the Google Service Account</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <h3 className="font-semibold text-sm">Pull from Google</h3>
-              <p className="text-sm text-muted-foreground">
-                When you sync, all contacts from your Google Contacts will be imported into this app.
-                Contact names, emails, phone numbers, addresses, and company information will be synchronized.
-              </p>
-            </div>
-            <div className="space-y-2">
-              <h3 className="font-semibold text-sm">Push to Google</h3>
-              <p className="text-sm text-muted-foreground">
-                When you create or update contacts in this app, they will automatically be pushed to your Google Contacts.
-                This keeps both systems in sync.
-              </p>
-            </div>
-            <div className="space-y-2">
-              <h3 className="font-semibold text-sm">Privacy & Security</h3>
-              <p className="text-sm text-muted-foreground">
-                We only access and sync contact information. Your Google credentials are securely stored and
-                we follow Google's security best practices. You can disconnect at any time.
-              </p>
+            <div className="space-y-3 text-sm">
+              <div>
+                <p className="font-semibold mb-1">1. Create a Service Account</p>
+                <ul className="list-disc list-inside text-muted-foreground space-y-1 ml-4">
+                  <li>Go to Google Cloud Console</li>
+                  <li>Create a new project or select existing</li>
+                  <li>Enable the "People API"</li>
+                  <li>Create a Service Account</li>
+                  <li>Download the JSON key file</li>
+                </ul>
+              </div>
+              <div>
+                <p className="font-semibold mb-1">2. Share Contacts with Service Account</p>
+                <ul className="list-disc list-inside text-muted-foreground space-y-1 ml-4">
+                  <li>Open Google Contacts</li>
+                  <li>Click "Share" or use delegation settings</li>
+                  <li>Add the service account email (from JSON key)</li>
+                  <li>Grant read access to contacts</li>
+                </ul>
+              </div>
+              <div>
+                <p className="font-semibold mb-1">3. Configure Environment Variable</p>
+                <ul className="list-disc list-inside text-muted-foreground space-y-1 ml-4">
+                  <li>Set GOOGLE_SERVICE_ACCOUNT_KEY with the JSON key content</li>
+                  <li>Restart the application</li>
+                  <li>The system will be ready to sync</li>
+                </ul>
+              </div>
             </div>
           </CardContent>
         </Card>
