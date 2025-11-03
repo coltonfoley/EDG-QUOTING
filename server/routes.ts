@@ -4386,6 +4386,138 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Google Contacts OAuth and sync routes
+  app.get("/api/google-contacts/auth", isAuthenticated, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      if (!user) {
+        return res.status(401).json({ message: 'User not authenticated' });
+      }
+
+      const { GoogleContactsService } = await import('./googleContacts');
+      const authUrl = GoogleContactsService.getAuthorizationUrl(user.id);
+      
+      res.json({ authUrl });
+    } catch (error: any) {
+      console.error('Error initiating Google OAuth:', error);
+      res.status(500).json({ message: error.message || 'Failed to initiate Google OAuth' });
+    }
+  });
+
+  app.get("/api/google-contacts/callback", async (req, res) => {
+    try {
+      const { code, state } = req.query;
+      
+      if (!code || !state) {
+        return res.status(400).send('Missing code or state parameter');
+      }
+
+      const userId = parseInt(state as string);
+      if (isNaN(userId)) {
+        return res.status(400).send('Invalid state parameter');
+      }
+
+      const { GoogleContactsService } = await import('./googleContacts');
+      const tokens = await GoogleContactsService.exchangeCodeForTokens(code as string);
+
+      await db.update(users).set({
+        googleAccessToken: tokens.access_token,
+        googleRefreshToken: tokens.refresh_token || null,
+        googleTokenExpiry: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
+        googleSyncEnabled: true,
+      }).where(eq(users.id, userId));
+
+      res.send(`
+        <html>
+          <body>
+            <h1>Google Contacts Connected Successfully!</h1>
+            <p>You can close this window and return to the application.</p>
+            <script>
+              window.opener && window.opener.postMessage({ type: 'GOOGLE_AUTH_SUCCESS' }, '*');
+              setTimeout(() => window.close(), 2000);
+            </script>
+          </body>
+        </html>
+      `);
+    } catch (error: any) {
+      console.error('Error in Google OAuth callback:', error);
+      res.status(500).send(`Error: ${error.message || 'Failed to connect Google account'}`);
+    }
+  });
+
+  app.post("/api/google-contacts/sync", isAuthenticated, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      if (!user) {
+        return res.status(401).json({ message: 'User not authenticated' });
+      }
+
+      const [userRecord] = await db.select().from(users).where(eq(users.id, user.id));
+      
+      if (!userRecord?.googleAccessToken || !userRecord.googleSyncEnabled) {
+        return res.status(400).json({ message: 'Google Contacts not connected' });
+      }
+
+      const { GoogleContactsSyncEngine } = await import('./googleContactsSync');
+      const syncEngine = new GoogleContactsSyncEngine(user.id, {
+        access_token: userRecord.googleAccessToken,
+        refresh_token: userRecord.googleRefreshToken || undefined,
+        expiry_date: userRecord.googleTokenExpiry ? userRecord.googleTokenExpiry.getTime() : undefined,
+      });
+
+      const result = await syncEngine.performFullSync();
+
+      res.json({
+        success: true,
+        ...result,
+      });
+    } catch (error: any) {
+      console.error('Error syncing Google Contacts:', error);
+      res.status(500).json({ message: error.message || 'Failed to sync Google Contacts' });
+    }
+  });
+
+  app.post("/api/google-contacts/disconnect", isAuthenticated, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      if (!user) {
+        return res.status(401).json({ message: 'User not authenticated' });
+      }
+
+      await db.update(users).set({
+        googleAccessToken: null,
+        googleRefreshToken: null,
+        googleTokenExpiry: null,
+        googleSyncEnabled: false,
+        lastGoogleSync: null,
+      }).where(eq(users.id, user.id));
+
+      res.json({ success: true, message: 'Google Contacts disconnected successfully' });
+    } catch (error: any) {
+      console.error('Error disconnecting Google Contacts:', error);
+      res.status(500).json({ message: error.message || 'Failed to disconnect Google Contacts' });
+    }
+  });
+
+  app.get("/api/google-contacts/status", isAuthenticated, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      if (!user) {
+        return res.status(401).json({ message: 'User not authenticated' });
+      }
+
+      const [userRecord] = await db.select().from(users).where(eq(users.id, user.id));
+      
+      res.json({
+        connected: !!userRecord?.googleSyncEnabled,
+        lastSync: userRecord?.lastGoogleSync || null,
+      });
+    } catch (error: any) {
+      console.error('Error getting Google Contacts status:', error);
+      res.status(500).json({ message: error.message || 'Failed to get status' });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
