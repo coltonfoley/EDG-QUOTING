@@ -20,6 +20,7 @@ import AuthPage from "@/pages/auth-page";
 import AdminPage from "@/pages/admin";
 import ContractsPage from "@/pages/contracts";
 import QuickBooksSettings from "@/pages/quickbooks-settings";
+import GoogleContactsSettings from "@/pages/google-contacts-settings";
 import Accounts from "@/pages/accounts";
 import AccountDetail from "@/pages/account-detail";
 import Pipeline from "@/pages/pipeline";
@@ -109,6 +110,7 @@ function Router() {
           <Route path="/admin" component={AdminPage} />
           <Route path="/admin/contracts" component={ContractsPage} />
           <Route path="/admin/quickbooks" component={QuickBooksSettings} />
+          <Route path="/admin/google-contacts" component={GoogleContactsSettings} />
         </>
       )}
     </Switch>

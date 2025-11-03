@@ -24,6 +24,12 @@ export const users = pgTable("users", {
   firstName: varchar("first_name"),
   lastName: varchar("last_name"),
   role: varchar("role").notNull().default("user"), // admin, user
+  // Google OAuth fields
+  googleAccessToken: text("google_access_token"),
+  googleRefreshToken: text("google_refresh_token"),
+  googleTokenExpiry: timestamp("google_token_expiry"),
+  googleSyncEnabled: boolean("google_sync_enabled").default(false),
+  lastGoogleSync: timestamp("last_google_sync"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -64,6 +70,8 @@ export const accounts = pgTable("accounts", {
   secondaryContacts: jsonb("secondary_contacts"), // Array of additional contact info for multi-person accounts
   // QuickBooks integration
   qbCustomerId: text("qb_customer_id"), // QuickBooks customer ID
+  // Google Contacts integration
+  googleContactId: text("google_contact_id"), // Google People API resource name
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => [
@@ -76,6 +84,21 @@ export const accounts = pgTable("accounts", {
 // Aliases for different conceptual uses
 export const customers = accounts; // Legacy alias for backward compatibility
 export const clients = accounts; // New unified client model alias
+
+// Google Contacts sync tracking table
+export const googleContactsSync = pgTable("google_contacts_sync", {
+  id: serial("id").primaryKey(),
+  accountId: integer("account_id").notNull().references(() => accounts.id, { onDelete: "cascade" }),
+  googleResourceName: text("google_resource_name").unique(), // Google People API resource name (e.g., "people/c1234567890")
+  googleEtag: text("google_etag"), // Google ETag for conflict detection
+  lastSyncedAt: timestamp("last_synced_at").defaultNow(),
+  localUpdatedAt: timestamp("local_updated_at"), // When account was last updated locally
+  googleUpdatedAt: timestamp("google_updated_at"), // When contact was last updated in Google
+  syncDirection: text("sync_direction"), // 'push', 'pull', or 'both'
+}, (table) => [
+  index("idx_google_sync_account_id").on(table.accountId),
+  index("idx_google_sync_resource_name").on(table.googleResourceName),
+]);
 
 // QuickBooks integration settings
 export const quickbooksSettings = pgTable("quickbooks_settings", {
@@ -570,6 +593,7 @@ export type QuoteCoverPhoto = typeof quoteCoverPhotos.$inferSelect;
 export type QuoteProductRendering = typeof quoteProductRenderings.$inferSelect;
 export type IssueReport = typeof issueReports.$inferSelect;
 export type QuickBooksSettings = typeof quickbooksSettings.$inferSelect;
+export type GoogleContactsSync = typeof googleContactsSync.$inferSelect;
 
 export type InsertApiKey = z.infer<typeof insertApiKeySchema>;
 export type InsertAccount = z.infer<typeof insertAccountSchema>;
