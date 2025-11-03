@@ -1,7 +1,7 @@
 import { db } from './db';
-import { accounts, googleContactsSync, users } from '@shared/schema';
-import { eq, and, sql } from 'drizzle-orm';
-import { GoogleContactsService, type GoogleContactData, type GoogleOAuthTokens } from './googleContacts';
+import { accounts, googleContactsSync } from '@shared/schema';
+import { eq } from 'drizzle-orm';
+import { GoogleContactsService, type GoogleContactData } from './googleContacts';
 import type { Account } from '@shared/schema';
 
 export interface SyncResult {
@@ -13,11 +13,9 @@ export interface SyncResult {
 
 export class GoogleContactsSyncEngine {
   private service: GoogleContactsService;
-  private userId: number;
 
-  constructor(userId: number, tokens: GoogleOAuthTokens) {
-    this.userId = userId;
-    this.service = new GoogleContactsService(tokens);
+  constructor(userEmail: string) {
+    this.service = GoogleContactsService.fromEnv(userEmail);
   }
 
   async performFullSync(): Promise<SyncResult> {
@@ -30,12 +28,6 @@ export class GoogleContactsSyncEngine {
 
     try {
       await this.pullFromGoogle(result);
-      
-      const [user] = await db.select().from(users).where(eq(users.id, this.userId));
-      await db.update(users)
-        .set({ lastGoogleSync: new Date() })
-        .where(eq(users.id, this.userId));
-
     } catch (error) {
       result.errors.push(`Full sync failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
@@ -114,7 +106,7 @@ export class GoogleContactsSyncEngine {
         .values({
           ...accountData,
           googleContactId: googleContact.resourceName,
-        })
+        } as any)
         .returning();
 
       await db.insert(googleContactsSync).values({
