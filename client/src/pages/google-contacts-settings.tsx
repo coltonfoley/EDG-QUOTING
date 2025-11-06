@@ -33,9 +33,17 @@ export default function GoogleContactsSettings() {
       queryClient.invalidateQueries({ queryKey: ["/api/google-contacts/status"] });
       queryClient.invalidateQueries({ queryKey: ["/api/accounts"] });
       
+      const parts = [];
+      if (data.imported > 0) parts.push(`${data.imported} imported`);
+      if (data.updated > 0) parts.push(`${data.updated} updated`);
+      if (data.skipped > 0) parts.push(`${data.skipped} skipped`);
+      
+      const summary = parts.length > 0 ? parts.join(', ') : 'No changes';
+      const errorMsg = data.errors?.length > 0 ? ` ${data.errors.length} errors occurred.` : '';
+      
       toast({
         title: "Sync Complete",
-        description: `Imported ${data.imported} contacts. ${data.errors?.length > 0 ? `${data.errors.length} errors occurred.` : ''}`,
+        description: `${summary}.${errorMsg}`,
       });
       setIsSyncing(false);
     },

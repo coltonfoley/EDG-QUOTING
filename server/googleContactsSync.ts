@@ -7,6 +7,7 @@ import type { Account } from '@shared/schema';
 export interface SyncResult {
   imported: number;
   updated: number;
+  skipped: number;
   pushed: number;
   errors: string[];
 }
@@ -22,6 +23,7 @@ export class GoogleContactsSyncEngine {
     const result: SyncResult = {
       imported: 0,
       updated: 0,
+      skipped: 0,
       pushed: 0,
       errors: [],
     };
@@ -45,11 +47,13 @@ export class GoogleContactsSyncEngine {
         
         for (const googleContact of response.contacts) {
           try {
-            const wasUpdated = await this.importGoogleContact(googleContact);
-            if (wasUpdated) {
+            const importResult = await this.importGoogleContact(googleContact);
+            if (importResult === 'updated') {
               result.updated++;
-            } else {
+            } else if (importResult === 'imported') {
               result.imported++;
+            } else if (importResult === 'skipped') {
+              result.skipped++;
             }
           } catch (error) {
             result.errors.push(`Failed to import contact ${googleContact.resourceName}: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -65,16 +69,16 @@ export class GoogleContactsSyncEngine {
     }
   }
 
-  private async importGoogleContact(googleContact: GoogleContactData): Promise<boolean> {
+  private async importGoogleContact(googleContact: GoogleContactData): Promise<'imported' | 'updated' | 'skipped'> {
     if (!googleContact.resourceName) {
-      return false;
+      return 'skipped';
     }
 
     const accountData = this.mapGoogleToAccount(googleContact);
     
     if (!accountData.email || !accountData.phone || !accountData.name) {
       console.log(`Skipping contact ${googleContact.resourceName} - missing required fields (email: ${!!accountData.email}, phone: ${!!accountData.phone}, name: ${!!accountData.name})`);
-      return false;
+      return 'skipped';
     }
 
     const [existingSync] = await db
@@ -91,7 +95,19 @@ export class GoogleContactsSyncEngine {
       if (existingAccount) {
         await db.update(accounts)
           .set({
-            ...accountData,
+            name: accountData.name,
+            firstName: accountData.firstName,
+            lastName: accountData.lastName,
+            email: accountData.email,
+            phone: accountData.phone,
+            company: accountData.company,
+            streetAddress: accountData.streetAddress,
+            addressLine2: accountData.addressLine2,
+            city: accountData.city,
+            state: accountData.state,
+            zipCode: accountData.zipCode,
+            country: accountData.country,
+            secondaryContacts: accountData.secondaryContacts,
             googleContactId: googleContact.resourceName,
             updatedAt: new Date(),
           })
@@ -105,7 +121,7 @@ export class GoogleContactsSyncEngine {
           })
           .where(eq(googleContactsSync.id, existingSync.id));
         
-        return true;
+        return 'updated';
       }
     }
 
@@ -120,7 +136,19 @@ export class GoogleContactsSyncEngine {
       
       await db.update(accounts)
         .set({
-          ...accountData,
+          name: accountData.name,
+          firstName: accountData.firstName,
+          lastName: accountData.lastName,
+          email: accountData.email,
+          phone: accountData.phone,
+          company: accountData.company,
+          streetAddress: accountData.streetAddress,
+          addressLine2: accountData.addressLine2,
+          city: accountData.city,
+          state: accountData.state,
+          zipCode: accountData.zipCode,
+          country: accountData.country,
+          secondaryContacts: accountData.secondaryContacts,
           googleContactId: googleContact.resourceName,
           updatedAt: new Date(),
         })
@@ -151,7 +179,7 @@ export class GoogleContactsSyncEngine {
         });
       }
 
-      return true;
+      return 'updated';
     }
 
     const [newAccount] = await db.insert(accounts)
@@ -170,7 +198,7 @@ export class GoogleContactsSyncEngine {
       syncDirection: 'pull',
     });
 
-    return false;
+    return 'imported';
   }
 
   async pushAccountToGoogle(accountId: number): Promise<void> {
