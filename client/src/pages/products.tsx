@@ -239,7 +239,7 @@ export default function Products() {
       const colorIds = productColors.map(pc => pc.colorId);
       form.setValue("selectedColorIds", colorIds);
     }
-  }, [editingProduct, productColors, form]);
+  }, [editingProduct, productColors]);
 
   const handleDelete = (id: number) => {
     if (confirm("Are you sure you want to delete this product?")) {
