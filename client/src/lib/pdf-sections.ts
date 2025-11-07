@@ -174,7 +174,7 @@ export async function drawProjectDetailsPage(pdf: jsPDF, opts: DrawProjectDetail
   pdf.setFont('Barlow-SemiBold', 'normal');
   pdf.text('Client', col1X, y);
   pdf.setFont('Barlow-Regular', 'normal');
-  pdf.text(quote.account?.name || 'N/A', col1X, y + 5);
+  pdf.text(quote.account?.company || quote.account?.name || 'N/A', col1X, y + 5);
 
   pdf.setFont('Barlow-SemiBold', 'normal');
   pdf.text('Date', col2X, y);
