@@ -51,7 +51,7 @@ export async function generateBrandedSequencePDF(options: BrandedSequenceOptions
     logoDataUrl: BRAND_LOGO_PNG,
     company,
     title: quote?.projectName || 'Project Proposal',
-    subtitle: quote?.account?.name || quote?.customer?.name || '',
+    subtitle: quote?.account?.company || quote?.account?.name || quote?.customer?.company || quote?.customer?.name || '',
     pageW,
     pageH
   });
