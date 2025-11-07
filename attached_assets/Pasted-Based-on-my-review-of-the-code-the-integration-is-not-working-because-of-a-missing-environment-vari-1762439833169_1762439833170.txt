@@ -1,0 +1,48 @@
+Based on my review of the code, the integration is not working because of a missing environment variable.
+
+Here is the breakdown of the failure and how to fix it.
+
+Primary Cause of Failure
+The application is failing because the required environment variable GOOGLE_SERVICE_ACCOUNT_KEY is not set.
+
+Missing Configuration: Your .env.local file only contains a key for DOCUSIGN_PRIVATE_KEY. It does not contain the GOOGLE_SERVICE_ACCOUNT_KEY variable that the application's code requires.
+
+Code Expectation:
+
+The Google Contacts service (googleContacts.ts) explicitly tries to read process.env.GOOGLE_SERVICE_ACCOUNT_KEY.
+
+If this variable is not found, the code is designed to throw an error stating GOOGLE_SERVICE_ACCOUNT_KEY environment variable not set.
+
+UI Confirmation:
+
+The settings page (google-contacts-settings.tsx) calls the /api/google-contacts/status endpoint to see if the feature is configured.
+
+That API endpoint only checks if process.env.GOOGLE_SERVICE_ACCOUNT_KEY exists.
+
+Since the variable is missing, the API returns { "configured": false }. This causes the frontend to display the "Not Configured" badge, and you are unable to proceed with the sync.
+
+How to Fix the Integration
+To get the integration working, you need to set this environment variable with the correct Google Service Account credentials.
+
+Get Credentials: You must go to the Google Cloud Console, create a Service Account, and enable the People API.
+
+Enable Delegation: You must grant this Service Account domain-wide delegation for the https://www.googleapis.com/auth/contacts scope.
+
+Download Key: Download the JSON key file for this service account.
+
+Set Environment Variable: Copy the entire contents of that JSON file and set it as the value for the GOOGLE_SERVICE_ACCOUNT_KEY environment variable in your production environment (e.g., in Replit Secrets).
+
+The variable's value should look like a complete JSON object:
+
+JSON
+
+GOOGLE_SERVICE_ACCOUNT_KEY={
+  "type": "service_account",
+  "project_id": "your-gcp-project-id",
+  "private_key_id": "...",
+  "private_key": "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n",
+  "client_email": "your-service-account-email@...",
+  "client_id": "...",
+  ...
+}
+Once this variable is set correctly, the "Configured" badge will appear, and the sync service will be able to authenticate with Google.
