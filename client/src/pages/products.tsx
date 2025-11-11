@@ -101,7 +101,7 @@ export default function Products() {
       toast({ title: "Product created successfully" });
     },
     onError: (error: any) => {
-      const errorMessage = error?.errors?.[0]?.message || error?.message || "Failed to create product";
+      const errorMessage = error?.details?.errors?.[0]?.message || error?.message || "Failed to create product";
       toast({ title: "Error", description: errorMessage, variant: "destructive" });
     },
   });
@@ -119,7 +119,7 @@ export default function Products() {
       toast({ title: "Product updated successfully" });
     },
     onError: (error: any) => {
-      const errorMessage = error?.errors?.[0]?.message || error?.message || "Failed to update product";
+      const errorMessage = error?.details?.errors?.[0]?.message || error?.message || "Failed to update product";
       toast({ title: "Error", description: errorMessage, variant: "destructive" });
     },
   });
