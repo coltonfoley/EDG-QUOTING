@@ -468,8 +468,8 @@ export const insertProductSchema = z.object({
     .transform(val => typeof val === 'string' ? val : val.toString())
     .refine(val => {
       const num = parseFloat(val);
-      return !isNaN(num) && num >= 0 && num <= 100;
-    }, "Default discount value must be between 0 and 100"),
+      return !isNaN(num) && num >= 0 && num <= 10000000;
+    }, "Default discount value must be between 0 and 10,000,000"),
   unit: z.string().max(50, "Unit name is too long").optional(),
   minLength: z.union([z.string(), z.number(), z.null()])
     .transform(val => val === null ? null : (typeof val === 'string' ? val : val.toString()))
@@ -507,7 +507,21 @@ export const insertProductSchema = z.object({
   galleryImages: z.array(z.any()).optional(),
   specificationSheets: z.array(z.any()).optional(),
   configFields: z.any().optional()
-});
+}).refine(
+  (data) => {
+    // Validate discount value based on discount type
+    if (data.defaultDiscountType === 'percentage') {
+      const discountValue = parseFloat(data.defaultDiscountValue || '0');
+      return discountValue >= 0 && discountValue <= 100;
+    }
+    // For dollar type, already validated in field-level (0 to 10,000,000)
+    return true;
+  },
+  {
+    message: "Percentage discount must be between 0 and 100",
+    path: ["defaultDiscountValue"]
+  }
+);
 
 // Enhanced Pricing Table validation
 export const insertPricingTableSchema = basePricingTableSchema.extend({
