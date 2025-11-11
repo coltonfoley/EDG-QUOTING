@@ -100,8 +100,9 @@ export default function Products() {
       form.reset();
       toast({ title: "Product created successfully" });
     },
-    onError: () => {
-      toast({ title: "Error", description: "Failed to create product", variant: "destructive" });
+    onError: (error: any) => {
+      const errorMessage = error?.errors?.[0]?.message || error?.message || "Failed to create product";
+      toast({ title: "Error", description: errorMessage, variant: "destructive" });
     },
   });
 
@@ -117,8 +118,9 @@ export default function Products() {
       form.reset();
       toast({ title: "Product updated successfully" });
     },
-    onError: () => {
-      toast({ title: "Error", description: "Failed to update product", variant: "destructive" });
+    onError: (error: any) => {
+      const errorMessage = error?.errors?.[0]?.message || error?.message || "Failed to update product";
+      toast({ title: "Error", description: errorMessage, variant: "destructive" });
     },
   });
 

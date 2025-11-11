@@ -451,6 +451,7 @@ export const insertProductSchema = z.object({
   name: z.string().min(1, "Product name is required").max(500, "Product name is too long"),
   description: z.string().max(5000, "Description is too long").optional(),
   manufacturer: z.string().min(1, "Manufacturer is required").max(100, "Manufacturer name is too long"),
+  category: z.string().max(100, "Category name is too long").optional(),
   productType: z.enum(['simple', 'configurable'], {
     errorMap: () => ({ message: "Product type must be either 'simple' or 'configurable'" })
   }).optional(),
