@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 export function AppHeader() {
   const [location] = useLocation();
@@ -28,7 +29,7 @@ export function AppHeader() {
           <span>Turn quotes into contracts - Make it rain! 💧</span>
         </div>
       </div>
-      <header className="bg-white shadow-sm border-b border-gray-200">
+      <header className="bg-card shadow-sm border-b border-border">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           <div className="flex items-center space-x-8">
@@ -112,13 +113,14 @@ export function AppHeader() {
             </nav>
           </div>
           <div className="flex items-center space-x-4">
+            <ThemeToggle />
             <Button variant="ghost" size="icon" className="text-edg-grey hover:text-edg-black">
               <Bell className="h-5 w-5" />
             </Button>
             
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="flex items-center space-x-2 hover:bg-gray-50">
+                <Button variant="ghost" className="flex items-center space-x-2 hover:bg-muted">
                   <Avatar className="h-8 w-8">
                     <AvatarFallback className="bg-edg-teal text-edg-black font-medium text-xs">
                       {user?.firstName?.[0]}{user?.lastName?.[0] || user?.username?.[0]}
@@ -136,7 +138,7 @@ export function AppHeader() {
                       {user?.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : user?.username}
                     </p>
                     {user?.email && (
-                      <p className="text-xs leading-none text-gray-600">
+                      <p className="text-xs leading-none text-muted-foreground">
                         {user.email}
                       </p>
                     )}

@@ -119,7 +119,7 @@ export default function Quotes() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-background">
         <AppHeader />
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {/* Header skeleton */}
@@ -176,7 +176,7 @@ export default function Quotes() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-background">
       <AppHeader />
       
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -278,9 +278,9 @@ export default function Quotes() {
           <CardContent>
             {!quotes || quotes.length === 0 ? (
               <div className="text-center py-12">
-                <FileText className="mx-auto h-12 w-12 text-gray-400" />
-                <h3 className="mt-2 text-sm font-medium text-gray-900">No quotes yet</h3>
-                <p className="mt-1 text-sm text-gray-500">Get started by creating your first quote.</p>
+                <FileText className="mx-auto h-12 w-12 text-muted-foreground" />
+                <h3 className="mt-2 text-sm font-medium text-foreground">No quotes yet</h3>
+                <p className="mt-1 text-sm text-muted-foreground">Get started by creating your first quote.</p>
                 <div className="mt-6 flex flex-col sm:flex-row gap-3 items-center justify-center">
                   <Link href="/quotes/new">
                     <Button className="bg-edg-black hover:bg-edg-grey text-edg-white">
@@ -299,9 +299,9 @@ export default function Quotes() {
               </div>
             ) : filteredQuotes && filteredQuotes.length === 0 ? (
               <div className="text-center py-12">
-                <Search className="mx-auto h-12 w-12 text-gray-400" />
-                <h3 className="mt-2 text-sm font-medium text-gray-900">No quotes found</h3>
-                <p className="mt-1 text-sm text-gray-500">Try adjusting your search terms.</p>
+                <Search className="mx-auto h-12 w-12 text-muted-foreground" />
+                <h3 className="mt-2 text-sm font-medium text-foreground">No quotes found</h3>
+                <p className="mt-1 text-sm text-muted-foreground">Try adjusting your search terms.</p>
                 <div className="mt-6">
                   <Button 
                     variant="outline" 
@@ -313,8 +313,8 @@ export default function Quotes() {
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
+                <table className="min-w-full divide-y divide-border">
+                  <thead className="bg-muted/50">
                     <tr>
                       <th className="px-6 py-3 text-left text-xs font-medium text-edg-grey uppercase tracking-wider">
                         Quote #
@@ -339,7 +339,7 @@ export default function Quotes() {
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
+                  <tbody className="bg-card divide-y divide-border">
                     {(filteredQuotes || quotes).map((quote) => {
                       const total = quote.lineItems.reduce((sum, item) => {
                         const qty = parseFloat(item.quantity.toString());
@@ -353,7 +353,7 @@ export default function Quotes() {
                       }, 0);
 
                       return (
-                        <tr key={quote.id} className="hover:bg-gray-50">
+                        <tr key={quote.id} className="hover:bg-muted/30">
                           <td className="px-6 py-4 text-sm font-medium text-edg-teal">
                             <Link href={`/quotes/${quote.id}/edit`} className="hover:underline">
                               {quote.quoteNumber}
@@ -398,7 +398,7 @@ export default function Quotes() {
                                 </Badge>
                               )
                             ) : (
-                              <span className="text-gray-400 text-xs">-</span>
+                              <span className="text-muted-foreground text-xs">-</span>
                             )}
                           </td>
                           <td className="px-6 py-4 text-sm font-medium text-edg-black text-right">
