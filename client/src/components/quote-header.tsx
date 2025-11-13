@@ -174,10 +174,10 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
 
   return (
     <Card className="mb-6">
-      <CardHeader className="border-b border-gray-200">
+      <CardHeader className="border-b border-border">
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <CardTitle className="text-2xl font-bold text-charcoal">
+            <CardTitle className="text-2xl font-bold text-foreground">
               {quote ? `Quote ${quote.quoteNumber}` : "New Quote"}
             </CardTitle>
             {quote?.createdAt && (
@@ -190,7 +190,7 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
             {quote && (
               <>
                 <div className="flex items-center space-x-2">
-                  <span className="text-sm font-medium text-gray-700">Pipeline Stage:</span>
+                  <span className="text-sm font-medium text-foreground">Pipeline Stage:</span>
                   <Select
                     value={form.watch("dealStage")}
                     onValueChange={handleDealStageChange}
@@ -242,11 +242,11 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
           <form id="quote-form" onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
             <div>
               <div className="flex items-center justify-between mb-3">
-                <h3 className="text-lg font-semibold text-charcoal">Client Information</h3>
-                <span className="text-sm text-gray-500">(Optional)</span>
+                <h3 className="text-lg font-semibold text-foreground">Client Information</h3>
+                <span className="text-sm text-muted-foreground">(Optional)</span>
               </div>
               
-              <div className="text-sm text-gray-600 mb-4">
+              <div className="text-sm text-muted-foreground mb-4">
                 Client can be linked later if needed. Focus on getting the quote created quickly.
               </div>
               
@@ -268,7 +268,7 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
                     </FormItem>
                   )}
                 />
-                <div className="text-xs text-gray-500 bg-gray-50 p-3 rounded-md">
+                <div className="text-xs text-muted-foreground bg-muted p-3 rounded-md">
                   <strong>Tip:</strong> You can create quotes quickly without selecting a client. 
                   Clients can be linked later when managing relationships.
                 </div>
@@ -276,7 +276,7 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
             </div>
             
             <div>
-              <h3 className="text-lg font-semibold text-charcoal mb-3">Project Details</h3>
+              <h3 className="text-lg font-semibold text-foreground mb-3">Project Details</h3>
                 <div className="space-y-3">
                   <FormField
                     control={form.control}
@@ -289,7 +289,7 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
                             {...field} 
                             readOnly 
                             placeholder="Auto-generated on save"
-                            className="bg-gray-50"
+                            className="bg-muted"
                           />
                         </FormControl>
                         <FormMessage />
@@ -313,8 +313,8 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
                   />
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <h4 className="text-sm font-semibold text-charcoal">Jobsite Address</h4>
-                      <span className="text-xs text-gray-500">Optional</span>
+                      <h4 className="text-sm font-semibold text-foreground">Jobsite Address</h4>
+                      <span className="text-xs text-muted-foreground">Optional</span>
                     </div>
                     <div>
                       <label className="text-sm font-medium leading-none">
@@ -325,7 +325,7 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
                         placeholder="Start typing jobsite address..."
                         testId="input-jobsite-address-autocomplete"
                       />
-                      <p className="text-xs text-gray-500 mt-1">Or enter address details manually below</p>
+                      <p className="text-xs text-muted-foreground mt-1">Or enter address details manually below</p>
                     </div>
 
                     <FormField
