@@ -49,13 +49,13 @@ export default function AuthPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
+    <div className="min-h-screen bg-background flex">
       {/* Left side - Auth forms */}
       <div className="w-full lg:w-1/2 flex items-center justify-center p-8">
         <div className="w-full max-w-md">
           <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-gray-900">Team Login</h1>
-            <p className="text-gray-600 mt-2">Access your quote management dashboard</p>
+            <h1 className="text-3xl font-bold text-foreground">Team Login</h1>
+            <p className="text-muted-foreground mt-2">Access your quote management dashboard</p>
           </div>
 
           <Card>
@@ -113,28 +113,28 @@ export default function AuthPage() {
       </div>
 
       {/* Right side - Hero section */}
-      <div className="hidden lg:flex lg:w-1/2 bg-teal-600 text-white p-12 items-center">
+      <div className="hidden lg:flex lg:w-1/2 bg-edg-teal text-edg-black p-12 items-center">
         <div>
           <h2 className="text-4xl font-bold mb-6">Rainmaker, by EDG</h2>
           <h3 className="text-2xl font-semibold mb-4">Quote Management System</h3>
-          <p className="text-lg text-teal-100 mb-8">
+          <p className="text-lg opacity-90 mb-8">
             Streamline your construction quoting process with our comprehensive management platform.
           </p>
-          <ul className="space-y-3 text-teal-100">
+          <ul className="space-y-3 opacity-90">
             <li className="flex items-center">
-              <div className="w-2 h-2 bg-white rounded-full mr-3"></div>
+              <div className="w-2 h-2 bg-edg-black/80 rounded-full mr-3"></div>
               Create professional quotes with detailed line items
             </li>
             <li className="flex items-center">
-              <div className="w-2 h-2 bg-white rounded-full mr-3"></div>
+              <div className="w-2 h-2 bg-edg-black/80 rounded-full mr-3"></div>
               Manage customer information and project details
             </li>
             <li className="flex items-center">
-              <div className="w-2 h-2 bg-white rounded-full mr-3"></div>
+              <div className="w-2 h-2 bg-edg-black/80 rounded-full mr-3"></div>
               Generate PDF quotes with company branding
             </li>
             <li className="flex items-center">
-              <div className="w-2 h-2 bg-white rounded-full mr-3"></div>
+              <div className="w-2 h-2 bg-edg-black/80 rounded-full mr-3"></div>
               Track quote status and manage your pipeline
             </li>
           </ul>

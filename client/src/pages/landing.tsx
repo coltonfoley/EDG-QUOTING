@@ -9,21 +9,21 @@ export default function Landing() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+    <div className="min-h-screen bg-gradient-to-br from-background to-muted">
       <div className="container mx-auto px-4 py-16">
         <div className="text-center mb-16">
           <div className="flex items-center justify-center mb-8">
             <img src={logoPath} alt="Rainmaker, by EDG" className="h-16 mr-6" />
           </div>
-          <h2 className="text-2xl text-slate-700 mb-4">Quote Management System</h2>
-          <p className="text-lg text-slate-600 max-w-2xl mx-auto mb-8">
+          <h2 className="text-2xl text-foreground mb-4">Quote Management System</h2>
+          <p className="text-lg text-muted-foreground max-w-2xl mx-auto mb-8">
             Professional quote creation and management platform for construction projects. 
             Streamline your quoting process with our comprehensive business tools.
           </p>
           <Button 
             onClick={handleLogin}
             size="lg"
-            className="bg-teal-600 hover:bg-teal-700 text-white px-8 py-3 text-lg"
+            className="bg-edg-teal hover:bg-edg-dark-teal text-edg-black px-8 py-3 text-lg"
           >
             Team Login
           </Button>
@@ -80,7 +80,7 @@ export default function Landing() {
         </div>
 
         <div className="mt-16 text-center">
-          <p className="text-slate-500">
+          <p className="text-muted-foreground">
             Secure team access powered by Replit authentication
           </p>
         </div>

@@ -1,5 +1,6 @@
 import { createRoot } from "react-dom/client";
 import App from "./App";
+import { ThemeProvider } from "@/components/theme-provider";
 import "./index.css";
 
 // Global handler for unhandled promise rejections to suppress abort errors
@@ -20,4 +21,8 @@ window.addEventListener('unhandledrejection', (event) => {
   // Let other errors through normally
 });
 
-createRoot(document.getElementById("root")!).render(<App />);
+createRoot(document.getElementById("root")!).render(
+  <ThemeProvider defaultTheme="system" storageKey="rainmaker-theme">
+    <App />
+  </ThemeProvider>
+);

@@ -170,7 +170,7 @@ export default function Home() {
   const isLoading = quotesLoading || accountsLoading;
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-background">
       <AppHeader />
 
       <main className="container mx-auto px-4 py-8">
@@ -472,10 +472,10 @@ export default function Home() {
                   <div className="space-y-3">
                     {[...Array(5)].map((_, i) => (
                       <div key={i} className="flex items-center space-x-3">
-                        <div className="w-10 h-10 bg-gray-200 rounded animate-pulse"></div>
+                        <div className="w-10 h-10 bg-muted rounded animate-pulse"></div>
                         <div className="flex-1 space-y-1">
-                          <div className="h-4 bg-gray-200 rounded animate-pulse"></div>
-                          <div className="h-3 bg-gray-200 rounded w-2/3 animate-pulse"></div>
+                          <div className="h-4 bg-muted rounded animate-pulse"></div>
+                          <div className="h-3 bg-muted rounded w-2/3 animate-pulse"></div>
                         </div>
                       </div>
                     ))}
@@ -485,7 +485,7 @@ export default function Home() {
                     {recentActivity.map((quote) => {
                       const stage = getDealStageById(quote.dealStage || 'new_lead');
                       return (
-                        <div key={quote.id} className="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg transition-colors">
+                        <div key={quote.id} className="flex items-center justify-between p-3 hover:bg-muted/50 rounded-lg transition-colors">
                           <div className="flex items-center space-x-3">
                             <div className="w-10 h-10 bg-edg-teal bg-opacity-10 rounded-full flex items-center justify-center">
                               <FileText className="h-5 w-5 text-edg-teal" />

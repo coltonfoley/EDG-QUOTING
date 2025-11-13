@@ -47,12 +47,12 @@ function Router() {
   // If there's an error (timeout or network issue), show error state with retry
   if (error && !isAuthenticated) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+      <div className="min-h-screen flex items-center justify-center bg-background p-4">
         <div className="max-w-md w-full">
-          <Alert className="border-red-200 bg-red-50">
-            <AlertTriangle className="h-4 w-4 text-red-600" />
-            <AlertTitle className="text-red-900">Connection Error</AlertTitle>
-            <AlertDescription className="text-red-700">
+          <Alert className="border-destructive/50 bg-destructive/10">
+            <AlertTriangle className="h-4 w-4 text-destructive" />
+            <AlertTitle className="text-destructive">Connection Error</AlertTitle>
+            <AlertDescription className="text-destructive/90">
               {error.message || "Unable to verify authentication status. Please check your connection and try again."}
             </AlertDescription>
           </Alert>
