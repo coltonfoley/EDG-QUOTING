@@ -319,7 +319,7 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
               />
             </div>
             {/* Contract Selection */}
-            <div className="space-y-4 p-4 bg-gray-50 rounded-lg border">
+            <div className="space-y-4 p-4 bg-muted rounded-lg border">
               <div className="flex items-center justify-between">
                 <Label className="text-sm font-medium">Contract Template</Label>
                 {(quote.contractTemplate || quote.customContractTerms) && (
@@ -516,20 +516,20 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="flex justify-between items-center text-sm">
-              <span className="text-accent-grey">Subtotal:</span>
-              <span className="font-medium text-charcoal">
+              <span className="text-muted-foreground">Subtotal:</span>
+              <span className="font-medium text-foreground">
                 {formatCurrency(totals.subtotal)}
               </span>
             </div>
             <div className="flex justify-between items-center text-sm">
-              <span className="text-accent-grey">Total Markup:</span>
+              <span className="text-muted-foreground">Total Markup:</span>
               <span className="font-medium text-success-green">
                 {formatCurrency(totals.totalMarkup)}
               </span>
             </div>
             {totals.totalManufacturerDiscount > 0 && (
               <div className="flex justify-between items-center text-sm">
-                <span className="text-accent-grey">Manufacturer Discount:</span>
+                <span className="text-muted-foreground">Manufacturer Discount:</span>
                 <span className="font-medium text-blue-600">
                   -{formatCurrency(totals.totalManufacturerDiscount)}
                 </span>
@@ -537,7 +537,7 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
             )}
             {totals.discountAmount > 0 && (
               <div className="flex justify-between items-center text-sm">
-                <span className="text-accent-grey">Discount:</span>
+                <span className="text-muted-foreground">Discount:</span>
                 <span className="font-medium text-red-600">
                   -{formatCurrency(totals.discountAmount)}
                 </span>
@@ -545,19 +545,19 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
             )}
             {totals.shippingAmount > 0 && (
               <div className="flex justify-between items-center text-sm">
-                <span className="text-accent-grey">Shipping:</span>
-                <span className="font-medium text-charcoal">
+                <span className="text-muted-foreground">Shipping:</span>
+                <span className="font-medium text-foreground">
                   {formatCurrency(totals.shippingAmount)}
                 </span>
               </div>
             )}
             <div className="flex justify-between items-center text-sm">
-              <span className="text-accent-grey">Tax ({quote.taxRate}%):</span>
-              <span className="font-medium text-charcoal">
+              <span className="text-muted-foreground">Tax ({quote.taxRate}%):</span>
+              <span className="font-medium text-foreground">
                 {formatCurrency(totals.taxAmount)}
               </span>
             </div>
-            <div className="border-t border-gray-200 pt-3">
+            <div className="border-t border-border pt-3">
               <div className="flex justify-between items-center">
                 <span className="text-lg font-semibold text-edg-black">Total:</span>
                 <span className="text-2xl font-bold text-edg-black">
@@ -565,8 +565,8 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
                 </span>
               </div>
             </div>
-            <div className="mt-3 p-3 bg-green-50 rounded-lg">
-              <div className="text-xs text-edg-grey">Profit Margin:</div>
+            <div className="mt-3 p-3 bg-muted rounded-lg border">
+              <div className="text-xs text-muted-foreground">Profit Margin:</div>
               <div className="text-lg font-semibold text-edg-teal">
                 {totals.margin}%
               </div>
@@ -585,7 +585,7 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
                 <Label htmlFor="enable-esignature" className="text-sm font-medium">
                   Enable E-Signature
                 </Label>
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-muted-foreground">
                   Allow clients to sign digitally
                 </p>
               </div>
@@ -603,9 +603,9 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
                 {/* Signature Status Display */}
                 {quote.clientSignedAt && quote.companySignedAt ? (
                   <>
-                    <Alert className="border-green-200 bg-green-50">
-                      <CheckCircle className="h-4 w-4 text-green-600" />
-                      <AlertDescription className="text-green-800">
+                    <Alert className="border-green-600/30 bg-green-600/10">
+                      <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
+                      <AlertDescription className="text-green-900 dark:text-green-100">
                         <strong>Fully Signed</strong>
                         <span className="block mt-1 text-sm">
                           Client: {new Date(quote.clientSignedAt).toLocaleString()}
@@ -628,9 +628,9 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
                   </>
                 ) : quote.clientSignedAt ? (
                   <>
-                    <Alert className="border-blue-200 bg-blue-50">
-                      <CheckCircle className="h-4 w-4 text-blue-600" />
-                      <AlertDescription className="text-blue-800">
+                    <Alert className="border-blue-600/30 bg-blue-600/10">
+                      <CheckCircle className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                      <AlertDescription className="text-blue-900 dark:text-blue-100">
                         <strong>Client Signed</strong>
                         <span className="block mt-1 text-sm">
                           Signed on {new Date(quote.clientSignedAt).toLocaleString()}
@@ -649,22 +649,22 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
                     </Button>
                   </>
                 ) : quote.companySignedAt ? (
-                  <Alert className="border-purple-200 bg-purple-50">
-                    <CheckCircle className="h-4 w-4 text-purple-600" />
-                    <AlertDescription className="text-purple-800">
+                  <Alert className="border-purple-600/30 bg-purple-600/10">
+                    <CheckCircle className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+                    <AlertDescription className="text-purple-900 dark:text-purple-100">
                       <strong>Company Signed</strong>
                       <span className="block mt-1 text-sm">
                         Signed on {new Date(quote.companySignedAt).toLocaleString()}
                       </span>
-                      <span className="block text-sm text-purple-600">
+                      <span className="block text-sm text-purple-700 dark:text-purple-300">
                         Waiting for client signature
                       </span>
                     </AlertDescription>
                   </Alert>
                 ) : quote.signingToken ? (
-                  <Alert className="border-yellow-200 bg-yellow-50">
-                    <Clock className="h-4 w-4 text-yellow-600" />
-                    <AlertDescription className="text-yellow-800">
+                  <Alert className="border-yellow-600/30 bg-yellow-600/10">
+                    <Clock className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
+                    <AlertDescription className="text-yellow-900 dark:text-yellow-100">
                       <strong>Pending Signature</strong>
                       <span className="block mt-1 text-sm">
                         Signing link is active, waiting for signature
@@ -751,8 +751,8 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
 
             <div className="pt-4 space-y-2">
               {!quote.account?.email && (
-                <Alert className="border-yellow-200 bg-yellow-50">
-                  <AlertDescription className="text-yellow-800 text-sm">
+                <Alert className="border-yellow-600/30 bg-yellow-600/10">
+                  <AlertDescription className="text-yellow-900 dark:text-yellow-100 text-sm">
                     Add a customer email to enable email sending
                   </AlertDescription>
                 </Alert>
@@ -806,9 +806,9 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
             />
 
             {companySignature && (
-              <Alert className="border-green-200 bg-green-50">
-                <CheckCircle className="w-4 h-4 text-green-600" />
-                <AlertDescription className="text-green-800">
+              <Alert className="border-green-600/30 bg-green-600/10">
+                <CheckCircle className="w-4 h-4 text-green-600 dark:text-green-400" />
+                <AlertDescription className="text-green-900 dark:text-green-100">
                   Signature captured. Click "Submit Signature" to complete.
                 </AlertDescription>
               </Alert>
