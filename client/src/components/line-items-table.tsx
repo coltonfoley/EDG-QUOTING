@@ -1192,18 +1192,18 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
       <tr
         ref={setNodeRef}
         style={style}
-        className="hover:bg-gray-50"
+        className="hover:bg-muted"
         data-testid={`row-line-item-${item.id}`}
       >
         {/* Drag handle */}
-        <td className="border-r border-gray-300 px-2 py-1 w-8">
-          <div {...listeners} className="cursor-grab hover:cursor-grabbing text-gray-400">
+        <td className="border-r border-border px-2 py-1 w-8">
+          <div {...listeners} className="cursor-grab hover:cursor-grabbing text-muted-foreground">
             <GripVertical className="h-4 w-4" />
           </div>
         </td>
 
         {/* Description - Always visible */}
-        <td className="border-r border-gray-300 px-3 py-1">
+        <td className="border-r border-border px-3 py-1">
           <Input
             value={getCurrentValue(item.id, 'description')}
             onChange={(e) => {
@@ -1232,11 +1232,11 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
                     {colors.map((color: { name: string; hexCode: string }, idx: number) => (
                       <div 
                         key={idx}
-                        className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-100 rounded text-xs"
+                        className="inline-flex items-center gap-1 px-2 py-0.5 bg-muted rounded text-xs"
                         data-testid={`color-badge-${item.id}-${idx}`}
                       >
                         <div 
-                          className="w-3 h-3 rounded-full border border-gray-300"
+                          className="w-3 h-3 rounded-full border border-border"
                           style={{ backgroundColor: color.hexCode }}
                         />
                         <span>{color.name}</span>
@@ -1256,7 +1256,7 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
         </td>
 
         {/* Quantity - Always visible */}
-        <td className="border-r border-gray-300 px-3 py-1 w-20 text-center">
+        <td className="border-r border-border px-3 py-1 w-20 text-center">
           <Input
             value={getCurrentValue(item.id, 'quantity')}
             onChange={(e) => {
@@ -1281,7 +1281,7 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
         </td>
 
         {/* Cost - Hidden on small screens */}
-        <td className="border-r border-gray-300 px-3 py-1 text-center hidden lg:table-cell">
+        <td className="border-r border-border px-3 py-1 text-center hidden lg:table-cell">
           <div className="flex items-center gap-1">
             <Input
               value={getCurrentValue(item.id, 'unitPrice')}
@@ -1307,7 +1307,7 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
                   <TooltipTrigger asChild>
                     <Info className="h-3 w-3 text-blue-500 cursor-help" />
                   </TooltipTrigger>
-                  <TooltipContent className="bg-gray-800 text-white p-2 text-xs max-w-xs">
+                  <TooltipContent className="bg-popover text-popover-foreground p-2 text-xs max-w-xs">
                     <div className="font-semibold mb-1">Cost Calculation:</div>
                     <div>Retail Price: {formatCurrency(parseFloat(item.retailPrice.toString()))}</div>
                     <div>
@@ -1321,7 +1321,7 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
                           : 'No manufacturer discount';
                       })()}
                     </div>
-                    <div className="border-t border-gray-600 mt-1 pt-1">
+                    <div className="border-t border-border mt-1 pt-1">
                       Your Cost: {formatCurrency(parseFloat(getCurrentValue(item.id, 'unitPrice')))}
                     </div>
                   </TooltipContent>
@@ -1335,7 +1335,7 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
         </td>
 
         {/* Markup% - Hidden on small screens */}
-        <td className="border-r border-gray-300 px-3 py-1 text-center hidden lg:table-cell">
+        <td className="border-r border-border px-3 py-1 text-center hidden lg:table-cell">
           <div className="flex items-center space-x-1">
             <Input
               value={getCurrentValue(item.id, 'markupValue')}
@@ -1384,22 +1384,22 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
         </td>
 
         {/* Price - Always visible */}
-        <td className="border-r border-gray-300 px-3 py-1 text-center text-sm" data-testid={`text-price-${item.id}`}>
+        <td className="border-r border-border px-3 py-1 text-center text-sm" data-testid={`text-price-${item.id}`}>
           {formatCurrency(price)}
         </td>
 
         {/* Margin$ - Hidden on small screens */}
-        <td className="border-r border-gray-300 px-3 py-1 text-center text-sm hidden md:table-cell" data-testid={`text-margin-${item.id}`}>
+        <td className="border-r border-border px-3 py-1 text-center text-sm hidden md:table-cell" data-testid={`text-margin-${item.id}`}>
           {formatCurrency(marginAmount)}
         </td>
 
         {/* Total - Always visible */}
-        <td className="border-r border-gray-300 px-3 py-1 text-center font-medium text-sm" data-testid={`text-total-${item.id}`}>
+        <td className="border-r border-border px-3 py-1 text-center font-medium text-sm" data-testid={`text-total-${item.id}`}>
           {formatCurrency(total)}
         </td>
 
         {/* Taxable - Always visible */}
-        <td className="border-r border-gray-300 px-2 py-1 text-center">
+        <td className="border-r border-border px-2 py-1 text-center">
           <div className="flex justify-center">
             <Checkbox
               checked={item.isTaxable !== false}
@@ -1416,7 +1416,7 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
         </td>
 
         {/* Tariff - Always visible */}
-        <td className="border-r border-gray-300 px-2 py-1 text-center">
+        <td className="border-r border-border px-2 py-1 text-center">
           <div className="flex justify-center">
             <Checkbox
               checked={!!item.isTariffApplicable}
@@ -1579,9 +1579,9 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
 
   return (
     <div className="mb-6">
-      <div className="border-b border-gray-300 bg-white px-4 py-3">
+      <div className="border-b border-border bg-card px-4 py-3">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-gray-900">
+          <h2 className="text-lg font-semibold text-foreground">
             Line Items
           </h2>
           <div className="flex space-x-2">
@@ -1622,7 +1622,7 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
                   {/* Search and Filter Controls */}
                   <div className="flex gap-4 mb-4 p-1">
                     <div className="flex-1 relative">
-                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
                       <Input
                         placeholder="Search products..."
                         value={searchTerm}
@@ -1668,13 +1668,13 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
                   {/* Products Grid */}
                   <div className="flex-1 overflow-y-auto border rounded-lg">
                     {Object.keys(groupedProducts).length === 0 ? (
-                      <div className="p-8 text-center text-gray-500">
+                      <div className="p-8 text-center text-muted-foreground">
                         No products found matching your criteria.
                       </div>
                     ) : (
                       Object.entries(groupedProducts).map(([category, products]) => (
-                        <div key={category} className="border-b border-gray-200 last:border-b-0">
-                          <div className="bg-gray-50 px-4 py-2 font-medium text-sm text-gray-700 border-b border-gray-200">
+                        <div key={category} className="border-b border-border last:border-b-0">
+                          <div className="bg-muted px-4 py-2 font-medium text-sm text-foreground border-b border-border">
                             {category} ({products.length})
                           </div>
                           <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -1682,14 +1682,14 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
                               <div
                                 key={product.id}
                                 onClick={() => handleProductSelect(product)}
-                                className="p-3 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer transition-colors"
+                                className="p-3 border border-border rounded hover:bg-primary/10 hover:border-blue-300 cursor-pointer transition-colors"
                                 data-testid={`product-card-${product.id}`}
                               >
-                                <div className="font-medium text-sm text-gray-900 mb-1">
+                                <div className="font-medium text-sm text-foreground mb-1">
                                   {product.name}
                                 </div>
                                 {product.description && (
-                                  <div className="text-xs text-gray-600 mb-2 line-clamp-2">
+                                  <div className="text-xs text-muted-foreground mb-2 line-clamp-2">
                                     {product.description}
                                   </div>
                                 )}
@@ -1745,10 +1745,10 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
         </div>
       </div>
 
-      <div className="bg-white">
+      <div className="bg-card">
         {/* Alert message for unsaved quotes */}
         {isUnsavedQuote && (
-          <div className="p-4 border-b border-gray-300 bg-blue-50">
+          <div className="p-4 border-b border-border bg-primary/10">
             <div className="text-blue-800 text-sm">
               <strong>Save the quote first</strong> - You need to save the quote before you can add line items.
             </div>
@@ -1762,43 +1762,43 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
           onDragEnd={handleDragEnd}
         >
           <div className="overflow-x-auto">
-            <table className="w-full border border-gray-300 divide-y divide-gray-300">
+            <table className="w-full border border-border divide-y divide-gray-300">
               <colgroup>
                 <col style={{width: '40px'}} /><col style={{width: '26%'}} /><col style={{width: '80px'}} /><col style={{width: '100px'}} /><col style={{width: '160px'}} /><col style={{width: '120px'}} /><col style={{width: '100px'}} /><col style={{width: '140px'}} /><col style={{width: '70px'}} /><col style={{width: '70px'}} /><col style={{width: '80px'}} />
               </colgroup>
               <thead>
-                <tr className="bg-gray-100">
-                  <th className="border-r border-gray-300 px-2 py-2 text-center text-sm font-medium text-gray-700 w-8">
+                <tr className="bg-muted">
+                  <th className="border-r border-border px-2 py-2 text-center text-sm font-medium text-foreground w-8">
                     <GripVertical className="h-4 w-4 mx-auto" />
                   </th>
-                  <th className="border-r border-gray-300 px-3 py-2 text-left text-sm font-medium text-gray-700">
+                  <th className="border-r border-border px-3 py-2 text-left text-sm font-medium text-foreground">
                     Description
                   </th>
-                  <th className="border-r border-gray-300 px-3 py-2 text-center text-sm font-medium text-gray-700">
+                  <th className="border-r border-border px-3 py-2 text-center text-sm font-medium text-foreground">
                     QTY
                   </th>
-                  <th className="border-r border-gray-300 px-3 py-2 text-center text-sm font-medium text-gray-700 hidden lg:table-cell">
+                  <th className="border-r border-border px-3 py-2 text-center text-sm font-medium text-foreground hidden lg:table-cell">
                     Cost
                   </th>
-                  <th className="border-r border-gray-300 px-3 py-2 text-center text-sm font-medium text-gray-700 hidden lg:table-cell">
+                  <th className="border-r border-border px-3 py-2 text-center text-sm font-medium text-foreground hidden lg:table-cell">
                     Markup%
                   </th>
-                  <th className="border-r border-gray-300 px-3 py-2 text-center text-sm font-medium text-gray-700">
+                  <th className="border-r border-border px-3 py-2 text-center text-sm font-medium text-foreground">
                     Price
                   </th>
-                  <th className="border-r border-gray-300 px-3 py-2 text-center text-sm font-medium text-gray-700 hidden md:table-cell">
+                  <th className="border-r border-border px-3 py-2 text-center text-sm font-medium text-foreground hidden md:table-cell">
                     Margin$
                   </th>
-                  <th className="border-r border-gray-300 px-3 py-2 text-center text-sm font-medium text-gray-700">
+                  <th className="border-r border-border px-3 py-2 text-center text-sm font-medium text-foreground">
                     Total
                   </th>
-                  <th className="border-r border-gray-300 px-2 py-2 text-center text-sm font-medium text-gray-700">
+                  <th className="border-r border-border px-2 py-2 text-center text-sm font-medium text-foreground">
                     Taxable
                   </th>
-                  <th className="border-r border-gray-300 px-2 py-2 text-center text-sm font-medium text-gray-700">
+                  <th className="border-r border-border px-2 py-2 text-center text-sm font-medium text-foreground">
                     Tariff
                   </th>
-                  <th className="px-3 py-2 text-center text-sm font-medium text-gray-700">
+                  <th className="px-3 py-2 text-center text-sm font-medium text-foreground">
                     Actions
                   </th>
                 </tr>
@@ -1872,7 +1872,7 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
                 {/* Show message if no items at all */}
                 {lineItems.length === 0 && (
                   <tr>
-                    <td colSpan={9} className="px-4 py-8 text-center text-gray-500">
+                    <td colSpan={9} className="px-4 py-8 text-center text-muted-foreground">
                       No line items yet. Click "Add Item" to get started.
                     </td>
                   </tr>
@@ -1884,7 +1884,7 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
           {/* DragOverlay for visual feedback */}
           <DragOverlay>
             {activeId ? (
-              <div className="bg-white shadow-lg border border-gray-300 rounded p-2">
+              <div className="bg-card shadow-lg border border-border rounded p-2">
                 Dragging {activeId.startsWith('group-') ? 'Group' : 'Item'}
               </div>
             ) : null}
@@ -1894,10 +1894,10 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
 
       {/* Add new item form */}
       {showNewItemForm && (
-        <div className="bg-gray-50 border-t border-gray-300 p-4">
+        <div className="bg-muted border-t border-border p-4">
           <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
             <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+              <label className="block text-sm font-medium text-foreground mb-1">Description</label>
               <Input
                 value={newItem.description}
                 onChange={(e) => setNewItem({ ...newItem, description: e.target.value })}
@@ -1910,7 +1910,7 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
               )}
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Quantity</label>
+              <label className="block text-sm font-medium text-foreground mb-1">Quantity</label>
               <Input
                 value={newItem.quantity}
                 onChange={(e) => setNewItem({ ...newItem, quantity: e.target.value })}
@@ -1925,7 +1925,7 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
               )}
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Unit Price</label>
+              <label className="block text-sm font-medium text-foreground mb-1">Unit Price</label>
               <Input
                 value={newItem.unitPrice}
                 onChange={(e) => setNewItem({ ...newItem, unitPrice: e.target.value })}
@@ -1940,7 +1940,7 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
               )}
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Markup</label>
+              <label className="block text-sm font-medium text-foreground mb-1">Markup</label>
               <div className="flex space-x-1">
                 <Input
                   value={newItem.markupValue}
@@ -1972,8 +1972,8 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
               )}
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Total</label>
-              <div className="bg-gray-100 border border-gray-300 rounded px-3 py-2 text-sm text-gray-700">
+              <label className="block text-sm font-medium text-foreground mb-1">Total</label>
+              <div className="bg-muted border border-border rounded px-3 py-2 text-sm text-foreground">
                 {formatCurrency(
                   calculateLineItemTotal(
                     newItem.quantity,
@@ -2020,7 +2020,7 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-foreground mb-1">
                 Length (ft)
               </label>
               <Input
@@ -2033,7 +2033,7 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-foreground mb-1">
                 Width (ft)
               </label>
               <Input

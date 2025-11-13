@@ -166,7 +166,7 @@ export default function QuoteBuilder() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-background">
         <AppHeader />
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="space-y-6">
@@ -285,7 +285,7 @@ export default function QuoteBuilder() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-background">
       <AppHeader />
       
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -361,10 +361,10 @@ export default function QuoteBuilder() {
                               <Badge variant="outline" className="text-xs">Current</Badge>
                             )}
                           </div>
-                          <p className="text-sm text-gray-600">
+                          <p className="text-sm text-muted-foreground">
                             Created: {version.createdAt ? new Date(version.createdAt).toLocaleDateString() : 'N/A'}
                           </p>
-                          <p className="text-sm text-gray-600">
+                          <p className="text-sm text-muted-foreground">
                             Project: {version.projectName || "Untitled"}
                           </p>
                         </div>
@@ -385,7 +385,7 @@ export default function QuoteBuilder() {
                   </Card>
                 ))
               ) : (
-                <p className="text-center text-gray-500 py-8">No version history available</p>
+                <p className="text-center text-muted-foreground py-8">No version history available</p>
               )}
             </div>
           </DialogContent>
