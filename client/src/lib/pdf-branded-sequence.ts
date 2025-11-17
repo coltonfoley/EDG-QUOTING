@@ -26,7 +26,6 @@ interface BrandedSequenceOptions {
   contractText: string;
   showPricing: boolean;
   clientLogoDataUrl: string | null;
-  showCosts?: boolean;
 }
 
 /**
@@ -39,7 +38,7 @@ interface BrandedSequenceOptions {
  * 6. Branded Back Page
  */
 export async function generateBrandedSequencePDF(options: BrandedSequenceOptions): Promise<void> {
-  const { pdf, company, quote, renderImages, contractText, showPricing, clientLogoDataUrl, showCosts } = options;
+  const { pdf, company, quote, renderImages, contractText, showPricing, clientLogoDataUrl } = options;
 
   const pageW = pdf.internal.pageSize.getWidth();
   const pageH = pdf.internal.pageSize.getHeight();
@@ -89,7 +88,6 @@ export async function generateBrandedSequencePDF(options: BrandedSequenceOptions
     drawLineItemsSection(pdf, {
       quote,
       showPricing,
-      showCosts: !!showCosts,
       logoDataUrl: BRAND_LOGO_PNG,
       company,
       margin,
