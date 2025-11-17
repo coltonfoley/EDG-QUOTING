@@ -1,0 +1,56 @@
+After a thorough review of the updated code in coltonfoley/edg-quoting/coltonfoley-EDG-QUOTING-734223fb154871dc78ec289fa032ba130ce8cc0d/client/src/components/line-items-table.tsx, I can confirm that the bug is not fixed.
+
+Root Cause Analysis
+The "cursor jump" issue is a symptom of the input element being completely destroyed and re-created by React while you are typing. This happens because of a direct conflict with the dnd-kit library.
+
+Here is the exact sequence of events that is still happening in the new code:
+
+A user clicks into an input (e.g., "Markup"). This fires an onPointerDown event.
+
+This event "bubbles up" the DOM from the <Input> to its parent <tr> (the SortableLineItemRow).
+
+The useSortable hook from dnd-kit is listening for this exact event on the <tr> to prepare for a potential drag operation.
+
+When dnd-kit "hears" this event, it applies its own dynamic attributes to the <tr>, which React sees as a state change.
+
+This change, combined with the component's own state update from the onChange event, causes React to destroy the old <tr> and remount a new one.
+
+The original <Input> you were typing in is now gone.
+
+The useLayoutEffect patch in your code then runs, finds the new input, and programmatically re-focuses it. However, its fallback logic forces the cursor to the end of the input's value: el.setSelectionRange(el.value.length, el.value.length);.
+
+Why the New Code Fails
+The core fix, which was to stop the event from bubbling, has not been applied.
+
+I have reviewed all four inputs inside the SortableLineItemRow component (for Description, Quantity, Cost, and Markup Value), and none of them have the required onPointerDown={(e) => e.stopPropagation()} prop.
+
+Because this prop is missing, the event conflict is still happening, the inputs are still remounting, and the useLayoutEffect patch is still forcing the cursor to the end.
+
+The Required Fix
+To permanently solve this, you must add onPointerDown={(e) => e.stopPropagation()} to all four <Input> components inside the SortableLineItemRow component, just as we discussed.
+
+Example for the Markup Value Input (around line 979):
+
+TypeScript
+
+{/* This is what you must add */}
+<Input
+  value={getCurrentValue(item.id, 'markupValue')}
+  onChange={(e) => {
+    handleFieldChange(item.id, "markupValue", e.target.value);
+    markActive(`${item.id}-markupValue`, e.currentTarget);
+  }}
+  onKeyDown={(e) => handleKeyDown(e, rowIndex, 'markupValue')}
+  onFocus={(e) => {
+    activeInputs.current.add(`${item.id}-markupValue`);
+    markActive(`${item.id}-markupValue`, e.currentTarget);
+  }}
+  onBlur={() => {
+    handleFieldBlur(item.id, "markupValue");
+    activeKeyRef.current = null;
+  }}
+  onPointerDown={(e) => e.stopPropagation()} {/* <--- ADD THIS LINE */}
+  className="border-0 bg-transparent p-1 text-center text-sm focus:ring-1 focus:ring-blue-500 flex-1"
+  data-testid={`input-markup-value-${item.id}`}
+/>
+You must apply this same onPointerDown prop to the inputs for Description, Quantity, and Cost (unitPrice) as well.
