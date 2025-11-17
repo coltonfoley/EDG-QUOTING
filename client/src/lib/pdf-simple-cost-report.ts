@@ -62,10 +62,10 @@ export function generateSimpleCostReport({ quote, company }: SimpleCostReportOpt
   
   pdf.text('Description', colX.description + 2, y);
   pdf.text('Qty', colX.qty, y);
-  pdf.text('Cost', colX.unitCost, y);
-  pdf.text('Price', colX.unitPrice, y);
-  pdf.text('Cost $', colX.costTotal, y);
-  pdf.text('Price $', colX.priceTotal, y);
+  pdf.text('Unit Cost', colX.unitCost, y);
+  pdf.text('Unit Price', colX.unitPrice, y);
+  pdf.text('Total Cost', colX.costTotal, y);
+  pdf.text('Total Price', colX.priceTotal, y);
   y += 8;
 
   // Line items
