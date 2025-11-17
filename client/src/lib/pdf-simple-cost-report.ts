@@ -31,6 +31,14 @@ export function generateSimpleCostReport({ quote, company }: SimpleCostReportOpt
   y += 5;
   pdf.text(`Project: ${quote.projectName || 'Untitled Project'}`, margin, y);
   y += 5;
+  
+  // Add address if available (jobsiteAddress takes precedence over projectAddress)
+  const address = quote.jobsiteAddress || quote.projectAddress;
+  if (address && address.trim()) {
+    pdf.text(`Address: ${address}`, margin, y);
+    y += 5;
+  }
+  
   pdf.text(`Date: ${new Date().toLocaleDateString()}`, margin, y);
   y += 10;
 
