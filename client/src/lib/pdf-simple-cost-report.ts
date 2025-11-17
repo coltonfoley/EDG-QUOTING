@@ -1,4 +1,5 @@
 import jsPDF from 'jspdf';
+import { calculateLineItemTotal } from './utils';
 
 interface SimpleCostReportOptions {
   quote: any;
@@ -42,15 +43,17 @@ export function generateSimpleCostReport({ quote, company }: SimpleCostReportOpt
   pdf.text(`Date: ${new Date().toLocaleDateString()}`, margin, y);
   y += 10;
 
-  // Table header
-  pdf.setFontSize(9);
+  // Table header with 6 columns
+  pdf.setFontSize(8);
   pdf.setFont('helvetica', 'bold');
   
   const colX = {
     description: margin,
-    qty: margin + contentW * 0.6,
-    unitCost: margin + contentW * 0.75,
-    total: margin + contentW * 0.87,
+    qty: margin + contentW * 0.43,
+    unitCost: margin + contentW * 0.54,
+    unitPrice: margin + contentW * 0.66,
+    costTotal: margin + contentW * 0.78,
+    priceTotal: margin + contentW * 0.90,
   };
 
   // Draw header row background
@@ -59,17 +62,21 @@ export function generateSimpleCostReport({ quote, company }: SimpleCostReportOpt
   
   pdf.text('Description', colX.description + 2, y);
   pdf.text('Qty', colX.qty, y);
-  pdf.text('Unit Cost', colX.unitCost, y);
-  pdf.text('Total', colX.total, y);
+  pdf.text('Cost', colX.unitCost, y);
+  pdf.text('Price', colX.unitPrice, y);
+  pdf.text('Cost $', colX.costTotal, y);
+  pdf.text('Price $', colX.priceTotal, y);
   y += 8;
 
   // Line items
   pdf.setFont('helvetica', 'normal');
-  pdf.setFontSize(9);
+  pdf.setFontSize(8);
 
   const lineItems = quote.lineItems || [];
-  let subtotal = 0;
-  let taxableSubtotal = 0;
+  let costSubtotal = 0;
+  let priceSubtotal = 0;
+  let taxableCostSubtotal = 0;
+  let taxablePriceSubtotal = 0;
 
   lineItems.forEach((item: any, index: number) => {
     // Check if we need a new page
@@ -80,11 +87,27 @@ export function generateSimpleCostReport({ quote, company }: SimpleCostReportOpt
 
     const quantity = parseFloat(item.quantity || '0');
     const unitCost = parseFloat(item.unitPrice || '0');
-    const total = quantity * unitCost;
+    const costTotal = quantity * unitCost;
     
-    subtotal += total;
+    // Calculate price with markup/discount
+    const priceTotal = calculateLineItemTotal(
+      item.quantity,
+      item.unitPrice,
+      item.markupType,
+      item.markupValue,
+      item.discountType || 'percentage',
+      item.discountValue || 0,
+      quote.tariffRate || 0,
+      item.isTariffApplicable || false
+    );
+    const unitPrice = quantity > 0 ? priceTotal / quantity : 0;
+    
+    costSubtotal += costTotal;
+    priceSubtotal += priceTotal;
+    
     if (item.isTaxable !== false) {
-      taxableSubtotal += total;
+      taxableCostSubtotal += costTotal;
+      taxablePriceSubtotal += priceTotal;
     }
 
     // Alternate row background
@@ -95,13 +118,15 @@ export function generateSimpleCostReport({ quote, company }: SimpleCostReportOpt
 
     // Description (wrap if too long)
     const description = item.description || 'Unnamed Item';
-    const maxDescWidth = contentW * 0.55;
+    const maxDescWidth = contentW * 0.38;
     const descLines = pdf.splitTextToSize(description, maxDescWidth);
     
     pdf.text(descLines[0], colX.description + 2, y);
     pdf.text(quantity.toFixed(2), colX.qty, y);
     pdf.text(`$${unitCost.toFixed(2)}`, colX.unitCost, y);
-    pdf.text(`$${total.toFixed(2)}`, colX.total, y);
+    pdf.text(`$${unitPrice.toFixed(2)}`, colX.unitPrice, y);
+    pdf.text(`$${costTotal.toFixed(2)}`, colX.costTotal, y);
+    pdf.text(`$${priceTotal.toFixed(2)}`, colX.priceTotal, y);
     
     y += 6;
 
@@ -121,7 +146,7 @@ export function generateSimpleCostReport({ quote, company }: SimpleCostReportOpt
   // Draw line above totals
   y += 5;
   pdf.setDrawColor(200, 200, 200);
-  pdf.line(margin + contentW * 0.7, y, margin + contentW, y);
+  pdf.line(margin + contentW * 0.5, y, margin + contentW, y);
   y += 8;
 
   // Calculate totals
@@ -130,39 +155,54 @@ export function generateSimpleCostReport({ quote, company }: SimpleCostReportOpt
   
   // Only include shipping in taxable amount if it's taxable (default to false to match calculateQuoteTotals)
   const isShippingTaxable = quote.isShippingTaxable === true;
-  const taxableAmount = taxableSubtotal + (isShippingTaxable ? shipping : 0);
-  const tax = (taxableAmount * taxRate) / 100;
-  const total = subtotal + shipping + tax;
+  const costTaxableAmount = taxableCostSubtotal + (isShippingTaxable ? shipping : 0);
+  const priceTaxableAmount = taxablePriceSubtotal + (isShippingTaxable ? shipping : 0);
+  const costTax = (costTaxableAmount * taxRate) / 100;
+  const priceTax = (priceTaxableAmount * taxRate) / 100;
+  const costTotal = costSubtotal + shipping + costTax;
+  const priceTotal = priceSubtotal + shipping + priceTax;
 
-  // Totals section
+  // Totals section - two columns for cost and price
   pdf.setFont('helvetica', 'normal');
-  pdf.setFontSize(10);
+  pdf.setFontSize(9);
   
-  const totalsX = margin + contentW * 0.75;
-  const valuesX = margin + contentW * 0.87;
+  const labelX = margin + contentW * 0.60;
+  const costValuesX = margin + contentW * 0.78;
+  const priceValuesX = margin + contentW * 0.90;
 
-  pdf.text('Subtotal:', totalsX, y);
-  pdf.text(`$${subtotal.toFixed(2)}`, valuesX, y);
+  // Column headers
+  pdf.setFont('helvetica', 'bold');
+  pdf.text('Cost', costValuesX, y);
+  pdf.text('Price', priceValuesX, y);
+  y += 6;
+  pdf.setFont('helvetica', 'normal');
+
+  pdf.text('Subtotal:', labelX, y);
+  pdf.text(`$${costSubtotal.toFixed(2)}`, costValuesX, y);
+  pdf.text(`$${priceSubtotal.toFixed(2)}`, priceValuesX, y);
   y += 6;
 
   if (shipping > 0) {
-    pdf.text('Shipping:', totalsX, y);
-    pdf.text(`$${shipping.toFixed(2)}`, valuesX, y);
+    pdf.text('Shipping:', labelX, y);
+    pdf.text(`$${shipping.toFixed(2)}`, costValuesX, y);
+    pdf.text(`$${shipping.toFixed(2)}`, priceValuesX, y);
     y += 6;
   }
 
-  if (tax > 0) {
-    pdf.text(`Tax (${taxRate}%):`, totalsX, y);
-    pdf.text(`$${tax.toFixed(2)}`, valuesX, y);
+  if (costTax > 0 || priceTax > 0) {
+    pdf.text(`Tax (${taxRate}%):`, labelX, y);
+    pdf.text(`$${costTax.toFixed(2)}`, costValuesX, y);
+    pdf.text(`$${priceTax.toFixed(2)}`, priceValuesX, y);
     y += 6;
   }
 
   // Total
   y += 2;
   pdf.setFont('helvetica', 'bold');
-  pdf.setFontSize(11);
-  pdf.text('Total Cost:', totalsX, y);
-  pdf.text(`$${total.toFixed(2)}`, valuesX, y);
+  pdf.setFontSize(10);
+  pdf.text('Total:', labelX, y);
+  pdf.text(`$${costTotal.toFixed(2)}`, costValuesX, y);
+  pdf.text(`$${priceTotal.toFixed(2)}`, priceValuesX, y);
 
   // Save
   const fileName = `${quote.quoteNumber || 'quote'}-costs.pdf`;
