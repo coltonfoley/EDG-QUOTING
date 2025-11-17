@@ -107,10 +107,6 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
   // Track which fields are actively being edited (have focus)
   const activeInputs = useRef<Set<string>>(new Set());
   
-  // Focus restoration refs to prevent focus loss during re-renders
-  const activeKeyRef = useRef<string | null>(null);
-  const caretRef = useRef<number | null>(null);
-  
   // Validation error states
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
   const [newItemErrors, setNewItemErrors] = useState<Record<string, string>>({});
@@ -189,63 +185,6 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
        item?.markupValue.toString() || '0');
   };
 
-  // Mark a field as active and capture caret position
-  const markActive = useCallback((key: string, el: HTMLInputElement | null) => {
-    if (!el) return;
-    activeInputs.current.add(key);
-    activeKeyRef.current = key;
-    // Capture caret position
-    try {
-      caretRef.current = el.selectionStart ?? null;
-    } catch {
-      caretRef.current = null;
-    }
-  }, []);
-
-  // Restore focus and caret position after re-renders
-  useLayoutEffect(() => {
-    if (!activeKeyRef.current) return;
-    const key = activeKeyRef.current;
-    
-    // If the field is no longer marked as active, clear activeKeyRef and stop
-    if (!activeInputs.current.has(key)) {
-      activeKeyRef.current = null;
-      caretRef.current = null;
-      return;
-    }
-    
-    // Parse the key to get id and field: `${item.id}-${field}`
-    // Split from the end to handle multi-part field names
-    const lastDashIndex = key.lastIndexOf('-');
-    if (lastDashIndex === -1) return;
-    
-    const id = key.substring(0, lastDashIndex);
-    const field = key.substring(lastDashIndex + 1);
-    
-    const testId =
-      field === "unitPrice" ? `input-unit-price-${id}` :
-      field === "markupValue" ? `input-markup-value-${id}` :
-      field === "quantity" ? `input-quantity-${id}` :
-      field === "description" ? `input-description-${id}` :
-      null;
-
-    if (!testId) return;
-    const el = document.querySelector(`[data-testid="${testId}"]`) as HTMLInputElement | null;
-    if (el) {
-      // Restore focus when input remounts (happens on every keystroke due to useSortable)
-      if (document.activeElement !== el) {
-        el.focus({ preventScroll: true });
-      }
-      // Restore cursor position after focusing
-      if (caretRef.current != null) {
-        try {
-          el.setSelectionRange(caretRef.current, caretRef.current);
-        } catch {
-          // If setSelectionRange fails, do nothing (let browser handle it naturally)
-        }
-      }
-    }
-  }, [localValues]);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -1036,8 +975,6 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
     setActiveId(event.active.id as string);
     // Clear active input tracking when drag starts to prevent focus trap
     activeInputs.current.clear();
-    activeKeyRef.current = null;
-    caretRef.current = null;
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
@@ -1228,17 +1165,22 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
           <Input
             value={getCurrentValue(item.id, 'description')}
             onChange={(e) => {
-              markActive(`${item.id}-description`, e.currentTarget);
+              const input = e.currentTarget;
+              const cursorPos = input.selectionStart;
               handleFieldChange(item.id, "description", e.target.value);
+              setTimeout(() => {
+                const activeInput = document.querySelector(`[data-testid="input-description-${item.id}"]`) as HTMLInputElement;
+                if (activeInput && document.activeElement === activeInput && cursorPos !== null) {
+                  activeInput.setSelectionRange(cursorPos, cursorPos);
+                }
+              }, 0);
+            }}
+            onFocus={() => {
+              activeInputs.current.add(`${item.id}-description`);
             }}
             onKeyDown={(e) => handleKeyDown(e, rowIndex, 'description')}
-            onFocus={(e) => {
-              activeInputs.current.add(`${item.id}-description`);
-              markActive(`${item.id}-description`, e.currentTarget);
-            }}
             onBlur={() => {
               handleFieldBlur(item.id, "description");
-              activeKeyRef.current = null;
             }}
             onPointerDown={(e) => e.stopPropagation()}
             className="border-0 bg-transparent p-1 text-sm focus:ring-1 focus:ring-blue-500"
@@ -1281,18 +1223,25 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
         <td className="border-r border-border px-3 py-1 w-20 text-center">
           <Input
             value={getCurrentValue(item.id, 'quantity')}
+            type="text"
+            inputMode="decimal"
             onChange={(e) => {
-              markActive(`${item.id}-quantity`, e.currentTarget);
+              const input = e.currentTarget;
+              const cursorPos = input.selectionStart;
               handleFieldChange(item.id, "quantity", e.target.value);
+              setTimeout(() => {
+                const activeInput = document.querySelector(`[data-testid="input-quantity-${item.id}"]`) as HTMLInputElement;
+                if (activeInput && document.activeElement === activeInput && cursorPos !== null) {
+                  activeInput.setSelectionRange(cursorPos, cursorPos);
+                }
+              }, 0);
+            }}
+            onFocus={() => {
+              activeInputs.current.add(`${item.id}-quantity`);
             }}
             onKeyDown={(e) => handleKeyDown(e, rowIndex, 'quantity')}
-            onFocus={(e) => {
-              activeInputs.current.add(`${item.id}-quantity`);
-              markActive(`${item.id}-quantity`, e.currentTarget);
-            }}
             onBlur={() => {
               handleFieldBlur(item.id, "quantity");
-              activeKeyRef.current = null;
             }}
             onPointerDown={(e) => e.stopPropagation()}
             className="border-0 bg-transparent p-1 text-center text-sm focus:ring-1 focus:ring-blue-500"
@@ -1308,18 +1257,25 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
           <div className="flex items-center gap-1">
             <Input
               value={getCurrentValue(item.id, 'unitPrice')}
+              type="text"
+              inputMode="decimal"
               onChange={(e) => {
-                markActive(`${item.id}-unitPrice`, e.currentTarget);
+                const input = e.currentTarget;
+                const cursorPos = input.selectionStart;
                 handleFieldChange(item.id, "unitPrice", e.target.value);
+                setTimeout(() => {
+                  const activeInput = document.querySelector(`[data-testid="input-unit-price-${item.id}"]`) as HTMLInputElement;
+                  if (activeInput && document.activeElement === activeInput && cursorPos !== null) {
+                    activeInput.setSelectionRange(cursorPos, cursorPos);
+                  }
+                }, 0);
+              }}
+              onFocus={() => {
+                activeInputs.current.add(`${item.id}-unitPrice`);
               }}
               onKeyDown={(e) => handleKeyDown(e, rowIndex, 'unitPrice')}
-              onFocus={(e) => {
-                activeInputs.current.add(`${item.id}-unitPrice`);
-                markActive(`${item.id}-unitPrice`, e.currentTarget);
-              }}
               onBlur={() => {
                 handleFieldBlur(item.id, "unitPrice");
-                activeKeyRef.current = null;
               }}
               onPointerDown={(e) => e.stopPropagation()}
               className="border-0 bg-transparent p-1 text-center text-sm focus:ring-1 focus:ring-blue-500 flex-1"
@@ -1363,18 +1319,25 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
           <div className="flex items-center space-x-1">
             <Input
               value={getCurrentValue(item.id, 'markupValue')}
+              type="text"
+              inputMode="decimal"
               onChange={(e) => {
-                markActive(`${item.id}-markupValue`, e.currentTarget);
+                const input = e.currentTarget;
+                const cursorPos = input.selectionStart;
                 handleFieldChange(item.id, "markupValue", e.target.value);
+                setTimeout(() => {
+                  const activeInput = document.querySelector(`[data-testid="input-markup-value-${item.id}"]`) as HTMLInputElement;
+                  if (activeInput && document.activeElement === activeInput && cursorPos !== null) {
+                    activeInput.setSelectionRange(cursorPos, cursorPos);
+                  }
+                }, 0);
+              }}
+              onFocus={() => {
+                activeInputs.current.add(`${item.id}-markupValue`);
               }}
               onKeyDown={(e) => handleKeyDown(e, rowIndex, 'markupValue')}
-              onFocus={(e) => {
-                activeInputs.current.add(`${item.id}-markupValue`);
-                markActive(`${item.id}-markupValue`, e.currentTarget);
-              }}
               onBlur={() => {
                 handleFieldBlur(item.id, "markupValue");
-                activeKeyRef.current = null;
               }}
               onPointerDown={(e) => e.stopPropagation()}
               className="border-0 bg-transparent p-1 text-center text-sm focus:ring-1 focus:ring-blue-500 flex-1"
@@ -1383,15 +1346,7 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
             <Select
               value={getCurrentValue(item.id, 'markupType')}
               onValueChange={(value) => {
-                activeInputs.current.delete(`${item.id}-markupType`);
                 handleFieldChange(item.id, "markupType", value);
-              }}
-              onOpenChange={(open) => {
-                if (open) {
-                  activeInputs.current.add(`${item.id}-markupType`);
-                } else {
-                  activeInputs.current.delete(`${item.id}-markupType`);
-                }
               }}
             >
               <SelectTrigger className="w-12 h-6 border-0 bg-transparent p-0 text-xs" data-testid={`select-markup-type-${item.id}`}>
