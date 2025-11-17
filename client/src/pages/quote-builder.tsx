@@ -18,6 +18,8 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { QuoteWithDetails } from "@shared/schema";
 import { QuickBooksSync } from "@/components/quickbooks-sync";
+import { generateSimpleCostReport } from "@/lib/pdf-simple-cost-report";
+import { COMPANY_INFO } from "@shared/companyConfig";
 
 export default function QuoteBuilder() {
   const params = useParams();
@@ -32,7 +34,6 @@ export default function QuoteBuilder() {
 
   // State for proposal generator dialog
   const [proposalGeneratorOpen, setProposalGeneratorOpen] = useState(false);
-  const [isInternalPrint, setIsInternalPrint] = useState(false);
   const [versionHistoryOpen, setVersionHistoryOpen] = useState(false);
 
   const { data: quote, isLoading, error } = useQuery<QuoteWithDetails>({
@@ -412,8 +413,11 @@ export default function QuoteBuilder() {
             
             <Button 
               onClick={() => {
-                setIsInternalPrint(true);
-                setProposalGeneratorOpen(true);
+                if (!quote) return;
+                generateSimpleCostReport({ 
+                  quote, 
+                  company: COMPANY_INFO 
+                });
               }}
               variant="outline"
               className="px-6 py-3 text-lg"
@@ -424,10 +428,7 @@ export default function QuoteBuilder() {
             </Button>
             
             <Button 
-              onClick={() => {
-                setIsInternalPrint(false);
-                setProposalGeneratorOpen(true);
-              }}
+              onClick={() => setProposalGeneratorOpen(true)}
               variant="outline"
               className="px-6 py-3 text-lg border-edg-black text-edg-black hover:bg-edg-black hover:text-white"
               data-testid="button-generate-proposal"
@@ -444,7 +445,6 @@ export default function QuoteBuilder() {
             quote={currentQuote}
             open={proposalGeneratorOpen}
             onOpenChange={setProposalGeneratorOpen}
-            isInternal={isInternalPrint}
           />
         )}
 
