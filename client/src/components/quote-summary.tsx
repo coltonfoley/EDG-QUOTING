@@ -60,11 +60,23 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
       const response = await apiRequest("PUT", `/api/quotes/${quote.id}`, data);
       return response.json();
     },
-    onSuccess: (updatedQuote) => {
+    onSuccess: (updatedQuote, variables) => {
       toast({ title: "Contract updated successfully" });
       
-      // Invalidate to refetch with contractTemplate relation
-      queryClient.invalidateQueries({ queryKey: [`/api/quotes/${quote.id}`] });
+      // If changing template (not just custom terms), refetch to get contractTemplate relation
+      // Otherwise use optimistic update to avoid re-rendering line items table
+      if (variables.contractTemplateId !== undefined && variables.contractTemplateId !== quote.contractTemplateId) {
+        queryClient.invalidateQueries({ queryKey: [`/api/quotes/${quote.id}`] });
+      } else {
+        // Optimistic update for custom terms only - doesn't trigger refetch
+        queryClient.setQueryData([`/api/quotes/${quote.id}`], (prev: any) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            customContractTerms: updatedQuote.customContractTerms,
+          };
+        });
+      }
     },
     onError: () => {
       toast({ 
