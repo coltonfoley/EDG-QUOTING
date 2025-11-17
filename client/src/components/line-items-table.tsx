@@ -1227,6 +1227,7 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
               handleFieldBlur(item.id, "description");
               activeKeyRef.current = null;
             }}
+            onPointerDown={(e) => e.stopPropagation()}
             className="border-0 bg-transparent p-1 text-sm focus:ring-1 focus:ring-blue-500"
             data-testid={`input-description-${item.id}`}
           />
@@ -1280,6 +1281,7 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
               handleFieldBlur(item.id, "quantity");
               activeKeyRef.current = null;
             }}
+            onPointerDown={(e) => e.stopPropagation()}
             className="border-0 bg-transparent p-1 text-center text-sm focus:ring-1 focus:ring-blue-500"
             data-testid={`input-quantity-${item.id}`}
           />
@@ -1306,6 +1308,7 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
                 handleFieldBlur(item.id, "unitPrice");
                 activeKeyRef.current = null;
               }}
+              onPointerDown={(e) => e.stopPropagation()}
               className="border-0 bg-transparent p-1 text-center text-sm focus:ring-1 focus:ring-blue-500 flex-1"
               data-testid={`input-unit-price-${item.id}`}
             />
@@ -1360,6 +1363,7 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
                 handleFieldBlur(item.id, "markupValue");
                 activeKeyRef.current = null;
               }}
+              onPointerDown={(e) => e.stopPropagation()}
               className="border-0 bg-transparent p-1 text-center text-sm focus:ring-1 focus:ring-blue-500 flex-1"
               data-testid={`input-markup-value-${item.id}`}
             />
