@@ -1228,8 +1228,8 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
           <Input
             value={getCurrentValue(item.id, 'description')}
             onChange={(e) => {
-              handleFieldChange(item.id, "description", e.target.value);
               markActive(`${item.id}-description`, e.currentTarget);
+              handleFieldChange(item.id, "description", e.target.value);
             }}
             onKeyDown={(e) => handleKeyDown(e, rowIndex, 'description')}
             onFocus={(e) => {
@@ -1282,8 +1282,8 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
           <Input
             value={getCurrentValue(item.id, 'quantity')}
             onChange={(e) => {
-              handleFieldChange(item.id, "quantity", e.target.value);
               markActive(`${item.id}-quantity`, e.currentTarget);
+              handleFieldChange(item.id, "quantity", e.target.value);
             }}
             onKeyDown={(e) => handleKeyDown(e, rowIndex, 'quantity')}
             onFocus={(e) => {
@@ -1309,8 +1309,8 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
             <Input
               value={getCurrentValue(item.id, 'unitPrice')}
               onChange={(e) => {
-                handleFieldChange(item.id, "unitPrice", e.target.value);
                 markActive(`${item.id}-unitPrice`, e.currentTarget);
+                handleFieldChange(item.id, "unitPrice", e.target.value);
               }}
               onKeyDown={(e) => handleKeyDown(e, rowIndex, 'unitPrice')}
               onFocus={(e) => {
@@ -1364,8 +1364,8 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
             <Input
               value={getCurrentValue(item.id, 'markupValue')}
               onChange={(e) => {
-                handleFieldChange(item.id, "markupValue", e.target.value);
                 markActive(`${item.id}-markupValue`, e.currentTarget);
+                handleFieldChange(item.id, "markupValue", e.target.value);
               }}
               onKeyDown={(e) => handleKeyDown(e, rowIndex, 'markupValue')}
               onFocus={(e) => {
