@@ -1804,7 +1804,7 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
                 {groupedLineItems.ungrouped.length > 0 && (
                   <>
                     <UngroupedSection 
-                      lineItems={groupedLineItems.ungrouped}
+                      lineItems={mergedGroupedLineItems.ungrouped}
                       onCreateGroup={() => setShowCreateGroupDialog(true)}
                     />
                     <SortableContext 
@@ -1834,12 +1834,13 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
                 {/* Render groups */}
                 {sortedGroups.map((group) => {
                   const groupItems = groupedLineItems.grouped[group.id] || [];
+                  const mergedGroupItems = mergedGroupedLineItems.grouped[group.id] || [];
                   
                   return (
                     <React.Fragment key={group.id}>
                       <GroupHeader
                         group={group}
-                        lineItems={groupItems}
+                        lineItems={mergedGroupItems}
                         onToggleCollapse={handleToggleGroupCollapse}
                         onEditTitle={handleEditGroupTitle}
                         onDeleteGroup={handleDeleteGroup}
@@ -1875,7 +1876,7 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
                       {!group.isCollapsed && (
                         <GroupFooter
                           group={group}
-                          lineItems={groupItems}
+                          lineItems={mergedGroupItems}
                           onAddItem={() => setShowNewItemForm(true)}
                         />
                       )}
