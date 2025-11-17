@@ -208,7 +208,13 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
     const key = activeKeyRef.current;
     
     // Parse the key to get id and field: `${item.id}-${field}`
-    const [id, field] = key.split("-");
+    // Split from the end to handle multi-part field names
+    const lastDashIndex = key.lastIndexOf('-');
+    if (lastDashIndex === -1) return;
+    
+    const id = key.substring(0, lastDashIndex);
+    const field = key.substring(lastDashIndex + 1);
+    
     const testId =
       field === "unitPrice" ? `input-unit-price-${id}` :
       field === "markupValue" ? `input-markup-value-${id}` :
@@ -218,20 +224,15 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
 
     if (!testId) return;
     const el = document.querySelector(`[data-testid="${testId}"]`) as HTMLInputElement | null;
-    if (el && document.activeElement !== el) {
-      el.focus();
-      if (caretRef.current != null) {
-        try {
-          el.setSelectionRange(caretRef.current, caretRef.current);
-        } catch {
-          // If setSelectionRange fails, just move to end
-          el.setSelectionRange(el.value.length, el.value.length);
-        }
-      } else {
-        el.setSelectionRange(el.value.length, el.value.length);
+    if (el && document.activeElement === el && caretRef.current != null) {
+      // Only restore cursor if the element is already focused and we have a valid position
+      try {
+        el.setSelectionRange(caretRef.current, caretRef.current);
+      } catch {
+        // If setSelectionRange fails, do nothing (let browser handle it naturally)
       }
     }
-  });
+  }, [localValues]);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
