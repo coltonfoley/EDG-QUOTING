@@ -1,0 +1,372 @@
+To add a tool for printing the quote with line item costs, I'll update the `QuoteBuilder` page and the PDF generation logic. This new "Print with Costs" button will generate an internal-facing document, distinct from the client-facing "Generate Proposal."
+
+Here are the changes:
+
+### 1\. `quote-builder.tsx`
+
+I'll add a new **"Print with Costs"** button next to the "Generate Proposal" button. This button will open the same proposal generator dialog but will pass a new `isInternal` flag to it, letting it know to generate a document with costs instead of prices.
+
+```tsx
+[...imports]
+// Import the new icon
+import { Save, Loader2, FileText, CloudUpload, Copy, History, Printer } from "lucide-react";
+[...imports]
+
+export default function QuoteBuilder() {
+  [...state]
+  
+  // State for proposal generator dialog
+  const [proposalGeneratorOpen, setProposalGeneratorOpen] = useState(false);
+  // Add state to track which print mode is active
+  const [isInternalPrint, setIsInternalPrint] = useState(false);
+  const [versionHistoryOpen, setVersionHistoryOpen] = useState(false);
+
+  [...hooks and functions]
+
+  [...return (]
+        {/* Action Buttons - Show for existing quotes with line items */}
+        {!isNewQuote && currentQuote.id && currentQuote.lineItems.length > 0 && (
+          <div className="flex justify-end gap-4 mt-8 pb-8">
+            <QuickBooksSync quote={currentQuote} />
+            
+            {/* NEW: Internal Print with Costs Button */}
+            <Button 
+              onClick={() => {
+                setIsInternalPrint(true);
+                setProposalGeneratorOpen(true);
+              }}
+              variant="outline"
+              className="px-6 py-3 text-lg"
+              data-testid="button-print-with-costs"
+            >
+              <Printer className="mr-2 h-5 w-5" />
+              Print with Costs
+            </Button>
+            
+            <Button 
+              onClick={() => {
+                // Set internal print to false for standard proposal
+                setIsInternalPrint(false);
+                setProposalGeneratorOpen(true);
+              }}
+              variant="outline"
+              className="px-6 py-3 text-lg border-edg-black text-edg-black hover:bg-edg-black hover:text-white"
+              data-testid="button-generate-proposal"
+            >
+              <FileText className="mr-2 h-5 w-5" />
+              Generate Proposal
+            </Button>
+          </div>
+        )}
+
+        {/* Simple Proposal Generator Dialog */}
+        {!isNewQuote && currentQuote.id && (
+          <SimpleProposalGenerator
+            quote={currentQuote}
+            open={proposalGeneratorOpen}
+            onOpenChange={setProposalGeneratorOpen}
+            // Pass the new flag to the generator
+            isInternal={isInternalPrint}
+          />
+        )}
+
+      </div>
+    </div>
+  );
+}
+```
+
+### 2\. `pdf-branded-sequence.ts`
+
+Now, I'll update the PDF orchestrator to accept the new flag (which I'm calling `showCosts`) and pass it down to the `drawLineItemsSection` function.
+
+```typescript
+[...imports]
+
+interface BrandedSequenceOptions {
+  pdf: jsPDF;
+  company: {
+    name: string;
+    address: string;
+    email: string;
+    phone: string;
+  };
+  quote: QuoteWithDetails;
+  renderImages: Array<{ dataUrl: string; format: 'PNG' | 'JPEG' }>;
+  contractText: string;
+  showPricing: boolean;
+  clientLogoDataUrl: string | null;
+  showCosts?: boolean; // NEW: Add showCosts prop
+}
+
+/**
+ * Generates a Branded Sequence PDF with fixed page order:
+ * 1. Standardized Cover (brand photo + logo)
+ * 2. Project Details
+ * 3. Gallery (auto-paginate)
+ * 4. Line Items (auto-paginate, optional pricing)
+ * 5. Contract Terms (auto-paginate)
+ * 6. Branded Back Page
+ */
+export async function generateBrandedSequencePDF(options: BrandedSequenceOptions): Promise<void> {
+  // Destructure the new prop
+  const { pdf, company, quote, renderImages, contractText, showPricing, clientLogoDataUrl, showCosts } = options;
+
+  const pageW = pdf.internal.pageSize.getWidth();
+  const pageH = pdf.internal.pageSize.getHeight();
+  const margin = 19; // Professional margins (3/4 inch)
+  const contentW = pageW - (2 * margin);
+
+  // 1. Standardized Cover Page (brand photo + logo)
+  [...drawStandardCover call]
+
+  // 2. Project Details Page (section handles its own page creation)
+  [...drawProjectDetailsPage call]
+
+  // 3. Gallery / Renderings (if images provided) (section handles its own page creation)
+  [...drawRenderingsPages call]
+
+  // 4. Line Items Section (if items exist) (section handles its own page creation)
+  if (quote?.lineItems && quote.lineItems.length > 0) {
+    drawLineItemsSection(pdf, {
+      quote,
+      showPricing,
+      showCosts: !!showCosts, // Pass the new prop
+      logoDataUrl: BRAND_LOGO_PNG,
+      company,
+      margin,
+      contentW,
+      pageW,
+      pageH
+    });
+  }
+
+  // 5. Contract Terms (if contract text provided) (section handles its own page creation)
+  // Don't draw contract or back page for internal cost print
+  if (!showCosts) {
+    if (contractText && contractText.trim()) {
+      drawContractSection(pdf, {
+        contractText,
+        logoDataUrl: BRAND_LOGO_PNG,
+        company,
+        margin,
+        contentW,
+        pageW,
+        pageH,
+        quote
+      });
+    }
+
+    // 6. Branded Back Page (section handles its own page creation)
+    drawBrandedBackPage(pdf, {
+      backPageDataUrl: BRAND_BACK_PAGE_PNG,
+      pageW,
+      pageH,
+      margin
+    });
+  }
+}
+```
+
+### 3\. `pdf-sections.ts`
+
+Finally, I'll modify the `drawLineItemsSection` to handle the new `showCosts` flag. This will create a different table layout that includes the **Cost** (from `unitPrice`) and omits the client-facing summary and acceptance blocks.
+
+```typescript
+[...imports]
+[...helper functions]
+
+interface DrawLineItemsSectionOpts {
+  quote: any;
+  showPricing: boolean;
+  showCosts?: boolean; // NEW: Add showCosts prop
+  logoDataUrl: string;
+  company: { name: string; address: string; phone: string; email: string };
+  margin: number;
+  contentW: number;
+  pageW: number;
+  pageH: number;
+}
+
+[...other functions]
+
+export function drawLineItemsSection(pdf: jsPDF, opts: DrawLineItemsSectionOpts): void {
+  // Destructure the new prop
+  const { quote, showPricing, showCosts, logoDataUrl, company, margin, contentW, pageW, pageH } = opts;
+
+  const lineItems = quote.lineItems || [];
+  if (lineItems.length === 0) return;
+
+  pdf.addPage();
+  let y = margin;
+
+  const drawHeader = (title: string) => {
+    pdf.setFont('Barlow-SemiBold', 'normal');
+    pdf.setFontSize(18);
+    pdf.setTextColor(0, 0, 0);
+    pdf.text(title, margin, y);
+    y += 12;
+
+    pdf.setFontSize(11);
+    pdf.setDrawColor(200, 200, 200);
+
+    // MODIFIED: Logic for 3 header types
+    if (showPricing && !showCosts) {
+      // 1. Client-facing with Price
+      const descW = contentW * 0.5;
+      const qtyW = contentW * 0.15;
+      const priceW = contentW * 0.17;
+      const totalW = contentW * 0.18;
+
+      pdf.text('Description', margin, y);
+      pdf.text('Qty', margin + descW, y);
+      pdf.text('Price', margin + descW + qtyW, y);
+      pdf.text('Total', margin + descW + qtyW + priceW, y);
+
+      y += 2;
+      pdf.line(margin, y, margin + contentW, y);
+      y += 5;
+    } else if (showCosts) {
+      // 2. NEW: Internal-facing with Cost
+      const descW = contentW * 0.6;
+      const qtyW = contentW * 0.15;
+      const costW = contentW * 0.25;
+
+      pdf.text('Description', margin, y);
+      pdf.text('Qty', margin + descW, y);
+      pdf.text('Cost', margin + descW + qtyW, y); // "Cost" column
+
+      y += 2;
+      pdf.line(margin, y, margin + contentW, y);
+      y += 5;
+    } else {
+      // 3. Client-facing with no Price
+      const descW = contentW * 0.75;
+      const qtyW = contentW * 0.25;
+
+      pdf.text('Description', margin, y);
+      pdf.text('Qty', margin + descW, y);
+
+      y += 2;
+      pdf.line(margin, y, margin + contentW, y);
+      y += 5;
+    }
+  };
+
+  drawHeader('Line Items');
+
+  pdf.setFont('Barlow-Regular', 'normal');
+  pdf.setFontSize(10);
+
+  lineItems.forEach((item: any, index: number) => {
+    [...description/color parsing]
+    
+    const rowHeight = Math.max((descLines.length + colorLines.length) * 5, 8);
+
+    [...ensureSpace call]
+
+    // MODIFIED: Logic for 3 row types
+    if (showPricing && !showCosts) {
+      // 1. Client-facing with Price
+      const descW = contentW * 0.5;
+      const qtyW = contentW * 0.15;
+      const priceW = contentW * 0.17;
+
+      pdf.text(descLines, margin, y);
+      
+      [...color drawing logic]
+
+      const qty = parseFloat(item.quantity || '0');
+      const total = calculateLineItemTotal(
+        item.quantity,
+        item.unitPrice,
+        item.markupType,
+        item.markupValue,
+        item.discountType || 'percentage',
+        item.discountValue || 0,
+        quote.tariffRate || 0,
+        item.isTariffApplicable || false
+      );
+      const unitPrice = qty > 0 ? total / qty : 0;
+
+      pdf.text(qty.toString(), margin + descW, y);
+      pdf.text(formatCurrency(unitPrice), margin + descW + qtyW, y);
+      pdf.text(formatCurrency(total), margin + descW + qtyW + priceW, y);
+
+    } else if (showCosts) {
+      // 2. NEW: Internal-facing with Cost
+      const descW = contentW * 0.6;
+      const qtyW = contentW * 0.15;
+
+      pdf.text(descLines, margin, y);
+      
+      [...color drawing logic]
+      
+      // Use item.unitPrice directly for "Cost"
+      const cost = parseFloat(item.unitPrice || '0');
+      
+      pdf.text(parseFloat(item.quantity || '0').toString(), margin + descW, y);
+      pdf.text(formatCurrency(cost), margin + descW + qtyW, y); // "Cost" value
+
+    } else {
+      // 3. Client-facing with no Price
+      const descW = contentW * 0.75;
+
+      pdf.text(descLines, margin, y);
+      
+      [...color drawing logic]
+      
+      pdf.text(parseFloat(item.quantity || '0').toString(), margin + descW, y);
+    }
+
+    y += rowHeight + 2;
+  });
+
+  // Calculate footer reserve height
+  [...disclaimer logic]
+  const footerReserveHeight = 25 + disclaimerHeight + 5;
+
+  // NEW: Wrap all summary/acceptance blocks in a conditional
+  if (!showCosts) {
+    // Investment Summary
+    y += 10;
+    [...Investment Summary logic]
+    [...summaryItems.forEach]
+    [...Total logic]
+
+    // Client Acceptance Block
+    [...acceptanceH logic]
+    [...targetSignatureY logic]
+    
+    drawAcceptanceBlock(
+      pdf, 
+      margin, 
+      signatureY, 
+      contentW,
+      quote.clientSignatureData,
+      quote.clientSignedAt ? new Date(quote.clientSignedAt) : null,
+      quote.clientSignedIp || null
+    );
+
+    // Add disclaimer text above the footer
+    [...disclaimerY logic]
+    
+    pdf.text(disclaimerLines, pageW / 2, disclaimerY - disclaimerHeight, { align: 'center' });
+  }
+
+  // Add branded footer
+  // MODIFIED: Hide initials on internal cost print
+  drawBrandedFooter({ 
+    pdf, 
+    logoDataUrl, 
+    company, 
+    pageW, 
+    pageH, 
+    margin, 
+    showInitials: !showCosts // Hide initials if showCosts is true
+  });
+}
+
+[...drawContractSection]
+[...drawBrandedBackPage]
+```
