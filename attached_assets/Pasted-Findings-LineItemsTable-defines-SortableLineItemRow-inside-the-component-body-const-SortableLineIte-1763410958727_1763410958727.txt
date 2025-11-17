@@ -1,0 +1,50 @@
+Findings
+LineItemsTable defines SortableLineItemRow inside the component body (const SortableLineItemRow = memo(...)). Because that function is recreated every render, React treats it as a brand‑new component type each time LineItemsTable re-renders, so every row (and its inputs) is unmounted/remounted on every keystroke. This resets focus/caret to the end before the effect can restore it.
+line-items-table.tsxLines 1145-1188
+const SortableLineItemRow = memo(({ item, rowIndex }: { item: LineItem; rowIndex: number }) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: `item-${item.id}` });
+
+  // renders <Input .../>
+});
+const SortableLineItemRow = memo(({ item, rowIndex }: { item: LineItem; rowIndex: number }) => {  const {    attributes,    listeners,    setNodeRef,    transform,    transition,    isDragging,  } = useSortable({ id: `item-${item.id}` });  // renders <Input .../>});
+Typing into any cell updates localValues via setLocalValues, which re-renders the parent component on every keystroke; combined with the inline component definition above, that guarantees each input is torn down and rebuilt immediately after every change.
+line-items-table.tsxLines 276-288
+const handleFieldChange = useCallback((itemId: number, field: string, value: any) => {
+  const key = `${itemId}-${field}`;
+  setLocalValues(prev => ({
+    ...prev,
+    [itemId]: {
+      ...(prev[itemId] ?? {}),
+      [field]: value
+    }
+  }));
+  // validation logic...
+}, []);
+const handleFieldChange = useCallback((itemId: number, field: string, value: any) => {  const key = `${itemId}-${field}`;  setLocalValues(prev => ({    ...prev,    [itemId]: {      ...(prev[itemId] ?? {}),      [field]: value    }  }));  // validation logic...}, []);
+The caret-restoration hook tries to patch over this (useLayoutEffect + activeKeyRef), but it runs after the DOM nodes have already been replaced, so the browser first places the caret at the end of the newly mounted input, and users still perceive the jump even if the effect later corrects it.
+line-items-table.tsxLines 205-248
+useLayoutEffect(() => {
+  if (!activeKeyRef.current) return;
+  const key = activeKeyRef.current;
+  const el = document.querySelector(`[data-testid="${testId}"]`) as HTMLInputElement | null;
+  if (el) {
+    if (document.activeElement !== el) {
+      el.focus({ preventScroll: true });
+    }
+    if (caretRef.current != null) {
+      el.setSelectionRange(caretRef.current, caretRef.current);
+    }
+  }
+}, [localValues]);
+useLayoutEffect(() => {  if (!activeKeyRef.current) return;  const key = activeKeyRef.current;  const el = document.querySelector(`[data-testid="${testId}"]`) as HTMLInputElement | null;  if (el) {    if (document.activeElement !== el) {      el.focus({ preventScroll: true });    }    if (caretRef.current != null) {      el.setSelectionRange(caretRef.current, caretRef.current);    }  }}, [localValues]);
+Proposed Fix
+Hoist SortableLineItemRow out of LineItemsTable (ideally into its own file) or wrap its creation in useMemo so React sees a stable component type between renders. Pass the necessary handlers (getCurrentValue, handleFieldChange, handleFieldBlur, etc.) as props. Once the row component isn’t recreated each render, inputs stop remounting and the cursor stays where the user left it without extra hacks.
+After the component type is stabilized you can keep React.memo (to avoid rerendering rows whose props didn’t change) and simplify/remove the focus-restoration effect because the DOM nodes will persist while typing.
+No backend or query changes are required—the current quote query (client/src/pages/quote-builder.tsx) already has calm staleTime/refetch options, so solving the component identity issue will resolve the cursor jumping behavior.
