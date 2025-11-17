@@ -16,7 +16,7 @@ import { SimpleProposalGenerator } from "@/components/simple-proposal-generator"
 import { Save, Loader2, FileText, CloudUpload, Copy, History, Printer } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import type { QuoteWithDetails } from "@shared/schema";
+import type { QuoteWithDetails, LineItem } from "@shared/schema";
 import { QuickBooksSync } from "@/components/quickbooks-sync";
 import { generateSimpleCostReport } from "@/lib/pdf-simple-cost-report";
 import { COMPANY_INFO } from "@shared/companyConfig";
@@ -35,6 +35,9 @@ export default function QuoteBuilder() {
   // State for proposal generator dialog
   const [proposalGeneratorOpen, setProposalGeneratorOpen] = useState(false);
   const [versionHistoryOpen, setVersionHistoryOpen] = useState(false);
+
+  // Lifted state for optimistic updates to prevent cursor jumping
+  const [localValues, setLocalValues] = useState<Record<number, Partial<LineItem>>>({});
 
   const { data: quote, isLoading, error } = useQuery<QuoteWithDetails>({
     queryKey: [`/api/quotes/${quoteId}`],
@@ -221,10 +224,19 @@ export default function QuoteBuilder() {
     quoteNumber: "",
     accountId: null,
     projectName: "",
-    projectAddress: "",
     jobsiteAddress: null,
+    jobsiteStreetAddress: "",
+    jobsiteAddressLine2: "",
+    jobsiteCity: "",
+    jobsiteState: "",
+    jobsiteZipCode: "",
+    jobsiteCountry: "",
+    jobsitePlaceId: "",
     estimatedStartDate: "",
     notes: "",
+    esigIncludePricing: true,
+    esigIncludeImages: false,
+    esigIncludeContract: true,
     taxRate: "8.5",
     tariffRate: "0",
     discount: "0",
@@ -260,10 +272,18 @@ export default function QuoteBuilder() {
       accountType: "homeowner" as const,
       paymentTerms: null,
       billingAddress: null,
+      streetAddress: null,
+      addressLine2: null,
+      city: null,
+      state: null,
+      zipCode: null,
+      country: null,
+      placeId: null,
       firstName: null,
       lastName: null,
       secondaryContacts: null,
       qbCustomerId: null,
+      googleContactId: null,
       createdAt: new Date(),
       updatedAt: new Date()
     },
@@ -276,10 +296,18 @@ export default function QuoteBuilder() {
       accountType: "homeowner" as const,
       paymentTerms: null,
       billingAddress: null,
+      streetAddress: null,
+      addressLine2: null,
+      city: null,
+      state: null,
+      zipCode: null,
+      country: null,
+      placeId: null,
       firstName: null,
       lastName: null,
       secondaryContacts: null,
       qbCustomerId: null,
+      googleContactId: null,
       createdAt: new Date(),
       updatedAt: new Date()
     },
@@ -398,12 +426,15 @@ export default function QuoteBuilder() {
           quoteId={currentQuote.id || 0}
           lineItems={currentQuote.lineItems}
           tariffRate={currentQuote.tariffRate || "0"}
+          localValues={localValues}
+          setLocalValues={setLocalValues}
         />
 
         {/* Quote Summary - Show for both new and existing quotes */}
         <QuoteSummary
           quote={currentQuote}
           onUpdateQuote={handleUpdateQuote}
+          localValues={localValues}
         />
 
         {/* Action Buttons - Show for existing quotes with line items */}

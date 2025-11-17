@@ -42,6 +42,8 @@ interface LineItemsTableProps {
   quoteId: number;
   lineItems: LineItem[];
   tariffRate: string | number;
+  localValues: Record<number, Partial<LineItem>>;
+  setLocalValues: React.Dispatch<React.SetStateAction<Record<number, Partial<LineItem>>>>;
 }
 
 interface SortableLineItemRowProps {
@@ -374,7 +376,7 @@ const SortableLineItemRow = memo(({
   );
 });
 
-export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTableProps) {
+export function LineItemsTable({ quoteId, lineItems, tariffRate, localValues, setLocalValues }: LineItemsTableProps) {
   // Check if quote is new (not saved yet)
   const isUnsavedQuote = !quoteId || quoteId === 0;
   
@@ -425,15 +427,6 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
     calculate: null,
   });
   
-  // Local state for immediate edit feedback
-  const [localValues, setLocalValues] = useState<Record<string, { 
-    description: string; 
-    quantity: string; 
-    unitPrice: string; 
-    markupType: string; 
-    markupValue: string; 
-  }>>({});
-  
   // Track which fields are actively being edited (have focus)
   const activeInputs = useRef<Set<string>>(new Set());
   
@@ -479,13 +472,7 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
       return;
     }
     
-    const newLocalValues: Record<string, { 
-      description: string; 
-      quantity: string; 
-      unitPrice: string; 
-      markupType: string; 
-      markupValue: string; 
-    }> = {};
+    const newLocalValues: Record<number, Partial<LineItem>> = {};
     lineItems.forEach(item => {
       newLocalValues[item.id] = {
         description: item.description,
@@ -496,7 +483,7 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
       };
     });
     setLocalValues(newLocalValues);
-  }, [lineItems]);
+  }, [lineItems, setLocalValues]);
 
   // Create a Map for O(1) line item lookups instead of O(n) array.find()
   const itemById = useMemo(() => 
@@ -639,7 +626,7 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
     try {
       let updateData;
       if (field === "quantity" || field === "unitPrice" || field === "markupValue") {
-        const sanitized = sanitizeNumberString(value);
+        const sanitized = sanitizeNumberString(value || "");
         const parsed = parseFloat(sanitized);
         
         // If the value is invalid or empty, revert to previous value instead of zero

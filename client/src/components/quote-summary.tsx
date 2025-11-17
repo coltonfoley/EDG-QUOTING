@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -22,9 +22,10 @@ import { ESignatureOptionsModal } from "@/components/esignature-options-modal";
 interface QuoteSummaryProps {
   quote: QuoteWithDetails;
   onUpdateQuote: (field: string, value: any) => void;
+  localValues: Record<number, Partial<import("@shared/schema").LineItem>>;
 }
 
-export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
+export function QuoteSummary({ quote, onUpdateQuote, localValues }: QuoteSummaryProps) {
   const [localTaxRate, setLocalTaxRate] = useState<string>("");
   const [localTariffRate, setLocalTariffRate] = useState<string>("");
   const [localDiscount, setLocalDiscount] = useState<string>("");
@@ -284,8 +285,21 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
     companySignMutation.mutate(companySignature);
   };
 
+  // Merge localValues into line items for real-time calculations
+  const mergedLineItems = useMemo(() => {
+    return quote.lineItems.map(item => {
+      const itemLocalValues = localValues[item.id];
+      if (!itemLocalValues) return item;
+      
+      return {
+        ...item,
+        ...itemLocalValues,
+      };
+    });
+  }, [quote.lineItems, localValues]);
+
   const totals = calculateQuoteTotals(
-    quote.lineItems.map(item => ({
+    mergedLineItems.map(item => ({
       quantity: item.quantity,
       unitPrice: item.unitPrice,
       markupType: item.markupType,
