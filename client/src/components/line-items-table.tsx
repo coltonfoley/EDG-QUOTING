@@ -207,6 +207,13 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
     if (!activeKeyRef.current) return;
     const key = activeKeyRef.current;
     
+    // If the field is no longer marked as active, clear activeKeyRef and stop
+    if (!activeInputs.current.has(key)) {
+      activeKeyRef.current = null;
+      caretRef.current = null;
+      return;
+    }
+    
     // Parse the key to get id and field: `${item.id}-${field}`
     // Split from the end to handle multi-part field names
     const lastDashIndex = key.lastIndexOf('-');
@@ -224,12 +231,18 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
 
     if (!testId) return;
     const el = document.querySelector(`[data-testid="${testId}"]`) as HTMLInputElement | null;
-    if (el && document.activeElement === el && caretRef.current != null) {
-      // Only restore cursor if the element is already focused and we have a valid position
-      try {
-        el.setSelectionRange(caretRef.current, caretRef.current);
-      } catch {
-        // If setSelectionRange fails, do nothing (let browser handle it naturally)
+    if (el) {
+      // Restore focus when input remounts (happens on every keystroke due to useSortable)
+      if (document.activeElement !== el) {
+        el.focus({ preventScroll: true });
+      }
+      // Restore cursor position after focusing
+      if (caretRef.current != null) {
+        try {
+          el.setSelectionRange(caretRef.current, caretRef.current);
+        } catch {
+          // If setSelectionRange fails, do nothing (let browser handle it naturally)
+        }
       }
     }
   }, [localValues]);
@@ -1018,6 +1031,10 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
   // Drag and drop handlers
   const handleDragStart = (event: DragStartEvent) => {
     setActiveId(event.active.id as string);
+    // Clear active input tracking when drag starts to prevent focus trap
+    activeInputs.current.clear();
+    activeKeyRef.current = null;
+    caretRef.current = null;
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
