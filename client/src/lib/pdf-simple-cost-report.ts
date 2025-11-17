@@ -119,7 +119,10 @@ export function generateSimpleCostReport({ quote, company }: SimpleCostReportOpt
   // Calculate totals
   const taxRate = parseFloat(quote.taxRate || '0');
   const shipping = parseFloat(quote.shipping || '0');
-  const taxableAmount = taxableSubtotal + shipping;
+  
+  // Only include shipping in taxable amount if it's taxable (default to false to match calculateQuoteTotals)
+  const isShippingTaxable = quote.isShippingTaxable === true;
+  const taxableAmount = taxableSubtotal + (isShippingTaxable ? shipping : 0);
   const tax = (taxableAmount * taxRate) / 100;
   const total = subtotal + shipping + tax;
 
