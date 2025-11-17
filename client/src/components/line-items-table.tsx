@@ -972,6 +972,19 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
     return [...groups].sort((a, b) => a.position - b.position);
   }, [groups]);
 
+  // Memoize sortable IDs to prevent dnd-kit from recreating rows on every localValues change
+  const ungroupedSortableIds = useMemo(() => {
+    return groupedLineItems.ungrouped.map(item => `item-${item.id}`);
+  }, [groupedLineItems.ungrouped]);
+
+  const groupedSortableIds = useMemo(() => {
+    const ids: Record<string, string[]> = {};
+    Object.keys(groupedLineItems.grouped).forEach(groupId => {
+      ids[groupId] = groupedLineItems.grouped[groupId].map(item => `item-${item.id}`);
+    });
+    return ids;
+  }, [groupedLineItems.grouped]);
+
   // Group management handlers
   const handleCreateGroup = (title: string) => {
     const groupId = generateGroupId();
@@ -1824,7 +1837,7 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
                       onCreateGroup={() => setShowCreateGroupDialog(true)}
                     />
                     <SortableContext 
-                      items={groupedLineItems.ungrouped.map(item => `item-${item.id}`)}
+                      items={ungroupedSortableIds}
                       strategy={verticalListSortingStrategy}
                     >
                       {groupedLineItems.ungrouped.map((item, rowIndex) => (
@@ -1857,7 +1870,7 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
                       
                       {!group.isCollapsed && (
                         <SortableContext 
-                          items={groupItems.map(item => `item-${item.id}`)}
+                          items={groupedSortableIds[group.id] || []}
                           strategy={verticalListSortingStrategy}
                         >
                           {groupItems.map((item, rowIndex) => (
