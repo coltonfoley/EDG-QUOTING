@@ -42,341 +42,9 @@ interface LineItemsTableProps {
   quoteId: number;
   lineItems: LineItem[];
   tariffRate: string | number;
-  localValues: Record<number, Partial<LineItem>>;
-  setLocalValues: React.Dispatch<React.SetStateAction<Record<number, Partial<LineItem>>>>;
 }
 
-interface SortableLineItemRowProps {
-  item: LineItem;
-  rowIndex: number;
-  tariffRate: string | number;
-  getCurrentValue: (itemId: number, field: 'description' | 'quantity' | 'unitPrice' | 'markupType' | 'markupValue') => string;
-  handleFieldChange: (itemId: number, field: string, value: any) => void;
-  handleFieldBlur: (itemId: number, field: 'description' | 'quantity' | 'unitPrice' | 'markupType' | 'markupValue') => void;
-  handleKeyDown: (e: React.KeyboardEvent, rowIndex: number, column: 'description' | 'quantity' | 'unitPrice' | 'markupValue') => void;
-  validationErrors: Record<string, string>;
-  updateLineItemMutation: any;
-  deleteLineItemMutation: any;
-  activeInputs: React.MutableRefObject<Set<string>>;
-}
-
-const SortableLineItemRow = memo(({ 
-  item, 
-  rowIndex, 
-  tariffRate,
-  getCurrentValue,
-  handleFieldChange,
-  handleFieldBlur,
-  handleKeyDown,
-  validationErrors,
-  updateLineItemMutation,
-  deleteLineItemMutation,
-  activeInputs
-}: SortableLineItemRowProps) => {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: `item-${item.id}` });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-  };
-
-  // Calculate values using current local values
-  const currentCost = parseFloat(getCurrentValue(item.id, 'unitPrice')) || 0;
-  const currentMarkupValue = parseFloat(getCurrentValue(item.id, 'markupValue')) || 0;
-  const currentMarkupType = getCurrentValue(item.id, 'markupType') || 'percentage';
-  const currentQuantity = parseFloat(getCurrentValue(item.id, 'quantity')) || 0;
-  
-  // Calculate price (cost + markup)
-  let price = currentCost;
-  if (currentMarkupType === 'percentage') {
-    price = currentCost + (currentCost * (currentMarkupValue / 100));
-  } else {
-    price = currentCost + currentMarkupValue;
-  }
-  
-  // Calculate margin (profit amount)
-  const marginAmount = calculateLineItemMargin(
-    currentQuantity,
-    currentCost,
-    currentMarkupType,
-    currentMarkupValue,
-    item.discountType,
-    item.discountValue,
-    tariffRate,
-    item.isTariffApplicable || false
-  );
-  
-  // Calculate total
-  const total = calculateLineItemTotal(
-    currentQuantity,
-    currentCost,
-    currentMarkupType,
-    currentMarkupValue,
-    item.discountType,
-    item.discountValue,
-    tariffRate,
-    item.isTariffApplicable || false
-  );
-
-  return (
-    <tr
-      ref={setNodeRef}
-      style={style}
-      className="hover:bg-muted"
-      data-testid={`row-line-item-${item.id}`}
-    >
-      {/* Drag handle */}
-      <td className="border-r border-border px-2 py-1 w-8">
-        <div {...listeners} className="cursor-grab hover:cursor-grabbing text-muted-foreground">
-          <GripVertical className="h-4 w-4" />
-        </div>
-      </td>
-
-      {/* Description - Always visible */}
-      <td className="border-r border-border px-3 py-1">
-        <Input
-          value={getCurrentValue(item.id, 'description')}
-          onChange={(e) => {
-            handleFieldChange(item.id, "description", e.target.value);
-          }}
-          onFocus={() => {
-            activeInputs.current.add(`${item.id}-description`);
-          }}
-          onKeyDown={(e) => handleKeyDown(e, rowIndex, 'description')}
-          onBlur={() => {
-            handleFieldBlur(item.id, "description");
-          }}
-          onPointerDown={(e) => e.stopPropagation()}
-          className="border-0 bg-transparent p-1 text-sm focus:ring-1 focus:ring-blue-500"
-          data-testid={`input-description-${item.id}`}
-        />
-        {(() => {
-          try {
-            const configData = item.configData ? (typeof item.configData === 'string' ? JSON.parse(item.configData) : item.configData) : null;
-            const colors = configData?.colors;
-            if (colors && Array.isArray(colors) && colors.length > 0) {
-              return (
-                <div className="flex gap-1 mt-1 flex-wrap">
-                  {colors.map((color: { name: string; hexCode: string }, idx: number) => (
-                    <div 
-                      key={idx}
-                      className="inline-flex items-center gap-1 px-2 py-0.5 bg-muted rounded text-xs"
-                      data-testid={`color-badge-${item.id}-${idx}`}
-                    >
-                      <div 
-                        className="w-3 h-3 rounded-full border border-border"
-                        style={{ backgroundColor: color.hexCode }}
-                      />
-                      <span>{color.name}</span>
-                    </div>
-                  ))}
-                </div>
-              );
-            }
-          } catch (e) {
-            // Silent fail if configData is malformed
-          }
-          return null;
-        })()}
-        {validationErrors[`${item.id}-description`] && (
-          <div className="text-xs text-red-500 mt-1">{validationErrors[`${item.id}-description`]}</div>
-        )}
-      </td>
-
-      {/* Quantity - Always visible */}
-      <td className="border-r border-border px-3 py-1 w-20 text-center">
-        <Input
-          value={getCurrentValue(item.id, 'quantity')}
-          type="text"
-          inputMode="decimal"
-          onChange={(e) => {
-            handleFieldChange(item.id, "quantity", e.target.value);
-          }}
-          onFocus={() => {
-            activeInputs.current.add(`${item.id}-quantity`);
-          }}
-          onKeyDown={(e) => handleKeyDown(e, rowIndex, 'quantity')}
-          onBlur={() => {
-            handleFieldBlur(item.id, "quantity");
-          }}
-          onPointerDown={(e) => e.stopPropagation()}
-          className="border-0 bg-transparent p-1 text-center text-sm focus:ring-1 focus:ring-blue-500"
-          data-testid={`input-quantity-${item.id}`}
-        />
-        {validationErrors[`${item.id}-quantity`] && (
-          <div className="text-xs text-red-500 mt-1">{validationErrors[`${item.id}-quantity`]}</div>
-        )}
-      </td>
-
-      {/* Cost - Hidden on small screens */}
-      <td className="border-r border-border px-3 py-1 text-center hidden lg:table-cell">
-        <div className="flex items-center gap-1">
-          <Input
-            value={getCurrentValue(item.id, 'unitPrice')}
-            type="text"
-            inputMode="decimal"
-            onChange={(e) => {
-              handleFieldChange(item.id, "unitPrice", e.target.value);
-            }}
-            onFocus={() => {
-              activeInputs.current.add(`${item.id}-unitPrice`);
-            }}
-            onKeyDown={(e) => handleKeyDown(e, rowIndex, 'unitPrice')}
-            onBlur={() => {
-              handleFieldBlur(item.id, "unitPrice");
-            }}
-            onPointerDown={(e) => e.stopPropagation()}
-            className="border-0 bg-transparent p-1 text-center text-sm focus:ring-1 focus:ring-blue-500 flex-1"
-            data-testid={`input-unit-price-${item.id}`}
-          />
-          {item.retailPrice && (
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Info className="h-3 w-3 text-blue-500 cursor-help" />
-                </TooltipTrigger>
-                <TooltipContent className="bg-popover text-popover-foreground p-2 text-xs max-w-xs">
-                  <div className="font-semibold mb-1">Cost Calculation:</div>
-                  <div>Retail Price: {formatCurrency(parseFloat(item.retailPrice.toString()))}</div>
-                  <div>
-                    Manufacturer Discount: {(() => {
-                      const retail = parseFloat(item.retailPrice.toString());
-                      const cost = parseFloat(getCurrentValue(item.id, 'unitPrice'));
-                      const discountAmount = retail - cost;
-                      const discountPercent = retail > 0 ? (discountAmount / retail * 100).toFixed(1) : 0;
-                      return discountAmount > 0 
-                        ? `${formatCurrency(discountAmount)} (${discountPercent}%)`
-                        : 'No manufacturer discount';
-                    })()}
-                  </div>
-                  <div className="border-t border-border mt-1 pt-1">
-                    Your Cost: {formatCurrency(parseFloat(getCurrentValue(item.id, 'unitPrice')))}
-                  </div>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          )}
-        </div>
-        {validationErrors[`${item.id}-unitPrice`] && (
-          <div className="text-xs text-red-500 mt-1">{validationErrors[`${item.id}-unitPrice`]}</div>
-        )}
-      </td>
-
-      {/* Markup% - Hidden on small screens */}
-      <td className="border-r border-border px-3 py-1 text-center hidden lg:table-cell">
-        <div className="flex items-center space-x-1">
-          <Input
-            value={getCurrentValue(item.id, 'markupValue')}
-            type="text"
-            inputMode="decimal"
-            onChange={(e) => {
-              handleFieldChange(item.id, "markupValue", e.target.value);
-            }}
-            onFocus={() => {
-              activeInputs.current.add(`${item.id}-markupValue`);
-            }}
-            onKeyDown={(e) => handleKeyDown(e, rowIndex, 'markupValue')}
-            onBlur={() => {
-              handleFieldBlur(item.id, "markupValue");
-            }}
-            onPointerDown={(e) => e.stopPropagation()}
-            className="border-0 bg-transparent p-1 text-center text-sm focus:ring-1 focus:ring-blue-500 flex-1"
-            data-testid={`input-markup-value-${item.id}`}
-          />
-          <Select
-            value={getCurrentValue(item.id, 'markupType')}
-            onValueChange={(value) => {
-              handleFieldChange(item.id, "markupType", value);
-            }}
-          >
-            <SelectTrigger className="w-12 h-6 border-0 bg-transparent p-0 text-xs" data-testid={`select-markup-type-${item.id}`}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="percentage">%</SelectItem>
-              <SelectItem value="dollar">$</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        {validationErrors[`${item.id}-markupValue`] && (
-          <div className="text-xs text-red-500 mt-1">{validationErrors[`${item.id}-markupValue`]}</div>
-        )}
-      </td>
-
-      {/* Price - Always visible */}
-      <td className="border-r border-border px-3 py-1 text-center text-sm" data-testid={`text-price-${item.id}`}>
-        {formatCurrency(price)}
-      </td>
-
-      {/* Margin$ - Hidden on small screens */}
-      <td className="border-r border-border px-3 py-1 text-center text-sm hidden md:table-cell" data-testid={`text-margin-${item.id}`}>
-        {formatCurrency(marginAmount)}
-      </td>
-
-      {/* Total - Always visible */}
-      <td className="border-r border-border px-3 py-1 text-center font-medium text-sm" data-testid={`text-total-${item.id}`}>
-        {formatCurrency(total)}
-      </td>
-
-      {/* Taxable - Always visible */}
-      <td className="border-r border-border px-2 py-1 text-center">
-        <div className="flex justify-center">
-          <Checkbox
-            checked={item.isTaxable !== false}
-            onCheckedChange={(checked) => {
-              updateLineItemMutation.mutate({ 
-                id: item.id, 
-                data: { isTaxable: checked === true },
-                skipInvalidation: false
-              });
-            }}
-            data-testid={`checkbox-taxable-${item.id}`}
-          />
-        </div>
-      </td>
-
-      {/* Tariff - Always visible */}
-      <td className="border-r border-border px-2 py-1 text-center">
-        <div className="flex justify-center">
-          <Checkbox
-            checked={!!item.isTariffApplicable}
-            onCheckedChange={(checked) => {
-              updateLineItemMutation.mutate({ 
-                id: item.id, 
-                data: { isTariffApplicable: checked === true },
-                skipInvalidation: false
-              });
-            }}
-            data-testid={`checkbox-tariff-${item.id}`}
-          />
-        </div>
-      </td>
-
-      {/* Actions - Always visible */}
-      <td className="px-3 py-1 text-center">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => deleteLineItemMutation.mutate(item.id)}
-          className="text-red-600 hover:text-red-700 hover:bg-red-50 p-1 h-auto"
-          data-testid={`button-delete-${item.id}`}
-        >
-          <Trash2 className="h-4 w-4" />
-        </Button>
-      </td>
-    </tr>
-  );
-});
-
-export function LineItemsTable({ quoteId, lineItems, tariffRate, localValues, setLocalValues }: LineItemsTableProps) {
+export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTableProps) {
   // Check if quote is new (not saved yet)
   const isUnsavedQuote = !quoteId || quoteId === 0;
   
@@ -427,8 +95,21 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate, localValues, se
     calculate: null,
   });
   
+  // Local state for immediate edit feedback
+  const [localValues, setLocalValues] = useState<Record<string, { 
+    description: string; 
+    quantity: string; 
+    unitPrice: string; 
+    markupType: string; 
+    markupValue: string; 
+  }>>({});
+  
   // Track which fields are actively being edited (have focus)
   const activeInputs = useRef<Set<string>>(new Set());
+  
+  // Focus restoration refs to prevent focus loss during re-renders
+  const activeKeyRef = useRef<string | null>(null);
+  const caretRef = useRef<number | null>(null);
   
   // Validation error states
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
@@ -472,7 +153,13 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate, localValues, se
       return;
     }
     
-    const newLocalValues: Record<number, Partial<LineItem>> = {};
+    const newLocalValues: Record<string, { 
+      description: string; 
+      quantity: string; 
+      unitPrice: string; 
+      markupType: string; 
+      markupValue: string; 
+    }> = {};
     lineItems.forEach(item => {
       newLocalValues[item.id] = {
         description: item.description,
@@ -483,7 +170,7 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate, localValues, se
       };
     });
     setLocalValues(newLocalValues);
-  }, [lineItems, setLocalValues]);
+  }, [lineItems]);
 
   // Create a Map for O(1) line item lookups instead of O(n) array.find()
   const itemById = useMemo(() => 
@@ -502,6 +189,49 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate, localValues, se
        item?.markupValue.toString() || '0');
   };
 
+  // Mark a field as active and capture caret position
+  const markActive = useCallback((key: string, el: HTMLInputElement | null) => {
+    if (!el) return;
+    activeInputs.current.add(key);
+    activeKeyRef.current = key;
+    // Capture caret position
+    try {
+      caretRef.current = el.selectionStart ?? null;
+    } catch {
+      caretRef.current = null;
+    }
+  }, []);
+
+  // Restore focus and caret position after re-renders
+  useLayoutEffect(() => {
+    if (!activeKeyRef.current) return;
+    const key = activeKeyRef.current;
+    
+    // Parse the key to get id and field: `${item.id}-${field}`
+    const [id, field] = key.split("-");
+    const testId =
+      field === "unitPrice" ? `input-unit-price-${id}` :
+      field === "markupValue" ? `input-markup-value-${id}` :
+      field === "quantity" ? `input-quantity-${id}` :
+      field === "description" ? `input-description-${id}` :
+      null;
+
+    if (!testId) return;
+    const el = document.querySelector(`[data-testid="${testId}"]`) as HTMLInputElement | null;
+    if (el && document.activeElement !== el) {
+      el.focus();
+      if (caretRef.current != null) {
+        try {
+          el.setSelectionRange(caretRef.current, caretRef.current);
+        } catch {
+          // If setSelectionRange fails, just move to end
+          el.setSelectionRange(el.value.length, el.value.length);
+        }
+      } else {
+        el.setSelectionRange(el.value.length, el.value.length);
+      }
+    }
+  });
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -626,7 +356,7 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate, localValues, se
     try {
       let updateData;
       if (field === "quantity" || field === "unitPrice" || field === "markupValue") {
-        const sanitized = sanitizeNumberString(value || "");
+        const sanitized = sanitizeNumberString(value);
         const parsed = parseFloat(sanitized);
         
         // If the value is invalid or empty, revert to previous value instead of zero
@@ -776,7 +506,7 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate, localValues, se
         throw error;
       }
     },
-    onSuccess: (result, { id, data }) => {
+    onSuccess: (result, { id }) => {
       // Check if this was an aborted mutation
       if (result?.__aborted) {
         return;
@@ -786,9 +516,19 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate, localValues, se
       const updateKey = `update-${id}`;
       delete pendingMutations.current.update[updateKey];
       
-      // Strategy: Don't update cache at all to prevent ANY re-renders
-      // The table uses localValues for editing, so UI is already correct
-      // Quote will be refreshed on page navigation/reload, or we can add a manual refresh button
+      // Invalidate queries by default to update totals, unless explicitly skipped
+      // Skip invalidation for batch operations (will be invalidated once at the end)
+      if (result.skipInvalidation !== true) {
+        queryClient.invalidateQueries({ queryKey: [`/api/quotes/${quoteId}`] });
+        
+        // Also update the list cache by refetching and updating that specific quote
+        queryClient.fetchQuery({ queryKey: [`/api/quotes/${quoteId}`] }).then((updatedQuote) => {
+          queryClient.setQueryData(["/api/quotes"], (old: any) => {
+            if (!old) return old;
+            return old.map((q: any) => q.id === quoteId ? updatedQuote : q);
+          });
+        });
+      }
       
       // Clear validation errors for this item on successful save
       setValidationErrors(prev => {
@@ -1196,17 +936,6 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate, localValues, se
     })
   );
 
-  // Helper function to merge localValues into a line item for accurate calculations
-  const mergeLocalValues = useCallback((item: LineItem): LineItem => {
-    const itemLocalValues = localValues[item.id];
-    if (!itemLocalValues) return item;
-    
-    return {
-      ...item,
-      ...itemLocalValues,
-    };
-  }, [localValues]);
-
   // Group line items by groupId
   const groupedLineItems = useMemo(() => {
     const grouped: Record<string, LineItem[]> = {};
@@ -1234,35 +963,10 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate, localValues, se
     return { grouped, ungrouped };
   }, [lineItems]);
 
-  // Create merged versions of line items with localValues applied for accurate footer calculations
-  const mergedGroupedLineItems = useMemo(() => {
-    const mergedGrouped: Record<string, LineItem[]> = {};
-    const mergedUngrouped = groupedLineItems.ungrouped.map(mergeLocalValues);
-    
-    Object.keys(groupedLineItems.grouped).forEach(groupId => {
-      mergedGrouped[groupId] = groupedLineItems.grouped[groupId].map(mergeLocalValues);
-    });
-    
-    return { grouped: mergedGrouped, ungrouped: mergedUngrouped };
-  }, [groupedLineItems, mergeLocalValues]);
-
   // Sort groups by position
   const sortedGroups = useMemo(() => {
     return [...groups].sort((a, b) => a.position - b.position);
   }, [groups]);
-
-  // Memoize sortable IDs to prevent dnd-kit from recreating rows on every localValues change
-  const ungroupedSortableIds = useMemo(() => {
-    return groupedLineItems.ungrouped.map(item => `item-${item.id}`);
-  }, [groupedLineItems.ungrouped]);
-
-  const groupedSortableIds = useMemo(() => {
-    const ids: Record<string, string[]> = {};
-    Object.keys(groupedLineItems.grouped).forEach(groupId => {
-      ids[groupId] = groupedLineItems.grouped[groupId].map(item => `item-${item.id}`);
-    });
-    return ids;
-  }, [groupedLineItems.grouped]);
 
   // Group management handlers
   const handleCreateGroup = (title: string) => {
@@ -1313,8 +1017,6 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate, localValues, se
   // Drag and drop handlers
   const handleDragStart = (event: DragStartEvent) => {
     setActiveId(event.active.id as string);
-    // Clear active input tracking when drag starts to prevent focus trap
-    activeInputs.current.clear();
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
@@ -1430,6 +1132,321 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate, localValues, se
 
     reorderLineItemsMutation.mutate(moves);
   };
+
+  // Sortable Line Item Row Component (memoized to prevent focus loss)
+  const SortableLineItemRow = memo(({ item, rowIndex }: { item: LineItem; rowIndex: number }) => {
+    const {
+      attributes,
+      listeners,
+      setNodeRef,
+      transform,
+      transition,
+      isDragging,
+    } = useSortable({ id: `item-${item.id}` });
+
+    const style = {
+      transform: CSS.Transform.toString(transform),
+      transition,
+      opacity: isDragging ? 0.5 : 1,
+    };
+
+    // Calculate values using current local values
+    const currentCost = parseFloat(getCurrentValue(item.id, 'unitPrice')) || 0;
+    const currentMarkupValue = parseFloat(getCurrentValue(item.id, 'markupValue')) || 0;
+    const currentMarkupType = getCurrentValue(item.id, 'markupType') || 'percentage';
+    const currentQuantity = parseFloat(getCurrentValue(item.id, 'quantity')) || 0;
+    
+    // Calculate price (cost + markup)
+    let price = currentCost;
+    if (currentMarkupType === 'percentage') {
+      price = currentCost + (currentCost * (currentMarkupValue / 100));
+    } else {
+      price = currentCost + currentMarkupValue;
+    }
+    
+    // Calculate margin (profit amount)
+    const marginAmount = calculateLineItemMargin(
+      currentQuantity,
+      currentCost,
+      currentMarkupType,
+      currentMarkupValue,
+      item.discountType,
+      item.discountValue,
+      tariffRate,
+      item.isTariffApplicable || false
+    );
+    
+    // Calculate total
+    const total = calculateLineItemTotal(
+      currentQuantity,
+      currentCost,
+      currentMarkupType,
+      currentMarkupValue,
+      item.discountType,
+      item.discountValue,
+      tariffRate,
+      item.isTariffApplicable || false
+    );
+
+    return (
+      <tr
+        ref={setNodeRef}
+        style={style}
+        className="hover:bg-muted"
+        data-testid={`row-line-item-${item.id}`}
+      >
+        {/* Drag handle */}
+        <td className="border-r border-border px-2 py-1 w-8">
+          <div {...listeners} className="cursor-grab hover:cursor-grabbing text-muted-foreground">
+            <GripVertical className="h-4 w-4" />
+          </div>
+        </td>
+
+        {/* Description - Always visible */}
+        <td className="border-r border-border px-3 py-1">
+          <Input
+            value={getCurrentValue(item.id, 'description')}
+            onChange={(e) => {
+              handleFieldChange(item.id, "description", e.target.value);
+              markActive(`${item.id}-description`, e.currentTarget);
+            }}
+            onKeyDown={(e) => handleKeyDown(e, rowIndex, 'description')}
+            onFocus={(e) => {
+              activeInputs.current.add(`${item.id}-description`);
+              markActive(`${item.id}-description`, e.currentTarget);
+            }}
+            onBlur={() => {
+              handleFieldBlur(item.id, "description");
+              activeKeyRef.current = null;
+            }}
+            className="border-0 bg-transparent p-1 text-sm focus:ring-1 focus:ring-blue-500"
+            data-testid={`input-description-${item.id}`}
+          />
+          {(() => {
+            try {
+              const configData = item.configData ? (typeof item.configData === 'string' ? JSON.parse(item.configData) : item.configData) : null;
+              const colors = configData?.colors;
+              if (colors && Array.isArray(colors) && colors.length > 0) {
+                return (
+                  <div className="flex gap-1 mt-1 flex-wrap">
+                    {colors.map((color: { name: string; hexCode: string }, idx: number) => (
+                      <div 
+                        key={idx}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 bg-muted rounded text-xs"
+                        data-testid={`color-badge-${item.id}-${idx}`}
+                      >
+                        <div 
+                          className="w-3 h-3 rounded-full border border-border"
+                          style={{ backgroundColor: color.hexCode }}
+                        />
+                        <span>{color.name}</span>
+                      </div>
+                    ))}
+                  </div>
+                );
+              }
+            } catch (e) {
+              // Silent fail if configData is malformed
+            }
+            return null;
+          })()}
+          {validationErrors[`${item.id}-description`] && (
+            <div className="text-xs text-red-500 mt-1">{validationErrors[`${item.id}-description`]}</div>
+          )}
+        </td>
+
+        {/* Quantity - Always visible */}
+        <td className="border-r border-border px-3 py-1 w-20 text-center">
+          <Input
+            value={getCurrentValue(item.id, 'quantity')}
+            onChange={(e) => {
+              handleFieldChange(item.id, "quantity", e.target.value);
+              markActive(`${item.id}-quantity`, e.currentTarget);
+            }}
+            onKeyDown={(e) => handleKeyDown(e, rowIndex, 'quantity')}
+            onFocus={(e) => {
+              activeInputs.current.add(`${item.id}-quantity`);
+              markActive(`${item.id}-quantity`, e.currentTarget);
+            }}
+            onBlur={() => {
+              handleFieldBlur(item.id, "quantity");
+              activeKeyRef.current = null;
+            }}
+            className="border-0 bg-transparent p-1 text-center text-sm focus:ring-1 focus:ring-blue-500"
+            data-testid={`input-quantity-${item.id}`}
+          />
+          {validationErrors[`${item.id}-quantity`] && (
+            <div className="text-xs text-red-500 mt-1">{validationErrors[`${item.id}-quantity`]}</div>
+          )}
+        </td>
+
+        {/* Cost - Hidden on small screens */}
+        <td className="border-r border-border px-3 py-1 text-center hidden lg:table-cell">
+          <div className="flex items-center gap-1">
+            <Input
+              value={getCurrentValue(item.id, 'unitPrice')}
+              onChange={(e) => {
+                handleFieldChange(item.id, "unitPrice", e.target.value);
+                markActive(`${item.id}-unitPrice`, e.currentTarget);
+              }}
+              onKeyDown={(e) => handleKeyDown(e, rowIndex, 'unitPrice')}
+              onFocus={(e) => {
+                activeInputs.current.add(`${item.id}-unitPrice`);
+                markActive(`${item.id}-unitPrice`, e.currentTarget);
+              }}
+              onBlur={() => {
+                handleFieldBlur(item.id, "unitPrice");
+                activeKeyRef.current = null;
+              }}
+              className="border-0 bg-transparent p-1 text-center text-sm focus:ring-1 focus:ring-blue-500 flex-1"
+              data-testid={`input-unit-price-${item.id}`}
+            />
+            {item.retailPrice && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Info className="h-3 w-3 text-blue-500 cursor-help" />
+                  </TooltipTrigger>
+                  <TooltipContent className="bg-popover text-popover-foreground p-2 text-xs max-w-xs">
+                    <div className="font-semibold mb-1">Cost Calculation:</div>
+                    <div>Retail Price: {formatCurrency(parseFloat(item.retailPrice.toString()))}</div>
+                    <div>
+                      Manufacturer Discount: {(() => {
+                        const retail = parseFloat(item.retailPrice.toString());
+                        const cost = parseFloat(getCurrentValue(item.id, 'unitPrice'));
+                        const discountAmount = retail - cost;
+                        const discountPercent = retail > 0 ? (discountAmount / retail * 100).toFixed(1) : 0;
+                        return discountAmount > 0 
+                          ? `${formatCurrency(discountAmount)} (${discountPercent}%)`
+                          : 'No manufacturer discount';
+                      })()}
+                    </div>
+                    <div className="border-t border-border mt-1 pt-1">
+                      Your Cost: {formatCurrency(parseFloat(getCurrentValue(item.id, 'unitPrice')))}
+                    </div>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+          </div>
+          {validationErrors[`${item.id}-unitPrice`] && (
+            <div className="text-xs text-red-500 mt-1">{validationErrors[`${item.id}-unitPrice`]}</div>
+          )}
+        </td>
+
+        {/* Markup% - Hidden on small screens */}
+        <td className="border-r border-border px-3 py-1 text-center hidden lg:table-cell">
+          <div className="flex items-center space-x-1">
+            <Input
+              value={getCurrentValue(item.id, 'markupValue')}
+              onChange={(e) => {
+                handleFieldChange(item.id, "markupValue", e.target.value);
+                markActive(`${item.id}-markupValue`, e.currentTarget);
+              }}
+              onKeyDown={(e) => handleKeyDown(e, rowIndex, 'markupValue')}
+              onFocus={(e) => {
+                activeInputs.current.add(`${item.id}-markupValue`);
+                markActive(`${item.id}-markupValue`, e.currentTarget);
+              }}
+              onBlur={() => {
+                handleFieldBlur(item.id, "markupValue");
+                activeKeyRef.current = null;
+              }}
+              className="border-0 bg-transparent p-1 text-center text-sm focus:ring-1 focus:ring-blue-500 flex-1"
+              data-testid={`input-markup-value-${item.id}`}
+            />
+            <Select
+              value={getCurrentValue(item.id, 'markupType')}
+              onValueChange={(value) => {
+                activeInputs.current.delete(`${item.id}-markupType`);
+                handleFieldChange(item.id, "markupType", value);
+              }}
+              onOpenChange={(open) => {
+                if (open) {
+                  activeInputs.current.add(`${item.id}-markupType`);
+                } else {
+                  activeInputs.current.delete(`${item.id}-markupType`);
+                }
+              }}
+            >
+              <SelectTrigger className="w-12 h-6 border-0 bg-transparent p-0 text-xs" data-testid={`select-markup-type-${item.id}`}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="percentage">%</SelectItem>
+                <SelectItem value="dollar">$</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {validationErrors[`${item.id}-markupValue`] && (
+            <div className="text-xs text-red-500 mt-1">{validationErrors[`${item.id}-markupValue`]}</div>
+          )}
+        </td>
+
+        {/* Price - Always visible */}
+        <td className="border-r border-border px-3 py-1 text-center text-sm" data-testid={`text-price-${item.id}`}>
+          {formatCurrency(price)}
+        </td>
+
+        {/* Margin$ - Hidden on small screens */}
+        <td className="border-r border-border px-3 py-1 text-center text-sm hidden md:table-cell" data-testid={`text-margin-${item.id}`}>
+          {formatCurrency(marginAmount)}
+        </td>
+
+        {/* Total - Always visible */}
+        <td className="border-r border-border px-3 py-1 text-center font-medium text-sm" data-testid={`text-total-${item.id}`}>
+          {formatCurrency(total)}
+        </td>
+
+        {/* Taxable - Always visible */}
+        <td className="border-r border-border px-2 py-1 text-center">
+          <div className="flex justify-center">
+            <Checkbox
+              checked={item.isTaxable !== false}
+              onCheckedChange={(checked) => {
+                updateLineItemMutation.mutate({ 
+                  id: item.id, 
+                  data: { isTaxable: checked === true },
+                  skipInvalidation: false
+                });
+              }}
+              data-testid={`checkbox-taxable-${item.id}`}
+            />
+          </div>
+        </td>
+
+        {/* Tariff - Always visible */}
+        <td className="border-r border-border px-2 py-1 text-center">
+          <div className="flex justify-center">
+            <Checkbox
+              checked={!!item.isTariffApplicable}
+              onCheckedChange={(checked) => {
+                updateLineItemMutation.mutate({ 
+                  id: item.id, 
+                  data: { isTariffApplicable: checked === true },
+                  skipInvalidation: false
+                });
+              }}
+              data-testid={`checkbox-tariff-${item.id}`}
+            />
+          </div>
+        </td>
+
+        {/* Actions - Always visible */}
+        <td className="px-3 py-1 text-center">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => deleteLineItemMutation.mutate(item.id)}
+            className="text-red-600 hover:text-red-700 hover:bg-red-50 p-1 h-auto"
+            data-testid={`button-delete-${item.id}`}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </td>
+      </tr>
+    );
+  });
 
   // Clean descriptions function to remove PDF filename prefixes
   const cleanDescriptions = async () => {
@@ -1791,11 +1808,11 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate, localValues, se
                 {groupedLineItems.ungrouped.length > 0 && (
                   <>
                     <UngroupedSection 
-                      lineItems={mergedGroupedLineItems.ungrouped}
+                      lineItems={groupedLineItems.ungrouped}
                       onCreateGroup={() => setShowCreateGroupDialog(true)}
                     />
                     <SortableContext 
-                      items={ungroupedSortableIds}
+                      items={groupedLineItems.ungrouped.map(item => `item-${item.id}`)}
                       strategy={verticalListSortingStrategy}
                     >
                       {groupedLineItems.ungrouped.map((item, rowIndex) => (
@@ -1803,15 +1820,6 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate, localValues, se
                           key={item.id}
                           item={item}
                           rowIndex={rowIndex}
-                          tariffRate={tariffRate}
-                          getCurrentValue={getCurrentValue}
-                          handleFieldChange={handleFieldChange}
-                          handleFieldBlur={handleFieldBlur}
-                          handleKeyDown={handleKeyDown}
-                          validationErrors={validationErrors}
-                          updateLineItemMutation={updateLineItemMutation}
-                          deleteLineItemMutation={deleteLineItemMutation}
-                          activeInputs={activeInputs}
                         />
                       ))}
                     </SortableContext>
@@ -1821,13 +1829,12 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate, localValues, se
                 {/* Render groups */}
                 {sortedGroups.map((group) => {
                   const groupItems = groupedLineItems.grouped[group.id] || [];
-                  const mergedGroupItems = mergedGroupedLineItems.grouped[group.id] || [];
                   
                   return (
                     <React.Fragment key={group.id}>
                       <GroupHeader
                         group={group}
-                        lineItems={mergedGroupItems}
+                        lineItems={groupItems}
                         onToggleCollapse={handleToggleGroupCollapse}
                         onEditTitle={handleEditGroupTitle}
                         onDeleteGroup={handleDeleteGroup}
@@ -1838,7 +1845,7 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate, localValues, se
                       
                       {!group.isCollapsed && (
                         <SortableContext 
-                          items={groupedSortableIds[group.id] || []}
+                          items={groupItems.map(item => `item-${item.id}`)}
                           strategy={verticalListSortingStrategy}
                         >
                           {groupItems.map((item, rowIndex) => (
@@ -1846,15 +1853,6 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate, localValues, se
                               key={item.id}
                               item={item}
                               rowIndex={rowIndex}
-                              tariffRate={tariffRate}
-                              getCurrentValue={getCurrentValue}
-                              handleFieldChange={handleFieldChange}
-                              handleFieldBlur={handleFieldBlur}
-                              handleKeyDown={handleKeyDown}
-                              validationErrors={validationErrors}
-                              updateLineItemMutation={updateLineItemMutation}
-                              deleteLineItemMutation={deleteLineItemMutation}
-                              activeInputs={activeInputs}
                             />
                           ))}
                         </SortableContext>
@@ -1863,7 +1861,7 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate, localValues, se
                       {!group.isCollapsed && (
                         <GroupFooter
                           group={group}
-                          lineItems={mergedGroupItems}
+                          lineItems={groupItems}
                           onAddItem={() => setShowNewItemForm(true)}
                         />
                       )}

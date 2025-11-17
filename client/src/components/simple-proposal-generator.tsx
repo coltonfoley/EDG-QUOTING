@@ -23,7 +23,6 @@ interface SimpleProposalGeneratorProps {
   quote: QuoteWithDetails;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  isInternal?: boolean;
 }
 
 interface UploadedFile {
@@ -53,7 +52,7 @@ interface DisplayImage {
   originalFile?: File; // Only for temp images
 }
 
-export function SimpleProposalGenerator({ quote, open, onOpenChange, isInternal = false }: SimpleProposalGeneratorProps) {
+export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimpleProposalGeneratorProps) {
   const [showPricing, setShowPricing] = useState(true);
   const [includeCoverPage, setIncludeCoverPage] = useState(false);
   
@@ -598,8 +597,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange, isInternal 
         renderImages: normalizedImages,
         contractText,
         showPricing,
-        clientLogoDataUrl,
-        showCosts: isInternal
+        clientLogoDataUrl
       });
 
       // Save the PDF

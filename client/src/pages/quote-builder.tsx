@@ -13,13 +13,11 @@ import { generateQuoteNumber } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { LoadingSpinner } from "@/components/loading-spinner";
 import { SimpleProposalGenerator } from "@/components/simple-proposal-generator";
-import { Save, Loader2, FileText, CloudUpload, Copy, History, Printer } from "lucide-react";
+import { Save, Loader2, FileText, CloudUpload, Copy, History } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import type { QuoteWithDetails, LineItem } from "@shared/schema";
+import type { QuoteWithDetails } from "@shared/schema";
 import { QuickBooksSync } from "@/components/quickbooks-sync";
-import { generateSimpleCostReport } from "@/lib/pdf-simple-cost-report";
-import { COMPANY_INFO } from "@shared/companyConfig";
 
 export default function QuoteBuilder() {
   const params = useParams();
@@ -35,9 +33,6 @@ export default function QuoteBuilder() {
   // State for proposal generator dialog
   const [proposalGeneratorOpen, setProposalGeneratorOpen] = useState(false);
   const [versionHistoryOpen, setVersionHistoryOpen] = useState(false);
-
-  // Lifted state for optimistic updates to prevent cursor jumping
-  const [localValues, setLocalValues] = useState<Record<number, Partial<LineItem>>>({});
 
   const { data: quote, isLoading, error } = useQuery<QuoteWithDetails>({
     queryKey: [`/api/quotes/${quoteId}`],
@@ -224,19 +219,10 @@ export default function QuoteBuilder() {
     quoteNumber: "",
     accountId: null,
     projectName: "",
+    projectAddress: "",
     jobsiteAddress: null,
-    jobsiteStreetAddress: "",
-    jobsiteAddressLine2: "",
-    jobsiteCity: "",
-    jobsiteState: "",
-    jobsiteZipCode: "",
-    jobsiteCountry: "",
-    jobsitePlaceId: "",
     estimatedStartDate: "",
     notes: "",
-    esigIncludePricing: true,
-    esigIncludeImages: false,
-    esigIncludeContract: true,
     taxRate: "8.5",
     tariffRate: "0",
     discount: "0",
@@ -272,18 +258,10 @@ export default function QuoteBuilder() {
       accountType: "homeowner" as const,
       paymentTerms: null,
       billingAddress: null,
-      streetAddress: null,
-      addressLine2: null,
-      city: null,
-      state: null,
-      zipCode: null,
-      country: null,
-      placeId: null,
       firstName: null,
       lastName: null,
       secondaryContacts: null,
       qbCustomerId: null,
-      googleContactId: null,
       createdAt: new Date(),
       updatedAt: new Date()
     },
@@ -296,18 +274,10 @@ export default function QuoteBuilder() {
       accountType: "homeowner" as const,
       paymentTerms: null,
       billingAddress: null,
-      streetAddress: null,
-      addressLine2: null,
-      city: null,
-      state: null,
-      zipCode: null,
-      country: null,
-      placeId: null,
       firstName: null,
       lastName: null,
       secondaryContacts: null,
       qbCustomerId: null,
-      googleContactId: null,
       createdAt: new Date(),
       updatedAt: new Date()
     },
@@ -426,38 +396,18 @@ export default function QuoteBuilder() {
           quoteId={currentQuote.id || 0}
           lineItems={currentQuote.lineItems}
           tariffRate={currentQuote.tariffRate || "0"}
-          localValues={localValues}
-          setLocalValues={setLocalValues}
         />
 
         {/* Quote Summary - Show for both new and existing quotes */}
         <QuoteSummary
           quote={currentQuote}
           onUpdateQuote={handleUpdateQuote}
-          localValues={localValues}
         />
 
         {/* Action Buttons - Show for existing quotes with line items */}
         {!isNewQuote && currentQuote.id && currentQuote.lineItems.length > 0 && (
           <div className="flex justify-end gap-4 mt-8 pb-8">
             <QuickBooksSync quote={currentQuote} />
-            
-            <Button 
-              onClick={() => {
-                if (!quote) return;
-                generateSimpleCostReport({ 
-                  quote, 
-                  company: COMPANY_INFO 
-                });
-              }}
-              variant="outline"
-              className="px-6 py-3 text-lg"
-              data-testid="button-print-with-costs"
-            >
-              <Printer className="mr-2 h-5 w-5" />
-              Print with Costs
-            </Button>
-            
             <Button 
               onClick={() => setProposalGeneratorOpen(true)}
               variant="outline"

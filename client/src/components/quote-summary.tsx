@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -22,10 +22,9 @@ import { ESignatureOptionsModal } from "@/components/esignature-options-modal";
 interface QuoteSummaryProps {
   quote: QuoteWithDetails;
   onUpdateQuote: (field: string, value: any) => void;
-  localValues: Record<number, Partial<import("@shared/schema").LineItem>>;
 }
 
-export function QuoteSummary({ quote, onUpdateQuote, localValues }: QuoteSummaryProps) {
+export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
   const [localTaxRate, setLocalTaxRate] = useState<string>("");
   const [localTariffRate, setLocalTariffRate] = useState<string>("");
   const [localDiscount, setLocalDiscount] = useState<string>("");
@@ -61,23 +60,11 @@ export function QuoteSummary({ quote, onUpdateQuote, localValues }: QuoteSummary
       const response = await apiRequest("PUT", `/api/quotes/${quote.id}`, data);
       return response.json();
     },
-    onSuccess: (updatedQuote, variables) => {
+    onSuccess: (updatedQuote) => {
       toast({ title: "Contract updated successfully" });
       
-      // If changing template (not just custom terms), refetch to get contractTemplate relation
-      // Otherwise use optimistic update to avoid re-rendering line items table
-      if (variables.contractTemplateId !== undefined && variables.contractTemplateId !== quote.contractTemplateId) {
-        queryClient.invalidateQueries({ queryKey: [`/api/quotes/${quote.id}`] });
-      } else {
-        // Optimistic update for custom terms only - doesn't trigger refetch
-        queryClient.setQueryData([`/api/quotes/${quote.id}`], (prev: any) => {
-          if (!prev) return prev;
-          return {
-            ...prev,
-            customContractTerms: updatedQuote.customContractTerms,
-          };
-        });
-      }
+      // Invalidate to refetch with contractTemplate relation
+      queryClient.invalidateQueries({ queryKey: [`/api/quotes/${quote.id}`] });
     },
     onError: () => {
       toast({ 
@@ -285,21 +272,8 @@ export function QuoteSummary({ quote, onUpdateQuote, localValues }: QuoteSummary
     companySignMutation.mutate(companySignature);
   };
 
-  // Merge localValues into line items for real-time calculations
-  const mergedLineItems = useMemo(() => {
-    return quote.lineItems.map(item => {
-      const itemLocalValues = localValues[item.id];
-      if (!itemLocalValues) return item;
-      
-      return {
-        ...item,
-        ...itemLocalValues,
-      };
-    });
-  }, [quote.lineItems, localValues]);
-
   const totals = calculateQuoteTotals(
-    mergedLineItems.map(item => ({
+    quote.lineItems.map(item => ({
       quantity: item.quantity,
       unitPrice: item.unitPrice,
       markupType: item.markupType,
