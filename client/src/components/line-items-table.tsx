@@ -1209,6 +1209,17 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
     })
   );
 
+  // Helper function to merge localValues into a line item for accurate calculations
+  const mergeLocalValues = useCallback((item: LineItem): LineItem => {
+    const itemLocalValues = localValues[item.id];
+    if (!itemLocalValues) return item;
+    
+    return {
+      ...item,
+      ...itemLocalValues,
+    };
+  }, [localValues]);
+
   // Group line items by groupId
   const groupedLineItems = useMemo(() => {
     const grouped: Record<string, LineItem[]> = {};
@@ -1235,6 +1246,18 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
     
     return { grouped, ungrouped };
   }, [lineItems]);
+
+  // Create merged versions of line items with localValues applied for accurate footer calculations
+  const mergedGroupedLineItems = useMemo(() => {
+    const mergedGrouped: Record<string, LineItem[]> = {};
+    const mergedUngrouped = groupedLineItems.ungrouped.map(mergeLocalValues);
+    
+    Object.keys(groupedLineItems.grouped).forEach(groupId => {
+      mergedGrouped[groupId] = groupedLineItems.grouped[groupId].map(mergeLocalValues);
+    });
+    
+    return { grouped: mergedGrouped, ungrouped: mergedUngrouped };
+  }, [groupedLineItems, mergeLocalValues]);
 
   // Sort groups by position
   const sortedGroups = useMemo(() => {
