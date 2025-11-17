@@ -13,7 +13,7 @@ import { generateQuoteNumber } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { LoadingSpinner } from "@/components/loading-spinner";
 import { SimpleProposalGenerator } from "@/components/simple-proposal-generator";
-import { Save, Loader2, FileText, CloudUpload, Copy, History } from "lucide-react";
+import { Save, Loader2, FileText, CloudUpload, Copy, History, Printer } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { QuoteWithDetails } from "@shared/schema";
@@ -32,6 +32,7 @@ export default function QuoteBuilder() {
 
   // State for proposal generator dialog
   const [proposalGeneratorOpen, setProposalGeneratorOpen] = useState(false);
+  const [isInternalPrint, setIsInternalPrint] = useState(false);
   const [versionHistoryOpen, setVersionHistoryOpen] = useState(false);
 
   const { data: quote, isLoading, error } = useQuery<QuoteWithDetails>({
@@ -408,8 +409,25 @@ export default function QuoteBuilder() {
         {!isNewQuote && currentQuote.id && currentQuote.lineItems.length > 0 && (
           <div className="flex justify-end gap-4 mt-8 pb-8">
             <QuickBooksSync quote={currentQuote} />
+            
             <Button 
-              onClick={() => setProposalGeneratorOpen(true)}
+              onClick={() => {
+                setIsInternalPrint(true);
+                setProposalGeneratorOpen(true);
+              }}
+              variant="outline"
+              className="px-6 py-3 text-lg"
+              data-testid="button-print-with-costs"
+            >
+              <Printer className="mr-2 h-5 w-5" />
+              Print with Costs
+            </Button>
+            
+            <Button 
+              onClick={() => {
+                setIsInternalPrint(false);
+                setProposalGeneratorOpen(true);
+              }}
               variant="outline"
               className="px-6 py-3 text-lg border-edg-black text-edg-black hover:bg-edg-black hover:text-white"
               data-testid="button-generate-proposal"
@@ -426,6 +444,7 @@ export default function QuoteBuilder() {
             quote={currentQuote}
             open={proposalGeneratorOpen}
             onOpenChange={setProposalGeneratorOpen}
+            isInternal={isInternalPrint}
           />
         )}
 

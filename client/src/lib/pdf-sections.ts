@@ -118,6 +118,7 @@ interface DrawRenderingsPagesOpts {
 interface DrawLineItemsSectionOpts {
   quote: any;
   showPricing: boolean;
+  showCosts?: boolean;
   logoDataUrl: string;
   company: { name: string; address: string; phone: string; email: string };
   margin: number;
@@ -233,6 +234,43 @@ export async function drawProjectDetailsPage(pdf: jsPDF, opts: DrawProjectDetail
 
   // Add branded footer
   drawBrandedFooter({ pdf, logoDataUrl, company, pageW, pageH, margin });
+}
+
+function calculateCostTotals(quote: any) {
+  const lineItems = quote.lineItems || [];
+  let subtotal = 0;
+  let taxableSubtotal = 0;
+
+  lineItems.forEach((item: any) => {
+    // For cost prints, use actual cost (unitPrice × quantity) without markup/discount
+    const quantity = parseFloat(item.quantity || '0');
+    const unitPrice = parseFloat(item.unitPrice || '0');
+    const total = quantity * unitPrice;
+    subtotal += total;
+    
+    // Only add to taxable base if item is taxable (default to true if not specified)
+    if (item.isTaxable !== false) {
+      taxableSubtotal += total;
+    }
+  });
+
+  const taxRate = parseFloat(quote.taxRate || '0');
+  const shipping = parseFloat(quote.shipping || '0');
+  
+  // For cost prints, no quote-level discount is applied
+  const discountAmount = 0;
+  
+  // Calculate tax on cost basis (subtotal + shipping)
+  const taxableAmount = taxableSubtotal + shipping;
+  const tax = (taxableAmount * taxRate) / 100;
+
+  return {
+    subtotal,
+    discountAmount,
+    shipping,
+    tax,
+    total: subtotal + shipping + tax
+  };
 }
 
 function calculateInvestmentTotals(quote: any) {
@@ -572,7 +610,7 @@ function detectImageFormat(dataUrl: string): 'PNG' | 'JPEG' {
 }
 
 export function drawLineItemsSection(pdf: jsPDF, opts: DrawLineItemsSectionOpts): void {
-  const { quote, showPricing, logoDataUrl, company, margin, contentW, pageW, pageH } = opts;
+  const { quote, showPricing, showCosts, logoDataUrl, company, margin, contentW, pageW, pageH } = opts;
 
   const lineItems = quote.lineItems || [];
   if (lineItems.length === 0) return;
@@ -590,7 +628,8 @@ export function drawLineItemsSection(pdf: jsPDF, opts: DrawLineItemsSectionOpts)
     pdf.setFontSize(11);
     pdf.setDrawColor(200, 200, 200);
 
-    if (showPricing) {
+    if (showPricing && !showCosts) {
+      // Client-facing with Price
       const descW = contentW * 0.5;
       const qtyW = contentW * 0.15;
       const priceW = contentW * 0.17;
@@ -604,7 +643,21 @@ export function drawLineItemsSection(pdf: jsPDF, opts: DrawLineItemsSectionOpts)
       y += 2;
       pdf.line(margin, y, margin + contentW, y);
       y += 5;
+    } else if (showCosts) {
+      // Internal-facing with Cost
+      const descW = contentW * 0.6;
+      const qtyW = contentW * 0.15;
+      const costW = contentW * 0.25;
+
+      pdf.text('Description', margin, y);
+      pdf.text('Qty', margin + descW, y);
+      pdf.text('Cost', margin + descW + qtyW, y);
+
+      y += 2;
+      pdf.line(margin, y, margin + contentW, y);
+      y += 5;
     } else {
+      // Client-facing with no Price
       const descW = contentW * 0.75;
       const qtyW = contentW * 0.25;
 
@@ -650,7 +703,8 @@ export function drawLineItemsSection(pdf: jsPDF, opts: DrawLineItemsSectionOpts)
       },
     });
 
-    if (showPricing) {
+    if (showPricing && !showCosts) {
+      // Client-facing with Price
       const descW = contentW * 0.5;
       const qtyW = contentW * 0.15;
       const priceW = contentW * 0.17;
@@ -683,7 +737,32 @@ export function drawLineItemsSection(pdf: jsPDF, opts: DrawLineItemsSectionOpts)
       pdf.text(qty.toString(), margin + descW, y);
       pdf.text(formatCurrency(unitPrice), margin + descW + qtyW, y);
       pdf.text(formatCurrency(total), margin + descW + qtyW + priceW, y);
+
+    } else if (showCosts) {
+      // Internal-facing with Cost
+      const descW = contentW * 0.6;
+      const qtyW = contentW * 0.15;
+
+      pdf.text(descLines, margin, y);
+      
+      // Add colors below description if they exist
+      if (colorLines.length > 0) {
+        const colorY = y + (descLines.length * 5);
+        pdf.setFontSize(9);
+        pdf.setTextColor(100, 100, 100);
+        pdf.text(colorLines, margin, colorY);
+        pdf.setFontSize(10);
+        pdf.setTextColor(0, 0, 0);
+      }
+      
+      // Use item.unitPrice directly for "Cost"
+      const cost = parseFloat(item.unitPrice || '0');
+      
+      pdf.text(parseFloat(item.quantity || '0').toString(), margin + descW, y);
+      pdf.text(formatCurrency(cost), margin + descW + qtyW, y);
+
     } else {
+      // Client-facing with no Price
       const descW = contentW * 0.75;
 
       pdf.text(descLines, margin, y);
@@ -710,9 +789,9 @@ export function drawLineItemsSection(pdf: jsPDF, opts: DrawLineItemsSectionOpts)
   pdf.setFontSize(8);
   const disclaimerLines = pdf.splitTextToSize(disclaimerText, contentW);
   const disclaimerHeight = disclaimerLines.length * 3;
-  const footerReserveHeight = 25 + disclaimerHeight + 5; // Footer + disclaimer + gap
+  const footerReserveHeight = showCosts ? 25 : 25 + disclaimerHeight + 5; // Simplified footer for internal prints
 
-  // Investment Summary - Always visible (per spec)
+  // Investment Summary - Show for all prints (provides critical financial context)
   y += 10;
   pdf.setFont('Barlow-SemiBold', 'normal');
   pdf.setFontSize(14);
@@ -726,10 +805,10 @@ export function drawLineItemsSection(pdf: jsPDF, opts: DrawLineItemsSectionOpts)
     },
   });
   
-  pdf.text('Investment Summary', margin, y);
+  pdf.text(showCosts ? 'Cost Summary' : 'Investment Summary', margin, y);
   y += 8;
 
-  const totals = calculateInvestmentTotals(quote);
+  const totals = showCosts ? calculateCostTotals(quote) : calculateInvestmentTotals(quote);
 
   pdf.setFont('Barlow-Regular', 'normal');
   pdf.setFontSize(11);
@@ -761,70 +840,83 @@ export function drawLineItemsSection(pdf: jsPDF, opts: DrawLineItemsSectionOpts)
   pdf.text(formatCurrency(totals.total), margin + contentW - 30, y, { align: 'right' });
   y += 18;
 
-  // Client Acceptance Block - positioned at bottom of page
-  const acceptanceH = measureAcceptanceBlock(pdf, {
-    heading: 'CLIENT ACCEPTANCE',
-    width: contentW,
-    headingFontSizePt: 14,
-    bodyFontSizePt: 11,
-    spacingTop: 10,
-    spacingAfterHeading: 8,
-    fieldGap: 8,
-    labelGap: 2,
-    bottomPadding: 5,
-    fields: [
-      { label: 'Signature', lineWidthMm: contentW * 0.6 },
-      { label: 'Print Name', lineWidthMm: contentW * 0.6 },
-      { label: 'Date', lineWidthMm: 50 },
-    ],
-  }) + (quote.clientSignedIp ? 8 : 0); // Add space for IP address if present
+  // Client Acceptance Block - Only show for client-facing documents
+  if (!showCosts) {
 
-  // Ensure space for signature, pushing to bottom when possible
-  const targetSignatureY = pageH - footerReserveHeight - acceptanceH - 10;
-  let signatureY = y;
-  
-  // If current position is above target, push to bottom
-  if (y + acceptanceH < targetSignatureY) {
-    signatureY = targetSignatureY;
-  } else {
-    // Otherwise ensure space at current position
-    signatureY = ensureSpace(pdf, y, acceptanceH, {
-      marginTop: margin,
-      marginBottom: margin,
-      footerReserve: footerReserveHeight,
-      onNewPage: () => {
-        // If new page, position at bottom of that page
-        signatureY = pageH - footerReserveHeight - acceptanceH - 10;
-      },
-    });
+    // Client Acceptance Block - positioned at bottom of page
+    const acceptanceH = measureAcceptanceBlock(pdf, {
+      heading: 'CLIENT ACCEPTANCE',
+      width: contentW,
+      headingFontSizePt: 14,
+      bodyFontSizePt: 11,
+      spacingTop: 10,
+      spacingAfterHeading: 8,
+      fieldGap: 8,
+      labelGap: 2,
+      bottomPadding: 5,
+      fields: [
+        { label: 'Signature', lineWidthMm: contentW * 0.6 },
+        { label: 'Print Name', lineWidthMm: contentW * 0.6 },
+        { label: 'Date', lineWidthMm: 50 },
+      ],
+    }) + (quote.clientSignedIp ? 8 : 0); // Add space for IP address if present
+
+    // Ensure space for signature, pushing to bottom when possible
+    const targetSignatureY = pageH - footerReserveHeight - acceptanceH - 10;
+    let signatureY = y;
     
-    // If ensureSpace returned a new page, update position
-    if (signatureY === margin) {
-      signatureY = pageH - footerReserveHeight - acceptanceH - 10;
+    // If current position is above target, push to bottom
+    if (y + acceptanceH < targetSignatureY) {
+      signatureY = targetSignatureY;
+    } else {
+      // Otherwise ensure space at current position
+      signatureY = ensureSpace(pdf, y, acceptanceH, {
+        marginTop: margin,
+        marginBottom: margin,
+        footerReserve: footerReserveHeight,
+        onNewPage: () => {
+          // If new page, position at bottom of that page
+          signatureY = pageH - footerReserveHeight - acceptanceH - 10;
+        },
+      });
+      
+      // If ensureSpace returned a new page, update position
+      if (signatureY === margin) {
+        signatureY = pageH - footerReserveHeight - acceptanceH - 10;
+      }
     }
+    
+    drawAcceptanceBlock(
+      pdf, 
+      margin, 
+      signatureY, 
+      contentW,
+      quote.clientSignatureData,
+      quote.clientSignedAt ? new Date(quote.clientSignedAt) : null,
+      quote.clientSignedIp || null
+    );
+
+    // Add disclaimer text above the footer
+    const disclaimerY = pageH - 25 - 5; // Footer height + gap
+    
+    pdf.setFont('Barlow-Regular', 'normal');
+    pdf.setFontSize(8);
+    pdf.setTextColor(120, 120, 120);
+    
+    pdf.text(disclaimerLines, pageW / 2, disclaimerY - disclaimerHeight, { align: 'center' });
   }
-  
-  drawAcceptanceBlock(
+
+  // Add branded footer
+  // Hide initials on internal cost print
+  drawBrandedFooter({ 
     pdf, 
+    logoDataUrl, 
+    company, 
+    pageW, 
+    pageH, 
     margin, 
-    signatureY, 
-    contentW,
-    quote.clientSignatureData,
-    quote.clientSignedAt ? new Date(quote.clientSignedAt) : null,
-    quote.clientSignedIp || null
-  );
-
-  // Add disclaimer text above the footer
-  const disclaimerY = pageH - 25 - 5; // Footer height + gap
-  
-  pdf.setFont('Barlow-Regular', 'normal');
-  pdf.setFontSize(8);
-  pdf.setTextColor(120, 120, 120);
-  
-  pdf.text(disclaimerLines, pageW / 2, disclaimerY - disclaimerHeight, { align: 'center' });
-
-  // Add branded footer (no initials on signature page)
-  drawBrandedFooter({ pdf, logoDataUrl, company, pageW, pageH, margin, showInitials: false });
+    showInitials: !showCosts 
+  });
 }
 
 export function drawContractSection(pdf: jsPDF, opts: DrawContractSectionOpts): void {
