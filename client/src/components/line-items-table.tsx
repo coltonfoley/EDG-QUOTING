@@ -520,7 +520,7 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
         throw error;
       }
     },
-    onSuccess: (result, { id }) => {
+    onSuccess: (result, { id, data }) => {
       // Check if this was an aborted mutation
       if (result?.__aborted) {
         return;
@@ -530,19 +530,9 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
       const updateKey = `update-${id}`;
       delete pendingMutations.current.update[updateKey];
       
-      // Invalidate queries by default to update totals, unless explicitly skipped
-      // Skip invalidation for batch operations (will be invalidated once at the end)
-      if (result.skipInvalidation !== true) {
-        queryClient.invalidateQueries({ queryKey: [`/api/quotes/${quoteId}`] });
-        
-        // Also update the list cache by refetching and updating that specific quote
-        queryClient.fetchQuery({ queryKey: [`/api/quotes/${quoteId}`] }).then((updatedQuote) => {
-          queryClient.setQueryData(["/api/quotes"], (old: any) => {
-            if (!old) return old;
-            return old.map((q: any) => q.id === quoteId ? updatedQuote : q);
-          });
-        });
-      }
+      // Strategy: Don't update cache at all to prevent ANY re-renders
+      // The table uses localValues for editing, so UI is already correct
+      // Quote will be refreshed on page navigation/reload, or we can add a manual refresh button
       
       // Clear validation errors for this item on successful save
       setValidationErrors(prev => {
