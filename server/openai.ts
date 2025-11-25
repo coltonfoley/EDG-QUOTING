@@ -92,8 +92,8 @@ setInterval(() => {
   visionExtractionCache.cleanup();
 }, 60 * 60 * 1000);
 
-// Schema for extracted product data
-const ExtractedProductSchema = z.object({
+// Schema for extracted product data (exported for testing)
+export const ExtractedProductSchema = z.object({
   sku: z.string().nullable().optional(),
   name: z.string(),
   unit: z.string().nullable().optional(),
@@ -101,14 +101,14 @@ const ExtractedProductSchema = z.object({
   description: z.string().nullable().optional(),
 });
 
-const ExtractedProductsSchema = z.object({
+export const ExtractedProductsSchema = z.object({
   products: z.array(ExtractedProductSchema),
 });
 
 export type ExtractedProduct = z.infer<typeof ExtractedProductSchema>;
 
-// Schema for extracted quote data
-const ExtractedLineItemSchema = z.object({
+// Schema for extracted quote data (exported for testing)
+export const ExtractedLineItemSchema = z.object({
   description: z.string().nullable().optional(),
   quantity: z.number().nullable().optional(),
   price: z.number().nullable().optional(),
@@ -116,7 +116,7 @@ const ExtractedLineItemSchema = z.object({
   unit: z.string().nullable().optional(),
 });
 
-const ExtractedCustomerSchema = z.object({
+export const ExtractedCustomerSchema = z.object({
   name: z.string().nullable().optional(),
   email: z.string().nullable().optional(),
   phone: z.string().nullable().optional(),
@@ -131,7 +131,7 @@ const ExtractedCustomerSchema = z.object({
   country: z.string().nullable().optional(),
 });
 
-const ExtractedQuoteSchema = z.object({
+export const ExtractedQuoteSchema = z.object({
   customer: ExtractedCustomerSchema.nullable().optional(),
   quoteNumber: z.string().nullable().optional(),
   date: z.string().nullable().optional(),
@@ -149,8 +149,8 @@ const ExtractedQuoteSchema = z.object({
 
 export type ExtractedQuote = z.infer<typeof ExtractedQuoteSchema>;
 
-// Schema for vision-based processing with page references
-const ExtractedQuoteWithPageRefsSchema = ExtractedQuoteSchema.extend({
+// Schema for vision-based processing with page references (exported for testing)
+export const ExtractedQuoteWithPageRefsSchema = ExtractedQuoteSchema.extend({
   pageRefs: z.array(z.number()).optional(), // Page indices where data was found
 });
 
