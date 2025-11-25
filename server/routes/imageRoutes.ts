@@ -1,0 +1,252 @@
+import type { Express } from "express";
+import { isAuthenticated } from "../replitAuth";
+import sharp from "sharp";
+import { ObjectStorageService, ObjectNotFoundError, objectStorageClient } from "../objectStorage";
+import { ObjectPermission } from "../objectAcl";
+import {
+  uploadUrlSchema,
+  finalizeUploadSchema,
+  imageProxySchema
+} from "../validation-schemas";
+
+export function registerImageRoutes(app: Express) {
+  // Get upload URL for image uploads
+  app.post("/api/images/upload-url", isAuthenticated, async (req, res) => {
+    try {
+      // Validate request body
+      const validatedData = uploadUrlSchema.safeParse(req.body);
+      if (!validatedData.success) {
+        return res.status(400).json({ 
+          message: "Invalid request data", 
+          errors: validatedData.error.errors 
+        });
+      }
+      
+      const { imageType, filename } = validatedData.data;
+      
+      const objectStorageService = new ObjectStorageService();
+      // Create a custom path based on image type and filename
+      const sanitizedFilename = filename.replace(/[^a-zA-Z0-9.-]/g, '_');
+      const timestamp = Date.now();
+      const customPath = `${imageType}s/${timestamp}-${sanitizedFilename}`;
+      
+      const { url, objectPath } = await objectStorageService.getObjectEntityUploadURL(customPath);
+      
+      console.log(`🔧 Generated upload URL for ${imageType}: ${objectPath}`);
+      
+      res.json({ 
+        uploadUrl: url, 
+        objectPath: objectPath,
+        publicUrl: `${req.protocol}://${req.get('host')}/objects${objectPath.replace('/objects', '')}`
+      });
+    } catch (error) {
+      console.error("❌ Error generating upload URL:", error);
+      res.status(500).json({ message: "Failed to generate upload URL" });
+    }
+  });
+
+  // Set ACL policy after successful upload + normalize image with Sharp
+  app.post("/api/images/finalize-upload", isAuthenticated, async (req, res) => {
+    try {
+      // Validate request body
+      const validatedData = finalizeUploadSchema.safeParse(req.body);
+      if (!validatedData.success) {
+        return res.status(400).json({ 
+          message: "Invalid request data", 
+          errors: validatedData.error.errors 
+        });
+      }
+      
+      const { objectPath } = validatedData.data;
+      const userId = req.user?.id;
+      
+      if (!userId) {
+        return res.status(401).json({ message: "User authentication required" });
+      }
+      
+      const objectStorageService = new ObjectStorageService();
+      
+      try {
+        // 1. Download the uploaded image from object storage
+        console.log(`📥 Downloading image for normalization: ${objectPath}`);
+        const objectFile = await objectStorageService.getObjectEntityFile(objectPath);
+        const [fileContents] = await objectFile.download();
+        
+        // 2. Normalize the image with Sharp (auto-orient + quality optimization)
+        console.log(`🔧 Normalizing image with Sharp...`);
+        const normalizedBuffer = await sharp(fileContents)
+          .rotate() // Auto-orient based on EXIF data - THIS FIXES THE ROTATION ISSUE
+          .resize({
+            width: 2400,
+            height: 1800,
+            fit: 'inside', // Preserve aspect ratio, no distortion
+            withoutEnlargement: true,
+          })
+          .jpeg({ quality: 85, mozjpeg: true })
+          .toBuffer();
+        
+        // 3. Re-upload the normalized image to the same location
+        console.log(`📤 Re-uploading normalized image...`);
+        await objectFile.save(normalizedBuffer, {
+          contentType: 'image/jpeg',
+          metadata: {
+            cacheControl: 'public, max-age=31536000',
+          },
+        });
+        
+        console.log(`✅ Image normalized and saved`);
+      } catch (normalizeError) {
+        console.warn(`⚠️ Image normalization failed, proceeding without normalization:`, normalizeError);
+        // Continue with ACL setup even if normalization fails
+      }
+      
+      // 4. Set ACL policy - making images public for now (quotes are shareable)
+      const normalizedPath = await objectStorageService.trySetObjectEntityAclPolicy(
+        objectPath,
+        {
+          owner: String(userId),
+          visibility: "public", // Images in quotes should be publicly accessible
+        }
+      );
+      
+      console.log(`✅ Finalized upload: ${normalizedPath}`);
+      
+      res.json({
+        success: true,
+        objectPath: normalizedPath,
+        publicUrl: `${req.protocol}://${req.get('host')}${normalizedPath}`
+      });
+    } catch (error) {
+      console.error("❌ Error finalizing upload:", error);
+      res.status(500).json({ message: "Failed to finalize upload" });
+    }
+  });
+
+  // Serve quote images without auth (for PDF generation and previews)
+  app.get("/quote-images/:filename", async (req, res) => {
+    try {
+      const { filename } = req.params;
+      const objectStorageService = new ObjectStorageService();
+      
+      // Get the bucket and list files to find the one ending with our filename
+      const privateDir = objectStorageService.getPrivateObjectDir();
+      const directories = ['cover-photos', 'product-renderings'];
+      
+      for (const dir of directories) {
+        try {
+          const bucketName = privateDir.split('/')[1]; // Extract bucket name
+          const bucket = objectStorageClient.bucket(bucketName);
+          const prefix = `${privateDir.split('/').slice(2).join('/')}/${dir}/`;
+          
+          const [files] = await bucket.getFiles({ prefix });
+          
+          // Look for a file that ends with our filename
+          const matchingFile = files.find(file => file.name.endsWith(filename));
+          if (matchingFile) {
+            // Get file metadata for proper headers
+            const [metadata] = await matchingFile.getMetadata();
+            
+            // Set CORS and caching headers for PDF generation
+            res.setHeader('Content-Type', metadata.contentType || 'application/octet-stream');
+            res.setHeader('Access-Control-Allow-Origin', '*');
+            res.setHeader('Cache-Control', 'public, max-age=3600');
+            
+            // Stream the file to the response
+            const stream = matchingFile.createReadStream();
+            stream.pipe(res);
+            return;
+          }
+        } catch (error: any) {
+          continue;
+        }
+      }
+      
+      res.status(404).json({ message: "Image not found" });
+    } catch (error) {
+      console.error("Error serving quote image:", error);
+      res.status(500).json({ message: "Failed to serve image" });
+    }
+  });
+
+  // Serve uploaded objects (with ACL check)
+  app.get("/objects/:objectPath(*)", isAuthenticated, async (req, res) => {
+    const userId = req.user?.id;
+    const objectStorageService = new ObjectStorageService();
+    try {
+      const objectFile = await objectStorageService.getObjectEntityFile(`/objects/${req.params.objectPath}`);
+      const canAccess = await objectStorageService.canAccessObjectEntity({
+        objectFile,
+        userId: String(userId),
+        requestedPermission: ObjectPermission.READ,
+      });
+      if (!canAccess) {
+        return res.sendStatus(401);
+      }
+      await objectStorageService.downloadObject(objectFile, res);
+    } catch (error) {
+      console.error("Error accessing object:", error);
+      if (error instanceof ObjectNotFoundError) {
+        return res.sendStatus(404);
+      }
+      return res.sendStatus(500);
+    }
+  });
+
+  // Image proxy endpoint to bypass CORS for object storage images
+  app.get("/api/image-proxy", isAuthenticated, async (req, res) => {
+    try {
+      // Validate query parameters
+      const validatedData = imageProxySchema.safeParse(req.query);
+      if (!validatedData.success) {
+        return res.status(400).json({ 
+          message: "Invalid request parameters", 
+          errors: validatedData.error.errors 
+        });
+      }
+      
+      const imageUrl = validatedData.data.url;
+      
+      console.log(`🔧 Proxying image request: ${imageUrl}`);
+      
+      // If it's an internal objects URL, handle directly
+      if (imageUrl.includes('/objects/')) {
+        const objectPath = imageUrl.split('/objects/')[1];
+        const objectStorageService = new ObjectStorageService();
+        try {
+          const objectFile = await objectStorageService.getObjectEntityFile(`/objects/${objectPath}`);
+          await objectStorageService.downloadObject(objectFile, res);
+          return;
+        } catch (error) {
+          console.error(`❌ Failed to serve internal object: ${error}`);
+          return res.status(404).json({ message: "Object not found" });
+        }
+      }
+      
+      // Fetch the image from external object storage
+      const response = await fetch(imageUrl);
+      
+      if (!response.ok) {
+        console.error(`❌ Failed to fetch image: ${response.status} ${response.statusText}`);
+        return res.status(response.status).json({ message: `Failed to fetch image: ${response.statusText}` });
+      }
+      
+      // Get the image data as buffer
+      const buffer = await response.arrayBuffer();
+      const contentType = response.headers.get('content-type') || 'application/octet-stream';
+      
+      console.log(`✅ Successfully proxied image: ${imageUrl} (${buffer.byteLength} bytes, ${contentType})`);
+      
+      // Set appropriate headers and send the image
+      res.setHeader('Content-Type', contentType);
+      res.setHeader('Content-Length', buffer.byteLength.toString());
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Cache-Control', 'public, max-age=3600'); // Cache for 1 hour
+      
+      res.send(Buffer.from(buffer));
+      
+    } catch (error) {
+      console.error("❌ Image proxy error:", error);
+      res.status(500).json({ message: "Failed to proxy image" });
+    }
+  });
+}
