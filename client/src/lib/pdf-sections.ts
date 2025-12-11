@@ -1,6 +1,6 @@
 import jsPDF from 'jspdf';
 import { ensureSpace, measureAcceptanceBlock } from '@/lib/pdf-utils';
-import { formatCurrency, calculateLineItemTotal } from '@/lib/utils';
+import { formatCurrency, calculateLineItemTotal, calculateQuoteTotals } from '@/lib/utils';
 import { getImageDimensions, getAspectFitBox, getCenteredOrigin } from '@/lib/pdf-image-pipeline';
 
 const EDG_TEAL = [66, 255, 193] as const;
@@ -235,49 +235,6 @@ export async function drawProjectDetailsPage(pdf: jsPDF, opts: DrawProjectDetail
   drawBrandedFooter({ pdf, logoDataUrl, company, pageW, pageH, margin });
 }
 
-function calculateInvestmentTotals(quote: any) {
-  const lineItems = quote.lineItems || [];
-  let subtotal = 0;
-  let taxableSubtotal = 0;
-
-  lineItems.forEach((item: any) => {
-    const total = calculateLineItemTotal(
-      item.quantity,
-      item.unitPrice,
-      item.markupType,
-      item.markupValue,
-      item.discountType || 'percentage',
-      item.discountValue || 0,
-      quote.tariffRate || 0,
-      item.isTariffApplicable || false
-    );
-    subtotal += total;
-    
-    // Only add to taxable base if item is taxable (default to true if not specified)
-    if (item.isTaxable !== false) {
-      taxableSubtotal += total;
-    }
-  });
-
-  const taxRate = parseFloat(quote.taxRate || '0');
-  const discount = parseFloat(quote.discount || '0');
-  const shipping = parseFloat(quote.shipping || '0');
-  
-  // Apply quote-level discount proportionally to taxable items
-  const discountAmount = (subtotal * discount) / 100;
-  const taxableDiscountRatio = subtotal > 0 ? taxableSubtotal / subtotal : 0;
-  const taxableDiscountAmount = discountAmount * taxableDiscountRatio;
-  const taxableAfterDiscount = taxableSubtotal - taxableDiscountAmount;
-  
-  // Tax only on discounted taxable items + shipping
-  const tax = ((taxableAfterDiscount + shipping) * taxRate) / 100;
-  
-  // Final total: discounted subtotal + shipping + tax
-  const afterDiscount = subtotal - discountAmount;
-  const total = afterDiscount + shipping + tax;
-
-  return { subtotal, taxableSubtotal, discountAmount, tax, shipping, total };
-}
 
 function drawAcceptanceBlock(
   pdf: jsPDF, 
@@ -729,7 +686,14 @@ export function drawLineItemsSection(pdf: jsPDF, opts: DrawLineItemsSectionOpts)
   pdf.text('Investment Summary', margin, y);
   y += 8;
 
-  const totals = calculateInvestmentTotals(quote);
+  const totals = calculateQuoteTotals(
+    quote.lineItems || [],
+    quote.taxRate || 0,
+    quote.discount || 0,
+    quote.shipping || 0,
+    quote.isShippingTaxable || false,
+    quote.tariffRate || 0
+  );
 
   pdf.setFont('Barlow-Regular', 'normal');
   pdf.setFontSize(11);
@@ -744,8 +708,8 @@ export function drawLineItemsSection(pdf: jsPDF, opts: DrawLineItemsSectionOpts)
   }
   
   summaryItems.push(
-    { label: 'Shipping', value: totals.shipping },
-    { label: 'Tax', value: totals.tax }
+    { label: 'Shipping', value: totals.shippingAmount },
+    { label: 'Tax', value: totals.taxAmount }
   );
 
   summaryItems.forEach(item => {
