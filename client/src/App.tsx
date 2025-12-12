@@ -26,6 +26,7 @@ import AccountDetail from "@/pages/account-detail";
 import Pipeline from "@/pages/pipeline";
 import PublicSignPage from "@/pages/public-sign";
 import { ReportIssueButton } from "@/components/report-issue-button";
+import { AIAssistant } from "@/components/ai-assistant";
 
 function GlobalLoadingIndicator() {
   const isFetching = useIsFetching();
@@ -127,6 +128,7 @@ function App() {
             <Toaster />
             <Router />
             <ReportIssueButton />
+            <AIAssistant />
           </TooltipProvider>
         </AuthProvider>
       </QueryClientProvider>
