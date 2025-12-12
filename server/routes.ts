@@ -17,6 +17,7 @@ import { registerQuoteRoutes } from "./routes/quoteRoutes";
 import { registerLineItemRoutes } from "./routes/lineItemRoutes";
 import { registerProductRoutes } from "./routes/productRoutes";
 import { registerImageRoutes } from "./routes/imageRoutes";
+import { registerAIAssistantRoutes } from "./routes/aiAssistantRoutes";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
@@ -66,6 +67,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerQuoteRoutes(app);
   registerLineItemRoutes(app);
   registerProductRoutes(app);
+  registerAIAssistantRoutes(app);
 
   app.get('/api/admin/users', isAuthenticated, async (req: any, res) => {
     try {
