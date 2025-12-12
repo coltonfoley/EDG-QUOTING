@@ -2,119 +2,445 @@ import type { Express } from "express";
 import { isAuthenticated } from "../replitAuth";
 import { storage } from "../storage";
 import OpenAI from "openai";
+import type { ChatCompletionMessageParam, ChatCompletionTool } from "openai/resources/chat/completions";
 
-// the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
 const openai = new OpenAI({ 
   apiKey: process.env.OPENAI_API_KEY 
 });
 
-interface ChatMessage {
-  role: "user" | "assistant" | "system";
-  content: string;
+const AI_TOOLS: ChatCompletionTool[] = [
+  {
+    type: "function",
+    function: {
+      name: "searchProducts",
+      description: "Search for products in the catalog by name, manufacturer, or category. Returns matching products with their prices and details.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: {
+            type: "string",
+            description: "Search term to find products (searches name, manufacturer, category)"
+          },
+          limit: {
+            type: "number",
+            description: "Maximum number of results to return (default 20, max 50)"
+          }
+        },
+        required: ["query"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "searchClients",
+      description: "Search for client accounts by name or company. Returns matching clients with their account type.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: {
+            type: "string",
+            description: "Search term to find clients (searches name, company)"
+          },
+          limit: {
+            type: "number",
+            description: "Maximum number of results to return (default 20, max 50)"
+          }
+        },
+        required: ["query"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "getQuotesByClient",
+      description: "Get all quotes for a specific client by their name or company name.",
+      parameters: {
+        type: "object",
+        properties: {
+          clientName: {
+            type: "string",
+            description: "Client name or company name to search for"
+          }
+        },
+        required: ["clientName"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "getQuoteDetails",
+      description: "Get detailed information about a specific quote by its quote number or ID.",
+      parameters: {
+        type: "object",
+        properties: {
+          quoteIdentifier: {
+            type: "string",
+            description: "Quote number (e.g., 'Q-123') or quote ID"
+          }
+        },
+        required: ["quoteIdentifier"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "getQuoteStats",
+      description: "Get summary statistics about quotes - total count, counts by status/stage, and value summaries.",
+      parameters: {
+        type: "object",
+        properties: {
+          stage: {
+            type: "string",
+            description: "Optional: filter stats by deal stage (lead, proposal, negotiation, won, lost)"
+          }
+        }
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "getRecentQuotes",
+      description: "Get the most recent quotes, optionally filtered by stage.",
+      parameters: {
+        type: "object",
+        properties: {
+          limit: {
+            type: "number",
+            description: "Number of quotes to return (default 10, max 50)"
+          },
+          stage: {
+            type: "string",
+            description: "Optional: filter by deal stage"
+          }
+        }
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "getProductsByManufacturer",
+      description: "Get all products from a specific manufacturer.",
+      parameters: {
+        type: "object",
+        properties: {
+          manufacturer: {
+            type: "string",
+            description: "Manufacturer name to filter by"
+          },
+          limit: {
+            type: "number",
+            description: "Maximum number of results (default 30, max 100)"
+          }
+        },
+        required: ["manufacturer"]
+      }
+    }
+  },
+  {
+    type: "function", 
+    function: {
+      name: "getBusinessOverview",
+      description: "Get a high-level overview of the business - total products, clients, quotes, and recent activity.",
+      parameters: {
+        type: "object",
+        properties: {}
+      }
+    }
+  }
+];
+
+async function executeToolCall(name: string, args: any): Promise<string> {
+  try {
+    switch (name) {
+      case "searchProducts": {
+        const products = await storage.getAllProducts();
+        const query = (args.query || "").toLowerCase();
+        const limit = Math.min(args.limit || 20, 50);
+        
+        const matches = products.filter(p => 
+          p.name.toLowerCase().includes(query) ||
+          p.manufacturer.toLowerCase().includes(query) ||
+          (p.category && p.category.toLowerCase().includes(query))
+        ).slice(0, limit);
+
+        if (matches.length === 0) {
+          return `No products found matching "${args.query}".`;
+        }
+
+        return `Found ${matches.length} product(s):\n` + matches.map(p => 
+          `- ${p.name} (${p.manufacturer}): $${p.retailPrice} per ${p.unit || 'each'}${p.category ? `, category: ${p.category}` : ''}`
+        ).join('\n');
+      }
+
+      case "searchClients": {
+        const query = (args.query || "").toLowerCase();
+        const limit = Math.min(args.limit || 20, 50);
+        const accounts = await storage.searchAccounts(query);
+        const matches = accounts.slice(0, limit);
+
+        if (matches.length === 0) {
+          return `No clients found matching "${args.query}".`;
+        }
+
+        return `Found ${matches.length} client(s):\n` + matches.map(a => 
+          `- ${a.name}${a.company ? ` (${a.company})` : ''}, type: ${a.accountType}`
+        ).join('\n');
+      }
+
+      case "getQuotesByClient": {
+        const clientName = (args.clientName || "").toLowerCase();
+        const allQuotes = [];
+        let page = 1;
+        const pageSize = 100;
+        
+        while (true) {
+          const quotes = await storage.getAllQuotes({ page, pageSize });
+          allQuotes.push(...quotes);
+          if (quotes.length < pageSize) break;
+          page++;
+          if (page > 20) break;
+        }
+        
+        const matches = allQuotes.filter(q => {
+          const accountName = q.account?.name?.toLowerCase() || '';
+          const accountCompany = q.account?.company?.toLowerCase() || '';
+          return accountName.includes(clientName) || accountCompany.includes(clientName);
+        });
+
+        if (matches.length === 0) {
+          return `No quotes found for client "${args.clientName}".`;
+        }
+
+        return `Found ${matches.length} quote(s) for "${args.clientName}":\n` + matches.map(q => {
+          const total = q.lineItems?.reduce((sum, item) => {
+            const qty = parseFloat(String(item.quantity || 0));
+            const price = parseFloat(String(item.unitPrice || 0));
+            return sum + (qty * price);
+          }, 0) || 0;
+          return `- Quote #${q.quoteNumber || q.id}: ${q.projectName || 'Unnamed'}, status: ${q.dealStage || 'draft'}, ${q.lineItems?.length || 0} items, ~$${total.toFixed(2)}`;
+        }).join('\n');
+      }
+
+      case "getQuoteDetails": {
+        const identifier = args.quoteIdentifier || "";
+        let quote = null;
+        let page = 1;
+        const pageSize = 100;
+        
+        while (!quote) {
+          const quotes = await storage.getAllQuotes({ page, pageSize });
+          quote = quotes.find(q => 
+            q.quoteNumber === identifier || 
+            q.quoteNumber?.includes(identifier) ||
+            String(q.id) === identifier
+          );
+          if (quotes.length < pageSize) break;
+          page++;
+          if (page > 20) break;
+        }
+
+        if (!quote) {
+          return `Quote "${identifier}" not found.`;
+        }
+
+        const total = quote.lineItems?.reduce((sum, item) => {
+          const qty = parseFloat(String(item.quantity || 0));
+          const price = parseFloat(String(item.unitPrice || 0));
+          return sum + (qty * price);
+        }, 0) || 0;
+
+        let details = `Quote #${quote.quoteNumber || quote.id}\n`;
+        details += `- Project: ${quote.projectName || 'Unnamed'}\n`;
+        details += `- Client: ${quote.account?.name || 'Unknown'}${quote.account?.company ? ` (${quote.account.company})` : ''}\n`;
+        details += `- Status: ${quote.dealStage || 'draft'}\n`;
+        details += `- Line Items: ${quote.lineItems?.length || 0}\n`;
+        details += `- Subtotal: ~$${total.toFixed(2)}\n`;
+        
+        if (quote.lineItems && quote.lineItems.length > 0) {
+          details += `\nLine Items:\n`;
+          quote.lineItems.slice(0, 15).forEach(item => {
+            const itemTotal = parseFloat(String(item.quantity || 0)) * parseFloat(String(item.unitPrice || 0));
+            details += `  - ${item.description}: ${item.quantity} x $${item.unitPrice} = $${itemTotal.toFixed(2)}\n`;
+          });
+          if (quote.lineItems.length > 15) {
+            details += `  ... and ${quote.lineItems.length - 15} more items\n`;
+          }
+        }
+
+        return details;
+      }
+
+      case "getQuoteStats": {
+        const allQuotes = [];
+        let page = 1;
+        const pageSize = 100;
+        
+        while (true) {
+          const quotes = await storage.getAllQuotes({ page, pageSize });
+          allQuotes.push(...quotes);
+          if (quotes.length < pageSize) break;
+          page++;
+          if (page > 50) break;
+        }
+        
+        const stageFilter = args.stage?.toLowerCase();
+
+        const filtered = stageFilter 
+          ? allQuotes.filter(q => q.dealStage?.toLowerCase() === stageFilter)
+          : allQuotes;
+
+        const stageCounts: Record<string, number> = {};
+        let totalValue = 0;
+
+        filtered.forEach(q => {
+          const stage = q.dealStage || 'draft';
+          stageCounts[stage] = (stageCounts[stage] || 0) + 1;
+          
+          const quoteTotal = q.lineItems?.reduce((sum, item) => {
+            const qty = parseFloat(String(item.quantity || 0));
+            const price = parseFloat(String(item.unitPrice || 0));
+            return sum + (qty * price);
+          }, 0) || 0;
+          totalValue += quoteTotal;
+        });
+
+        let stats = `Quote Statistics${stageFilter ? ` (filtered by ${stageFilter})` : ''}:\n`;
+        stats += `- Total Quotes: ${filtered.length}\n`;
+        stats += `- Total Value: $${totalValue.toFixed(2)}\n`;
+        stats += `- Average Quote Value: $${filtered.length > 0 ? (totalValue / filtered.length).toFixed(2) : '0.00'}\n`;
+        stats += `\nBy Stage:\n`;
+        Object.entries(stageCounts).sort((a, b) => b[1] - a[1]).forEach(([stage, count]) => {
+          stats += `  - ${stage}: ${count} quote(s)\n`;
+        });
+
+        return stats;
+      }
+
+      case "getRecentQuotes": {
+        const limit = Math.min(args.limit || 10, 50);
+        const stageFilter = args.stage?.toLowerCase();
+        const quotes = await storage.getAllQuotes({ page: 1, pageSize: limit * 2 });
+        
+        const filtered = stageFilter 
+          ? quotes.filter(q => q.dealStage?.toLowerCase() === stageFilter)
+          : quotes;
+
+        const recent = filtered.slice(0, limit);
+
+        if (recent.length === 0) {
+          return stageFilter ? `No quotes found with stage "${args.stage}".` : 'No quotes found.';
+        }
+
+        return `Recent ${recent.length} quote(s)${stageFilter ? ` (${stageFilter})` : ''}:\n` + recent.map(q => {
+          const total = q.lineItems?.reduce((sum, item) => {
+            const qty = parseFloat(String(item.quantity || 0));
+            const price = parseFloat(String(item.unitPrice || 0));
+            return sum + (qty * price);
+          }, 0) || 0;
+          return `- Quote #${q.quoteNumber || q.id}: ${q.projectName || 'Unnamed'} for ${q.account?.name || 'Unknown'}, ${q.dealStage || 'draft'}, ~$${total.toFixed(2)}`;
+        }).join('\n');
+      }
+
+      case "getProductsByManufacturer": {
+        const manufacturer = (args.manufacturer || "").toLowerCase();
+        const limit = Math.min(args.limit || 30, 100);
+        const products = await storage.getAllProducts();
+        
+        const matches = products.filter(p => 
+          p.manufacturer.toLowerCase().includes(manufacturer)
+        ).slice(0, limit);
+
+        if (matches.length === 0) {
+          return `No products found from manufacturer "${args.manufacturer}".`;
+        }
+
+        return `Found ${matches.length} product(s) from "${args.manufacturer}":\n` + matches.map(p => 
+          `- ${p.name}: $${p.retailPrice} per ${p.unit || 'each'}${p.category ? `, category: ${p.category}` : ''}`
+        ).join('\n');
+      }
+
+      case "getBusinessOverview": {
+        const allQuotes = [];
+        let page = 1;
+        const pageSize = 100;
+        
+        while (true) {
+          const pageQuotes = await storage.getAllQuotes({ page, pageSize });
+          allQuotes.push(...pageQuotes);
+          if (pageQuotes.length < pageSize) break;
+          page++;
+          if (page > 50) break;
+        }
+        
+        const [products, accounts] = await Promise.all([
+          storage.getAllProducts(),
+          storage.getAllAccounts()
+        ]);
+        
+        const quotes = allQuotes;
+
+        const manufacturers = new Set(products.map(p => p.manufacturer));
+        const stageCounts: Record<string, number> = {};
+        let totalQuoteValue = 0;
+
+        quotes.forEach(q => {
+          const stage = q.dealStage || 'draft';
+          stageCounts[stage] = (stageCounts[stage] || 0) + 1;
+          
+          const quoteTotal = q.lineItems?.reduce((sum, item) => {
+            const qty = parseFloat(String(item.quantity || 0));
+            const price = parseFloat(String(item.unitPrice || 0));
+            return sum + (qty * price);
+          }, 0) || 0;
+          totalQuoteValue += quoteTotal;
+        });
+
+        let overview = `Business Overview:\n`;
+        overview += `\nProducts:\n`;
+        overview += `  - Total Products: ${products.length}\n`;
+        overview += `  - Manufacturers: ${manufacturers.size}\n`;
+        overview += `\nClients:\n`;
+        overview += `  - Total Accounts: ${accounts.length}\n`;
+        overview += `\nQuotes:\n`;
+        overview += `  - Total Quotes: ${quotes.length}\n`;
+        overview += `  - Total Pipeline Value: $${totalQuoteValue.toFixed(2)}\n`;
+        overview += `  - By Stage:\n`;
+        Object.entries(stageCounts).sort((a, b) => b[1] - a[1]).forEach(([stage, count]) => {
+          overview += `    - ${stage}: ${count}\n`;
+        });
+
+        return overview;
+      }
+
+      default:
+        return `Unknown tool: ${name}`;
+    }
+  } catch (error: any) {
+    console.error(`Tool execution error (${name}):`, error);
+    return `Error executing ${name}: ${error.message}`;
+  }
 }
 
-interface SafeProductSummary {
-  name: string;
-  manufacturer: string;
-  category: string | null;
-  retailPrice: string;
-  unit: string;
-}
+const SYSTEM_PROMPT = `You are a helpful AI assistant for Rainmaker, a construction quoting and sales management application. You have access to tools that let you search and retrieve real data from the system.
 
-interface SafeAccountSummary {
-  name: string;
-  accountType: string;
-  company: string | null;
-}
+Your capabilities:
+- Search and find products in the catalog
+- Look up client/account information  
+- Find and analyze quotes
+- Get business statistics and overviews
 
-interface SafeQuoteSummary {
-  quoteNumber: string | null;
-  projectName: string | null;
-  clientName: string;
-  dealStage: string;
-  itemCount: number;
-  estimatedTotal: number;
-}
-
-async function gatherSafeBusinessContext(): Promise<string> {
-  const [products, accounts, quotes] = await Promise.all([
-    storage.getAllProducts(),
-    storage.getAllAccounts(),
-    storage.getAllQuotes({ page: 1, pageSize: 30 })
-  ]);
-
-  const safeProducts: SafeProductSummary[] = products.slice(0, 30).map(p => ({
-    name: p.name,
-    manufacturer: p.manufacturer,
-    category: p.category || null,
-    retailPrice: p.retailPrice,
-    unit: p.unit || 'each'
-  }));
-
-  const safeAccounts: SafeAccountSummary[] = accounts.slice(0, 20).map(a => ({
-    name: a.name,
-    accountType: a.accountType,
-    company: a.company || null
-  }));
-
-  const safeQuotes: SafeQuoteSummary[] = quotes.slice(0, 20).map(q => {
-    const lineItemsTotal = q.lineItems?.reduce((sum, item) => {
-      const qty = parseFloat(String(item.quantity || 0));
-      const price = parseFloat(String(item.unitPrice || 0));
-      return sum + (qty * price);
-    }, 0) || 0;
-    
-    return {
-      quoteNumber: q.quoteNumber || null,
-      projectName: q.projectName || null,
-      clientName: q.account?.name || 'Unknown client',
-      dealStage: q.dealStage || 'draft',
-      itemCount: q.lineItems?.length || 0,
-      estimatedTotal: lineItemsTotal
-    };
-  });
-
-  const productsSummary = safeProducts.map(p => 
-    `- ${p.name} (${p.manufacturer}): $${p.retailPrice} per ${p.unit}${p.category ? `, category: ${p.category}` : ''}`
-  ).join('\n');
-
-  const accountsSummary = safeAccounts.map(a => 
-    `- ${a.name}${a.company ? ` (${a.company})` : ''}, type: ${a.accountType}`
-  ).join('\n');
-
-  const quotesSummary = safeQuotes.map(q => 
-    `- Quote #${q.quoteNumber || 'N/A'}: ${q.projectName || 'Unnamed project'} for ${q.clientName}, status: ${q.dealStage}, ${q.itemCount} items, ~$${q.estimatedTotal.toFixed(2)}`
-  ).join('\n');
-
-  return `
-## Business Data Summary
-
-### Products Catalog (${products.length} total):
-${productsSummary || 'No products in catalog.'}
-
-### Client Accounts (${accounts.length} total):
-${accountsSummary || 'No client accounts.'}
-
-### Quotes (${quotes.length} total):
-${quotesSummary || 'No quotes created.'}
-`;
-}
-
-const SYSTEM_PROMPT = `You are a helpful AI assistant for a quoting and sales management application. You have access to summarized business data about products, client accounts, and quotes.
-
-Your role is to:
-1. Answer questions about products, pricing, and availability
-2. Help find information about clients and their quotes
-3. Provide insights about sales and quotes
-4. Assist with general business questions related to the data
-
-Important guidelines:
-- Be concise, helpful, and professional
-- When referring to specific items, include relevant details like prices, names, and statuses
-- If you don't have enough information to answer a question, say so clearly
-- Never fabricate or invent data that isn't in the provided context
+Guidelines:
+- Use the available tools to fetch real data before answering questions
+- Be concise and professional
 - Format currency as dollars (e.g., $100.00)
-- You only have access to summary data, not full client contact details for privacy reasons`;
+- If you can't find what the user is looking for, suggest alternative searches
+- Never make up data - only use information from tool results`;
 
 export function registerAIAssistantRoutes(app: Express) {
   app.post('/api/ai-assistant/chat', isAuthenticated, async (req: any, res) => {
@@ -125,13 +451,10 @@ export function registerAIAssistantRoutes(app: Express) {
         return res.status(400).json({ message: "Message is required" });
       }
 
-      const businessContext = await gatherSafeBusinessContext();
+      console.log("🤖 AI Assistant: Processing request with tool calling...");
 
-      const messages: ChatMessage[] = [
-        { 
-          role: "system", 
-          content: `${SYSTEM_PROMPT}\n\n${businessContext}` 
-        },
+      const messages: ChatCompletionMessageParam[] = [
+        { role: "system", content: SYSTEM_PROMPT },
         ...conversationHistory.slice(-10).map((msg: any) => ({
           role: msg.role as "user" | "assistant",
           content: msg.content
@@ -139,43 +462,62 @@ export function registerAIAssistantRoutes(app: Express) {
         { role: "user", content: message }
       ];
 
-      console.log("🤖 AI Assistant: Sending request to OpenAI...");
-      
-      const response = await openai.chat.completions.create({
-        model: "gpt-4o", // Using gpt-4o for reliable responses
+      let response = await openai.chat.completions.create({
+        model: "gpt-4o",
         messages: messages,
-        max_tokens: 1024,
+        tools: AI_TOOLS,
+        tool_choice: "auto",
+        max_tokens: 2048,
       });
 
-      const assistantMessage = response.choices[0]?.message?.content;
-      
-      if (!assistantMessage) {
-        console.error("AI Assistant: Empty response from OpenAI", { 
-          choices: response.choices,
-          finishReason: response.choices[0]?.finish_reason 
+      let assistantMessage = response.choices[0]?.message;
+      let iterations = 0;
+      const maxIterations = 5;
+
+      while (assistantMessage?.tool_calls && iterations < maxIterations) {
+        iterations++;
+        console.log(`🔧 AI Assistant: Executing ${assistantMessage.tool_calls.length} tool call(s) (iteration ${iterations})`);
+
+        messages.push(assistantMessage);
+
+        for (const toolCall of assistantMessage.tool_calls) {
+          const args = JSON.parse(toolCall.function.arguments || "{}");
+          console.log(`   - Tool: ${toolCall.function.name}`, args);
+          
+          const result = await executeToolCall(toolCall.function.name, args);
+          
+          messages.push({
+            role: "tool",
+            tool_call_id: toolCall.id,
+            content: result
+          });
+        }
+
+        response = await openai.chat.completions.create({
+          model: "gpt-4o",
+          messages: messages,
+          tools: AI_TOOLS,
+          tool_choice: "auto",
+          max_tokens: 2048,
         });
-        return res.json({
-          message: "I apologize, but I couldn't generate a response. Please try rephrasing your question.",
-          usage: response.usage
-        });
+
+        assistantMessage = response.choices[0]?.message;
       }
 
+      const finalContent = assistantMessage?.content || "I apologize, but I couldn't generate a response. Please try rephrasing your question.";
+
       console.log("✅ AI Assistant: Response generated successfully");
-      
+
       res.json({
-        message: assistantMessage,
-        usage: response.usage
+        message: finalContent,
+        usage: response.usage,
+        toolCalls: iterations
       });
     } catch (error: any) {
       console.error("AI Assistant error:", error.message || error);
-      console.error("AI Assistant error details:", JSON.stringify(error, null, 2));
       
-      if (error.code === 'insufficient_quota') {
-        return res.status(429).json({ message: "AI service quota exceeded. Please try again later." });
-      }
-      
-      if (error.status === 429) {
-        return res.status(429).json({ message: "Too many requests. Please wait a moment and try again." });
+      if (error.code === 'insufficient_quota' || error.status === 429) {
+        return res.status(429).json({ message: "AI service is busy. Please try again in a moment." });
       }
       
       res.status(500).json({ message: "Failed to process your request. Please try again." });
@@ -185,11 +527,11 @@ export function registerAIAssistantRoutes(app: Express) {
   app.get('/api/ai-assistant/suggestions', isAuthenticated, async (req: any, res) => {
     try {
       const suggestions = [
-        "What products do we have in stock?",
-        "Show me recent quotes",
-        "Who are our top clients?",
-        "What's the average quote value?",
-        "Find quotes in proposal stage"
+        "Give me a business overview",
+        "What products do we have from Sundance?",
+        "Show me recent quotes in proposal stage",
+        "Find quotes for Smith Construction",
+        "What's our total pipeline value?"
       ];
       res.json({ suggestions });
     } catch (error) {
