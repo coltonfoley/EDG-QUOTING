@@ -139,23 +139,43 @@ export function registerAIAssistantRoutes(app: Express) {
         { role: "user", content: message }
       ];
 
+      console.log("🤖 AI Assistant: Sending request to OpenAI...");
+      
       const response = await openai.chat.completions.create({
-        model: "gpt-5",
+        model: "gpt-4o", // Using gpt-4o for reliable responses
         messages: messages,
-        max_completion_tokens: 1024,
+        max_tokens: 1024,
       });
 
-      const assistantMessage = response.choices[0]?.message?.content || "I'm sorry, I couldn't generate a response.";
+      const assistantMessage = response.choices[0]?.message?.content;
+      
+      if (!assistantMessage) {
+        console.error("AI Assistant: Empty response from OpenAI", { 
+          choices: response.choices,
+          finishReason: response.choices[0]?.finish_reason 
+        });
+        return res.json({
+          message: "I apologize, but I couldn't generate a response. Please try rephrasing your question.",
+          usage: response.usage
+        });
+      }
 
+      console.log("✅ AI Assistant: Response generated successfully");
+      
       res.json({
         message: assistantMessage,
         usage: response.usage
       });
     } catch (error: any) {
-      console.error("AI Assistant error:", error);
+      console.error("AI Assistant error:", error.message || error);
+      console.error("AI Assistant error details:", JSON.stringify(error, null, 2));
       
       if (error.code === 'insufficient_quota') {
         return res.status(429).json({ message: "AI service quota exceeded. Please try again later." });
+      }
+      
+      if (error.status === 429) {
+        return res.status(429).json({ message: "Too many requests. Please wait a moment and try again." });
       }
       
       res.status(500).json({ message: "Failed to process your request. Please try again." });
