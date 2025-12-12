@@ -3,10 +3,30 @@ import { isAuthenticated } from "../replitAuth";
 import { storage } from "../storage";
 import OpenAI from "openai";
 import type { ChatCompletionMessageParam, ChatCompletionTool } from "openai/resources/chat/completions";
+import { isActiveStage, isWonStage, isFinalStage, getDealStageLabel } from "@shared/dealStageConstants";
 
 const openai = new OpenAI({ 
   apiKey: process.env.OPENAI_API_KEY 
 });
+
+// Calculate quote total WITH markup (matches dashboard logic)
+function calculateQuoteTotal(quote: any): number {
+  if (!quote.lineItems || !Array.isArray(quote.lineItems)) return 0;
+  
+  return quote.lineItems.reduce((sum: number, item: any) => {
+    const qty = parseFloat(String(item.quantity || 0));
+    const price = parseFloat(String(item.unitPrice || 0));
+    const markup = parseFloat(String(item.markupValue || 0));
+    const baseTotal = qty * price;
+    
+    // Include markup based on type (percentage or dollar)
+    const total = item.markupType === 'percentage' 
+      ? baseTotal + (baseTotal * (markup / 100))
+      : baseTotal + markup;
+    
+    return sum + total;
+  }, 0);
+}
 
 const AI_TOOLS: ChatCompletionTool[] = [
   {
@@ -218,12 +238,9 @@ async function executeToolCall(name: string, args: any): Promise<string> {
         }
 
         return `Found ${matches.length} quote(s) for "${args.clientName}":\n` + matches.map(q => {
-          const total = q.lineItems?.reduce((sum, item) => {
-            const qty = parseFloat(String(item.quantity || 0));
-            const price = parseFloat(String(item.unitPrice || 0));
-            return sum + (qty * price);
-          }, 0) || 0;
-          return `- Quote #${q.quoteNumber || q.id}: ${q.projectName || 'Unnamed'}, status: ${q.dealStage || 'draft'}, ${q.lineItems?.length || 0} items, ~$${total.toFixed(2)}`;
+          const total = calculateQuoteTotal(q);
+          const stageLabel = getDealStageLabel(q.dealStage || 'new_lead');
+          return `- Quote #${q.quoteNumber || q.id}: ${q.projectName || 'Unnamed'}, stage: ${stageLabel}, ${q.lineItems?.length || 0} items, $${total.toFixed(2)}`;
         }).join('\n');
       }
 
@@ -249,18 +266,15 @@ async function executeToolCall(name: string, args: any): Promise<string> {
           return `Quote "${identifier}" not found.`;
         }
 
-        const total = quote.lineItems?.reduce((sum, item) => {
-          const qty = parseFloat(String(item.quantity || 0));
-          const price = parseFloat(String(item.unitPrice || 0));
-          return sum + (qty * price);
-        }, 0) || 0;
+        const total = calculateQuoteTotal(quote);
+        const stageLabel = getDealStageLabel(quote.dealStage || 'new_lead');
 
         let details = `Quote #${quote.quoteNumber || quote.id}\n`;
         details += `- Project: ${quote.projectName || 'Unnamed'}\n`;
         details += `- Client: ${quote.account?.name || 'Unknown'}${quote.account?.company ? ` (${quote.account.company})` : ''}\n`;
-        details += `- Status: ${quote.dealStage || 'draft'}\n`;
+        details += `- Stage: ${stageLabel}\n`;
         details += `- Line Items: ${quote.lineItems?.length || 0}\n`;
-        details += `- Subtotal: ~$${total.toFixed(2)}\n`;
+        details += `- Total (with markup): $${total.toFixed(2)}\n`;
         
         if (quote.lineItems && quote.lineItems.length > 0) {
           details += `\nLine Items:\n`;
@@ -297,26 +311,35 @@ async function executeToolCall(name: string, args: any): Promise<string> {
 
         const stageCounts: Record<string, number> = {};
         let totalValue = 0;
+        let pipelineValue = 0;
+        let wonValue = 0;
 
         filtered.forEach(q => {
-          const stage = q.dealStage || 'draft';
+          const stage = q.dealStage || 'new_lead';
           stageCounts[stage] = (stageCounts[stage] || 0) + 1;
           
-          const quoteTotal = q.lineItems?.reduce((sum, item) => {
-            const qty = parseFloat(String(item.quantity || 0));
-            const price = parseFloat(String(item.unitPrice || 0));
-            return sum + (qty * price);
-          }, 0) || 0;
+          const quoteTotal = calculateQuoteTotal(q);
           totalValue += quoteTotal;
+          
+          // Track pipeline (active stages only) vs won
+          if (isActiveStage(stage)) {
+            pipelineValue += quoteTotal;
+          }
+          if (isWonStage(stage)) {
+            wonValue += quoteTotal;
+          }
         });
 
         let stats = `Quote Statistics${stageFilter ? ` (filtered by ${stageFilter})` : ''}:\n`;
         stats += `- Total Quotes: ${filtered.length}\n`;
-        stats += `- Total Value: $${totalValue.toFixed(2)}\n`;
+        stats += `- Total Value (all quotes): $${totalValue.toFixed(2)}\n`;
+        stats += `- Pipeline Value (active deals only): $${pipelineValue.toFixed(2)}\n`;
+        stats += `- Won Value (closed-won only): $${wonValue.toFixed(2)}\n`;
         stats += `- Average Quote Value: $${filtered.length > 0 ? (totalValue / filtered.length).toFixed(2) : '0.00'}\n`;
         stats += `\nBy Stage:\n`;
         Object.entries(stageCounts).sort((a, b) => b[1] - a[1]).forEach(([stage, count]) => {
-          stats += `  - ${stage}: ${count} quote(s)\n`;
+          const label = getDealStageLabel(stage);
+          stats += `  - ${label}: ${count} quote(s)\n`;
         });
 
         return stats;
@@ -338,12 +361,9 @@ async function executeToolCall(name: string, args: any): Promise<string> {
         }
 
         return `Recent ${recent.length} quote(s)${stageFilter ? ` (${stageFilter})` : ''}:\n` + recent.map(q => {
-          const total = q.lineItems?.reduce((sum, item) => {
-            const qty = parseFloat(String(item.quantity || 0));
-            const price = parseFloat(String(item.unitPrice || 0));
-            return sum + (qty * price);
-          }, 0) || 0;
-          return `- Quote #${q.quoteNumber || q.id}: ${q.projectName || 'Unnamed'} for ${q.account?.name || 'Unknown'}, ${q.dealStage || 'draft'}, ~$${total.toFixed(2)}`;
+          const total = calculateQuoteTotal(q);
+          const stageLabel = getDealStageLabel(q.dealStage || 'new_lead');
+          return `- Quote #${q.quoteNumber || q.id}: ${q.projectName || 'Unnamed'} for ${q.account?.name || 'Unknown'}, ${stageLabel}, $${total.toFixed(2)}`;
         }).join('\n');
       }
 
@@ -388,17 +408,23 @@ async function executeToolCall(name: string, args: any): Promise<string> {
         const manufacturers = new Set(products.map(p => p.manufacturer));
         const stageCounts: Record<string, number> = {};
         let totalQuoteValue = 0;
+        let pipelineValue = 0;
+        let wonValue = 0;
 
         quotes.forEach(q => {
-          const stage = q.dealStage || 'draft';
+          const stage = q.dealStage || 'new_lead';
           stageCounts[stage] = (stageCounts[stage] || 0) + 1;
           
-          const quoteTotal = q.lineItems?.reduce((sum, item) => {
-            const qty = parseFloat(String(item.quantity || 0));
-            const price = parseFloat(String(item.unitPrice || 0));
-            return sum + (qty * price);
-          }, 0) || 0;
+          const quoteTotal = calculateQuoteTotal(q);
           totalQuoteValue += quoteTotal;
+          
+          // Track pipeline (active stages only) vs won
+          if (isActiveStage(stage)) {
+            pipelineValue += quoteTotal;
+          }
+          if (isWonStage(stage)) {
+            wonValue += quoteTotal;
+          }
         });
 
         let overview = `Business Overview:\n`;
@@ -409,10 +435,13 @@ async function executeToolCall(name: string, args: any): Promise<string> {
         overview += `  - Total Accounts: ${accounts.length}\n`;
         overview += `\nQuotes:\n`;
         overview += `  - Total Quotes: ${quotes.length}\n`;
-        overview += `  - Total Pipeline Value: $${totalQuoteValue.toFixed(2)}\n`;
+        overview += `  - Pipeline Value (active deals): $${pipelineValue.toFixed(2)}\n`;
+        overview += `  - Won Value (closed-won): $${wonValue.toFixed(2)}\n`;
+        overview += `  - Total All Quotes: $${totalQuoteValue.toFixed(2)}\n`;
         overview += `  - By Stage:\n`;
         Object.entries(stageCounts).sort((a, b) => b[1] - a[1]).forEach(([stage, count]) => {
-          overview += `    - ${stage}: ${count}\n`;
+          const label = getDealStageLabel(stage);
+          overview += `    - ${label}: ${count}\n`;
         });
 
         return overview;
