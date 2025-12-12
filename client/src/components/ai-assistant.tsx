@@ -24,10 +24,6 @@ export function AIAssistant() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  if (!isAuthenticated) {
-    return null;
-  }
-
   const chatMutation = useMutation({
     mutationFn: async (message: string) => {
       const conversationHistory = messages.map(m => ({
@@ -61,6 +57,22 @@ export function AIAssistant() {
     }
   });
 
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [messages]);
+
+  useEffect(() => {
+    if (isOpen && inputRef.current) {
+      setTimeout(() => inputRef.current?.focus(), 100);
+    }
+  }, [isOpen]);
+
+  if (!isAuthenticated) {
+    return null;
+  }
+
   const handleSend = () => {
     if (!input.trim() || chatMutation.isPending) return;
 
@@ -82,18 +94,6 @@ export function AIAssistant() {
       handleSend();
     }
   };
-
-  useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [messages]);
-
-  useEffect(() => {
-    if (isOpen && inputRef.current) {
-      setTimeout(() => inputRef.current?.focus(), 100);
-    }
-  }, [isOpen]);
 
   const suggestions = [
     "What products do we have?",
