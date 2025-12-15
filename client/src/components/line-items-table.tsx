@@ -450,6 +450,9 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
   // Validation error states
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
   const [newItemErrors, setNewItemErrors] = useState<Record<string, string>>({});
+  
+  // Ref to hold the update mutation's mutate function (for use in callbacks defined before mutation)
+  const updateLineItemMutateRef = useRef<((params: { id: number; data: any; skipInvalidation?: boolean }) => void) | null>(null);
 
   // Cleanup debounce timers and cancel pending mutations on unmount
   useEffect(() => {
@@ -665,8 +668,28 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
       return newErrors;
     });
     
-    // Don't set up debounced save - we'll save on blur instead
-    // This prevents the save from firing while the user is still typing
+    // Set up debounced save for text fields (skip for markupType which saves immediately)
+    if (field !== "markupType" && !validationError) {
+      debounceTimers.current[key] = setTimeout(() => {
+        delete debounceTimers.current[key];
+        
+        // Prepare the data for save
+        let updateData;
+        if (field === "quantity" || field === "unitPrice" || field === "markupValue") {
+          const sanitized = sanitizeNumberString(value);
+          const parsed = parseFloat(sanitized);
+          if (sanitized === '' || isNaN(parsed)) {
+            return; // Don't save invalid values
+          }
+          updateData = { [field]: parsed };
+        } else {
+          updateData = { [field]: value };
+        }
+        
+        // Save to server using the ref
+        updateLineItemMutateRef.current?.({ id: itemId, data: updateData });
+      }, 500); // 500ms debounce delay
+    }
   }, []);
   
   // Save field on blur (when user moves away from the field)
@@ -677,7 +700,8 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
     // Remove from active inputs
     activeInputs.current.delete(key);
     
-    // Clear any pending timer
+    // Check if there was a pending debounce timer - if so, we need to save immediately
+    const hadPendingTimer = !!debounceTimers.current[key];
     if (debounceTimers.current[key]) {
       clearTimeout(debounceTimers.current[key]);
       delete debounceTimers.current[key];
@@ -688,7 +712,18 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
       return; // Don't save if there's a validation error
     }
     
-    // Save immediately on blur
+    // Only save on blur if there was a pending timer (meaning the debounce hadn't fired yet)
+    // This prevents duplicate saves when debounce already fired
+    if (!hadPendingTimer) {
+      // No pending timer means either:
+      // 1. The debounce already saved the value (no action needed)
+      // 2. The value never changed (no action needed)
+      // Don't revert to props here as the mutation may be in flight
+      activeKeyRef.current = null;
+      return;
+    }
+    
+    // Save immediately on blur since debounce hadn't fired yet
     try {
       let updateData;
       if (field === "quantity" || field === "unitPrice" || field === "markupValue") {
@@ -716,7 +751,7 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
       } else {
         updateData = { [field]: value };
       }
-      updateLineItemMutation.mutate({ id: itemId, data: updateData });
+      updateLineItemMutateRef.current?.({ id: itemId, data: updateData });
     } catch (error) {
       const err = error as Error;
       if (err?.name !== 'AbortError' && !err?.message?.includes('aborted') && !err?.message?.includes('signal is aborted')) {
@@ -844,7 +879,7 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
         throw error;
       }
     },
-    onSuccess: (result, { id }) => {
+    onSuccess: (result, { id, data }) => {
       // Check if this was an aborted mutation
       if (result?.__aborted) {
         return;
@@ -853,6 +888,21 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
       // Clear the pending mutation reference
       const updateKey = `update-${id}`;
       delete pendingMutations.current.update[updateKey];
+      
+      // Update local values with server response to keep them in sync
+      // This prevents stale local values from persisting after server confirms the update
+      setLocalValues(prev => {
+        const updated = { ...prev };
+        if (updated[id]) {
+          // Update with values from server response (result contains the updated line item)
+          if (result.description !== undefined) updated[id].description = result.description;
+          if (result.quantity !== undefined) updated[id].quantity = result.quantity.toString();
+          if (result.unitPrice !== undefined) updated[id].unitPrice = result.unitPrice.toString();
+          if (result.markupType !== undefined) updated[id].markupType = result.markupType;
+          if (result.markupValue !== undefined) updated[id].markupValue = result.markupValue.toString();
+        }
+        return updated;
+      });
       
       // Invalidate queries by default to update totals, unless explicitly skipped
       // Skip invalidation for batch operations (will be invalidated once at the end)
@@ -889,9 +939,28 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
         // Silent abort - don't show error toast for user-initiated cancellations
         return;
       }
-      toast({ title: "Error", description: "Failed to update line item", variant: "destructive" });
+      
+      // Rollback local state to the server's last known value
+      const item = lineItems.find(i => i.id === variables.id);
+      if (item) {
+        setLocalValues(prev => ({
+          ...prev,
+          [variables.id]: {
+            description: item.description,
+            quantity: item.quantity.toString(),
+            unitPrice: item.unitPrice.toString(),
+            markupType: item.markupType,
+            markupValue: item.markupValue.toString()
+          }
+        }));
+      }
+      
+      toast({ title: "Error", description: "Failed to update line item. Changes have been reverted.", variant: "destructive" });
     },
   });
+  
+  // Assign the mutate function to the ref for use in callbacks defined before this mutation
+  updateLineItemMutateRef.current = updateLineItemMutation.mutate;
 
   // Group mutations
   const createGroupMutation = useMutation({
