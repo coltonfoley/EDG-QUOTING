@@ -293,6 +293,12 @@ const SortableLineItemRow = memo(function SortableLineItemRow({
             value={getCurrentValue(item.id, 'markupType')}
             onValueChange={(value) => {
               handleFieldChange(item.id, "markupType", value);
+              // Immediately save to server (unlike inputs, Select doesn't trigger blur)
+              updateLineItemMutation.mutate({ 
+                id: item.id, 
+                data: { markupType: value },
+                skipInvalidation: false
+              });
             }}
           >
             <SelectTrigger className="w-12 h-6 border-0 bg-transparent p-0 text-xs" data-testid={`select-markup-type-${item.id}`}>
@@ -826,7 +832,8 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
         const response = await apiRequest("PUT", `/api/line-items/${id}`, data, {
           signal: abortController.current.signal
         });
-        return { ...response.json(), skipInvalidation };
+        const body = await response.json();
+        return { ...body, skipInvalidation };
       } catch (error: any) {
         // If this is an abort error, don't let it become an unhandled rejection
         if (error instanceof NavigationAbortError || error?.name === 'AbortError' || error?.message?.includes('aborted') || error?.message?.includes('signal is aborted')) {
