@@ -118,6 +118,22 @@ function Router() {
   );
 }
 
+function InternalUIComponents() {
+  const [location] = useLocation();
+  
+  // Hide internal UI on public-facing pages
+  if (location.startsWith('/sign/')) {
+    return null;
+  }
+  
+  return (
+    <>
+      <ReportIssueButton />
+      <AIAssistant />
+    </>
+  );
+}
+
 function App() {
   return (
     <ErrorBoundary>
@@ -127,8 +143,7 @@ function App() {
             <GlobalLoadingIndicator />
             <Toaster />
             <Router />
-            <ReportIssueButton />
-            <AIAssistant />
+            <InternalUIComponents />
           </TooltipProvider>
         </AuthProvider>
       </QueryClientProvider>
