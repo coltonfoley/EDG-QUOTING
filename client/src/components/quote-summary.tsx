@@ -34,6 +34,7 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
   const [localCustomContractTerms, setLocalCustomContractTerms] = useState<string>("");
   const [showSigningLinkDialog, setShowSigningLinkDialog] = useState(false);
   const [signingLink, setSigningLink] = useState<string>("");
+  const [personalizedMessage, setPersonalizedMessage] = useState<string>("");
   const [showCompanySignDialog, setShowCompanySignDialog] = useState(false);
   const [companySignature, setCompanySignature] = useState<SignatureData | null>(null);
   const [showESignatureOptionsModal, setShowESignatureOptionsModal] = useState(false);
@@ -212,6 +213,8 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
       // Token exists - just show the dialog with the existing link
       const link = `${window.location.origin}/sign/${quote.signingToken}`;
       setSigningLink(link);
+      // Pre-populate personalized message from saved value if available
+      setPersonalizedMessage(quote.signatureEmailMessage || '');
       setShowSigningLinkDialog(true);
     } else {
       // No token - open the options modal to configure preferences
@@ -241,8 +244,10 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
 
   // Send signature email mutation
   const sendSignatureEmailMutation = useMutation({
-    mutationFn: async () => {
-      const response = await apiRequest("POST", `/api/quotes/${quote.id}/send-signature-email`, {});
+    mutationFn: async (message?: string) => {
+      const response = await apiRequest("POST", `/api/quotes/${quote.id}/send-signature-email`, {
+        message: message || ''
+      });
       return response.json();
     },
     onSuccess: (data) => {
@@ -250,6 +255,9 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
         title: "Email Sent!",
         description: data.message || "E-signature email sent to customer"
       });
+      // Don't clear the personalized message - keep it for potential resend
+      // Refresh to get updated signatureEmailSentAt
+      queryClient.invalidateQueries({ queryKey: [`/api/quotes/${quote.id}`] });
     },
     onError: (error: any) => {
       toast({ 
@@ -666,9 +674,15 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
                     <Clock className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
                     <AlertDescription className="text-yellow-900 dark:text-yellow-100">
                       <strong>Pending Signature</strong>
-                      <span className="block mt-1 text-sm">
-                        Signing link is active, waiting for signature
-                      </span>
+                      {quote.signatureEmailSentAt ? (
+                        <span className="block mt-1 text-sm">
+                          Email sent on {new Date(quote.signatureEmailSentAt).toLocaleString()}
+                        </span>
+                      ) : (
+                        <span className="block mt-1 text-sm">
+                          Signing link ready - email not yet sent
+                        </span>
+                      )}
                     </AlertDescription>
                   </Alert>
                 ) : null}
@@ -716,19 +730,26 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
 
       {/* Signing Link Dialog */}
       <Dialog open={showSigningLinkDialog} onOpenChange={setShowSigningLinkDialog}>
-        <DialogContent>
+        <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>Signing Link Generated</DialogTitle>
+            <DialogTitle>Send Quote for Signature</DialogTitle>
             <DialogDescription>
-              Share this link with your client to sign the quote electronically
+              Share this link with your client or send it directly via email
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <Alert>
-              <AlertDescription>
-                Share this link with the client to sign the quote electronically
-              </AlertDescription>
-            </Alert>
+            {/* Show if email was already sent */}
+            {quote.signatureEmailSentAt && (
+              <Alert className="border-green-600/30 bg-green-600/10">
+                <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
+                <AlertDescription className="text-green-900 dark:text-green-100">
+                  <strong>Email Previously Sent</strong>
+                  <span className="block mt-1 text-sm">
+                    Sent on {new Date(quote.signatureEmailSentAt).toLocaleString()}
+                  </span>
+                </AlertDescription>
+              </Alert>
+            )}
             
             <div className="space-y-2">
               <Label>Signing Link</Label>
@@ -749,27 +770,58 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
               </div>
             </div>
 
-            <div className="pt-4 space-y-2">
-              {!quote.account?.email && (
+            <div className="border-t pt-4 space-y-3">
+              <Label className="text-sm font-medium">Send via Email</Label>
+              
+              {!quote.account?.email ? (
                 <Alert className="border-yellow-600/30 bg-yellow-600/10">
+                  <AlertCircle className="h-4 w-4 text-yellow-600" />
                   <AlertDescription className="text-yellow-900 dark:text-yellow-100 text-sm">
-                    Add a customer email to enable email sending
+                    Add a customer email address to enable email sending
                   </AlertDescription>
                 </Alert>
+              ) : (
+                <>
+                  <div className="text-sm text-muted-foreground">
+                    Sending to: <span className="font-medium text-foreground">{quote.account.email}</span>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="personalized-message" className="text-sm">
+                      Add a Personal Message <span className="text-muted-foreground">(optional)</span>
+                    </Label>
+                    <Textarea
+                      id="personalized-message"
+                      placeholder="Hi! Thank you for choosing us for your project. Please review the attached quote at your convenience..."
+                      value={personalizedMessage}
+                      onChange={(e) => setPersonalizedMessage(e.target.value)}
+                      rows={3}
+                      className="resize-none"
+                      data-testid="input-personalized-message"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      This message will appear as a highlighted note in the email, before the quote details.
+                    </p>
+                  </div>
+                  
+                  <Button
+                    onClick={() => sendSignatureEmailMutation.mutate(personalizedMessage)}
+                    disabled={sendSignatureEmailMutation.isPending}
+                    className="w-full bg-edg-teal hover:bg-edg-dark-teal text-white"
+                    data-testid="button-send-email"
+                  >
+                    <Mail className="mr-2 h-4 w-4" />
+                    {sendSignatureEmailMutation.isPending ? "Sending..." : 
+                      quote.signatureEmailSentAt ? "Resend Email" : "Send Email"}
+                  </Button>
+                </>
               )}
-              <Button
-                onClick={() => sendSignatureEmailMutation.mutate()}
-                disabled={sendSignatureEmailMutation.isPending || !quote.account?.email}
-                className="w-full bg-edg-teal hover:bg-edg-dark-teal text-white disabled:opacity-50 disabled:cursor-not-allowed"
-                data-testid="button-send-email"
-              >
-                <Mail className="mr-2 h-4 w-4" />
-                {sendSignatureEmailMutation.isPending ? "Sending..." : "Send Email to Customer"}
-              </Button>
+            </div>
+
+            <div className="flex justify-end pt-2">
               <Button
                 onClick={() => setShowSigningLinkDialog(false)}
                 variant="outline"
-                className="w-full"
                 data-testid="button-close-dialog"
               >
                 Done

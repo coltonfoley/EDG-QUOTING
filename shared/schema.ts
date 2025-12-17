@@ -148,6 +148,9 @@ export const quotes = pgTable("quotes", {
   companySignatureData: jsonb("company_signature_data"), // { type: 'draw'|'type', imageData: string, name: string }
   companySignedAt: timestamp("company_signed_at"),
   companySignedIp: text("company_signed_ip"),
+  // E-Signature email tracking
+  signatureEmailSentAt: timestamp("signature_email_sent_at"), // when the signing link was emailed to client
+  signatureEmailMessage: text("signature_email_message"), // optional personalized message included in email
   // E-Signature PDF preferences
   esigIncludePricing: boolean("esig_include_pricing").default(true), // show pricing in signed PDF
   esigIncludeImages: boolean("esig_include_images").default(false), // include product renderings in signed PDF
