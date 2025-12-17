@@ -1132,6 +1132,21 @@ export function registerQuoteRoutes(app: Express) {
 
       const { sendEmail } = await import("../gmail");
 
+      // Get optional personalized message from request body
+      const personalizedMessage = req.body.message?.trim() || '';
+      
+      // Escape HTML entities in personalized message to prevent injection
+      const escapeHtml = (text: string) => {
+        return text
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#039;')
+          .replace(/\n/g, '<br>');
+      };
+      const safePersonalizedMessage = personalizedMessage ? escapeHtml(personalizedMessage) : '';
+
       const baseUrl = process.env.REPLIT_DOMAINS
         ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}`
         : process.env.REPLIT_DEV_DOMAIN 
@@ -1143,6 +1158,15 @@ export function registerQuoteRoutes(app: Express) {
       const customerName = quote.account.firstName 
         ? `${quote.account.firstName} ${quote.account.lastName || ''}`.trim()
         : quote.account.name;
+
+      // Build personalized message section if provided (use escaped version)
+      const personalizedMessageHtml = safePersonalizedMessage ? `
+          <div style="background-color: #fff7ed; border-left: 4px solid #f97316; border-radius: 4px; padding: 20px; margin: 20px 0;">
+            <p style="margin: 0; font-size: 14px; color: #1a1a1a; font-style: italic;">
+              "${safePersonalizedMessage}"
+            </p>
+          </div>
+      ` : '';
 
       const htmlBody = `
         <!DOCTYPE html>
@@ -1158,7 +1182,7 @@ export function registerQuoteRoutes(app: Express) {
             <p style="color: #ffffff; margin-bottom: 0;">Hello ${customerName},</p>
             <p style="color: #f0f0f0;">Your quote <strong>#${quote.quoteNumber}</strong> for <strong>${quote.projectName || 'your project'}</strong> is ready for your electronic signature.</p>
           </div>
-          
+          ${personalizedMessageHtml}
           <div style="background-color: #ffffff; border: 2px solid #e5e7eb; border-radius: 8px; padding: 30px; margin-bottom: 20px;">
             <h2 style="color: #000000; margin-top: 0; font-size: 20px; border-bottom: 2px solid #14b8a6; padding-bottom: 10px;">Quote Details</h2>
             <p style="color: #1a1a1a;"><strong>Quote Number:</strong> ${quote.quoteNumber}</p>
@@ -1194,9 +1218,17 @@ export function registerQuoteRoutes(app: Express) {
         htmlBody
       });
 
+      // Track when the email was sent and the personalized message
+      // Always update the message field so it stays in sync with what was sent
+      await storage.updateQuote(quote.id, {
+        signatureEmailSentAt: new Date(),
+        signatureEmailMessage: personalizedMessage || null, // Store null if cleared
+      });
+
       res.json({ 
         success: true,
-        message: `E-signature email sent to ${quote.account.email}`
+        message: `E-signature email sent to ${quote.account.email}`,
+        sentAt: new Date().toISOString()
       });
     } catch (error) {
       console.error("Error sending signature email:", error);
