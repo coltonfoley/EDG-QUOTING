@@ -382,20 +382,45 @@ export default function Quotes() {
                           <td className="px-6 py-4 text-center">
                             {quote.enableESignature ? (
                               quote.clientSignedAt && quote.companySignedAt ? (
-                                <Badge className="bg-green-100 text-green-800 hover:bg-green-100" data-testid={`badge-signature-complete-${quote.id}`}>
-                                  <CheckCircle2 className="w-3 h-3 mr-1" />
-                                  Fully Signed
-                                </Badge>
+                                <div className="flex flex-col items-center gap-1">
+                                  <Badge className="bg-green-100 text-green-800 hover:bg-green-100" data-testid={`badge-signature-complete-${quote.id}`}>
+                                    <CheckCircle2 className="w-3 h-3 mr-1" />
+                                    Fully Signed
+                                  </Badge>
+                                  <span className="text-[10px] text-muted-foreground">
+                                    {new Date(quote.clientSignedAt).toLocaleDateString()}
+                                  </span>
+                                </div>
                               ) : quote.clientSignedAt ? (
-                                <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100" data-testid={`badge-signature-client-${quote.id}`}>
-                                  <FileSignature className="w-3 h-3 mr-1" />
-                                  Client Signed
-                                </Badge>
+                                <div className="flex flex-col items-center gap-1">
+                                  <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100" data-testid={`badge-signature-client-${quote.id}`}>
+                                    <FileSignature className="w-3 h-3 mr-1" />
+                                    Client Signed
+                                  </Badge>
+                                  <span className="text-[10px] text-muted-foreground">
+                                    {new Date(quote.clientSignedAt).toLocaleDateString()}
+                                  </span>
+                                </div>
+                              ) : quote.signatureEmailSentAt ? (
+                                <div className="flex flex-col items-center gap-1">
+                                  <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-100" data-testid={`badge-signature-awaiting-${quote.id}`}>
+                                    <Clock className="w-3 h-3 mr-1" />
+                                    Awaiting Signature
+                                  </Badge>
+                                  <span className="text-[10px] text-muted-foreground">
+                                    Sent {new Date(quote.signatureEmailSentAt).toLocaleDateString()}
+                                  </span>
+                                </div>
                               ) : (
-                                <Badge className="bg-yellow-100 text-yellow-800 hover:bg-yellow-100" data-testid={`badge-signature-pending-${quote.id}`}>
-                                  <Clock className="w-3 h-3 mr-1" />
-                                  Pending Client
-                                </Badge>
+                                <div className="flex flex-col items-center gap-1">
+                                  <Badge className="bg-gray-100 text-gray-600 hover:bg-gray-100" data-testid={`badge-signature-ready-${quote.id}`}>
+                                    <Clock className="w-3 h-3 mr-1" />
+                                    Ready to Send
+                                  </Badge>
+                                  <span className="text-[10px] text-muted-foreground">
+                                    {new Date(quote.updatedAt || quote.createdAt || Date.now()).toLocaleDateString()}
+                                  </span>
+                                </div>
                               )
                             ) : (
                               <span className="text-muted-foreground text-xs">-</span>
