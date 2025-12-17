@@ -142,6 +142,7 @@ export default function PublicSignPage() {
   const [currentStep, setCurrentStep] = useState<SigningStep>('review');
   const [hasAgreed, setHasAgreed] = useState(false);
   const [signedTimestamp, setSignedTimestamp] = useState<Date | null>(null);
+  const [emailWasSent, setEmailWasSent] = useState(false);
   const { toast } = useToast();
 
   const { data: quoteData, isLoading, error } = useQuery<SigningQuoteData>({
@@ -257,11 +258,12 @@ export default function PublicSignPage() {
         signatureData,
         signerType: 'client'
       });
-      return response;
+      return response.json();
     },
-    onSuccess: () => {
+    onSuccess: (data: { success: boolean; emailSent?: boolean }) => {
       setSignedTimestamp(new Date());
       setCurrentStep('complete');
+      setEmailWasSent(data.emailSent ?? false);
       toast({
         title: 'Signed Successfully',
         description: 'Your signature has been recorded',
@@ -450,7 +452,10 @@ export default function PublicSignPage() {
                 </Button>
                 
                 <p className="text-xs text-muted-foreground">
-                  We recommend downloading a copy of your signed document for your records.
+                  {emailWasSent 
+                    ? "A confirmation email has been sent to you with a link to download your signed document."
+                    : "We recommend downloading a copy of your signed document for your records."
+                  }
                 </p>
               </div>
 
