@@ -146,9 +146,9 @@ export default function PublicSignPage() {
   const { toast } = useToast();
 
   const { data: quoteData, isLoading, error } = useQuery<SigningQuoteData>({
-    queryKey: ['/api/signatures', token],
+    queryKey: ['/api/signatures', token, 'full'],
     queryFn: async () => {
-      const res = await fetch(`/api/signatures/${token}`, {
+      const res = await fetch(`/api/signatures/${token}/full`, {
         credentials: 'include'
       });
       if (!res.ok) {
@@ -269,7 +269,7 @@ export default function PublicSignPage() {
         description: 'Your signature has been recorded',
       });
       queryClient.invalidateQueries({ 
-        queryKey: ['/api/signatures', token]
+        queryKey: ['/api/signatures', token, 'full']
       });
       queryClient.invalidateQueries({ 
         queryKey: ['/api/quotes']
