@@ -1317,9 +1317,112 @@ export function registerQuoteRoutes(app: Express) {
 
       await storage.updateQuote(quote.id, updateData);
 
+      // Send confirmation email to client after they sign
+      let emailSent = false;
+      if (signerType === 'client' && quote.account?.email) {
+        try {
+          const { sendEmail } = await import("../gmail");
+          
+          const customerName = quote.account.firstName 
+            ? `${quote.account.firstName} ${quote.account.lastName || ''}`.trim()
+            : quote.account.name;
+
+          const baseUrl = process.env.REPLIT_DOMAINS
+            ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}`
+            : process.env.REPLIT_DEV_DOMAIN 
+              ? `https://${process.env.REPLIT_DEV_DOMAIN}` 
+              : req.get('origin') || `${req.protocol}://${req.get('host')}`;
+          
+          const downloadUrl = `${baseUrl}/sign/${quote.signingToken}`;
+
+          const signedDate = new Date().toLocaleString('en-US', {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit',
+            timeZoneName: 'short'
+          });
+
+          const htmlBody = `
+            <!DOCTYPE html>
+            <html>
+            <head>
+              <meta charset="utf-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <title>Signature Confirmation</title>
+            </head>
+            <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #1a1a1a; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9fafb;">
+              <div style="background-color: #059669; border-radius: 8px 8px 0 0; padding: 30px; margin-bottom: 0;">
+                <div style="text-align: center; margin-bottom: 15px;">
+                  <div style="display: inline-block; width: 60px; height: 60px; background-color: rgba(255,255,255,0.2); border-radius: 50%; line-height: 60px; font-size: 30px;">
+                    ✓
+                  </div>
+                </div>
+                <h1 style="color: #ffffff; margin: 0; font-size: 24px; text-align: center;">Document Signed Successfully</h1>
+              </div>
+              
+              <div style="background-color: #ffffff; border: 1px solid #e5e7eb; border-top: none; padding: 30px; margin-bottom: 20px;">
+                <p style="color: #1a1a1a; margin-top: 0;">Hello ${customerName},</p>
+                <p style="color: #4b5563;">Thank you for signing your quote. This email confirms that your electronic signature has been successfully recorded.</p>
+                
+                <div style="background-color: #f3f4f6; border-radius: 8px; padding: 20px; margin: 20px 0;">
+                  <h3 style="color: #1f2937; margin: 0 0 15px 0; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px;">Signature Details</h3>
+                  <table style="width: 100%; font-size: 14px;">
+                    <tr>
+                      <td style="padding: 5px 0; color: #6b7280;">Document:</td>
+                      <td style="padding: 5px 0; color: #1f2937; font-weight: 600;">${quote.projectName || `Quote #${quote.quoteNumber}`}</td>
+                    </tr>
+                    <tr>
+                      <td style="padding: 5px 0; color: #6b7280;">Quote Number:</td>
+                      <td style="padding: 5px 0; color: #1f2937; font-weight: 600;">#${quote.quoteNumber}</td>
+                    </tr>
+                    <tr>
+                      <td style="padding: 5px 0; color: #6b7280;">Signed On:</td>
+                      <td style="padding: 5px 0; color: #1f2937; font-weight: 600;">${signedDate}</td>
+                    </tr>
+                    <tr>
+                      <td style="padding: 5px 0; color: #6b7280;">Signed By:</td>
+                      <td style="padding: 5px 0; color: #1f2937; font-weight: 600;">${customerName}</td>
+                    </tr>
+                  </table>
+                </div>
+
+                <div style="text-align: center; margin: 25px 0;">
+                  <a href="${downloadUrl}" style="display: inline-block; background-color: #000000; color: #ffffff; text-decoration: none; padding: 14px 30px; border-radius: 6px; font-weight: 600; font-size: 14px;">Download Signed Document</a>
+                </div>
+
+                <p style="color: #6b7280; font-size: 13px; text-align: center;">You can access your signed document at any time using the link above.</p>
+              </div>
+              
+              <div style="text-align: center; color: #6b7280; font-size: 12px; padding-top: 20px;">
+                <p style="margin: 5px 0; font-weight: 600; color: #1a1a1a;">EDG Patio & Shade</p>
+                <p style="margin: 5px 0;">1802 Holian Drive, Spring Grove, IL 60081</p>
+                <p style="margin: 5px 0;">Phone: +1 (815) 581-0138 | Email: info@edgpatioshade.com</p>
+                <p style="margin: 15px 0 5px 0; font-size: 11px; color: #9ca3af;">This is an automated confirmation. Please do not reply to this email.</p>
+              </div>
+            </body>
+            </html>
+          `;
+
+          await sendEmail({
+            to: quote.account.email,
+            subject: `Signature Confirmed: ${quote.projectName || `Quote #${quote.quoteNumber}`}`,
+            htmlBody
+          });
+
+          emailSent = true;
+          console.log(`Signature confirmation email sent to ${quote.account.email}`);
+        } catch (emailError) {
+          console.error("Failed to send signature confirmation email:", emailError);
+        }
+      }
+
       res.json({ 
         success: true,
-        message: "Signature captured successfully"
+        message: "Signature captured successfully",
+        emailSent
       });
     } catch (error) {
       console.error("Error submitting signature:", error);
