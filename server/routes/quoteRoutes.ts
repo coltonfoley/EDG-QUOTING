@@ -439,6 +439,47 @@ export function registerQuoteRoutes(app: Express) {
     }
   });
 
+  // Autosave endpoint for navigator.sendBeacon (handles in-app navigation saves)
+  app.post("/api/quotes/:id/autosave", isAuthenticated, async (req, res) => {
+    try {
+      const params = idParamSchema.safeParse(req.params);
+      if (!params.success) {
+        return res.status(400).json({ message: "Invalid quote ID" });
+      }
+      
+      const quoteId = params.data.id;
+      const updates = req.body;
+      
+      if (Object.keys(updates).length > 0) {
+        await storage.updateQuote(quoteId, updates);
+        console.log(`Autosaved quote ${quoteId} with fields:`, Object.keys(updates));
+      }
+      
+      res.status(200).json({ success: true });
+    } catch (error: any) {
+      console.error("Autosave error:", error);
+      res.status(500).json({ message: "Autosave failed" });
+    }
+  });
+
+  // Create a minimal draft quote for eager autosave
+  app.post("/api/quotes/draft", isAuthenticated, async (req, res) => {
+    try {
+      const quoteData: InsertQuote = {
+        quoteNumber: `DRAFT-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
+        isDraft: true,
+        isShippingTaxable: false,
+      };
+      
+      const quote = await storage.createQuote(quoteData);
+      console.log(`Created draft quote with ID: ${quote.id}`);
+      res.status(201).json(quote);
+    } catch (error: any) {
+      console.error("Draft creation error:", error);
+      res.status(500).json({ message: "Failed to create draft" });
+    }
+  });
+
   app.post("/api/quotes/import-vision-direct", isAuthenticated, rateLimitPDFProcessing, upload.single('pdf'), async (req: any, res) => {
     try {
       if (!req.file) {
