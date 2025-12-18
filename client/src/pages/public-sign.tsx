@@ -6,10 +6,11 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
 import { LoadingSpinner } from '@/components/loading-spinner';
 import { SignatureCanvas, SignatureData } from '@/components/signature-canvas';
 import { apiRequest, queryClient } from '@/lib/queryClient';
-import { CheckCircle, AlertTriangle, FileText, Download, Shield, Clock, Eye, PenLine, ArrowRight, Building2, MapPin, Mail, Phone } from 'lucide-react';
+import { CheckCircle, AlertTriangle, FileText, Download, Shield, Clock, Eye, PenLine, ArrowRight, ArrowLeft, MapPin, Mail, Phone, DollarSign, Package, Maximize2, Minimize2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import jsPDF from 'jspdf';
 import { barlowRegularBase64, barlowSemiBoldBase64 } from '@/lib/fonts';
@@ -18,6 +19,7 @@ import { normalizeImageToDataUrl } from '@/lib/pdf-image-pipeline';
 import { generateSignedPDF, downloadSignedPDF } from '@/lib/generate-signed-pdf';
 import type { QuoteWithDetails } from '@shared/schema';
 import { cn } from '@/lib/utils';
+import edgLogoPath from '@assets/Logo_Full_Color_Black_1766097629382.png';
 
 interface SigningQuoteData {
   id: number;
@@ -33,6 +35,7 @@ interface SigningQuoteData {
     quantity: number;
     unitPrice: number;
     lineType: string;
+    isTaxable?: boolean;
   }>;
   taxRate: number | null;
   discount: number | null;
@@ -55,6 +58,28 @@ const COMPANY_INFO = {
   phone: '+1 (815) 581-0138',
   email: 'info@edgpatioshade.com'
 };
+
+function calculateQuoteTotals(quoteData: SigningQuoteData) {
+  const lineItems = quoteData.lineItems || [];
+  const subtotal = lineItems.reduce((sum, item) => {
+    const qty = Number(item.quantity) || 0;
+    const price = Number(item.unitPrice) || 0;
+    return sum + (qty * price);
+  }, 0);
+  const taxableAmount = lineItems
+    .filter(item => item.isTaxable !== false)
+    .reduce((sum, item) => {
+      const qty = Number(item.quantity) || 0;
+      const price = Number(item.unitPrice) || 0;
+      return sum + (qty * price);
+    }, 0);
+  const taxRate = Number(quoteData.taxRate) || 0;
+  const tax = taxableAmount * (taxRate / 100);
+  const shipping = Number(quoteData.shipping) || 0;
+  const discount = Number(quoteData.discount) || 0;
+  const total = subtotal + tax + shipping - discount;
+  return { subtotal, tax, shipping, discount, total, itemCount: lineItems.length };
+}
 
 function StepIndicator({ currentStep, isComplete }: { currentStep: SigningStep; isComplete: boolean }) {
   const steps = [
@@ -113,20 +138,71 @@ function StepIndicator({ currentStep, isComplete }: { currentStep: SigningStep; 
 
 function CompanyHeader() {
   return (
-    <div className="bg-slate-900 text-white py-4 px-6">
-      <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-teal-400 to-teal-600 flex items-center justify-center font-bold text-lg">
-            E
-          </div>
-          <div>
-            <h1 className="font-semibold text-lg">{COMPANY_INFO.name}</h1>
-            <p className="text-slate-400 text-sm">Secure Document Signing</p>
+    <div className="bg-slate-900 text-white py-3 px-6 shadow-lg">
+      <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
+        <div className="flex items-center gap-4">
+          <img 
+            src={edgLogoPath} 
+            alt="EDG Patio & Shade" 
+            className="h-10 w-auto brightness-0 invert"
+          />
+          <div className="hidden sm:block border-l border-slate-700 pl-4">
+            <p className="text-slate-400 text-xs">Secure Document Signing</p>
           </div>
         </div>
-        <div className="flex items-center gap-2 text-sm text-slate-400">
-          <Shield className="w-4 h-4 text-emerald-400" />
+        <div className="flex items-center gap-2 text-xs text-slate-400">
+          <Shield className="w-3.5 h-3.5 text-emerald-400" />
           <span>256-bit SSL Encrypted</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function QuoteSummaryBar({ quoteData, showPricing }: { quoteData: SigningQuoteData; showPricing: boolean }) {
+  const totals = calculateQuoteTotals(quoteData);
+  
+  return (
+    <div className="bg-white dark:bg-slate-800 border-b shadow-sm sticky top-0 z-10">
+      <div className="max-w-7xl mx-auto px-4 py-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-primary/10">
+              <FileText className="w-5 h-5 text-primary" />
+            </div>
+            <div>
+              <h2 className="font-semibold text-lg leading-tight">
+                {quoteData.projectName || `Quote #${quoteData.quoteNumber}`}
+              </h2>
+              <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                <span>{quoteData.accountName}</span>
+                {quoteData.jobsiteAddress && (
+                  <>
+                    <span className="hidden sm:inline">•</span>
+                    <span className="flex items-center gap-1">
+                      <MapPin className="w-3 h-3" />
+                      {quoteData.jobsiteAddress}
+                    </span>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3 text-sm">
+              <Badge variant="secondary" className="flex items-center gap-1">
+                <Package className="w-3 h-3" />
+                {totals.itemCount} items
+              </Badge>
+              {showPricing && (
+                <Badge variant="default" className="flex items-center gap-1 bg-primary">
+                  <DollarSign className="w-3 h-3" />
+                  {totals.total.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+                </Badge>
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -143,6 +219,7 @@ export default function PublicSignPage() {
   const [hasAgreed, setHasAgreed] = useState(false);
   const [signedTimestamp, setSignedTimestamp] = useState<Date | null>(null);
   const [emailWasSent, setEmailWasSent] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const { toast } = useToast();
 
   const { data: quoteData, isLoading, error } = useQuery<SigningQuoteData>({
@@ -179,6 +256,31 @@ export default function PublicSignPage() {
       setSignedTimestamp(new Date(quoteData.clientSignedAt));
     }
   }, [quoteData?.clientSignedAt]);
+
+  useEffect(() => {
+    if (isFullscreen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isFullscreen]);
+
+  const handleDownloadPreview = () => {
+    if (!pdfUrl || !quoteData) return;
+    const link = document.createElement('a');
+    link.href = pdfUrl;
+    link.download = `Quote-${quoteData.quoteNumber || quoteData.id}-Preview.pdf`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast({
+      title: 'PDF Downloaded',
+      description: 'Quote preview has been downloaded',
+    });
+  };
 
   const generatePdfPreview = async () => {
     if (!quoteData) return;
@@ -345,6 +447,7 @@ export default function PublicSignPage() {
 
   const isAlreadySigned = !!quoteData?.clientSignedAt;
   const canSign = signature && hasAgreed && !isAlreadySigned && !signMutation.isPending;
+  const showPricing = quoteData?.esigIncludePricing ?? true;
 
   if (isLoading) {
     return (
@@ -482,211 +585,197 @@ export default function PublicSignPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-900">
+    <div className="min-h-screen bg-slate-100 dark:bg-slate-900 flex flex-col">
       <CompanyHeader />
+      <QuoteSummaryBar quoteData={quoteData} showPricing={showPricing} />
       
-      <div className="max-w-5xl mx-auto px-4 py-6">
-        <StepIndicator currentStep={currentStep} isComplete={false} />
-        
-        <Card className="mb-6 shadow-sm">
-          <CardContent className="py-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="flex items-start gap-3">
-                <div className="p-2 rounded-lg bg-primary/10">
-                  <FileText className="w-5 h-5 text-primary" />
-                </div>
-                <div>
-                  <h2 className="font-semibold text-lg">{quoteData.projectName || `Quote #${quoteData.quoteNumber}`}</h2>
-                  <p className="text-sm text-muted-foreground">{quoteData.accountName}</p>
-                </div>
+      <div className="flex-1 flex flex-col">
+        <div className="max-w-7xl mx-auto w-full px-4 py-4">
+          <StepIndicator currentStep={currentStep} isComplete={false} />
+        </div>
+
+        {currentStep === 'review' && (
+          <>
+            <div className={cn(
+              "flex-1 bg-slate-200 dark:bg-slate-800 relative",
+              isFullscreen && "fixed inset-0 z-50"
+            )}>
+              <div className="absolute top-2 right-2 z-10 flex gap-2">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setIsFullscreen(!isFullscreen)}
+                  className="shadow-lg"
+                  data-testid="button-toggle-fullscreen"
+                >
+                  {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+                </Button>
               </div>
-              {quoteData.jobsiteAddress && (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <MapPin className="w-4 h-4" />
-                  <span>{quoteData.jobsiteAddress}</span>
+              
+              {isGeneratingPdf ? (
+                <div className="flex items-center justify-center h-full min-h-[70vh]">
+                  <LoadingSpinner text="Generating document preview..." />
+                </div>
+              ) : pdfUrl ? (
+                <iframe
+                  src={pdfUrl}
+                  className={cn(
+                    "w-full border-0",
+                    isFullscreen ? "h-full" : "h-[calc(100vh-280px)] min-h-[500px]"
+                  )}
+                  data-testid="pdf-preview"
+                  title="Document Preview"
+                />
+              ) : (
+                <div className="flex items-center justify-center h-full min-h-[70vh]">
+                  <Alert className="max-w-md">
+                    <AlertDescription>
+                      Document preview not available. Please try refreshing the page.
+                    </AlertDescription>
+                  </Alert>
                 </div>
               )}
             </div>
-          </CardContent>
-        </Card>
 
-        {currentStep === 'review' && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2">
-              <Card className="shadow-lg">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Eye className="w-5 h-5" />
-                    Review Document
-                  </CardTitle>
-                  <CardDescription>
-                    Please review the document carefully before signing
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {isGeneratingPdf ? (
-                    <div className="flex items-center justify-center h-[700px] bg-slate-100 dark:bg-slate-800 rounded-lg">
-                      <LoadingSpinner text="Loading document..." />
+            {!isFullscreen && (
+              <div className="bg-white dark:bg-slate-800 border-t shadow-lg sticky bottom-0">
+                <div className="max-w-7xl mx-auto px-4 py-4">
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                    <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                      <Shield className="w-4 h-4 text-emerald-500" />
+                      <span>Your signature is legally binding and encrypted</span>
                     </div>
-                  ) : pdfUrl ? (
-                    <iframe
-                      src={pdfUrl}
-                      className="w-full h-[700px] border rounded-lg"
-                      data-testid="pdf-preview"
-                      title="Document Preview"
-                    />
-                  ) : (
-                    <Alert>
-                      <AlertDescription>
-                        Document preview not available
-                      </AlertDescription>
-                    </Alert>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
-
-            <div className="space-y-4">
-              <Card className="shadow-lg">
-                <CardHeader>
-                  <CardTitle className="text-lg">Ready to Sign?</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <p className="text-sm text-muted-foreground">
-                    After reviewing the document above, click the button below to proceed with your electronic signature.
-                  </p>
-                  
-                  <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
-                    <p className="text-sm text-amber-800 dark:text-amber-200">
-                      <strong>Important:</strong> By signing, you agree to all terms and conditions outlined in this document.
-                    </p>
-                  </div>
-
-                  <Button 
-                    onClick={handleProceedToSign}
-                    className="w-full"
-                    size="lg"
-                    disabled={isGeneratingPdf}
-                    data-testid="button-proceed-to-sign"
-                  >
-                    Proceed to Sign
-                    <ArrowRight className="w-4 h-4 ml-2" />
-                  </Button>
-                </CardContent>
-              </Card>
-
-              <Card className="shadow-sm bg-slate-50 dark:bg-slate-800/50">
-                <CardContent className="py-4">
-                  <div className="flex items-start gap-3">
-                    <Shield className="w-5 h-5 text-emerald-500 mt-0.5" />
-                    <div className="text-sm">
-                      <p className="font-medium text-slate-700 dark:text-slate-300">Secure Signing</p>
-                      <p className="text-muted-foreground">Your signature is legally binding and protected with industry-standard encryption.</p>
+                    
+                    <div className="flex items-center gap-3 w-full sm:w-auto">
+                      <Button
+                        variant="outline"
+                        onClick={handleDownloadPreview}
+                        disabled={!pdfUrl || isGeneratingPdf}
+                        data-testid="button-download-preview"
+                      >
+                        <Download className="w-4 h-4 mr-2" />
+                        Download
+                      </Button>
+                      <Button 
+                        onClick={handleProceedToSign}
+                        size="lg"
+                        disabled={isGeneratingPdf}
+                        className="flex-1 sm:flex-none min-w-[200px]"
+                        data-testid="button-proceed-to-sign"
+                      >
+                        Continue to Sign
+                        <ArrowRight className="w-4 h-4 ml-2" />
+                      </Button>
                     </div>
                   </div>
-                </CardContent>
-              </Card>
-            </div>
-          </div>
+                </div>
+              </div>
+            )}
+          </>
         )}
 
         {currentStep === 'sign' && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Card className="shadow-lg">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Eye className="w-5 h-5" />
-                  Document Preview
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {pdfUrl ? (
-                  <iframe
-                    src={pdfUrl}
-                    className="w-full h-[600px] border rounded-lg"
-                    data-testid="pdf-preview"
-                    title="Document Preview"
-                  />
-                ) : (
-                  <div className="h-[600px] bg-slate-100 dark:bg-slate-800 rounded-lg flex items-center justify-center">
-                    <LoadingSpinner text="Loading..." />
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            <div className="space-y-4">
-              <Card className="shadow-lg">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <PenLine className="w-5 h-5" />
-                    Your Signature
-                  </CardTitle>
-                  <CardDescription>
-                    Draw or type your signature below
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <SignatureCanvas
-                    onSignatureChange={setSignature}
-                    signerName=""
-                  />
-                </CardContent>
-              </Card>
-
-              <Card className="shadow-lg border-primary/20">
-                <CardContent className="py-4 space-y-4">
-                  <div className="flex items-start gap-3">
-                    <Checkbox 
-                      id="agree-terms" 
-                      checked={hasAgreed}
-                      onCheckedChange={(checked) => setHasAgreed(checked === true)}
-                      data-testid="checkbox-agree-terms"
-                    />
-                    <Label htmlFor="agree-terms" className="text-sm leading-relaxed cursor-pointer">
-                      I confirm that I have reviewed this document and agree to be legally bound by its terms. I understand that my electronic signature carries the same legal weight as a handwritten signature.
-                    </Label>
-                  </div>
-
-                  <Button
-                    onClick={handleSign}
-                    disabled={!canSign}
-                    className="w-full"
-                    size="lg"
-                    data-testid="button-submit-signature"
-                  >
-                    {signMutation.isPending ? (
-                      <>
-                        <LoadingSpinner className="w-4 h-4 mr-2" />
-                        Signing...
-                      </>
+          <div className="flex-1 max-w-4xl mx-auto w-full px-4 py-6">
+            <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+              <div className="lg:col-span-2">
+                <Card className="shadow-lg h-full">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="flex items-center gap-2 text-lg">
+                      <Eye className="w-5 h-5" />
+                      Document Preview
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-2">
+                    {pdfUrl ? (
+                      <iframe
+                        src={pdfUrl}
+                        className="w-full h-[400px] border rounded-lg"
+                        data-testid="pdf-preview-sign"
+                        title="Document Preview"
+                      />
                     ) : (
-                      <>
-                        <CheckCircle className="w-4 h-4 mr-2" />
-                        Sign Document
-                      </>
+                      <div className="h-[400px] bg-slate-100 dark:bg-slate-800 rounded-lg flex items-center justify-center">
+                        <LoadingSpinner text="Loading..." />
+                      </div>
                     )}
-                  </Button>
+                  </CardContent>
+                </Card>
+              </div>
 
-                  {signature && hasAgreed && (
-                    <Alert className="bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800">
-                      <CheckCircle className="w-4 h-4 text-emerald-600" />
-                      <AlertDescription className="text-emerald-800 dark:text-emerald-200">
-                        Ready to submit! Click "Sign Document" to complete.
-                      </AlertDescription>
-                    </Alert>
-                  )}
-                </CardContent>
-              </Card>
+              <div className="lg:col-span-3 space-y-4">
+                <Card className="shadow-lg">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <PenLine className="w-5 h-5" />
+                      Your Signature
+                    </CardTitle>
+                    <CardDescription>
+                      Draw or type your signature below
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <SignatureCanvas
+                      onSignatureChange={setSignature}
+                      signerName=""
+                    />
+                  </CardContent>
+                </Card>
 
-              <Button 
-                variant="ghost" 
-                onClick={() => setCurrentStep('review')}
-                className="w-full"
-                data-testid="button-back-to-review"
-              >
-                Back to Review
-              </Button>
+                <Card className="shadow-lg border-primary/20">
+                  <CardContent className="py-4 space-y-4">
+                    <div className="flex items-start gap-3">
+                      <Checkbox 
+                        id="agree-terms" 
+                        checked={hasAgreed}
+                        onCheckedChange={(checked) => setHasAgreed(checked === true)}
+                        data-testid="checkbox-agree-terms"
+                      />
+                      <Label htmlFor="agree-terms" className="text-sm leading-relaxed cursor-pointer">
+                        I confirm that I have reviewed this document and agree to be legally bound by its terms. I understand that my electronic signature carries the same legal weight as a handwritten signature.
+                      </Label>
+                    </div>
+
+                    {signature && hasAgreed && (
+                      <Alert className="bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800">
+                        <CheckCircle className="w-4 h-4 text-emerald-600" />
+                        <AlertDescription className="text-emerald-800 dark:text-emerald-200">
+                          Ready to submit! Click "Sign Document" to complete.
+                        </AlertDescription>
+                      </Alert>
+                    )}
+
+                    <div className="flex gap-3 pt-2">
+                      <Button 
+                        variant="outline" 
+                        onClick={() => setCurrentStep('review')}
+                        data-testid="button-back-to-review"
+                      >
+                        <ArrowLeft className="w-4 h-4 mr-2" />
+                        Back
+                      </Button>
+                      <Button
+                        onClick={handleSign}
+                        disabled={!canSign}
+                        className="flex-1"
+                        size="lg"
+                        data-testid="button-submit-signature"
+                      >
+                        {signMutation.isPending ? (
+                          <>
+                            <LoadingSpinner className="w-4 h-4 mr-2" />
+                            Signing...
+                          </>
+                        ) : (
+                          <>
+                            <CheckCircle className="w-4 h-4 mr-2" />
+                            Sign Document
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
             </div>
           </div>
         )}
