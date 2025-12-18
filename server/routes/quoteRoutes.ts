@@ -498,6 +498,7 @@ export function registerQuoteRoutes(app: Express) {
         projectName: "",
         isDraft: true,
         isShippingTaxable: false,
+        dealStage: "new_lead",
       };
       
       const quote = await storage.createQuote(quoteData);
