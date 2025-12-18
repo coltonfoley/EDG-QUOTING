@@ -5,6 +5,8 @@ import { db } from "../db";
 import { quotes as quotesTable } from "@shared/schema";
 import { eq, sql } from "drizzle-orm";
 import { isAuthenticated } from "../replitAuth";
+import fs from "fs";
+import path from "path";
 import {
   insertQuoteSchema,
   updateQuoteSchema,
@@ -1132,6 +1134,15 @@ export function registerQuoteRoutes(app: Express) {
 
       const { sendEmail } = await import("../gmail");
 
+      // Load logo for email
+      const logoPath = path.join(process.cwd(), 'attached_assets', 'Logo_Full_Color_Black_1766097629382.png');
+      let logoBase64 = '';
+      try {
+        logoBase64 = fs.readFileSync(logoPath).toString('base64');
+      } catch (e) {
+        console.warn('Could not load logo for email:', e);
+      }
+
       // Get optional personalized message from request body
       const personalizedMessage = req.body.message?.trim() || '';
       
@@ -1178,7 +1189,7 @@ export function registerQuoteRoutes(app: Express) {
         </head>
         <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #1a1a1a; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9fafb;">
           <div style="background-color: #000000; border-radius: 8px 8px 0 0; border-bottom: 4px solid #14b8a6; padding: 30px; margin-bottom: 20px; text-align: center;">
-            <img src="https://edgpatioshade.com/wp-content/uploads/2024/01/EDG-Logo-Full-Color-White.png" alt="EDG Patio & Shade" style="max-width: 200px; height: auto; margin-bottom: 20px;" />
+            <img src="cid:edg-logo" alt="EDG Patio & Shade" style="max-width: 200px; height: auto; margin-bottom: 20px;" />
             <h1 style="color: #ffffff; margin-top: 0; font-size: 24px;">Your Quote is Ready for Signature</h1>
             <p style="color: #ffffff; margin-bottom: 0;">Hello ${customerName},</p>
             <p style="color: #f0f0f0;">Your quote <strong>#${quote.quoteNumber}</strong> for <strong>${quote.projectName || 'your project'}</strong> is ready for your electronic signature.</p>
@@ -1216,7 +1227,13 @@ export function registerQuoteRoutes(app: Express) {
       await sendEmail({
         to: quote.account.email,
         subject: `EDG Patio & Shade - Quote #${quote.quoteNumber}${quote.projectName ? ` for ${quote.projectName}` : ''} Ready for Your Signature`,
-        htmlBody
+        htmlBody,
+        inlineAttachments: logoBase64 ? [{
+          contentId: 'edg-logo',
+          base64Data: logoBase64,
+          mimeType: 'image/png',
+          filename: 'edg-logo.png'
+        }] : undefined
       });
 
       // Track when the email was sent and the personalized message
