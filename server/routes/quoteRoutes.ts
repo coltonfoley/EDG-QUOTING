@@ -479,6 +479,7 @@ export function registerQuoteRoutes(app: Express) {
     try {
       const quoteData: InsertQuote = {
         quoteNumber: `DRAFT-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
+        projectName: "",
         isDraft: true,
         isShippingTaxable: false,
       };
