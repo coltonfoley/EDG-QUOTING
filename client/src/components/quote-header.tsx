@@ -49,14 +49,11 @@ interface QuoteHeaderProps {
 export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  
+  const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingChanges = useRef<Record<string, any>>({});
+  const [isSaving, setIsSaving] = useState(false);
 
-  
-  
-  
-  
-  
-  
-  
   const form = useForm<QuoteFormData>({
     resolver: zodResolver(quoteFormSchema),
     defaultValues: {
@@ -150,6 +147,91 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
     }
   };
 
+  // General autosave mutation for project details and client info
+  const autosaveMutation = useMutation({
+    mutationFn: async (data: Record<string, any>) => {
+      if (!quote?.id) throw new Error("No quote ID");
+      const response = await apiRequest('PUT', `/api/quotes/${quote.id}`, data);
+      return response.json();
+    },
+    onSuccess: () => {
+      // Invalidate caches to ensure fresh data
+      queryClient.invalidateQueries({ queryKey: [`/api/quotes/${quote?.id}`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/quotes"] });
+      setIsSaving(false);
+    },
+    onError: (error: Error) => {
+      toast({ 
+        title: "Error", 
+        description: "Failed to save changes", 
+        variant: "destructive" 
+      });
+      setIsSaving(false);
+    },
+  });
+
+  // Flush all pending changes immediately
+  const flushPendingChanges = useCallback(() => {
+    if (!quote?.id) return;
+    
+    // Clear the timer if it exists
+    if (debounceTimer.current) {
+      clearTimeout(debounceTimer.current);
+      debounceTimer.current = null;
+    }
+    
+    // Only mutate if there are actual changes
+    const changes = { ...pendingChanges.current };
+    if (Object.keys(changes).length > 0) {
+      pendingChanges.current = {};
+      setIsSaving(true);
+      autosaveMutation.mutate(changes);
+    }
+  }, [quote?.id, autosaveMutation]);
+
+  // Debounced autosave function - uses single timer for all fields
+  const performAutosave = useCallback((field: keyof QuoteFormData, value: any) => {
+    if (!quote?.id) return;
+    
+    // Store the pending change
+    pendingChanges.current[field] = value;
+    
+    // Clear existing timer
+    if (debounceTimer.current) {
+      clearTimeout(debounceTimer.current);
+    }
+    
+    // Set new debounced timer (500ms delay)
+    debounceTimer.current = setTimeout(() => {
+      flushPendingChanges();
+    }, 500);
+  }, [quote?.id, flushPendingChanges]);
+
+  // Handle field blur - flush all pending changes immediately
+  const handleFieldBlur = useCallback(() => {
+    if (!quote?.id) return;
+    flushPendingChanges();
+  }, [quote?.id, flushPendingChanges]);
+
+  // Handle field change with autosave
+  const handleFieldChange = useCallback((
+    field: keyof QuoteFormData, 
+    value: any, 
+    originalOnChange: (value: any) => void
+  ) => {
+    originalOnChange(value);
+    performAutosave(field, value);
+  }, [performAutosave]);
+
+  // Cleanup timer on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceTimer.current) {
+        clearTimeout(debounceTimer.current);
+      }
+    };
+  }, []);
+
   const handleJobsiteAddressSelect = (components: {
     streetAddress: string;
     addressLine2: string;
@@ -166,7 +248,33 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
     form.setValue("jobsiteZipCode", components.zipCode);
     form.setValue("jobsiteCountry", components.country);
     form.setValue("jobsitePlaceId", components.placeId);
+    
+    // Autosave all address fields immediately when selecting from autocomplete
+    if (quote?.id) {
+      // Add all address fields to pending changes and flush immediately
+      pendingChanges.current = {
+        ...pendingChanges.current,
+        jobsiteStreetAddress: components.streetAddress,
+        jobsiteAddressLine2: components.addressLine2 || "",
+        jobsiteCity: components.city,
+        jobsiteState: components.state,
+        jobsiteZipCode: components.zipCode,
+        jobsiteCountry: components.country,
+        jobsitePlaceId: components.placeId,
+      };
+      flushPendingChanges();
+    }
   };
+
+  // Handle client change with immediate autosave
+  const handleClientChange = useCallback((value: number | null | undefined) => {
+    const actualValue = value ?? null;
+    form.setValue("accountId", actualValue);
+    if (quote?.id) {
+      pendingChanges.current = { ...pendingChanges.current, accountId: actualValue };
+      flushPendingChanges();
+    }
+  }, [quote?.id, flushPendingChanges, form]);
 
   const handleSubmit = (data: QuoteFormData) => {
     onSave(data);
@@ -189,10 +297,16 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
           <div className="mt-4 lg:mt-0 flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3">
             {quote && (
               <>
+                {(isSaving || autosaveMutation.isPending) && (
+                  <span className="text-sm text-muted-foreground flex items-center">
+                    <Clock className="mr-1 h-3 w-3 animate-spin" />
+                    Saving...
+                  </span>
+                )}
                 <div className="flex items-center space-x-2">
                   <span className="text-sm font-medium text-foreground">Pipeline Stage:</span>
                   <Select
-                    value={form.watch("dealStage")}
+                    value={(form.watch("dealStage") as string) || "new_lead"}
                     onValueChange={handleDealStageChange}
                     disabled={updateDealStageMutation.isPending}
                   >
@@ -259,8 +373,8 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
                       <FormLabel>Client (Optional)</FormLabel>
                       <FormControl>
                         <ClientComboboxWithCreate
-                          value={field.value}
-                          onValueChange={field.onChange}
+                          value={field.value as number | null | undefined}
+                          onValueChange={handleClientChange}
                           placeholder="Search clients or create new..."
                         />
                       </FormControl>
@@ -286,7 +400,7 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
                         <FormLabel>Quote Number</FormLabel>
                         <FormControl>
                           <Input 
-                            {...field} 
+                            value={field.value as string || ""}
                             readOnly 
                             placeholder="Auto-generated on save"
                             className="bg-muted"
@@ -305,7 +419,13 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
                           Project Name <span className="text-red-500">*</span>
                         </FormLabel>
                         <FormControl>
-                          <Input placeholder="Enter project name (required)" {...field} value={field.value || ""} data-testid="input-project-name" />
+                          <Input 
+                            placeholder="Enter project name (required)" 
+                            value={field.value as string || ""} 
+                            onChange={(e) => handleFieldChange("projectName", e.target.value, field.onChange)}
+                            onBlur={handleFieldBlur}
+                            data-testid="input-project-name" 
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -337,8 +457,9 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
                           <FormControl>
                             <Input 
                               placeholder="123 Main Street" 
-                              {...field} 
-                              value={field.value || ""}
+                              value={field.value as string || ""}
+                              onChange={(e) => handleFieldChange("jobsiteStreetAddress", e.target.value, field.onChange)}
+                              onBlur={handleFieldBlur}
                               data-testid="input-jobsite-street-address"
                             />
                           </FormControl>
@@ -357,8 +478,9 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
                             <FormControl>
                               <Input 
                                 placeholder="Apt 4B" 
-                                {...field} 
-                                value={field.value || ""}
+                                value={field.value as string || ""}
+                                onChange={(e) => handleFieldChange("jobsiteAddressLine2", e.target.value, field.onChange)}
+                                onBlur={handleFieldBlur}
                                 data-testid="input-jobsite-address-line2"
                               />
                             </FormControl>
@@ -376,8 +498,9 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
                             <FormControl>
                               <Input 
                                 placeholder="City" 
-                                {...field} 
-                                value={field.value || ""}
+                                value={field.value as string || ""}
+                                onChange={(e) => handleFieldChange("jobsiteCity", e.target.value, field.onChange)}
+                                onBlur={handleFieldBlur}
                                 data-testid="input-jobsite-city"
                               />
                             </FormControl>
@@ -397,8 +520,9 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
                             <FormControl>
                               <Input 
                                 placeholder="State" 
-                                {...field} 
-                                value={field.value || ""}
+                                value={field.value as string || ""}
+                                onChange={(e) => handleFieldChange("jobsiteState", e.target.value, field.onChange)}
+                                onBlur={handleFieldBlur}
                                 data-testid="input-jobsite-state"
                               />
                             </FormControl>
@@ -416,8 +540,9 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
                             <FormControl>
                               <Input 
                                 placeholder="ZIP" 
-                                {...field} 
-                                value={field.value || ""}
+                                value={field.value as string || ""}
+                                onChange={(e) => handleFieldChange("jobsiteZipCode", e.target.value, field.onChange)}
+                                onBlur={handleFieldBlur}
                                 data-testid="input-jobsite-zip"
                               />
                             </FormControl>
@@ -435,8 +560,9 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
                             <FormControl>
                               <Input 
                                 placeholder="Country" 
-                                {...field} 
-                                value={field.value || ""}
+                                value={field.value as string || ""}
+                                onChange={(e) => handleFieldChange("jobsiteCountry", e.target.value, field.onChange)}
+                                onBlur={handleFieldBlur}
                                 data-testid="input-jobsite-country"
                               />
                             </FormControl>
@@ -454,7 +580,12 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
                       <FormItem>
                         <FormLabel>Estimated Start Date</FormLabel>
                         <FormControl>
-                          <Input type="date" {...field} value={field.value || ""} />
+                          <Input 
+                            type="date" 
+                            value={field.value as string || ""} 
+                            onChange={(e) => handleFieldChange("estimatedStartDate", e.target.value, field.onChange)}
+                            onBlur={handleFieldBlur}
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
