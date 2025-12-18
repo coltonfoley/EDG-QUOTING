@@ -53,21 +53,6 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingChanges = useRef<Record<string, any>>({});
   const [isSaving, setIsSaving] = useState(false);
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-
-  // Leave protection - warn before navigating away with unsaved changes
-  useEffect(() => {
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (hasUnsavedChanges || Object.keys(pendingChanges.current).length > 0) {
-        e.preventDefault();
-        e.returnValue = "You have unsaved changes. Are you sure you want to leave?";
-        return e.returnValue;
-      }
-    };
-
-    window.addEventListener("beforeunload", handleBeforeUnload);
-    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-  }, [hasUnsavedChanges]);
 
   const form = useForm<QuoteFormData>({
     resolver: zodResolver(quoteFormSchema),
@@ -115,7 +100,7 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
         accountId: quote.accountId ?? null,
       });
     }
-  }, [quote?.id, quote?.quoteNumber, quote?.isDraft, form]);
+  }, [quote?.id, form]);
   
 
   const updateDealStageMutation = useMutation({
@@ -166,37 +151,14 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
   const autosaveMutation = useMutation({
     mutationFn: async (data: Record<string, any>) => {
       if (!quote?.id) throw new Error("No quote ID");
-      
-      // If this is a draft and we're setting meaningful fields, promote to active
-      const meaningfulFields = ['projectName', 'accountId', 'jobsiteStreetAddress'];
-      const hasMeaningfulData = meaningfulFields.some(field => 
-        data[field] !== undefined && data[field] !== null && data[field] !== ''
-      );
-      
-      // If draft and meaningful data provided, include isDraft: false
-      if (quote?.isDraft && hasMeaningfulData) {
-        data.isDraft = false;
-      }
-      
       const response = await apiRequest('PUT', `/api/quotes/${quote.id}`, data);
       return response.json();
     },
-    onSuccess: (data, variables) => {
-      // Optimistically update the quote cache if isDraft was changed
-      if (variables.isDraft === false && quote) {
-        queryClient.setQueryData([`/api/quotes/${quote.id}`], (oldData: any) => {
-          if (oldData) {
-            return { ...oldData, isDraft: false };
-          }
-          return oldData;
-        });
-      }
-      
+    onSuccess: () => {
       // Invalidate caches to ensure fresh data
       queryClient.invalidateQueries({ queryKey: [`/api/quotes/${quote?.id}`] });
       queryClient.invalidateQueries({ queryKey: ["/api/quotes"] });
       setIsSaving(false);
-      setHasUnsavedChanges(false);
     },
     onError: (error: Error) => {
       toast({ 
@@ -231,9 +193,6 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
   const performAutosave = useCallback((field: keyof QuoteFormData, value: any) => {
     if (!quote?.id) return;
     
-    // Mark as having unsaved changes
-    setHasUnsavedChanges(true);
-    
     // Store the pending change
     pendingChanges.current[field] = value;
     
@@ -264,21 +223,14 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
     performAutosave(field, value);
   }, [performAutosave]);
 
-  // Cleanup timer on unmount and flush any pending changes
+  // Cleanup timer on unmount
   useEffect(() => {
     return () => {
       if (debounceTimer.current) {
         clearTimeout(debounceTimer.current);
       }
-      // Flush pending changes synchronously on unmount to handle in-app navigation
-      const changes = { ...pendingChanges.current };
-      if (Object.keys(changes).length > 0 && quote?.id) {
-        // Use navigator.sendBeacon for reliable background sync on unmount
-        const data = JSON.stringify(changes);
-        navigator.sendBeacon(`/api/quotes/${quote.id}/autosave`, data);
-      }
     };
-  }, [quote?.id]);
+  }, []);
 
   const handleJobsiteAddressSelect = (components: {
     streetAddress: string;
@@ -333,16 +285,9 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
       <CardHeader className="border-b border-border">
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <div className="flex items-center gap-2">
-              <CardTitle className="text-2xl font-bold text-foreground">
-                {quote ? `Quote ${quote.quoteNumber}` : "New Quote"}
-              </CardTitle>
-              {quote?.isDraft && (
-                <Badge variant="outline" className="bg-amber-100 text-amber-800 border-amber-300">
-                  Draft
-                </Badge>
-              )}
-            </div>
+            <CardTitle className="text-2xl font-bold text-foreground">
+              {quote ? `Quote ${quote.quoteNumber}` : "New Quote"}
+            </CardTitle>
             {quote?.createdAt && (
               <p className="text-sm text-accent-grey mt-1">
                 Created on {new Date(quote.createdAt).toLocaleDateString()}

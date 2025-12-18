@@ -1,6 +1,6 @@
 import { useParams } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState, useEffect, useRef } from "react";
+import { useState } from "react";
 import { AppHeader } from "@/components/app-header";
 import { QuoteHeader } from "@/components/quote-header";
 import { LineItemsTable } from "@/components/line-items-table";
@@ -23,10 +23,6 @@ export default function QuoteBuilder() {
   const params = useParams();
   const id = params.id;
   
-  // Track if we're in the process of creating a draft
-  const [isCreatingDraft, setIsCreatingDraft] = useState(false);
-  const draftCreated = useRef(false);
-  
   const isNewQuote = !id || id === "new";
   const quoteId = id && id !== "new" ? parseInt(id) : undefined;
   
@@ -37,33 +33,6 @@ export default function QuoteBuilder() {
   // State for proposal generator dialog
   const [proposalGeneratorOpen, setProposalGeneratorOpen] = useState(false);
   const [versionHistoryOpen, setVersionHistoryOpen] = useState(false);
-
-  // Eagerly create a draft when navigating to /quotes/new
-  useEffect(() => {
-    if (isNewQuote && !draftCreated.current && !isCreatingDraft) {
-      draftCreated.current = true;
-      setIsCreatingDraft(true);
-      
-      apiRequest("POST", "/api/quotes/draft")
-        .then(response => response.json())
-        .then(draft => {
-          queryClient.invalidateQueries({ queryKey: ["/api/quotes"] });
-          // Navigate to the draft's edit page with full page reload
-          // This ensures the component fully remounts with the new ID
-          window.location.replace(`/quotes/${draft.id}/edit`);
-        })
-        .catch(error => {
-          console.error("Failed to create draft:", error);
-          toast({ 
-            title: "Error", 
-            description: "Failed to initialize quote. Please try again.", 
-            variant: "destructive" 
-          });
-          draftCreated.current = false;
-          setIsCreatingDraft(false);
-        });
-    }
-  }, [isNewQuote, isCreatingDraft, queryClient, toast]);
 
   const { data: quote, isLoading, error } = useQuery<QuoteWithDetails>({
     queryKey: [`/api/quotes/${quoteId}`],
@@ -250,16 +219,9 @@ export default function QuoteBuilder() {
     quoteNumber: "",
     accountId: null,
     projectName: "",
+    projectAddress: "",
     jobsiteAddress: null,
-    jobsiteStreetAddress: null,
-    jobsiteAddressLine2: null,
-    jobsiteCity: null,
-    jobsiteState: null,
-    jobsiteZipCode: null,
-    jobsiteCountry: null,
-    jobsitePlaceId: null,
     estimatedStartDate: "",
-    isDraft: false,
     notes: "",
     taxRate: "8.5",
     tariffRate: "0",
@@ -278,11 +240,6 @@ export default function QuoteBuilder() {
     companySignatureData: null,
     companySignedAt: null,
     companySignedIp: null,
-    signatureEmailSentAt: null,
-    signatureEmailMessage: null,
-    esigIncludePricing: true,
-    esigIncludeImages: false,
-    esigIncludeContract: true,
     qbEstimateId: null,
     qbSyncStatus: null,
     qbSyncedAt: null,
