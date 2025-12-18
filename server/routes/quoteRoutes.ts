@@ -1,4 +1,4 @@
-import type { Express } from "express";
+import express, { type Express } from "express";
 import { storage } from "../storage";
 import { z } from "zod";
 import { db } from "../db";
@@ -440,7 +440,8 @@ export function registerQuoteRoutes(app: Express) {
   });
 
   // Autosave endpoint for navigator.sendBeacon (handles in-app navigation saves)
-  app.post("/api/quotes/:id/autosave", isAuthenticated, async (req, res) => {
+  // Note: sendBeacon sends with text/plain content-type, so we need to parse the body
+  app.post("/api/quotes/:id/autosave", isAuthenticated, express.text({ type: '*/*' }), async (req, res) => {
     try {
       const params = idParamSchema.safeParse(req.params);
       if (!params.success) {
@@ -448,9 +449,20 @@ export function registerQuoteRoutes(app: Express) {
       }
       
       const quoteId = params.data.id;
-      const updates = req.body;
       
-      if (Object.keys(updates).length > 0) {
+      // Parse the body - it may come as string (sendBeacon) or object (regular fetch)
+      let updates: Record<string, any>;
+      if (typeof req.body === 'string') {
+        try {
+          updates = JSON.parse(req.body);
+        } catch {
+          return res.status(400).json({ message: "Invalid JSON body" });
+        }
+      } else {
+        updates = req.body;
+      }
+      
+      if (updates && Object.keys(updates).length > 0) {
         await storage.updateQuote(quoteId, updates);
         console.log(`Autosaved quote ${quoteId} with fields:`, Object.keys(updates));
       }

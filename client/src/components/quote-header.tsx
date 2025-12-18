@@ -181,7 +181,17 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
       const response = await apiRequest('PUT', `/api/quotes/${quote.id}`, data);
       return response.json();
     },
-    onSuccess: () => {
+    onSuccess: (data, variables) => {
+      // Optimistically update the quote cache if isDraft was changed
+      if (variables.isDraft === false && quote) {
+        queryClient.setQueryData([`/api/quotes/${quote.id}`], (oldData: any) => {
+          if (oldData) {
+            return { ...oldData, isDraft: false };
+          }
+          return oldData;
+        });
+      }
+      
       // Invalidate caches to ensure fresh data
       queryClient.invalidateQueries({ queryKey: [`/api/quotes/${quote?.id}`] });
       queryClient.invalidateQueries({ queryKey: ["/api/quotes"] });
