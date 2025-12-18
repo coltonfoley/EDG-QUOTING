@@ -136,7 +136,6 @@ export const quotes = pgTable("quotes", {
   isShippingTaxable: boolean("is_shipping_taxable").default(false), // whether shipping is subject to sales tax
   dealStage: text("deal_stage").notNull().default("new_lead"), // new_lead, qualifying, consultation_scheduled, building_estimate, quote_sent, closed_won, closed_lost, on_hold
   lostReason: text("lost_reason"), // price, timeline, competitor, no_budget, etc.
-  isDraft: boolean("is_draft").notNull().default(false), // true for auto-saved drafts that haven't been explicitly saved
   // Contract fields
   contractTemplateId: integer("contract_template_id").references(() => contractTemplates.id, { onDelete: "set null" }), // reference to contract template
   customContractTerms: text("custom_contract_terms"), // custom contract text for this quote

@@ -1,4 +1,4 @@
-import express, { type Express } from "express";
+import type { Express } from "express";
 import { storage } from "../storage";
 import { z } from "zod";
 import { db } from "../db";
@@ -436,77 +436,6 @@ export function registerQuoteRoutes(app: Express) {
       
       console.error("Quote creation error:", error);
       res.status(500).json({ message: "Internal server error" });
-    }
-  });
-
-  // Autosave endpoint for navigator.sendBeacon (handles in-app navigation saves)
-  // Note: sendBeacon sends with text/plain content-type, so we need to parse the body
-  app.post("/api/quotes/:id/autosave", isAuthenticated, express.text({ type: '*/*' }), async (req, res) => {
-    try {
-      const params = idParamSchema.safeParse(req.params);
-      if (!params.success) {
-        return res.status(400).json({ message: "Invalid quote ID" });
-      }
-      
-      const quoteId = params.data.id;
-      
-      // Parse the body - it may come as string (sendBeacon) or object (regular fetch)
-      let updates: Record<string, any>;
-      if (typeof req.body === 'string') {
-        try {
-          updates = JSON.parse(req.body);
-        } catch {
-          return res.status(400).json({ message: "Invalid JSON body" });
-        }
-      } else {
-        updates = req.body;
-      }
-      
-      if (updates && Object.keys(updates).length > 0) {
-        // Check if we're promoting a draft and need to generate a proper quote number
-        if (updates.isDraft === false) {
-          const originalQuote = await storage.getQuote(quoteId);
-          if (originalQuote?.isDraft && originalQuote.quoteNumber?.startsWith('DRAFT-')) {
-            // Generate a proper quote number using the same format as storage.createQuote
-            const year = new Date().getFullYear();
-            const timestamp = Date.now();
-            const random = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
-            updates.quoteNumber = `QT-${year}-${timestamp.toString().slice(-8)}${random}`;
-            console.log(`Promoting draft quote ${quoteId}: ${originalQuote.quoteNumber} -> ${updates.quoteNumber}`);
-          }
-        }
-        
-        const updatedQuote = await storage.updateQuote(quoteId, updates);
-        console.log(`Autosaved quote ${quoteId} with fields:`, Object.keys(updates));
-        
-        // Return the updated quote so the client can see any changes (like new quote number)
-        return res.status(200).json({ success: true, quote: updatedQuote });
-      }
-      
-      res.status(200).json({ success: true });
-    } catch (error: any) {
-      console.error("Autosave error:", error);
-      res.status(500).json({ message: "Autosave failed" });
-    }
-  });
-
-  // Create a minimal draft quote for eager autosave
-  app.post("/api/quotes/draft", isAuthenticated, async (req, res) => {
-    try {
-      const quoteData: InsertQuote = {
-        quoteNumber: `DRAFT-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
-        projectName: "",
-        isDraft: true,
-        isShippingTaxable: false,
-        dealStage: "new_lead",
-      };
-      
-      const quote = await storage.createQuote(quoteData);
-      console.log(`Created draft quote with ID: ${quote.id}`);
-      res.status(201).json(quote);
-    } catch (error: any) {
-      console.error("Draft creation error:", error);
-      res.status(500).json({ message: "Failed to create draft" });
     }
   });
 
@@ -992,19 +921,6 @@ export function registerQuoteRoutes(app: Express) {
       const originalQuote = await storage.getQuote(params.data.id);
       if (!originalQuote) {
         return res.status(404).json({ message: "Quote not found" });
-      }
-      
-      // If promoting a draft (isDraft going from true to false), generate a proper quote number
-      if (originalQuote.isDraft && quoteData.isDraft === false) {
-        // Check if the quote number still has the DRAFT prefix
-        if (originalQuote.quoteNumber?.startsWith('DRAFT-')) {
-          // Generate a proper quote number using the same format as storage.createQuote
-          const year = new Date().getFullYear();
-          const timestamp = Date.now();
-          const random = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
-          quoteData.quoteNumber = `QT-${year}-${timestamp.toString().slice(-8)}${random}`;
-          console.log(`Promoting draft quote ${params.data.id}: ${originalQuote.quoteNumber} -> ${quoteData.quoteNumber}`);
-        }
       }
       
       const quote = await storage.updateQuote(params.data.id, quoteData);
