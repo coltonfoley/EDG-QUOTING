@@ -115,7 +115,7 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
         accountId: quote.accountId ?? null,
       });
     }
-  }, [quote?.id, form]);
+  }, [quote?.id, quote?.quoteNumber, quote?.isDraft, form]);
   
 
   const updateDealStageMutation = useMutation({
