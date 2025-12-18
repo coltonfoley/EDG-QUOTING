@@ -89,10 +89,9 @@ export async function generateSignedPDF(options: GenerateSignedPDFOptions): Prom
  */
 export function downloadSignedPDF(pdfBlob: Blob, quote: QuoteWithDetails) {
   const timestamp = new Date().toISOString().slice(0, 10);
-  const customer = quote.account ?? quote.customer;
-  const customerName = customer?.name ?? 'Customer';
+  const projectName = quote.projectName || 'Project';
   const quoteNumber = quote.quoteNumber || 'Quote';
-  const filename = `${customerName.replace(/[^a-zA-Z0-9]/g, '_')}_${quoteNumber}_Signed_${timestamp}.pdf`;
+  const filename = `${projectName.replace(/[^a-zA-Z0-9]/g, '_')}_${quoteNumber}_Signed_${timestamp}.pdf`;
 
   const url = URL.createObjectURL(pdfBlob);
   const link = document.createElement('a');

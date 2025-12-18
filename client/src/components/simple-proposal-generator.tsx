@@ -602,10 +602,10 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
 
       // Save the PDF
       const pdfBlob = pdf.output('blob');
-      const timestamp = new Date().toISOString().slice(0, 19).replace(/[-:]/g, '');
-      const customer = (quote.account ?? quote.customer);
-      const customerName = customer?.name ?? 'Customer';
-      const filename = `${customerName.replace(/[^a-zA-Z0-9]/g, '_')}_Proposal_${timestamp}.pdf`;
+      const timestamp = new Date().toISOString().slice(0, 10);
+      const projectName = quote.projectName || 'Project';
+      const quoteNumber = quote.quoteNumber || 'Quote';
+      const filename = `${projectName.replace(/[^a-zA-Z0-9]/g, '_')}_${quoteNumber}_Proposal_${timestamp}.pdf`;
       
       // Create download link and store URL for viewing
       const url = URL.createObjectURL(pdfBlob);
@@ -867,7 +867,10 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
                       onClick={() => {
                         const link = document.createElement('a');
                         link.href = generatedPdfUrl;
-                        link.download = `Quote-${quote.quoteNumber}.pdf`;
+                        const timestamp = new Date().toISOString().slice(0, 10);
+                        const projectName = quote.projectName || 'Project';
+                        const quoteNumber = quote.quoteNumber || 'Quote';
+                        link.download = `${projectName.replace(/[^a-zA-Z0-9]/g, '_')}_${quoteNumber}_Proposal_${timestamp}.pdf`;
                         link.click();
                       }}
                     >
