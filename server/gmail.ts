@@ -54,22 +54,64 @@ export async function getUncachableGmailClient() {
   return google.gmail({ version: 'v1', auth: oauth2Client });
 }
 
+export interface InlineAttachment {
+  contentId: string;
+  base64Data: string;
+  mimeType: string;
+  filename: string;
+}
+
 export async function sendEmail(params: {
   to: string;
   subject: string;
   htmlBody: string;
   textBody?: string;
+  inlineAttachments?: InlineAttachment[];
 }) {
   const gmail = await getUncachableGmailClient();
   
-  const message = [
-    `To: ${params.to}`,
-    'Content-Type: text/html; charset=utf-8',
-    'MIME-Version: 1.0',
-    `Subject: ${params.subject}`,
-    '',
-    params.htmlBody
-  ].join('\n');
+  let message: string;
+  
+  if (params.inlineAttachments && params.inlineAttachments.length > 0) {
+    const boundary = `----=_Part_${Date.now()}_${Math.random().toString(36).substring(2)}`;
+    
+    const messageParts = [
+      `To: ${params.to}`,
+      'MIME-Version: 1.0',
+      `Subject: ${params.subject}`,
+      `Content-Type: multipart/related; boundary="${boundary}"`,
+      '',
+      `--${boundary}`,
+      'Content-Type: text/html; charset=utf-8',
+      'Content-Transfer-Encoding: 7bit',
+      '',
+      params.htmlBody,
+    ];
+    
+    for (const attachment of params.inlineAttachments) {
+      messageParts.push(
+        `--${boundary}`,
+        `Content-Type: ${attachment.mimeType}; name="${attachment.filename}"`,
+        'Content-Transfer-Encoding: base64',
+        `Content-ID: <${attachment.contentId}>`,
+        `Content-Disposition: inline; filename="${attachment.filename}"`,
+        '',
+        attachment.base64Data
+      );
+    }
+    
+    messageParts.push(`--${boundary}--`);
+    message = messageParts.join('\r\n');
+  } else {
+    message = [
+      `To: ${params.to}`,
+      'Content-Type: text/html; charset=utf-8',
+      'MIME-Version: 1.0',
+      `Subject: ${params.subject}`,
+      '',
+      params.htmlBody
+    ].join('\n');
+  }
 
   const encodedMessage = Buffer.from(message)
     .toString('base64')
