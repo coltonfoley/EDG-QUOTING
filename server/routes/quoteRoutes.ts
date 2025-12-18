@@ -1177,7 +1177,8 @@ export function registerQuoteRoutes(app: Express) {
           <title>Your Quote is Ready for Signature</title>
         </head>
         <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #1a1a1a; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9fafb;">
-          <div style="background-color: #000000; border-radius: 8px 8px 0 0; border-bottom: 4px solid #14b8a6; padding: 30px; margin-bottom: 20px;">
+          <div style="background-color: #000000; border-radius: 8px 8px 0 0; border-bottom: 4px solid #14b8a6; padding: 30px; margin-bottom: 20px; text-align: center;">
+            <img src="https://edgpatioshade.com/wp-content/uploads/2024/01/EDG-Logo-Full-Color-White.png" alt="EDG Patio & Shade" style="max-width: 200px; height: auto; margin-bottom: 20px;" />
             <h1 style="color: #ffffff; margin-top: 0; font-size: 24px;">Your Quote is Ready for Signature</h1>
             <p style="color: #ffffff; margin-bottom: 0;">Hello ${customerName},</p>
             <p style="color: #f0f0f0;">Your quote <strong>#${quote.quoteNumber}</strong> for <strong>${quote.projectName || 'your project'}</strong> is ready for your electronic signature.</p>
@@ -1214,7 +1215,7 @@ export function registerQuoteRoutes(app: Express) {
 
       await sendEmail({
         to: quote.account.email,
-        subject: `Your Quote #${quote.quoteNumber} is Ready for Signature`,
+        subject: `EDG Patio & Shade - Quote #${quote.quoteNumber}${quote.projectName ? ` for ${quote.projectName}` : ''} Ready for Your Signature`,
         htmlBody
       });
 

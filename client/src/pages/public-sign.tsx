@@ -525,13 +525,13 @@ export default function PublicSignPage() {
                 </CardHeader>
                 <CardContent>
                   {isGeneratingPdf ? (
-                    <div className="flex items-center justify-center h-[500px] bg-slate-100 dark:bg-slate-800 rounded-lg">
+                    <div className="flex items-center justify-center h-[700px] bg-slate-100 dark:bg-slate-800 rounded-lg">
                       <LoadingSpinner text="Loading document..." />
                     </div>
                   ) : pdfUrl ? (
                     <iframe
                       src={pdfUrl}
-                      className="w-full h-[500px] border rounded-lg"
+                      className="w-full h-[700px] border rounded-lg"
                       data-testid="pdf-preview"
                       title="Document Preview"
                     />
@@ -603,12 +603,12 @@ export default function PublicSignPage() {
                 {pdfUrl ? (
                   <iframe
                     src={pdfUrl}
-                    className="w-full h-[400px] border rounded-lg"
+                    className="w-full h-[600px] border rounded-lg"
                     data-testid="pdf-preview"
                     title="Document Preview"
                   />
                 ) : (
-                  <div className="h-[400px] bg-slate-100 dark:bg-slate-800 rounded-lg flex items-center justify-center">
+                  <div className="h-[600px] bg-slate-100 dark:bg-slate-800 rounded-lg flex items-center justify-center">
                     <LoadingSpinner text="Loading..." />
                   </div>
                 )}
