@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Trash2, Plus, Package, Search, Filter, X, FileText, Loader2, GripVertical, Info, Settings } from "lucide-react";
+import { Trash2, Plus, Package, Search, Filter, X, FileText, Loader2, GripVertical, Info, Settings, Percent } from "lucide-react";
 import { formatCurrency, calculateLineItemTotal, calculateLineItemMargin, applyDiscountToPrice, isValidNumber, clampValue, roundCurrency, generateGroupId, sanitizeNumberString } from "@/lib/utils";
 import { apiRequest, NavigationAbortError } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -411,6 +411,12 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
   
   // Product configurator state
   const [showConfiguratorDialog, setShowConfiguratorDialog] = useState(false);
+  
+  // Bulk margin adjustment state
+  const [showBulkMarginDialog, setShowBulkMarginDialog] = useState(false);
+  const [bulkMarginType, setBulkMarginType] = useState<"percentage" | "dollar">("percentage");
+  const [bulkMarginValue, setBulkMarginValue] = useState("");
+  const [isBulkUpdating, setIsBulkUpdating] = useState(false);
   
   // Debounced save timeout refs
   const debounceTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
@@ -1231,6 +1237,128 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
     },
   });
 
+  // Bulk margin update handler
+  const handleBulkMarginUpdate = async () => {
+    // Validate input
+    const value = parseFloat(bulkMarginValue);
+    if (isNaN(value) || !Number.isFinite(value)) {
+      toast({ 
+        title: "Invalid value", 
+        description: "Please enter a valid number", 
+        variant: "destructive" 
+      });
+      return;
+    }
+
+    // Validate range based on type
+    if (bulkMarginType === "percentage") {
+      if (value < 0 || value > 1000) {
+        toast({ 
+          title: "Invalid percentage", 
+          description: "Percentage must be between 0 and 1000", 
+          variant: "destructive" 
+        });
+        return;
+      }
+    } else {
+      if (value < -10000000 || value > 10000000) {
+        toast({ 
+          title: "Invalid amount", 
+          description: "Dollar amount must be between -10,000,000 and 10,000,000", 
+          variant: "destructive" 
+        });
+        return;
+      }
+    }
+
+    // Check if there are any line items
+    if (lineItems.length === 0) {
+      toast({ 
+        title: "No items", 
+        description: "There are no line items to update", 
+        variant: "destructive" 
+      });
+      return;
+    }
+
+    // Check for unsaved edits
+    const hasPendingEdits = Object.keys(debounceTimers.current).length > 0 || activeInputs.current.size > 0;
+    if (hasPendingEdits) {
+      // Flush pending edits first by clearing active inputs and waiting
+      activeInputs.current.clear();
+      Object.values(debounceTimers.current).forEach(timer => clearTimeout(timer));
+      debounceTimers.current = {};
+    }
+
+    setIsBulkUpdating(true);
+
+    try {
+      const ids = lineItems.map(item => item.id);
+      const roundedValue = Math.round(value * 100) / 100; // Round to 2 decimal places
+      
+      const response = await apiRequest("PUT", "/api/line-items/bulk", {
+        ids,
+        updates: {
+          markupType: bulkMarginType,
+          markupValue: roundedValue.toString()
+        }
+      }, {
+        signal: abortController.current.signal
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: "Failed to update margins" }));
+        throw new Error(errorData.message || "Failed to update margins");
+      }
+
+      const result = await response.json();
+      const updatedCount = result?.updatedCount ?? ids.length;
+
+      // Update local values to reflect the change immediately
+      setLocalValues(prev => {
+        const updated = { ...prev };
+        for (const id of ids) {
+          if (updated[id]) {
+            updated[id].markupType = bulkMarginType;
+            updated[id].markupValue = roundedValue.toString();
+          }
+        }
+        return updated;
+      });
+
+      // Invalidate queries to refresh data
+      queryClient.invalidateQueries({ queryKey: [`/api/quotes/${quoteId}`] });
+      
+      // Also update the list cache
+      queryClient.fetchQuery({ queryKey: [`/api/quotes/${quoteId}`] }).then((updatedQuote) => {
+        queryClient.setQueryData(["/api/quotes"], (old: any) => {
+          if (!old) return old;
+          return old.map((q: any) => q.id === quoteId ? updatedQuote : q);
+        });
+      });
+
+      toast({ 
+        title: "Margins updated", 
+        description: `Updated ${updatedCount} line item${updatedCount !== 1 ? 's' : ''} to ${roundedValue}${bulkMarginType === 'percentage' ? '%' : ' dollar'} margin` 
+      });
+
+      // Close dialog and reset
+      setShowBulkMarginDialog(false);
+      setBulkMarginValue("");
+    } catch (error: any) {
+      if (error instanceof NavigationAbortError || error?.name === 'AbortError') {
+        return;
+      }
+      toast({ 
+        title: "Error", 
+        description: error?.message || "Failed to update margins", 
+        variant: "destructive" 
+      });
+    } finally {
+      setIsBulkUpdating(false);
+    }
+  };
+
   // Set pending mutation references when they start
   const createLineItemWithTracking = (data: any) => {
     pendingMutations.current.create = createLineItemMutation;
@@ -1691,6 +1819,91 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
               )}
               Clean Descriptions
             </Button>
+            <Dialog open={showBulkMarginDialog} onOpenChange={(open) => {
+              setShowBulkMarginDialog(open);
+              if (!open) {
+                setBulkMarginValue("");
+              }
+            }}>
+              <DialogTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={isUnsavedQuote || lineItems.length === 0}
+                  data-testid="button-bulk-margin"
+                >
+                  <Percent className="mr-2 h-4 w-4" />
+                  Bulk Margin
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Adjust Margins for All Line Items</DialogTitle>
+                  <DialogDescription>
+                    This will override the margin on all {lineItems.length} line item{lineItems.length !== 1 ? 's' : ''} in this quote.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 pt-4">
+                  <div className="flex gap-3">
+                    <div className="flex-1">
+                      <label className="text-sm font-medium mb-2 block">Margin Value</label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        placeholder={bulkMarginType === 'percentage' ? 'e.g., 25' : 'e.g., 50.00'}
+                        value={bulkMarginValue}
+                        onChange={(e) => setBulkMarginValue(e.target.value)}
+                        className="w-full"
+                        data-testid="input-bulk-margin-value"
+                      />
+                    </div>
+                    <div className="w-32">
+                      <label className="text-sm font-medium mb-2 block">Type</label>
+                      <Select 
+                        value={bulkMarginType} 
+                        onValueChange={(value: "percentage" | "dollar") => setBulkMarginType(value)}
+                      >
+                        <SelectTrigger data-testid="select-bulk-margin-type">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="percentage">%</SelectItem>
+                          <SelectItem value="dollar">$</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    {bulkMarginType === 'percentage' 
+                      ? 'Enter a percentage markup (e.g., 25 for 25% margin on cost)'
+                      : 'Enter a fixed dollar amount to add to each item\'s cost'}
+                  </p>
+                  <div className="flex justify-end gap-2 pt-2">
+                    <Button
+                      variant="outline"
+                      onClick={() => setShowBulkMarginDialog(false)}
+                      disabled={isBulkUpdating}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      onClick={handleBulkMarginUpdate}
+                      disabled={isBulkUpdating || !bulkMarginValue}
+                      data-testid="button-apply-bulk-margin"
+                    >
+                      {isBulkUpdating ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Updating...
+                        </>
+                      ) : (
+                        'Apply to All Items'
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
             <Dialog open={showProductDialog} onOpenChange={setShowProductDialog}>
               <DialogTrigger asChild>
                 <Button
