@@ -207,6 +207,70 @@ export function registerLineItemRoutes(app: Express) {
     }
   });
 
+  // Bulk operations for line items - MUST be defined before :id routes
+  app.delete("/api/line-items/bulk", isAuthenticated, async (req: any, res) => {
+    try {
+      // Validate request body
+      const validatedData = bulkDeleteSchema.safeParse(req.body);
+      if (!validatedData.success) {
+        return res.status(400).json({ 
+          message: "Invalid request data", 
+          errors: validatedData.error.errors 
+        });
+      }
+
+      // Authorization check: validate ownership and same quote
+      const ownership = await storage.validateLineItemsOwnership(validatedData.data.ids, req.user?.id);
+      if (!ownership.isValid) {
+        return res.status(403).json({ message: "Unauthorized: You can only delete your own line items from the same quote" });
+      }
+
+      // Additional quote ownership validation
+      if (ownership.quoteId && !await storage.validateQuoteOwnership(ownership.quoteId, req.user?.id)) {
+        return res.status(403).json({ message: "Unauthorized: You don't have access to this quote" });
+      }
+
+      const deletedCount = await storage.bulkDeleteLineItems(validatedData.data.ids);
+      res.json({ deletedCount });
+    } catch (error) {
+      console.error("Bulk delete error:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.put("/api/line-items/bulk", isAuthenticated, async (req: any, res) => {
+    try {
+      // Validate request body
+      const validatedData = bulkUpdateSchema.safeParse(req.body);
+      if (!validatedData.success) {
+        return res.status(400).json({ 
+          message: "Invalid request data", 
+          errors: validatedData.error.errors 
+        });
+      }
+
+      // Authorization check: validate ownership and same quote
+      const ownership = await storage.validateLineItemsOwnership(validatedData.data.ids, req.user?.id);
+      if (!ownership.isValid) {
+        return res.status(403).json({ message: "Unauthorized: You can only update your own line items from the same quote" });
+      }
+
+      // Additional quote ownership validation
+      if (ownership.quoteId && !await storage.validateQuoteOwnership(ownership.quoteId, req.user?.id)) {
+        return res.status(403).json({ message: "Unauthorized: You don't have access to this quote" });
+      }
+
+      const updatedCount = await storage.bulkUpdateLineItems(validatedData.data.ids, validatedData.data.updates);
+      res.json({ updatedCount });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid update data", errors: error.errors });
+      }
+      console.error("Bulk update error:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
   app.put("/api/line-items/:id", isAuthenticated, async (req, res) => {
     try {
       // Validate ID parameter
@@ -291,70 +355,6 @@ export function registerLineItemRoutes(app: Express) {
       }
       res.status(204).send();
     } catch (error) {
-      res.status(500).json({ message: "Internal server error" });
-    }
-  });
-
-  // Bulk operations for line items
-  app.delete("/api/line-items/bulk", isAuthenticated, async (req: any, res) => {
-    try {
-      // Validate request body
-      const validatedData = bulkDeleteSchema.safeParse(req.body);
-      if (!validatedData.success) {
-        return res.status(400).json({ 
-          message: "Invalid request data", 
-          errors: validatedData.error.errors 
-        });
-      }
-
-      // Authorization check: validate ownership and same quote
-      const ownership = await storage.validateLineItemsOwnership(validatedData.data.ids, req.user?.id);
-      if (!ownership.isValid) {
-        return res.status(403).json({ message: "Unauthorized: You can only delete your own line items from the same quote" });
-      }
-
-      // Additional quote ownership validation
-      if (ownership.quoteId && !await storage.validateQuoteOwnership(ownership.quoteId, req.user?.id)) {
-        return res.status(403).json({ message: "Unauthorized: You don't have access to this quote" });
-      }
-
-      const deletedCount = await storage.bulkDeleteLineItems(validatedData.data.ids);
-      res.json({ deletedCount });
-    } catch (error) {
-      console.error("Bulk delete error:", error);
-      res.status(500).json({ message: "Internal server error" });
-    }
-  });
-
-  app.put("/api/line-items/bulk", isAuthenticated, async (req: any, res) => {
-    try {
-      // Validate request body
-      const validatedData = bulkUpdateSchema.safeParse(req.body);
-      if (!validatedData.success) {
-        return res.status(400).json({ 
-          message: "Invalid request data", 
-          errors: validatedData.error.errors 
-        });
-      }
-
-      // Authorization check: validate ownership and same quote
-      const ownership = await storage.validateLineItemsOwnership(validatedData.data.ids, req.user?.id);
-      if (!ownership.isValid) {
-        return res.status(403).json({ message: "Unauthorized: You can only update your own line items from the same quote" });
-      }
-
-      // Additional quote ownership validation
-      if (ownership.quoteId && !await storage.validateQuoteOwnership(ownership.quoteId, req.user?.id)) {
-        return res.status(403).json({ message: "Unauthorized: You don't have access to this quote" });
-      }
-
-      const updatedCount = await storage.bulkUpdateLineItems(validatedData.data.ids, validatedData.data.updates);
-      res.json({ updatedCount });
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: "Invalid update data", errors: error.errors });
-      }
-      console.error("Bulk update error:", error);
       res.status(500).json({ message: "Internal server error" });
     }
   });
