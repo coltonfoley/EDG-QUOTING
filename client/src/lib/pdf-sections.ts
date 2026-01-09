@@ -597,15 +597,60 @@ export function drawLineItemsSection(pdf: jsPDF, opts: DrawLineItemsSectionOpts)
     const colorLines = colorText ? pdf.splitTextToSize(colorText, contentW * 0.48) : [];
     const rowHeight = Math.max((descLines.length + colorLines.length) * 5, 8);
 
-    y = ensureSpace(pdf, y, rowHeight, {
+    // Track if we need to draw header after page break
+    let newPageY: number | null = null;
+    ensureSpace(pdf, y, rowHeight, {
       marginTop: margin,
       marginBottom: margin,
       footerReserve: 0,
       onNewPage: () => {
-        y = margin;
-        drawHeader('Line Items (cont.)');
+        // Draw continuation header and track the y position after it
+        let headerY = margin;
+        pdf.setFont('Barlow-SemiBold', 'normal');
+        pdf.setFontSize(18);
+        pdf.setTextColor(0, 0, 0);
+        pdf.text('Line Items (cont.)', margin, headerY);
+        headerY += 12;
+
+        pdf.setFontSize(11);
+        pdf.setDrawColor(200, 200, 200);
+
+        if (showPricing) {
+          const descW = contentW * 0.5;
+          const qtyW = contentW * 0.15;
+          const priceW = contentW * 0.17;
+
+          pdf.text('Description', margin, headerY);
+          pdf.text('Qty', margin + descW, headerY);
+          pdf.text('Price', margin + descW + qtyW, headerY);
+          pdf.text('Total', margin + descW + qtyW + priceW, headerY);
+
+          headerY += 2;
+          pdf.line(margin, headerY, margin + contentW, headerY);
+          headerY += 5;
+        } else {
+          const descW = contentW * 0.75;
+
+          pdf.text('Description', margin, headerY);
+          pdf.text('Qty', margin + descW, headerY);
+
+          headerY += 2;
+          pdf.line(margin, headerY, margin + contentW, headerY);
+          headerY += 5;
+        }
+        
+        // Reset font for line items
+        pdf.setFont('Barlow-Regular', 'normal');
+        pdf.setFontSize(10);
+        
+        newPageY = headerY;
       },
     });
+    
+    // Use the tracked y position from header if we had a page break, otherwise use returned value
+    if (newPageY !== null) {
+      y = newPageY;
+    }
 
     if (showPricing) {
       const descW = contentW * 0.5;
