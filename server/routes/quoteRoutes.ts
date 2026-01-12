@@ -915,10 +915,18 @@ export function registerQuoteRoutes(app: Express) {
       console.log("Raw request body:", JSON.stringify(req.body, null, 2));
       const parsedData = updateQuoteSchema.parse(req.body);
       
-      const quoteData: Partial<InsertQuote> = {
-        ...parsedData,
-        lostReason: parsedData.lostReason === null ? undefined : parsedData.lostReason,
-      };
+      // Filter out undefined values to prevent accidentally overwriting existing data
+      // This ensures partial updates only modify explicitly provided fields
+      const quoteData: Partial<InsertQuote> = {};
+      for (const [key, value] of Object.entries(parsedData)) {
+        if (value !== undefined) {
+          // Handle lostReason null case
+          if (key === 'lostReason' && value === null) {
+            continue; // Don't include null lostReason
+          }
+          (quoteData as any)[key] = value;
+        }
+      }
       
       const originalQuote = await storage.getQuote(params.data.id);
       if (!originalQuote) {
