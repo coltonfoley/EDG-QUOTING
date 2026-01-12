@@ -41,6 +41,8 @@ export default function AccountDetail() {
   const handleAccountUpdated = () => {
     setEditAccountOpen(false);
     queryClient.invalidateQueries({ queryKey: [`/api/accounts/${accountId}/details`] });
+    queryClient.invalidateQueries({ queryKey: ["/api/accounts"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/clients"] });
     toast({
       title: "Client updated",
       description: "The client has been successfully updated.",
