@@ -418,9 +418,6 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
   const [bulkMarginValue, setBulkMarginValue] = useState("");
   const [isBulkUpdating, setIsBulkUpdating] = useState(false);
   
-  // Debounced save timeout refs
-  const debounceTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
-  
   // AbortController for cancelling requests on unmount
   const abortController = useRef<AbortController>(new AbortController());
   
@@ -437,7 +434,8 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
     calculate: null,
   });
   
-  // Local state for immediate edit feedback
+  // Local state for immediate edit feedback - these are "draft" values that are
+  // completely independent from server data while being edited
   const [localValues, setLocalValues] = useState<Record<string, { 
     description: string; 
     quantity: string; 
@@ -445,6 +443,12 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
     markupType: string; 
     markupValue: string; 
   }>>({});
+  
+  // Track which rows have unsaved changes (dirty state)
+  const [dirtyRows, setDirtyRows] = useState<Set<number>>(new Set());
+  
+  // Track which row is currently being edited (has focus)
+  const [editingRowId, setEditingRowId] = useState<number | null>(null);
   
   // Track which fields are actively being edited (have focus)
   const activeInputs = useRef<Set<string>>(new Set());
@@ -460,12 +464,9 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
   // Ref to hold the update mutation's mutate function (for use in callbacks defined before mutation)
   const updateLineItemMutateRef = useRef<((params: { id: number; data: any; skipInvalidation?: boolean }) => void) | null>(null);
 
-  // Cleanup debounce timers and cancel pending mutations on unmount
+  // Cancel pending mutations on unmount
   useEffect(() => {
     return () => {
-      // Clear debounce timers
-      Object.values(debounceTimers.current).forEach(timer => clearTimeout(timer));
-      
       // Abort all pending API requests
       abortController.current.abort();
       
@@ -492,30 +493,35 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
   }, []);
 
   // Initialize local values when lineItems change
+  // Only update rows that are NOT dirty (have unsaved changes) and NOT currently being edited
   useEffect(() => {
-    // Don't reset if there are pending saves or active inputs
-    if (Object.keys(debounceTimers.current).length > 0 || activeInputs.current.size > 0) {
-      return;
-    }
-    
-    const newLocalValues: Record<string, { 
-      description: string; 
-      quantity: string; 
-      unitPrice: string; 
-      markupType: string; 
-      markupValue: string; 
-    }> = {};
-    lineItems.forEach(item => {
-      newLocalValues[item.id] = {
-        description: item.description,
-        quantity: item.quantity.toString(),
-        unitPrice: item.unitPrice.toString(),
-        markupType: item.markupType,
-        markupValue: item.markupValue.toString()
-      };
+    setLocalValues(prev => {
+      const newLocalValues: Record<string, { 
+        description: string; 
+        quantity: string; 
+        unitPrice: string; 
+        markupType: string; 
+        markupValue: string; 
+      }> = { ...prev };
+      
+      lineItems.forEach(item => {
+        // Skip updating rows that are dirty or being edited - preserve their local draft state
+        if (dirtyRows.has(item.id) || editingRowId === item.id) {
+          return;
+        }
+        
+        newLocalValues[item.id] = {
+          description: item.description,
+          quantity: item.quantity.toString(),
+          unitPrice: item.unitPrice.toString(),
+          markupType: item.markupType,
+          markupValue: item.markupValue.toString()
+        };
+      });
+      
+      return newLocalValues;
     });
-    setLocalValues(newLocalValues);
-  }, [lineItems]);
+  }, [lineItems, dirtyRows, editingRowId]);
 
   // Create a Map for O(1) line item lookups instead of O(n) array.find()
   const itemById = useMemo(() => 
@@ -539,6 +545,13 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
     if (!el) return;
     activeInputs.current.add(key);
     activeKeyRef.current = key;
+    
+    // Extract item ID from key (format: "itemId-fieldName")
+    const itemId = parseInt(key.split('-')[0]);
+    if (!isNaN(itemId)) {
+      setEditingRowId(itemId);
+    }
+    
     // Capture caret position
     try {
       caretRef.current = el.selectionStart ?? null;
@@ -604,7 +617,8 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
     return products.find(p => p.id === productId) || null;
   };
 
-  // Immediate local update with debounced server save
+  // Immediate local update - NO auto-save on keystroke
+  // Saves only happen on blur or explicit commit to prevent cursor jumping
   const handleFieldChange = useCallback((itemId: number, field: string, value: any) => {
     const key = `${itemId}-${field}`;
     
@@ -617,10 +631,11 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
       }
     }));
     
-    // Clear existing timer for this field
-    if (debounceTimers.current[key]) {
-      clearTimeout(debounceTimers.current[key]);
-    }
+    // Mark this row as dirty (has unsaved changes)
+    setDirtyRows(prev => new Set(prev).add(itemId));
+    
+    // Track which row is being edited
+    setEditingRowId(itemId);
     
     // Validate the value
     let validationError = "";
@@ -674,133 +689,228 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
       return newErrors;
     });
     
-    // Set up debounced save for text fields (skip for markupType which saves immediately)
-    if (field !== "markupType" && !validationError) {
-      debounceTimers.current[key] = setTimeout(() => {
-        delete debounceTimers.current[key];
-        
-        // Prepare the data for save
-        let updateData;
-        if (field === "quantity" || field === "unitPrice" || field === "markupValue") {
-          const sanitized = sanitizeNumberString(value);
-          const parsed = parseFloat(sanitized);
-          if (sanitized === '' || isNaN(parsed)) {
-            return; // Don't save invalid values
-          }
-          updateData = { [field]: parsed };
-        } else {
-          updateData = { [field]: value };
-        }
-        
-        // Save to server using the ref
-        updateLineItemMutateRef.current?.({ id: itemId, data: updateData });
-      }, 500); // 500ms debounce delay
-    }
+    // NO debounced auto-save - saving happens only on blur
   }, []);
   
-  // Save field on blur (when user moves away from the field)
+  // Save entire row on blur - this is the ONLY place where saves happen
+  // This eliminates cursor jumping by avoiding saves while typing
   const handleFieldBlur = useCallback((itemId: number, field: 'description' | 'quantity' | 'unitPrice' | 'markupType' | 'markupValue') => {
     const key = `${itemId}-${field}`;
-    const value = localValues[itemId]?.[field];
     
     // Remove from active inputs
     activeInputs.current.delete(key);
     
-    // Check if there was a pending debounce timer - if so, we need to save immediately
-    const hadPendingTimer = !!debounceTimers.current[key];
-    if (debounceTimers.current[key]) {
-      clearTimeout(debounceTimers.current[key]);
-      delete debounceTimers.current[key];
-    }
-    
-    // Check if there's a validation error
-    if (validationErrors[key]) {
-      return; // Don't save if there's a validation error
-    }
-    
-    // Only save on blur if there was a pending timer (meaning the debounce hadn't fired yet)
-    // This prevents duplicate saves when debounce already fired
-    if (!hadPendingTimer) {
-      // No pending timer means either:
-      // 1. The debounce already saved the value (no action needed)
-      // 2. The value never changed (no action needed)
-      // Don't revert to props here as the mutation may be in flight
-      activeKeyRef.current = null;
-      return;
-    }
-    
-    // Save immediately on blur since debounce hadn't fired yet
-    try {
-      let updateData;
-      if (field === "quantity" || field === "unitPrice" || field === "markupValue") {
-        const sanitized = sanitizeNumberString(value);
-        const parsed = parseFloat(sanitized);
-        
-        // If the value is invalid or empty, revert to previous value instead of zero
-        if (sanitized === '' || isNaN(parsed)) {
-          const item = lineItems.find(item => item.id === itemId);
-          if (item) {
-            const previousValue = item[field];
-            // Revert local state to previous value
-            setLocalValues(prev => ({
-              ...prev,
-              [itemId]: {
-                ...prev[itemId],
-                [field]: previousValue.toString()
-              }
-            }));
-          }
-          return; // Don't save invalid input
+    // Use a small delay to check if we're moving to another field in the same row
+    // This prevents saving on every field change within the same row
+    setTimeout(() => {
+      // Check if another field in this row is now active
+      const stillEditingRow = Array.from(activeInputs.current).some(activeKey => 
+        activeKey.startsWith(`${itemId}-`)
+      );
+      
+      if (stillEditingRow) {
+        // Still editing the same row, don't save yet
+        return;
+      }
+      
+      // No longer editing this row - check if it's dirty and needs saving
+      if (!dirtyRows.has(itemId)) {
+        // Not dirty, nothing to save
+        activeKeyRef.current = null;
+        if (editingRowId === itemId) {
+          setEditingRowId(null);
         }
-        
-        updateData = { [field]: parsed };
-      } else {
-        updateData = { [field]: value };
+        return;
       }
-      updateLineItemMutateRef.current?.({ id: itemId, data: updateData });
-    } catch (error) {
-      const err = error as Error;
-      if (err?.name !== 'AbortError' && !err?.message?.includes('aborted') && !err?.message?.includes('signal is aborted')) {
-        console.error('Error saving on blur:', error);
+      
+      // Check for validation errors in this row
+      const rowHasErrors = Object.keys(validationErrors).some(errorKey => 
+        errorKey.startsWith(`${itemId}-`)
+      );
+      
+      if (rowHasErrors) {
+        // Has validation errors - revert to server values
+        const item = lineItems.find(i => i.id === itemId);
+        if (item) {
+          setLocalValues(prev => ({
+            ...prev,
+            [itemId]: {
+              description: item.description,
+              quantity: item.quantity.toString(),
+              unitPrice: item.unitPrice.toString(),
+              markupType: item.markupType,
+              markupValue: item.markupValue.toString()
+            }
+          }));
+          // Clear validation errors for this row
+          setValidationErrors(prev => {
+            const newErrors = { ...prev };
+            Object.keys(newErrors).forEach(k => {
+              if (k.startsWith(`${itemId}-`)) {
+                delete newErrors[k];
+              }
+            });
+            return newErrors;
+          });
+        }
+        // Clear dirty state
+        setDirtyRows(prev => {
+          const next = new Set(prev);
+          next.delete(itemId);
+          return next;
+        });
+        if (editingRowId === itemId) {
+          setEditingRowId(null);
+        }
+        activeKeyRef.current = null;
+        return;
       }
-    }
-    activeKeyRef.current = null;
-  }, [localValues, validationErrors, lineItems]);
+      
+      // Get the current local values for this row
+      const rowValues = localValues[itemId];
+      if (!rowValues) {
+        activeKeyRef.current = null;
+        return;
+      }
+      
+      // Prepare the complete update data for the entire row
+      const updateData: Record<string, any> = {};
+      
+      // Description
+      if (rowValues.description) {
+        updateData.description = rowValues.description;
+      }
+      
+      // Quantity
+      const quantitySanitized = sanitizeNumberString(rowValues.quantity);
+      const quantityParsed = parseFloat(quantitySanitized);
+      if (!isNaN(quantityParsed) && quantityParsed > 0) {
+        updateData.quantity = quantityParsed;
+      }
+      
+      // Unit Price
+      const priceSanitized = sanitizeNumberString(rowValues.unitPrice);
+      const priceParsed = parseFloat(priceSanitized);
+      if (!isNaN(priceParsed)) {
+        updateData.unitPrice = priceParsed;
+      }
+      
+      // Markup Type
+      if (rowValues.markupType === 'percentage' || rowValues.markupType === 'dollar') {
+        updateData.markupType = rowValues.markupType;
+      }
+      
+      // Markup Value
+      const markupSanitized = sanitizeNumberString(rowValues.markupValue);
+      const markupParsed = parseFloat(markupSanitized);
+      if (!isNaN(markupParsed)) {
+        updateData.markupValue = markupParsed;
+      }
+      
+      // Only save if we have data to update
+      if (Object.keys(updateData).length > 0) {
+        try {
+          updateLineItemMutateRef.current?.({ id: itemId, data: updateData });
+        } catch (error) {
+          const err = error as Error;
+          if (err?.name !== 'AbortError' && !err?.message?.includes('aborted') && !err?.message?.includes('signal is aborted')) {
+            console.error('Error saving on blur:', error);
+          }
+        }
+      }
+      
+      // Clear dirty state after initiating save
+      setDirtyRows(prev => {
+        const next = new Set(prev);
+        next.delete(itemId);
+        return next;
+      });
+      
+      if (editingRowId === itemId) {
+        setEditingRowId(null);
+      }
+      activeKeyRef.current = null;
+    }, 50); // Small delay to check if moving to another field in the same row
+  }, [localValues, validationErrors, lineItems, dirtyRows, editingRowId]);
   
-  // Keyboard navigation helper
+  // Keyboard navigation helper - Enter commits the row and moves to next
   const handleKeyDown = useCallback((e: React.KeyboardEvent, rowIndex: number, column: 'description' | 'quantity' | 'unitPrice' | 'markupValue') => {
     const totalRows = lineItems.length;
+    const currentItemId = lineItems[rowIndex]?.id;
     
     if (e.key === 'Enter') {
       e.preventDefault();
-      if (e.shiftKey) {
-        // Move up a row
-        if (rowIndex > 0) {
-          const columnTestId = column === 'unitPrice' ? 'unit-price' : 
-                              column === 'markupValue' ? 'markup-value' : column;
-          const selector = `[data-testid="input-${columnTestId}-${lineItems[rowIndex - 1].id}"]`;
-          const element = document.querySelector(selector) as HTMLInputElement;
-          if (element) {
-            element.focus();
-            element.select();
+      
+      // First, blur the current field to trigger save
+      (e.currentTarget as HTMLInputElement)?.blur();
+      
+      // Then navigate to next/previous row after a short delay
+      setTimeout(() => {
+        if (e.shiftKey) {
+          // Move up a row
+          if (rowIndex > 0) {
+            const columnTestId = column === 'unitPrice' ? 'unit-price' : 
+                                column === 'markupValue' ? 'markup-value' : column;
+            const selector = `[data-testid="input-${columnTestId}-${lineItems[rowIndex - 1].id}"]`;
+            const element = document.querySelector(selector) as HTMLInputElement;
+            if (element) {
+              element.focus();
+              element.select();
+            }
+          }
+        } else {
+          // Move down a row
+          if (rowIndex < totalRows - 1) {
+            const columnTestId = column === 'unitPrice' ? 'unit-price' : 
+                                column === 'markupValue' ? 'markup-value' : column;
+            const selector = `[data-testid="input-${columnTestId}-${lineItems[rowIndex + 1].id}"]`;
+            const element = document.querySelector(selector) as HTMLInputElement;
+            if (element) {
+              element.focus();
+              element.select();
+            }
           }
         }
-      } else {
-        // Move down a row
-        if (rowIndex < totalRows - 1) {
-          const columnTestId = column === 'unitPrice' ? 'unit-price' : 
-                              column === 'markupValue' ? 'markup-value' : column;
-          const selector = `[data-testid="input-${columnTestId}-${lineItems[rowIndex + 1].id}"]`;
-          const element = document.querySelector(selector) as HTMLInputElement;
-          if (element) {
-            element.focus();
-            element.select();
-          }
-        }
-      }
+      }, 100); // Small delay to let blur handler run first
     } else if (e.key === 'Tab') {
       // Allow default Tab behavior for horizontal navigation
       return;
+    } else if (e.key === 'Escape') {
+      // Revert changes and blur
+      e.preventDefault();
+      const item = lineItems.find(i => i.id === currentItemId);
+      if (item && currentItemId) {
+        // Revert to server values
+        setLocalValues(prev => ({
+          ...prev,
+          [currentItemId]: {
+            description: item.description,
+            quantity: item.quantity.toString(),
+            unitPrice: item.unitPrice.toString(),
+            markupType: item.markupType,
+            markupValue: item.markupValue.toString()
+          }
+        }));
+        // Clear dirty state
+        setDirtyRows(prev => {
+          const next = new Set(prev);
+          next.delete(currentItemId);
+          return next;
+        });
+        // Clear validation errors for this row
+        setValidationErrors(prev => {
+          const newErrors = { ...prev };
+          Object.keys(newErrors).forEach(k => {
+            if (k.startsWith(`${currentItemId}-`)) {
+              delete newErrors[k];
+            }
+          });
+          return newErrors;
+        });
+        // Clear editing row
+        setEditingRowId(null);
+      }
+      (e.currentTarget as HTMLInputElement)?.blur();
     }
   }, [lineItems]);
 
@@ -910,18 +1020,45 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
         return updated;
       });
       
-      // Invalidate queries by default to update totals, unless explicitly skipped
-      // Skip invalidation for batch operations (will be invalidated once at the end)
+      // Use optimistic update: directly update the cache instead of refetching
+      // This prevents re-renders that could cause cursor jumping
       if (result.skipInvalidation !== true) {
-        queryClient.invalidateQueries({ queryKey: [`/api/quotes/${quoteId}`] });
+        // Verify the result is a valid line item (has required fields)
+        // This guards against malformed API responses
+        const isValidLineItem = result && 
+          typeof result.id === 'number' &&
+          typeof result.description === 'string' &&
+          result.quantity !== undefined;
         
-        // Also update the list cache by refetching and updating that specific quote
-        queryClient.fetchQuery({ queryKey: [`/api/quotes/${quoteId}`] }).then((updatedQuote) => {
+        if (isValidLineItem) {
+          // Optimistically update the quote's lineItems in the cache
+          queryClient.setQueryData([`/api/quotes/${quoteId}`], (oldQuote: any) => {
+            if (!oldQuote || !oldQuote.lineItems) return oldQuote;
+            return {
+              ...oldQuote,
+              lineItems: oldQuote.lineItems.map((item: any) => 
+                item.id === id ? { ...item, ...result } : item
+              )
+            };
+          });
+          
+          // Also update the quotes list cache optimistically
           queryClient.setQueryData(["/api/quotes"], (old: any) => {
             if (!old) return old;
-            return old.map((q: any) => q.id === quoteId ? updatedQuote : q);
+            return old.map((q: any) => {
+              if (q.id !== quoteId || !q.lineItems) return q;
+              return {
+                ...q,
+                lineItems: q.lineItems.map((item: any) => 
+                  item.id === id ? { ...item, ...result } : item
+                )
+              };
+            });
           });
-        });
+        } else {
+          // Fallback: invalidate cache if response is malformed
+          queryClient.invalidateQueries({ queryKey: [`/api/quotes/${quoteId}`] });
+        }
       }
       
       // Clear validation errors for this item on successful save
@@ -1281,13 +1418,13 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
       return;
     }
 
-    // Check for unsaved edits
-    const hasPendingEdits = Object.keys(debounceTimers.current).length > 0 || activeInputs.current.size > 0;
+    // Check for unsaved edits using the dirty rows state
+    const hasPendingEdits = dirtyRows.size > 0 || activeInputs.current.size > 0;
     if (hasPendingEdits) {
-      // Flush pending edits first by clearing active inputs and waiting
+      // Clear any pending state to avoid race conditions
       activeInputs.current.clear();
-      Object.values(debounceTimers.current).forEach(timer => clearTimeout(timer));
-      debounceTimers.current = {};
+      setDirtyRows(new Set());
+      setEditingRowId(null);
     }
 
     setIsBulkUpdating(true);
@@ -1689,9 +1826,10 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
     let successCount = 0;
     let errorCount = 0;
 
-    // Cancel any outstanding debounced saves to prevent race conditions
-    Object.values(debounceTimers.current).forEach(timer => clearTimeout(timer));
-    debounceTimers.current = {};
+    // Clear any pending edit state to prevent race conditions
+    activeInputs.current.clear();
+    setDirtyRows(new Set());
+    setEditingRowId(null);
 
     try {
       // Update each item that needs cleaning (with batch invalidation)
