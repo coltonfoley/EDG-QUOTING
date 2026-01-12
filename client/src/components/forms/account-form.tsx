@@ -146,10 +146,11 @@ export function AccountForm({ account, onSuccess, onCancel }: AccountFormProps) 
   });
 
   const onSubmit = (data: AccountFormData) => {
-    // Auto-generate name from firstName and lastName if not provided
+    // Always regenerate name from firstName and lastName to keep them in sync
+    const generatedName = `${data.firstName} ${data.lastName}`.trim();
     const submissionData = {
       ...data,
-      name: data.name || `${data.firstName} ${data.lastName}`.trim(),
+      name: generatedName || data.name,
       secondaryContacts: secondaryContacts.length > 0 ? secondaryContacts : null
     };
     createAccountMutation.mutate(submissionData);
