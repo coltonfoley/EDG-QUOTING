@@ -297,31 +297,36 @@ export const updateQuoteSchema = z.object({
   jobsitePlaceId: z.string().max(500, "Place ID is too long").optional(),
   estimatedStartDate: z.string().optional(),
   notes: z.string().max(5000, "Notes are too long").optional(),
-  // Align with insertQuoteSchema coercion for tax/discount/shipping
+  // Financial fields - null means "no change" (undefined), not "set to 0"
+  // This prevents partial updates from accidentally zeroing out these fields
   taxRate: z.union([z.string(), z.number(), z.null()])
-    .transform(val => val === null ? "0" : (typeof val === 'string' ? val : val.toString()))
+    .transform(val => val === null ? undefined : (typeof val === 'string' ? val : val.toString()))
     .refine(val => {
+      if (val === undefined) return true;
       const num = parseFloat(val);
       return !isNaN(num) && num >= 0 && num <= 100;
     }, "Tax rate must be between 0 and 100")
     .optional(),
   discount: z.union([z.string(), z.number(), z.null()])
-    .transform(val => val === null ? "0" : (typeof val === 'string' ? val : val.toString()))
+    .transform(val => val === null ? undefined : (typeof val === 'string' ? val : val.toString()))
     .refine(val => {
+      if (val === undefined) return true;
       const num = parseFloat(val);
       return !isNaN(num) && num >= 0 && num <= 100;
     }, "Discount must be between 0 and 100")
     .optional(),
   tariffRate: z.union([z.string(), z.number(), z.null()])
-    .transform(val => val === null ? "0" : (typeof val === 'string' ? val : val.toString()))
+    .transform(val => val === null ? undefined : (typeof val === 'string' ? val : val.toString()))
     .refine(val => {
+      if (val === undefined) return true;
       const num = parseFloat(val);
       return !isNaN(num) && num >= 0 && num <= 100;
     }, "Tariff rate must be between 0 and 100")
     .optional(),
   shipping: z.union([z.string(), z.number(), z.null()])
-    .transform(val => val === null ? "0" : (typeof val === 'string' ? val : val.toString()))
+    .transform(val => val === null ? undefined : (typeof val === 'string' ? val : val.toString()))
     .refine(val => {
+      if (val === undefined) return true;
       const num = parseFloat(val);
       return !isNaN(num) && num >= 0 && num <= 1000000;
     }, "Shipping must be between 0 and 1,000,000")
