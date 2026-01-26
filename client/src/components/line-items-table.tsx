@@ -274,9 +274,18 @@ const SortableLineItemRow = memo(function SortableLineItemRow({
       <td className="border-r border-border px-3 py-1 text-center hidden lg:table-cell">
         <div className="flex items-center space-x-1">
           <Input
+            type="number"
+            min="0"
             value={getCurrentValue(item.id, 'markupValue')}
             onChange={(e) => {
-              handleFieldChange(item.id, "markupValue", e.target.value);
+              // SAFETY: Prevent negative markup values
+              const value = e.target.value;
+              const numValue = parseFloat(value);
+              if (!isNaN(numValue) && numValue < 0) {
+                handleFieldChange(item.id, "markupValue", "0");
+              } else {
+                handleFieldChange(item.id, "markupValue", value);
+              }
               markActive(`${item.id}-markupValue`, e.currentTarget);
             }}
             onKeyDown={(e) => handleKeyDown(e, rowIndex, 'markupValue')}

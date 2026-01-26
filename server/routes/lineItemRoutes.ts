@@ -75,8 +75,9 @@ function verifyLineItemCalculation(
     console.warn(`⚠️ Invalid unit price: ${price}`);
     return { isValid: false, calculatedTotal: 0, expectedTotal: expected, discrepancy: expected };
   }
-  if (!isFinite(markup) || markup < -10000000 || markup > 10000000) {
-    console.warn(`⚠️ Invalid markup value: ${markup}`);
+  // SAFETY: Reject negative markup values - markup must be >= 0
+  if (!isFinite(markup) || markup < 0 || markup > 10000000) {
+    console.warn(`⚠️ Invalid markup value: ${markup} (must be >= 0)`);
     return { isValid: false, calculatedTotal: 0, expectedTotal: expected, discrepancy: expected };
   }
   if (!isFinite(discount) || discount < 0) {

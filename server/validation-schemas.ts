@@ -392,8 +392,8 @@ export const insertLineItemSchema = baseLineItemSchema.extend({
     .transform(val => typeof val === 'string' ? val : val.toString())
     .refine(val => {
       const num = parseFloat(val);
-      return !isNaN(num) && Number.isFinite(num) && num >= -10000000 && num <= 10000000;
-    }, "Markup value must be between -10,000,000 and 10,000,000")
+      return !isNaN(num) && Number.isFinite(num) && num >= 0 && num <= 10000000;
+    }, "Markup value must be between 0 and 10,000,000 (negative markup is not allowed)")
     .refine(val => {
       const num = parseFloat(val);
       // For percentage markup, limit to 2 decimal places
@@ -730,8 +730,9 @@ export const bulkUpdateSchema = z.object({
       .transform(val => typeof val === 'string' ? val : val.toString())
       .refine(val => {
         const num = parseFloat(val);
-        return !isNaN(num) && Number.isFinite(num) && num >= -10000000 && num <= 10000000;
-      }, "Markup value must be between -10,000,000 and 10,000,000")
+        // SAFETY: Reject negative markup values - markup must be >= 0
+        return !isNaN(num) && Number.isFinite(num) && num >= 0 && num <= 10000000;
+      }, "Markup value must be between 0 and 10,000,000 (negative markup is not allowed)")
       .optional(),
     quantity: z.union([z.string(), z.number()])
       .transform(val => typeof val === 'string' ? val : val.toString())

@@ -107,14 +107,16 @@ export function calculateLineItemTotal(
   // Validate inputs
   if (!isValidNumber(qty) || qty <= 0 || qty > 999999) return 0;
   if (!isValidNumber(price) || price < 0 || price > 10000000) return 0;
-  if (isNaN(markup) || !Number.isFinite(markup) || markup < -10000000 || markup > 10000000) return 0;
+  // SAFETY: Reject negative markup values - markup must be >= 0
+  if (isNaN(markup) || !Number.isFinite(markup) || markup < 0 || markup > 10000000) return 0;
   if (!isValidNumber(discount) || discount < 0) return 0;
   if (!isValidNumber(tariff) || tariff < 0) return 0;
 
   // Clamp values to safe ranges
   const safeQty = clampValue(qty, 0.01, 999999);
   const safePrice = clampValue(price, 0, 10000000);
-  const safeMarkup = markup;
+  // SAFETY: Ensure markup is never negative - treat any negative as 0
+  const safeMarkup = Math.max(0, markup);
   const safeDiscount = discountType === 'percentage' 
     ? clampValue(discount, 0, 100)
     : clampValue(discount, 0, 10000000);
@@ -197,13 +199,15 @@ export function calculateLineItemMargin(
   // Validate inputs
   if (!isValidNumber(qty) || qty <= 0 || qty > 999999) return 0;
   if (!isValidNumber(price) || price < 0 || price > 10000000) return 0;
-  if (isNaN(markup) || !Number.isFinite(markup) || markup < -10000000 || markup > 10000000) return 0;
+  // SAFETY: Reject negative markup values - markup must be >= 0
+  if (isNaN(markup) || !Number.isFinite(markup) || markup < 0 || markup > 10000000) return 0;
   if (!isValidNumber(discount) || discount < 0) return 0;
 
   // Clamp values to safe ranges
   const safeQty = clampValue(qty, 0.01, 999999);
   const safePrice = clampValue(price, 0, 10000000);
-  const safeMarkup = markup;
+  // SAFETY: Ensure markup is never negative - treat any negative as 0
+  const safeMarkup = Math.max(0, markup);
   const safeDiscount = discountType === 'percentage' 
     ? clampValue(discount, 0, 100)
     : clampValue(discount, 0, 10000000);
@@ -231,8 +235,8 @@ export function calculateLineItemMargin(
     marginAmount = safeMarkup;
   }
 
-  // Note: marginAmount can be negative (representing a loss) which is intentional for markdown
-  return roundCurrency(marginAmount);
+  // Margin should never be negative since markup can't be negative
+  return roundCurrency(Math.max(0, marginAmount));
 }
 
 /**
