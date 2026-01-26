@@ -48,7 +48,7 @@ export function setupAuth(app: Express) {
     name: 'sessionId', // Custom session name for security
   };
 
-  app.set("trust proxy", 1);
+  // Note: trust proxy is set in server/index.ts before rate limiting
   app.use(session(sessionSettings));
   app.use(passport.initialize());
   app.use(passport.session());

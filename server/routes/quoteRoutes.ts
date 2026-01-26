@@ -26,7 +26,6 @@ import multer from "multer";
 import sharp from "sharp";
 import { extractQuoteDataFromImages, extractQuoteDataFromPDF } from "../openai";
 import { ObjectStorageService, objectStorageClient } from "../objectStorage";
-import type { InsertQuote } from "@shared/schema";
 import { nanoid } from "nanoid";
 
 const quotesQuerySchema = z.object({

@@ -112,7 +112,6 @@ export const quickbooksSettings = pgTable("quickbooks_settings", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-// @ts-expect-error - TypeScript can't infer type for self-referencing foreign keys
 export const quotes = pgTable("quotes", {
   id: serial("id").primaryKey(),
   quoteNumber: text("quote_number").notNull().unique(),
@@ -161,7 +160,8 @@ export const quotes = pgTable("quotes", {
   qbSyncedAt: timestamp("qb_synced_at"),
   qbSyncError: text("qb_sync_error"),
   // Version control fields
-  parentQuoteId: integer("parent_quote_id").references(() => quotes.id, { onDelete: "set null" }), // Links versions together
+  // @ts-expect-error - Self-referencing foreign key causes TypeScript inference issue
+  parentQuoteId: integer("parent_quote_id").references((): typeof quotes => quotes, { onDelete: "set null" }), // Links versions together
   versionNumber: integer("version_number").notNull().default(1), // Version number (1, 2, 3, etc.)
   isLatestVersion: boolean("is_latest_version").notNull().default(true), // Flag for filtering to latest version
   createdAt: timestamp("created_at").defaultNow(),
