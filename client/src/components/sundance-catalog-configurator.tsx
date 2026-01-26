@@ -44,6 +44,39 @@ const CATEGORY_ORDER = [
   'Sales & Marketing'
 ];
 
+// Product order within categories (by product name/SKU)
+// Products not listed will appear at the end sorted by ID for stability
+const PRODUCT_ORDER: Record<string, string[]> = {
+  'Louvers': [
+    'lvr8',       // Louvers - 8'
+    'lvr10',      // Louvers - 10'
+    'lvr12',      // Louvers - 12'
+    'lvr14',      // Louvers - 14'
+    'lvrendcap',  // Louver End Cap
+    'rivets',     // Rivets
+    'pvtbar20',   // Pivot Bar 7' 6"
+    'pvtbarber',  // Pivot Bar Bearing
+    'pvtbarspacer', // Pivot Bar Spacer
+    'louverspsd', // Louver Spring Pins
+    'louverber',  // Louver Bearing
+    'beartemp',   // Bearing Template
+    'lvrgasket',  // Louver Gasket Bumper
+  ],
+};
+
+// Helper function to get sort order for a product within its category
+function getProductSortOrder(product: Product, category: string): number {
+  const categoryOrder = PRODUCT_ORDER[category];
+  if (!categoryOrder) return -1; // No ordering defined for this category
+  
+  // Product names ARE the SKUs, so do exact match (case-insensitive)
+  const index = categoryOrder.findIndex(sku => 
+    sku.toLowerCase() === product.name.toLowerCase()
+  );
+  
+  return index >= 0 ? index : categoryOrder.length; // Unlisted items go after listed ones
+}
+
 export function SundanceCatalogConfigurator({ 
   quoteId, 
   onInsert, 
@@ -109,6 +142,19 @@ export function SundanceCatalogConfigurator({
     acc[category].push(product);
     return acc;
   }, {} as CategoryProducts) || {};
+
+  // Sort products within each category according to PRODUCT_ORDER
+  // Uses product ID as secondary sort key for stability
+  Object.keys(categorizedProducts).forEach(category => {
+    if (PRODUCT_ORDER[category]) {
+      categorizedProducts[category].sort((a, b) => {
+        const orderA = getProductSortOrder(a, category);
+        const orderB = getProductSortOrder(b, category);
+        if (orderA !== orderB) return orderA - orderB;
+        return a.id - b.id; // Stable fallback for items with same order
+      });
+    }
+  });
 
   // Get ordered categories (matching PDF order, then any additional categories)
   const orderedCategories = [
