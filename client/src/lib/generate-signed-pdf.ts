@@ -4,11 +4,18 @@ import { barlowRegularBase64, barlowSemiBoldBase64 } from './fonts';
 import { generateBrandedSequencePDF } from './pdf-branded-sequence';
 import { normalizeImageToDataUrl } from './pdf-image-pipeline';
 
+interface PdfGroup {
+  id: string;
+  title: string;
+  position: number;
+}
+
 interface GenerateSignedPDFOptions {
   quote: QuoteWithDetails;
   includeImages?: boolean;
   includePricing?: boolean;
   includeContract?: boolean;
+  groups?: PdfGroup[];
 }
 
 /**
@@ -16,7 +23,7 @@ interface GenerateSignedPDFOptions {
  * This is the official legally-binding document for both parties
  */
 export async function generateSignedPDF(options: GenerateSignedPDFOptions): Promise<Blob> {
-  const { quote, includeImages = false, includePricing = true, includeContract = true } = options;
+  const { quote, includeImages = false, includePricing = true, includeContract = true, groups = [] } = options;
 
   // Create PDF instance
   const pdf = new jsPDF({ unit: 'mm', format: 'letter' });
@@ -77,7 +84,8 @@ export async function generateSignedPDF(options: GenerateSignedPDFOptions): Prom
     renderImages: normalizedImages,
     contractText,
     showPricing: includePricing,
-    clientLogoDataUrl
+    clientLogoDataUrl,
+    groups
   });
 
   // Return as blob

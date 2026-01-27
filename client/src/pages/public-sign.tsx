@@ -391,6 +391,16 @@ export default function PublicSignPage() {
       const response = await apiRequest('GET', `/api/signatures/${token}/full`);
       const fullQuote: QuoteWithDetails = await response.json();
       
+      // Fetch groups for proper PDF aggregation
+      let groups: { id: string; title: string; position: number }[] = [];
+      try {
+        const groupsResponse = await apiRequest('GET', `/api/quotes/${fullQuote.id}/groups`);
+        const groupsData = await groupsResponse.json();
+        groups = groupsData.map((g: any) => ({ id: g.id, title: g.title, position: g.position }));
+      } catch (e) {
+        console.warn('Failed to fetch groups for PDF:', e);
+      }
+      
       const includeImages = fullQuote.esigIncludeImages ?? false;
       const includePricing = fullQuote.esigIncludePricing ?? true;
       const includeContract = fullQuote.esigIncludeContract ?? true;
@@ -399,7 +409,8 @@ export default function PublicSignPage() {
         quote: fullQuote, 
         includeImages,
         includePricing,
-        includeContract
+        includeContract,
+        groups
       });
       
       downloadSignedPDF(pdfBlob, fullQuote);

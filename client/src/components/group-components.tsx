@@ -24,6 +24,7 @@ interface GroupHeaderProps {
   isEditing: boolean;
   onStartEdit: () => void;
   onCancelEdit: () => void;
+  isDropTarget?: boolean;
 }
 
 export function GroupHeader({
@@ -34,7 +35,8 @@ export function GroupHeader({
   onDeleteGroup,
   isEditing,
   onStartEdit,
-  onCancelEdit
+  onCancelEdit,
+  isDropTarget = false
 }: GroupHeaderProps) {
   const [editTitle, setEditTitle] = useState(group.title);
 
@@ -63,7 +65,7 @@ export function GroupHeader({
   };
 
   return (
-    <tr ref={setNodeRef} className="bg-gray-50 border-b border-gray-300" data-testid={`group-header-${group.id}`}>
+    <tr ref={setNodeRef} className={`border-b border-gray-300 transition-all duration-200 ${isDropTarget ? 'bg-blue-100 ring-2 ring-blue-400 ring-inset' : 'bg-gray-50'}`} data-testid={`group-header-${group.id}`}>
       <td colSpan={9} className="px-4 py-3">
         <div className="flex items-center justify-between">
         <div className="flex items-center space-x-3">
@@ -173,11 +175,10 @@ export function GroupFooter({ group, lineItems, onAddItem }: GroupFooterProps) {
 interface UngroupedSectionProps {
   lineItems: LineItem[];
   onCreateGroup: () => void;
+  isDropTarget?: boolean;
 }
 
-export function UngroupedSection({ lineItems, onCreateGroup }: UngroupedSectionProps) {
-  if (lineItems.length === 0) return null;
-
+export function UngroupedSection({ lineItems, onCreateGroup, isDropTarget = false }: UngroupedSectionProps) {
   const { setNodeRef } = useDroppable({
     id: "ungrouped"
   });
@@ -186,7 +187,7 @@ export function UngroupedSection({ lineItems, onCreateGroup }: UngroupedSectionP
   const ungroupedMargin = calculateGroupMargin(lineItems);
 
   return (
-    <tr ref={setNodeRef} className="bg-gray-50 border-b border-gray-300" data-testid="ungrouped-section">
+    <tr ref={setNodeRef} className={`border-b border-gray-300 transition-all duration-200 ${isDropTarget ? 'bg-blue-100 ring-2 ring-blue-400 ring-inset' : 'bg-gray-50'}`} data-testid="ungrouped-section">
       <td colSpan={9} className="px-4 py-3">
         <div className="flex items-center justify-between">
         <div className="flex items-center space-x-3">
@@ -216,6 +217,34 @@ export function UngroupedSection({ lineItems, onCreateGroup }: UngroupedSectionP
             Create Group
           </Button>
         </div>
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+interface UngroupedDropZoneProps {
+  isDropTarget: boolean;
+}
+
+export function UngroupedDropZone({ isDropTarget }: UngroupedDropZoneProps) {
+  const { setNodeRef } = useDroppable({
+    id: "ungrouped-dropzone"
+  });
+
+  return (
+    <tr 
+      ref={setNodeRef} 
+      className={`border-b border-gray-300 transition-all duration-200 ${isDropTarget ? 'bg-blue-100 ring-2 ring-blue-400 ring-inset' : 'bg-gray-100 hover:bg-gray-200'}`} 
+      data-testid="ungrouped-drop-zone"
+    >
+      <td colSpan={11} className="px-4 py-3">
+        <div className="flex items-center justify-center text-sm text-gray-600">
+          {isDropTarget ? (
+            <span className="font-medium text-blue-700">Drop here to move to Ungrouped Items</span>
+          ) : (
+            <span>Drag items here to remove from groups</span>
+          )}
         </div>
       </td>
     </tr>
