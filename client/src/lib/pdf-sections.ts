@@ -670,7 +670,7 @@ export function drawLineItemsSection(pdf: jsPDF, opts: DrawLineItemsSectionOpts)
 
     displayItems.push({
       description: group.title,
-      quantity: aggregatedQty,
+      quantity: 1,
       total: aggregatedTotal,
       colorText: '',
       isGroup: true
