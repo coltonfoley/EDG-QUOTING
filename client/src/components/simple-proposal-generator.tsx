@@ -597,7 +597,8 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         renderImages: normalizedImages,
         contractText,
         showPricing,
-        clientLogoDataUrl
+        clientLogoDataUrl,
+        groups: groups.map((g: any) => ({ id: g.id, title: g.title, position: g.position }))
       });
 
       // Save the PDF

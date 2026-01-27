@@ -83,6 +83,16 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
       const response = await apiRequest('GET', `/api/quotes/${quote.id}`);
       const fullQuote: QuoteWithDetails = await response.json();
       
+      // Fetch groups for proper PDF aggregation
+      let groups: { id: string; title: string; position: number }[] = [];
+      try {
+        const groupsResponse = await apiRequest('GET', `/api/quotes/${quote.id}/groups`);
+        const groupsData = await groupsResponse.json();
+        groups = groupsData.map((g: any) => ({ id: g.id, title: g.title, position: g.position }));
+      } catch (e) {
+        console.warn('Failed to fetch groups for PDF:', e);
+      }
+      
       // Use stored PDF preferences
       const includeImages = fullQuote.esigIncludeImages ?? false;
       const includePricing = fullQuote.esigIncludePricing ?? true;
@@ -93,7 +103,8 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
         quote: fullQuote, 
         includeImages,
         includePricing,
-        includeContract
+        includeContract,
+        groups
       });
       
       // Download

@@ -115,6 +115,12 @@ interface DrawRenderingsPagesOpts {
   pageH: number;
 }
 
+interface PdfGroup {
+  id: string;
+  title: string;
+  position: number;
+}
+
 interface DrawLineItemsSectionOpts {
   quote: any;
   showPricing: boolean;
@@ -124,6 +130,7 @@ interface DrawLineItemsSectionOpts {
   contentW: number;
   pageW: number;
   pageH: number;
+  groups?: PdfGroup[];
 }
 
 interface DrawContractSectionOpts {
@@ -529,7 +536,7 @@ function detectImageFormat(dataUrl: string): 'PNG' | 'JPEG' {
 }
 
 export function drawLineItemsSection(pdf: jsPDF, opts: DrawLineItemsSectionOpts): void {
-  const { quote, showPricing, logoDataUrl, company, margin, contentW, pageW, pageH } = opts;
+  const { quote, showPricing, logoDataUrl, company, margin, contentW, pageW, pageH, groups = [] } = opts;
 
   const lineItems = quote.lineItems || [];
   if (lineItems.length === 0) return;
@@ -579,10 +586,35 @@ export function drawLineItemsSection(pdf: jsPDF, opts: DrawLineItemsSectionOpts)
   pdf.setFont('Barlow-Regular', 'normal');
   pdf.setFontSize(10);
 
-  lineItems.forEach((item: any, index: number) => {
-    const descLines = pdf.splitTextToSize(item.description || '', contentW * 0.48);
-    
-    // Parse colors from configData if available
+  // Process items: aggregate grouped items, keep ungrouped items individual
+  interface DisplayItem {
+    description: string;
+    quantity: number;
+    total: number;
+    colorText: string;
+    isGroup: boolean;
+  }
+
+  const displayItems: DisplayItem[] = [];
+  const groupsMap = new Map<string, PdfGroup>();
+  groups.forEach(g => groupsMap.set(g.id, g));
+
+  // Separate items into grouped and ungrouped
+  const ungroupedItems: any[] = [];
+  const groupedItemsMap = new Map<string, any[]>();
+
+  lineItems.forEach((item: any) => {
+    if (item.groupId && groupsMap.has(item.groupId)) {
+      const existing = groupedItemsMap.get(item.groupId) || [];
+      existing.push(item);
+      groupedItemsMap.set(item.groupId, existing);
+    } else {
+      ungroupedItems.push(item);
+    }
+  });
+
+  // Add ungrouped items individually
+  ungroupedItems.forEach((item: any) => {
     let colorText = '';
     try {
       const configData = item.configData ? (typeof item.configData === 'string' ? JSON.parse(item.configData) : item.configData) : null;
@@ -590,11 +622,64 @@ export function drawLineItemsSection(pdf: jsPDF, opts: DrawLineItemsSectionOpts)
         const colorNames = configData.colors.map((c: any) => c.name).join(', ');
         colorText = `Colors: ${colorNames}`;
       }
-    } catch (e) {
-      // Silent fail if configData is malformed
-    }
-    
-    const colorLines = colorText ? pdf.splitTextToSize(colorText, contentW * 0.48) : [];
+    } catch (e) {}
+
+    const total = calculateLineItemTotal(
+      item.quantity,
+      item.unitPrice,
+      item.markupType,
+      item.markupValue,
+      item.discountType || 'percentage',
+      item.discountValue || 0,
+      quote.tariffRate || 0,
+      item.isTariffApplicable || false
+    );
+
+    displayItems.push({
+      description: item.description || '',
+      quantity: parseFloat(item.quantity || '0'),
+      total,
+      colorText,
+      isGroup: false
+    });
+  });
+
+  // Add grouped items as single aggregated lines (sorted by group position)
+  const sortedGroups = [...groups].sort((a, b) => a.position - b.position);
+  sortedGroups.forEach(group => {
+    const items = groupedItemsMap.get(group.id);
+    if (!items || items.length === 0) return;
+
+    let aggregatedTotal = 0;
+    let aggregatedQty = 0;
+
+    items.forEach((item: any) => {
+      const itemTotal = calculateLineItemTotal(
+        item.quantity,
+        item.unitPrice,
+        item.markupType,
+        item.markupValue,
+        item.discountType || 'percentage',
+        item.discountValue || 0,
+        quote.tariffRate || 0,
+        item.isTariffApplicable || false
+      );
+      aggregatedTotal += itemTotal;
+      aggregatedQty += parseFloat(item.quantity || '0');
+    });
+
+    displayItems.push({
+      description: group.title,
+      quantity: aggregatedQty,
+      total: aggregatedTotal,
+      colorText: '',
+      isGroup: true
+    });
+  });
+
+  displayItems.forEach((item: DisplayItem, index: number) => {
+    const descLines = pdf.splitTextToSize(item.description || '', contentW * 0.48);
+    const colorLines = item.colorText ? pdf.splitTextToSize(item.colorText, contentW * 0.48) : [];
     const rowHeight = Math.max((descLines.length + colorLines.length) * 5, 8);
 
     // Track if we need to draw header after page break
@@ -652,6 +737,13 @@ export function drawLineItemsSection(pdf: jsPDF, opts: DrawLineItemsSectionOpts)
       y = newPageY;
     }
 
+    // Use bold font for group items
+    if (item.isGroup) {
+      pdf.setFont('Barlow-SemiBold', 'normal');
+    } else {
+      pdf.setFont('Barlow-Regular', 'normal');
+    }
+
     if (showPricing) {
       const descW = contentW * 0.5;
       const qtyW = contentW * 0.15;
@@ -669,17 +761,8 @@ export function drawLineItemsSection(pdf: jsPDF, opts: DrawLineItemsSectionOpts)
         pdf.setTextColor(0, 0, 0);
       }
 
-      const qty = parseFloat(item.quantity || '0');
-      const total = calculateLineItemTotal(
-        item.quantity,
-        item.unitPrice,
-        item.markupType,
-        item.markupValue,
-        item.discountType || 'percentage',
-        item.discountValue || 0,
-        quote.tariffRate || 0,
-        item.isTariffApplicable || false
-      );
+      const qty = item.quantity;
+      const total = item.total;
       const unitPrice = qty > 0 ? total / qty : 0;
 
       pdf.text(qty.toString(), margin + descW, y);
@@ -700,9 +783,11 @@ export function drawLineItemsSection(pdf: jsPDF, opts: DrawLineItemsSectionOpts)
         pdf.setTextColor(0, 0, 0);
       }
       
-      pdf.text(parseFloat(item.quantity || '0').toString(), margin + descW, y);
+      pdf.text(item.quantity.toString(), margin + descW, y);
     }
 
+    // Reset font for next item
+    pdf.setFont('Barlow-Regular', 'normal');
     y += rowHeight + 2;
   });
 

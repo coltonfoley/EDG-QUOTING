@@ -33,6 +33,7 @@ import {
   GroupHeader, 
   GroupFooter, 
   UngroupedSection, 
+  UngroupedDropZone,
   CreateGroupDialog,
   type Group 
 } from './group-components';
@@ -417,6 +418,7 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
   const [showCreateGroupDialog, setShowCreateGroupDialog] = useState(false);
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [overId, setOverId] = useState<string | null>(null);
   
   // Product configurator state
   const [showConfiguratorDialog, setShowConfiguratorDialog] = useState(false);
@@ -1698,11 +1700,18 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
   // Drag and drop handlers
   const handleDragStart = (event: DragStartEvent) => {
     setActiveId(event.active.id as string);
+    setOverId(null);
+  };
+
+  const handleDragOver = (event: DragOverEvent) => {
+    const { over } = event;
+    setOverId(over?.id as string | null);
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     setActiveId(null);
+    setOverId(null);
 
     if (!over) return;
 
@@ -1745,7 +1754,7 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
     if (overId.startsWith('group-')) {
       targetGroupId = overId.replace('group-', '');
       targetPosition = groupedLineItems.grouped[targetGroupId]?.length || 0;
-    } else if (overId === 'ungrouped') {
+    } else if (overId === 'ungrouped' || overId === 'ungrouped-dropzone') {
       targetGroupId = null;
       targetPosition = groupedLineItems.ungrouped.length;
     } else if (overId.startsWith('item-')) {
@@ -2211,6 +2220,7 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
           sensors={sensors}
           collisionDetection={closestCenter}
           onDragStart={handleDragStart}
+          onDragOver={handleDragOver}
           onDragEnd={handleDragEnd}
         >
           <div className="overflow-x-auto">
@@ -2262,6 +2272,7 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
                     <UngroupedSection 
                       lineItems={groupedLineItems.ungrouped}
                       onCreateGroup={() => setShowCreateGroupDialog(true)}
+                      isDropTarget={overId === 'ungrouped' && activeId !== null && !activeId.startsWith('group-')}
                     />
                     <SortableContext 
                       items={groupedLineItems.ungrouped.map(item => `item-${item.id}`)}
@@ -2305,6 +2316,7 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
                         isEditing={editingGroupId === group.id}
                         onStartEdit={() => setEditingGroupId(group.id)}
                         onCancelEdit={() => setEditingGroupId(null)}
+                        isDropTarget={overId === `group-${group.id}` && activeId !== null && !activeId.startsWith('group-')}
                       />
                       
                       {!group.isCollapsed && (
@@ -2344,6 +2356,13 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
                     </React.Fragment>
                   );
                 })}
+
+                {/* Show ungrouped drop zone when dragging and groups exist */}
+                {activeId && !activeId.startsWith('group-') && sortedGroups.length > 0 && (
+                  <UngroupedDropZone 
+                    isDropTarget={overId === 'ungrouped-dropzone'}
+                  />
+                )}
 
                 {/* Show message if no items at all */}
                 {lineItems.length === 0 && (

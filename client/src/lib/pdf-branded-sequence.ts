@@ -13,6 +13,12 @@ import {
   drawBrandedBackPage
 } from './pdf-sections';
 
+interface PdfGroup {
+  id: string;
+  title: string;
+  position: number;
+}
+
 interface BrandedSequenceOptions {
   pdf: jsPDF;
   company: {
@@ -26,6 +32,7 @@ interface BrandedSequenceOptions {
   contractText: string;
   showPricing: boolean;
   clientLogoDataUrl: string | null;
+  groups?: PdfGroup[];
 }
 
 /**
@@ -38,7 +45,7 @@ interface BrandedSequenceOptions {
  * 6. Branded Back Page
  */
 export async function generateBrandedSequencePDF(options: BrandedSequenceOptions): Promise<void> {
-  const { pdf, company, quote, renderImages, contractText, showPricing, clientLogoDataUrl } = options;
+  const { pdf, company, quote, renderImages, contractText, showPricing, clientLogoDataUrl, groups = [] } = options;
 
   const pageW = pdf.internal.pageSize.getWidth();
   const pageH = pdf.internal.pageSize.getHeight();
@@ -93,7 +100,8 @@ export async function generateBrandedSequencePDF(options: BrandedSequenceOptions
       margin,
       contentW,
       pageW,
-      pageH
+      pageH,
+      groups
     });
   }
 
