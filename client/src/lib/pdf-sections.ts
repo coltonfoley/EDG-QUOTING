@@ -737,12 +737,8 @@ export function drawLineItemsSection(pdf: jsPDF, opts: DrawLineItemsSectionOpts)
       y = newPageY;
     }
 
-    // Use bold font for group items
-    if (item.isGroup) {
-      pdf.setFont('Barlow-SemiBold', 'normal');
-    } else {
-      pdf.setFont('Barlow-Regular', 'normal');
-    }
+    // Reset font for each item to regular to ensure consistency
+    pdf.setFont('Barlow-Regular', 'normal');
 
     if (showPricing) {
       const descW = contentW * 0.5;
