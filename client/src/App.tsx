@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { Switch, Route, Redirect, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider, useIsFetching, useIsMutating } from "@tanstack/react-query";
@@ -10,23 +11,24 @@ import { LoadingSpinner } from "@/components/loading-spinner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, RefreshCw } from "lucide-react";
-import NotFound from "@/pages/not-found";
-import Quotes from "@/pages/quotes";
-import QuoteBuilder from "@/pages/quote-builder";
-import Products from "@/pages/products";
-import Landing from "@/pages/landing";
-import Home from "@/pages/home";
-import AuthPage from "@/pages/auth-page";
-import AdminPage from "@/pages/admin";
-import ContractsPage from "@/pages/contracts";
-import QuickBooksSettings from "@/pages/quickbooks-settings";
-import GoogleContactsSettings from "@/pages/google-contacts-settings";
-import Accounts from "@/pages/accounts";
-import AccountDetail from "@/pages/account-detail";
-import Pipeline from "@/pages/pipeline";
-import PublicSignPage from "@/pages/public-sign";
 import { ReportIssueButton } from "@/components/report-issue-button";
 import { AIAssistant } from "@/components/ai-assistant";
+
+const NotFound = lazy(() => import("@/pages/not-found"));
+const Quotes = lazy(() => import("@/pages/quotes"));
+const QuoteBuilder = lazy(() => import("@/pages/quote-builder"));
+const Products = lazy(() => import("@/pages/products"));
+const Landing = lazy(() => import("@/pages/landing"));
+const Home = lazy(() => import("@/pages/home"));
+const AuthPage = lazy(() => import("@/pages/auth-page"));
+const AdminPage = lazy(() => import("@/pages/admin"));
+const ContractsPage = lazy(() => import("@/pages/contracts"));
+const QuickBooksSettings = lazy(() => import("@/pages/quickbooks-settings"));
+const GoogleContactsSettings = lazy(() => import("@/pages/google-contacts-settings"));
+const Accounts = lazy(() => import("@/pages/accounts"));
+const AccountDetail = lazy(() => import("@/pages/account-detail"));
+const Pipeline = lazy(() => import("@/pages/pipeline"));
+const PublicSignPage = lazy(() => import("@/pages/public-sign"));
 
 function GlobalLoadingIndicator() {
   const isFetching = useIsFetching();
@@ -80,41 +82,44 @@ function Router() {
   }
 
   return (
-    <Switch>
-      {/* Public routes - accessible without authentication */}
-      <Route path="/sign/:token" component={PublicSignPage} />
-      
-      {!isAuthenticated ? (
-        <>
-          <Route path="/auth" component={AuthPage} />
-          {/* Redirect all other paths to auth when not authenticated */}
-          <Route>
-            <Redirect to="/auth" />
-          </Route>
-        </>
-      ) : (
-        <>
-          <Route path="/" component={Home} />
-          <Route path="/auth">
-            <Redirect to="/" />
-          </Route>
-          <Route path="/accounts" component={Accounts} />
-          <Route path="/accounts/:id" component={AccountDetail} />
-          <Route path="/quotes" component={Quotes} />
-          <Route path="/pipeline" component={Pipeline} />
-          <Route path="/quotes/new" component={QuoteBuilder} />
-          <Route path="/quotes/:id/edit" component={QuoteBuilder} />
-          <Route path="/products" component={Products} />
-          <Route path="/contracts">
-            <Redirect to="/admin/contracts" />
-          </Route>
-          <Route path="/admin" component={AdminPage} />
-          <Route path="/admin/contracts" component={ContractsPage} />
-          <Route path="/admin/quickbooks" component={QuickBooksSettings} />
-          <Route path="/admin/google-contacts" component={GoogleContactsSettings} />
-        </>
-      )}
-    </Switch>
+    <Suspense fallback={<LoadingSpinner fullScreen text="Loading page..." />}>
+      <Switch>
+        {/* Public routes - accessible without authentication */}
+        <Route path="/sign/:token" component={PublicSignPage} />
+        
+        {!isAuthenticated ? (
+          <>
+            <Route path="/auth" component={AuthPage} />
+            {/* Redirect all other paths to auth when not authenticated */}
+            <Route>
+              <Redirect to="/auth" />
+            </Route>
+          </>
+        ) : (
+          <>
+            <Route path="/" component={Home} />
+            <Route path="/auth">
+              <Redirect to="/" />
+            </Route>
+            <Route path="/accounts" component={Accounts} />
+            <Route path="/accounts/:id" component={AccountDetail} />
+            <Route path="/quotes" component={Quotes} />
+            <Route path="/pipeline" component={Pipeline} />
+            <Route path="/quotes/new" component={QuoteBuilder} />
+            <Route path="/quotes/:id/edit" component={QuoteBuilder} />
+            <Route path="/products" component={Products} />
+            <Route path="/contracts">
+              <Redirect to="/admin/contracts" />
+            </Route>
+            <Route path="/admin" component={AdminPage} />
+            <Route path="/admin/contracts" component={ContractsPage} />
+            <Route path="/admin/quickbooks" component={QuickBooksSettings} />
+            <Route path="/admin/google-contacts" component={GoogleContactsSettings} />
+            <Route component={NotFound} />
+          </>
+        )}
+      </Switch>
+    </Suspense>
   );
 }
 
