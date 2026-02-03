@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
-import { FileText, Bookmark, Plus, Eye, Send, Mail, CheckCircle, AlertCircle, Clock, Link2, Copy, Download, PenTool } from "lucide-react";
+import { FileText, Bookmark, Plus, Eye, Send, Mail, CheckCircle, AlertCircle, Clock, Link2, Copy, Download, PenTool, Package } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { formatCurrency, calculateQuoteTotals } from "@/lib/utils";
@@ -16,6 +16,7 @@ import { useToast } from "@/hooks/use-toast";
 import type { QuoteWithDetails, ContractTemplate } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
 import { generateSignedPDF, downloadSignedPDF } from "@/lib/generate-signed-pdf";
+import { generateBomPDF, downloadBomPDF } from "@/lib/generate-bom-pdf";
 import { SignatureCanvas, SignatureData } from "@/components/signature-canvas";
 import { ESignatureOptionsModal } from "@/components/esignature-options-modal";
 
@@ -121,6 +122,47 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
       toast({
         title: 'PDF Downloaded',
         description: 'Signed quote has been downloaded successfully',
+      });
+    }
+  });
+
+  // Download BOM PDF mutation
+  const downloadBomPdfMutation = useMutation({
+    mutationFn: async () => {
+      // Fetch full quote data
+      const response = await apiRequest('GET', `/api/quotes/${quote.id}`);
+      const fullQuote: QuoteWithDetails = await response.json();
+      
+      // Fetch groups for proper sorting
+      let groups: { id: string; title: string; position: number }[] = [];
+      try {
+        const groupsResponse = await apiRequest('GET', `/api/quotes/${quote.id}/groups`);
+        const groupsData = await groupsResponse.json();
+        groups = groupsData.map((g: any) => ({ id: g.id, title: g.title, position: g.position }));
+      } catch (e) {
+        console.warn('Failed to fetch groups for BOM:', e);
+      }
+      
+      // Generate BOM PDF
+      const pdfBlob = await generateBomPDF({ 
+        quote: fullQuote, 
+        groups
+      });
+      
+      // Download
+      downloadBomPDF(pdfBlob, fullQuote);
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Download Failed',
+        description: error.message || 'Failed to generate BOM PDF',
+        variant: 'destructive'
+      });
+    },
+    onSuccess: () => {
+      toast({
+        title: 'BOM Downloaded',
+        description: 'Bill of Materials has been downloaded successfully',
       });
     }
   });
@@ -726,8 +768,16 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
 
         {/* Action Buttons */}
         <div className="space-y-3">
-
-
+          <Button
+            onClick={() => downloadBomPdfMutation.mutate()}
+            disabled={downloadBomPdfMutation.isPending || quote.lineItems.length === 0}
+            variant="outline"
+            className="w-full"
+            data-testid="button-download-bom"
+          >
+            <Package className="mr-2 h-4 w-4" />
+            {downloadBomPdfMutation.isPending ? 'Generating BOM...' : 'Download BOM'}
+          </Button>
 
           <Button
             variant="outline"
