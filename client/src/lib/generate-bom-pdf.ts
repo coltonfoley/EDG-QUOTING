@@ -2,6 +2,7 @@ import jsPDF from 'jspdf';
 import type { QuoteWithDetails, LineItem } from '@shared/schema';
 import { barlowRegularBase64, barlowSemiBoldBase64 } from './fonts';
 import { formatCurrency, calculateLineItemTotal } from './utils';
+import { BRAND_LOGO_PNG } from './pdf-brand-assets';
 
 interface BomLineItem extends LineItem {
   manufacturer?: string;
@@ -97,13 +98,26 @@ export async function generateBomPDF(options: GenerateBomPDFOptions): Promise<Bl
   const margin = 15;
   const contentW = pageW - (2 * margin);
   
+  const company = {
+    name: 'EDG Patio & Shade',
+    address: 'Scottsdale, AZ',
+    phone: '(480) 999-0002',
+    email: 'info@edgpatioshade.com',
+  };
+
+  const footerReserve = 30;
+
   let y = margin;
+
+  const logoW = 35;
+  const logoH = 14;
+  pdf.addImage(BRAND_LOGO_PNG, 'PNG', margin, y - 4, logoW, logoH);
 
   pdf.setFont('Barlow-SemiBold', 'normal');
   pdf.setFontSize(18);
   pdf.setTextColor(33, 33, 33);
-  pdf.text('Bill of Materials', margin, y);
-  y += 8;
+  pdf.text('Bill of Materials', margin + logoW + 6, y + 5);
+  y += logoH + 4;
 
   pdf.setFont('Barlow-Regular', 'normal');
   pdf.setFontSize(11);
@@ -191,7 +205,7 @@ export async function generateBomPDF(options: GenerateBomPDFOptions): Promise<Bl
         y += 4;
       }
       
-      if (y > pageH - 30) {
+      if (y > pageH - footerReserve) {
         pdf.addPage();
         y = margin;
         const hh = drawTableHeader(pdf, y, margin, colWidths);
@@ -223,7 +237,7 @@ export async function generateBomPDF(options: GenerateBomPDFOptions): Promise<Bl
     const descLines = pdf.splitTextToSize(descriptionWithColor, descMaxWidth);
     const rowHeight = Math.max(5, descLines.length * 4 + 2);
 
-    if (y + rowHeight > pageH - 20) {
+    if (y + rowHeight > pageH - footerReserve) {
       pdf.addPage();
       y = margin;
       const hh = drawTableHeader(pdf, y, margin, colWidths);
@@ -260,7 +274,7 @@ export async function generateBomPDF(options: GenerateBomPDFOptions): Promise<Bl
   }
 
   y += 8;
-  if (y > pageH - 25) {
+  if (y > pageH - footerReserve) {
     pdf.addPage();
     y = margin;
   }
@@ -275,19 +289,29 @@ export async function generateBomPDF(options: GenerateBomPDFOptions): Promise<Bl
   const pageCount = pdf.getNumberOfPages();
   for (let i = 1; i <= pageCount; i++) {
     pdf.setPage(i);
+
+    const footerY = pageH - 15;
+    const lineY = footerY - 8;
+
+    pdf.setDrawColor(66, 255, 193);
+    pdf.setLineWidth(1);
+    pdf.line(margin, lineY, pageW - margin, lineY);
+
+    const fLogoW = 22;
+    const fLogoH = 9;
+    pdf.addImage(BRAND_LOGO_PNG, 'PNG', margin, footerY - fLogoH + 2, fLogoW, fLogoH);
+
     pdf.setFont('Barlow-Regular', 'normal');
-    pdf.setFontSize(8);
-    pdf.setTextColor(150, 150, 150);
+    pdf.setFontSize(7);
+    pdf.setTextColor(100, 100, 100);
+    const infoText = `${company.name} | ${company.phone} | ${company.email}`;
+    pdf.text(infoText, pageW / 2, footerY, { align: 'center' });
+
     pdf.text(
       `Page ${i} of ${pageCount}`,
       pageW - margin,
-      pageH - 10,
+      footerY,
       { align: 'right' }
-    );
-    pdf.text(
-      'Bill of Materials',
-      margin,
-      pageH - 10
     );
   }
 
