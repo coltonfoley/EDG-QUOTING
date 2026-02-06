@@ -1,7 +1,7 @@
 import jsPDF from 'jspdf';
 import type { QuoteWithDetails, LineItem } from '@shared/schema';
 import { barlowRegularBase64, barlowSemiBoldBase64 } from './fonts';
-import { formatCurrency } from './utils';
+import { formatCurrency, calculateLineItemTotal } from './utils';
 
 interface BomLineItem extends LineItem {
   manufacturer?: string;
@@ -16,15 +16,6 @@ interface PdfGroup {
 interface GenerateBomPDFOptions {
   quote: QuoteWithDetails;
   groups?: PdfGroup[];
-}
-
-interface BomRow {
-  description: string;
-  quantity: string;
-  manufacturer: string;
-  unitPrice: string;
-  colors?: string;
-  groupTitle?: string;
 }
 
 function parseConfigData(configData: any): { colors?: string } {
@@ -48,6 +39,47 @@ function parseConfigData(configData: any): { colors?: string } {
   }
   
   return {};
+}
+
+function calculateSellPrice(item: BomLineItem, quoteTariffRate: string | number): { unitSellPrice: number; lineTotal: number } {
+  const qty = parseFloat(item.quantity) || 0;
+  const lineTotal = calculateLineItemTotal(
+    qty,
+    item.unitPrice,
+    item.markupType,
+    item.markupValue,
+    item.discountType || 'percentage',
+    item.discountValue || '0',
+    quoteTariffRate || '0',
+    item.isTariffApplicable || false
+  );
+  const unitSellPrice = qty > 0 ? lineTotal / qty : 0;
+  return { unitSellPrice, lineTotal };
+}
+
+function drawTableHeader(pdf: jsPDF, y: number, margin: number, colWidths: Record<string, number>) {
+  const contentW = Object.values(colWidths).reduce((sum, w) => sum + w, 0);
+  const headerHeight = 8;
+  
+  pdf.setFillColor(240, 240, 240);
+  pdf.rect(margin, y - 2, contentW, headerHeight, 'F');
+  
+  pdf.setFont('Barlow-SemiBold', 'normal');
+  pdf.setFontSize(9);
+  pdf.setTextColor(33, 33, 33);
+  
+  let colX = margin + 2;
+  pdf.text('Description', colX, y + 3);
+  colX += colWidths.description;
+  pdf.text('SKU', colX, y + 3);
+  colX += colWidths.sku;
+  pdf.text('Qty', colX, y + 3);
+  colX += colWidths.qty;
+  pdf.text('Unit Price', colX, y + 3);
+  colX += colWidths.unitPrice;
+  pdf.text('Total', colX, y + 3);
+  
+  return headerHeight;
 }
 
 export async function generateBomPDF(options: GenerateBomPDFOptions): Promise<Blob> {
@@ -109,21 +141,18 @@ export async function generateBomPDF(options: GenerateBomPDFOptions): Promise<Bl
   
   interface SortedItem {
     item: BomLineItem;
-    manufacturer: string;
     groupPosition: number;
     groupTitle: string;
     itemPosition: number;
   }
   
   const sortedItems: SortedItem[] = lineItems.map(item => {
-    const manufacturer = item.manufacturer || 'Uncategorized';
     const group = item.groupId ? groupMap.get(item.groupId) : null;
     const groupPosition = group ? group.position : 999999;
     const groupTitle = group ? group.title : 'Ungrouped Items';
     
     return {
       item,
-      manufacturer,
       groupPosition,
       groupTitle,
       itemPosition: item.position ?? 0
@@ -131,11 +160,6 @@ export async function generateBomPDF(options: GenerateBomPDFOptions): Promise<Bl
   });
 
   sortedItems.sort((a, b) => {
-    if (a.manufacturer !== b.manufacturer) {
-      if (a.manufacturer === 'Uncategorized') return 1;
-      if (b.manufacturer === 'Uncategorized') return -1;
-      return a.manufacturer.localeCompare(b.manufacturer);
-    }
     if (a.groupPosition !== b.groupPosition) {
       return a.groupPosition - b.groupPosition;
     }
@@ -143,70 +167,41 @@ export async function generateBomPDF(options: GenerateBomPDFOptions): Promise<Bl
   });
 
   const colWidths = {
-    qty: 18,
-    manufacturer: 40,
-    unitPrice: 25,
-    description: contentW - 18 - 40 - 25
+    description: contentW - 30 - 15 - 28 - 28,
+    sku: 30,
+    qty: 15,
+    unitPrice: 28,
+    total: 28,
   };
 
-  const headerHeight = 8;
-  pdf.setFillColor(240, 240, 240);
-  pdf.rect(margin, y - 2, contentW, headerHeight, 'F');
-  
-  pdf.setFont('Barlow-SemiBold', 'normal');
-  pdf.setFontSize(9);
-  pdf.setTextColor(33, 33, 33);
-  
-  let colX = margin + 2;
-  pdf.text('Qty', colX, y + 3);
-  colX += colWidths.qty;
-  pdf.text('Description', colX, y + 3);
-  colX += colWidths.description;
-  pdf.text('Manufacturer', colX, y + 3);
-  colX += colWidths.manufacturer;
-  pdf.text('Unit Price', colX, y + 3);
-  
+  const headerHeight = drawTableHeader(pdf, y, margin, colWidths);
   y += headerHeight + 4;
 
-  let currentManufacturer = '';
   let currentGroup = '';
+  let grandTotal = 0;
   
   pdf.setFont('Barlow-Regular', 'normal');
   pdf.setFontSize(9);
 
   for (const sortedItem of sortedItems) {
-    const { item, manufacturer, groupTitle } = sortedItem;
+    const { item, groupTitle } = sortedItem;
     
-    if (manufacturer !== currentManufacturer) {
-      if (currentManufacturer !== '') {
+    if (groupTitle !== currentGroup && groupTitle !== 'Ungrouped Items') {
+      if (currentGroup !== '') {
         y += 4;
       }
       
       if (y > pageH - 30) {
         pdf.addPage();
         y = margin;
-      }
-      
-      pdf.setFont('Barlow-SemiBold', 'normal');
-      pdf.setFontSize(11);
-      pdf.setTextColor(66, 140, 120);
-      pdf.text(manufacturer, margin, y);
-      y += 6;
-      
-      currentManufacturer = manufacturer;
-      currentGroup = '';
-    }
-    
-    if (groupTitle !== currentGroup && groupTitle !== 'Ungrouped Items') {
-      if (y > pageH - 30) {
-        pdf.addPage();
-        y = margin;
+        const hh = drawTableHeader(pdf, y, margin, colWidths);
+        y += hh + 4;
       }
       
       pdf.setFont('Barlow-SemiBold', 'normal');
       pdf.setFontSize(9);
-      pdf.setTextColor(100, 100, 100);
-      pdf.text(`  ${groupTitle}`, margin, y);
+      pdf.setTextColor(66, 140, 120);
+      pdf.text(groupTitle, margin, y);
       y += 5;
       
       currentGroup = groupTitle;
@@ -215,12 +210,13 @@ export async function generateBomPDF(options: GenerateBomPDFOptions): Promise<Bl
     const configInfo = parseConfigData(item.configData);
     
     const qty = parseFloat(item.quantity).toString();
-    const description = item.description;
-    const unitPrice = formatCurrency(parseFloat(item.unitPrice));
+    const sku = item.sku || '';
+    const { unitSellPrice, lineTotal } = calculateSellPrice(item, quote.tariffRate || '0');
+    grandTotal += lineTotal;
     
-    let descriptionWithColor = description;
+    let descriptionWithColor = item.description;
     if (configInfo.colors) {
-      descriptionWithColor = `${description} (${configInfo.colors})`;
+      descriptionWithColor = `${item.description} (${configInfo.colors})`;
     }
 
     const descMaxWidth = colWidths.description - 4;
@@ -230,43 +226,30 @@ export async function generateBomPDF(options: GenerateBomPDFOptions): Promise<Bl
     if (y + rowHeight > pageH - 20) {
       pdf.addPage();
       y = margin;
-      
-      pdf.setFillColor(240, 240, 240);
-      pdf.rect(margin, y - 2, contentW, headerHeight, 'F');
-      
-      pdf.setFont('Barlow-SemiBold', 'normal');
-      pdf.setFontSize(9);
-      pdf.setTextColor(33, 33, 33);
-      
-      let hColX = margin + 2;
-      pdf.text('Qty', hColX, y + 3);
-      hColX += colWidths.qty;
-      pdf.text('Description', hColX, y + 3);
-      hColX += colWidths.description;
-      pdf.text('Manufacturer', hColX, y + 3);
-      hColX += colWidths.manufacturer;
-      pdf.text('Unit Price', hColX, y + 3);
-      
-      y += headerHeight + 4;
+      const hh = drawTableHeader(pdf, y, margin, colWidths);
+      y += hh + 4;
     }
 
     pdf.setFont('Barlow-Regular', 'normal');
     pdf.setFontSize(9);
     pdf.setTextColor(33, 33, 33);
     
-    colX = margin + 2;
-    pdf.text(qty, colX, y);
-    colX += colWidths.qty;
-    
+    let colX = margin + 2;
     pdf.text(descLines, colX, y);
     colX += colWidths.description;
     
     pdf.setTextColor(100, 100, 100);
-    pdf.text(manufacturer, colX, y);
-    colX += colWidths.manufacturer;
+    pdf.text(sku, colX, y);
+    colX += colWidths.sku;
     
     pdf.setTextColor(33, 33, 33);
-    pdf.text(unitPrice, colX, y);
+    pdf.text(qty, colX, y);
+    colX += colWidths.qty;
+    
+    pdf.text(formatCurrency(unitSellPrice), colX, y);
+    colX += colWidths.unitPrice;
+    
+    pdf.text(formatCurrency(lineTotal), colX, y);
     
     y += rowHeight;
 
@@ -286,6 +269,8 @@ export async function generateBomPDF(options: GenerateBomPDFOptions): Promise<Bl
   pdf.setFontSize(10);
   pdf.setTextColor(33, 33, 33);
   pdf.text(`Total Line Items: ${lineItems.length}`, margin, y);
+  y += 6;
+  pdf.text(`Grand Total: ${formatCurrency(grandTotal)}`, margin, y);
 
   const pageCount = pdf.getNumberOfPages();
   for (let i = 1; i <= pageCount; i++) {
@@ -300,7 +285,7 @@ export async function generateBomPDF(options: GenerateBomPDFOptions): Promise<Bl
       { align: 'right' }
     );
     pdf.text(
-      'Bill of Materials - For Operations Use',
+      'Bill of Materials',
       margin,
       pageH - 10
     );

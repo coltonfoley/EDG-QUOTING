@@ -325,6 +325,7 @@ export const lineItems = pgTable("line_items", {
   id: serial("id").primaryKey(),
   quoteId: integer("quote_id").notNull(),
   productId: integer("product_id"), // optional reference to product catalog
+  sku: text("sku"),
   description: text("description").notNull(),
   quantity: decimal("quantity", { precision: 10, scale: 2 }).notNull(),
   retailPrice: decimal("retail_price", { precision: 10, scale: 2 }), // manufacturer's suggested retail price
