@@ -101,7 +101,7 @@ export async function generateBomPDF(options: GenerateBomPDFOptions): Promise<Bl
   const company = {
     name: 'EDG Patio & Shade',
     address: 'Scottsdale, AZ',
-    phone: '(480) 999-0002',
+    phone: '(815) 581-0138',
     email: 'info@edgpatioshade.com',
   };
 
