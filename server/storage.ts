@@ -451,6 +451,7 @@ export class MemStorage {
       discountType: insertLineItem.discountType || "percentage",
       discountValue: insertLineItem.discountValue || "0",
       groupId: insertLineItem.groupId ?? null,
+      sku: insertLineItem.sku ?? null,
     };
     this.lineItems.set(id, lineItem);
     return lineItem;
@@ -792,6 +793,7 @@ export class DatabaseStorage implements IStorage {
         isTariffApplicable: lineItems.isTariffApplicable,
         groupId: lineItems.groupId,
         position: lineItems.position,
+        sku: lineItems.sku,
         productManufacturer: products.manufacturer,
       })
       .from(lineItems)
@@ -819,6 +821,7 @@ export class DatabaseStorage implements IStorage {
       isTariffApplicable: item.isTariffApplicable,
       groupId: item.groupId,
       position: item.position,
+      sku: item.sku,
       manufacturer: item.productManufacturer || "Uncategorized",
     }));
 
@@ -870,6 +873,7 @@ export class DatabaseStorage implements IStorage {
         isTariffApplicable: lineItems.isTariffApplicable,
         groupId: lineItems.groupId,
         position: lineItems.position,
+        sku: lineItems.sku,
         productManufacturer: products.manufacturer,
       })
       .from(lineItems)
@@ -897,6 +901,7 @@ export class DatabaseStorage implements IStorage {
       isTariffApplicable: item.isTariffApplicable,
       groupId: item.groupId,
       position: item.position,
+      sku: item.sku,
       manufacturer: item.productManufacturer || "Uncategorized",
     }));
 
@@ -980,6 +985,7 @@ export class DatabaseStorage implements IStorage {
           isTariffApplicable: lineItems.isTariffApplicable,
           groupId: lineItems.groupId,
           position: lineItems.position,
+          sku: lineItems.sku,
           productManufacturer: products.manufacturer,
         })
         .from(lineItems)
@@ -1012,6 +1018,7 @@ export class DatabaseStorage implements IStorage {
         isTariffApplicable: item.isTariffApplicable,
         groupId: item.groupId,
         position: item.position,
+        sku: item.sku,
         manufacturer: item.productManufacturer || "Uncategorized",
       };
 
@@ -1310,6 +1317,7 @@ export class DatabaseStorage implements IStorage {
           baseProductId: item.baseProductId,
           isAccessory: item.isAccessory,
           isTaxable: item.isTaxable,
+          sku: item.sku,
           groupId: item.groupId ? (groupIdMapping[item.groupId] || null) : null,
           position: item.position,
         });
