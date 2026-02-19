@@ -77,12 +77,12 @@ export function registerImageRoutes(app: Express) {
         const normalizedBuffer = await sharp(fileContents)
           .rotate() // Auto-orient based on EXIF data - THIS FIXES THE ROTATION ISSUE
           .resize({
-            width: 2400,
-            height: 1800,
-            fit: 'inside', // Preserve aspect ratio, no distortion
+            width: 1600,
+            height: 1200,
+            fit: 'inside',
             withoutEnlargement: true,
           })
-          .jpeg({ quality: 85, mozjpeg: true })
+          .jpeg({ quality: 80, mozjpeg: true })
           .toBuffer();
         
         // 3. Re-upload the normalized image to the same location
