@@ -169,7 +169,19 @@ export function registerLineItemRoutes(app: Express) {
         });
       }
       
-      const lineItemData = insertLineItemSchema.parse({ ...req.body, quoteId: params.data.quoteId });
+      // Get existing line items to determine position for new item
+      const existingItems = await storage.getLineItemsByQuoteId(params.data.quoteId);
+      const groupId = req.body.groupId || null;
+      const itemsInSameGroup = existingItems.filter(item => item.groupId === groupId);
+      const maxPosition = itemsInSameGroup.length > 0
+        ? Math.max(...itemsInSameGroup.map(item => item.position ?? 0))
+        : -1;
+
+      const lineItemData = insertLineItemSchema.parse({ 
+        ...req.body, 
+        quoteId: params.data.quoteId,
+        position: maxPosition + 1
+      });
       
       // Get quote to access tariff rate for calculation verification
       const quote = await storage.getQuote(params.data.quoteId);
