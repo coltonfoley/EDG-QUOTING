@@ -7,7 +7,6 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Upload, FileSpreadsheet, AlertCircle, CheckCircle, ArrowRight, Download } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import * as XLSX from "xlsx";
 import { apiRequest } from "@/lib/queryClient";
 
 interface CSVRow {
@@ -92,6 +91,7 @@ export function CSVProductImporter() {
     setErrors([]);
 
     try {
+      const XLSX = await import("xlsx");
       const buffer = await selectedFile.arrayBuffer();
       const workbook = XLSX.read(buffer, { type: "array" });
       const sheetName = workbook.SheetNames[0];
@@ -274,7 +274,8 @@ export function CSVProductImporter() {
     setErrors([]);
   };
 
-  const downloadSampleCSV = () => {
+  const downloadSampleCSV = async () => {
+    const XLSX = await import("xlsx");
     const sampleData = [
       { 'Product Name': 'Example Product 1', 'Category': 'Materials', 'Dealer Price': '100.00', 'Your Cost': '70.00', 'Unit': 'each' },
       { 'Product Name': 'Example Product 2', 'Category': 'Labor', 'Dealer Price': '150.00', 'Your Cost': '100.00', 'Unit': 'hour' },
