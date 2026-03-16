@@ -256,7 +256,7 @@ export function registerImageRoutes(app: Express) {
     "brand-back.jpg": { objectPath: "brand-assets/brand-back.jpg", contentType: "image/jpeg" },
   };
 
-  app.get("/api/brand-assets/:filename", isAuthenticated, async (req, res) => {
+  app.get("/api/brand-assets/:filename", async (req, res) => {
     try {
       const { filename } = req.params;
       const asset = BRAND_ASSET_MAP[filename];
