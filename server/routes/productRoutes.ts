@@ -67,16 +67,21 @@ export function registerProductRoutes(app: Express) {
   app.get("/api/products", isAuthenticated, async (req, res) => {
     try {
       const manufacturerFilter = req.query.manufacturer as string;
+      const limit = req.query.limit ? Math.min(parseInt(req.query.limit as string) || 200, 500) : undefined;
+      const offset = req.query.offset ? parseInt(req.query.offset as string) || 0 : undefined;
       
       let productList;
       
       if (manufacturerFilter) {
         const filters = buildManufacturerFilter(manufacturerFilter);
         if (filters.length > 0) {
-          productList = await db
+          let query = db
             .select()
             .from(products)
             .where(and(...filters));
+          if (limit !== undefined) query = query.limit(limit) as any;
+          if (offset !== undefined) query = query.offset(offset) as any;
+          productList = await query;
         } else {
           productList = await storage.getAllProducts();
         }

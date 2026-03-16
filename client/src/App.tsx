@@ -12,7 +12,8 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, RefreshCw } from "lucide-react";
 import { ReportIssueButton } from "@/components/report-issue-button";
-import { AIAssistant } from "@/components/ai-assistant";
+
+const AIAssistant = lazy(() => import("@/components/ai-assistant").then(m => ({ default: m.AIAssistant })));
 
 const NotFound = lazy(() => import("@/pages/not-found"));
 const Quotes = lazy(() => import("@/pages/quotes"));
@@ -134,7 +135,9 @@ function InternalUIComponents() {
   return (
     <>
       <ReportIssueButton />
-      <AIAssistant />
+      <Suspense fallback={null}>
+        <AIAssistant />
+      </Suspense>
     </>
   );
 }

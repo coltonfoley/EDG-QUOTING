@@ -17,13 +17,13 @@ export function registerAccountRoutes(app: Express) {
   app.get("/api/accounts", isAuthenticated, async (req, res) => {
     try {
       const searchTerm = req.query.search as string;
+      const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
+      const offset = parseInt(req.query.offset as string) || 0;
       
       if (searchTerm && searchTerm.length > 0) {
-        // Search functionality
         console.log(`[SEARCH] Account search request: search="${searchTerm}"`);
         const term = searchTerm.toLowerCase();
         
-        // Search accounts directly
         const accountResults = await db
           .select()
           .from(accounts)
@@ -34,12 +34,12 @@ export function registerAccountRoutes(app: Express) {
               ilike(accounts.company, `%${term}%`)
             )
           )
-          .limit(10);
+          .limit(limit)
+          .offset(offset);
         
         console.log(`[SEARCH] Found ${accountResults.length} accounts for term "${term}"`);
         res.json(accountResults);
       } else {
-        // Return all accounts when no search term
         const allAccounts = await storage.getAllAccounts();
         res.json(allAccounts);
       }
