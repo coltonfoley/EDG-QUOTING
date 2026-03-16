@@ -2,7 +2,7 @@ import jsPDF from 'jspdf';
 import type { QuoteWithDetails, LineItem } from '@shared/schema';
 import { barlowRegularBase64, barlowSemiBoldBase64 } from './fonts';
 import { formatCurrency, calculateLineItemTotal } from './utils';
-import { BRAND_LOGO_PNG } from './pdf-brand-assets';
+import { getBrandLogoPNG } from './pdf-brand-assets';
 
 interface BomLineItem extends LineItem {
   manufacturer?: string;
@@ -85,6 +85,8 @@ function drawTableHeader(pdf: jsPDF, y: number, margin: number, colWidths: Recor
 
 export async function generateBomPDF(options: GenerateBomPDFOptions): Promise<Blob> {
   const { quote, groups = [] } = options;
+
+  const BRAND_LOGO_PNG = await getBrandLogoPNG();
 
   const pdf = new jsPDF({ unit: 'mm', format: 'letter' });
 

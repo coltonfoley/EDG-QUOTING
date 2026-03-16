@@ -41,6 +41,8 @@ Preferred communication style: Simple, everyday language.
 - **Deployment**: Configured for Replit, with `npm run dev` for development and optimized production builds.
 - **Error Handling**: Robust validation and error management, including silent handling of navigation-triggered aborts.
 - **Performance**: Optimized line item rendering and React Query cache invalidation strategy.
+    - **Bundle Optimization**: Main JS bundle reduced from 1.6 MB to ~421 KB (74% reduction). AIAssistant is lazy-loaded via React.lazy. Brand assets (Base64 images for PDFs) are split into 3 separate chunks (`brand-asset-cover.ts`, `brand-asset-logo.ts`, `brand-asset-back.ts`) loaded on demand via async getters in `pdf-brand-assets.ts`. All page routes are lazy-loaded.
+    - **API Pagination**: GET `/api/accounts` search and GET `/api/products` (with manufacturer filter) support `limit`/`offset` query parameters for pagination.
 - **Key Features**:
     - Search functionality for quotes and product catalog.
     - Customizable PDF generation with company branding.

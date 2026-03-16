@@ -3,7 +3,7 @@
 
 import jsPDF from 'jspdf';
 import type { QuoteWithDetails } from '@shared/schema';
-import { BRAND_COVER_JPG, BRAND_LOGO_PNG, BRAND_BACK_PAGE_PNG } from './pdf-brand-assets';
+import { getBrandCoverJPG, getBrandLogoPNG, getBrandBackPagePNG } from './pdf-brand-assets';
 import {
   drawStandardCover,
   drawProjectDetailsPage,
@@ -46,6 +46,12 @@ interface BrandedSequenceOptions {
  */
 export async function generateBrandedSequencePDF(options: BrandedSequenceOptions): Promise<void> {
   const { pdf, company, quote, renderImages, contractText, showPricing, clientLogoDataUrl, groups = [] } = options;
+
+  const [BRAND_COVER_JPG, BRAND_LOGO_PNG, BRAND_BACK_PAGE_PNG] = await Promise.all([
+    getBrandCoverJPG(),
+    getBrandLogoPNG(),
+    getBrandBackPagePNG(),
+  ]);
 
   const pageW = pdf.internal.pageSize.getWidth();
   const pageH = pdf.internal.pageSize.getHeight();
