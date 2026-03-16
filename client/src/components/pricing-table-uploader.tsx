@@ -9,7 +9,6 @@ import { Label } from "@/components/ui/label";
 import { Upload, FileSpreadsheet, AlertCircle, CheckCircle, Calculator } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
-import * as XLSX from "xlsx";
 import { apiRequest } from "@/lib/queryClient";
 import type { Product } from "@shared/schema";
 
@@ -348,6 +347,7 @@ export function PricingTableUploader({ productId, onUploadComplete }: PricingTab
         return;
       }
 
+      const XLSX = await import("xlsx");
       const buffer = await selectedFile.arrayBuffer();
       const workbook = XLSX.read(buffer, { type: "array" });
       const sheetName = workbook.SheetNames[0];
@@ -402,6 +402,7 @@ export function PricingTableUploader({ productId, onUploadComplete }: PricingTab
 
     // Process full file again for upload
     const processFile = async () => {
+      const XLSX = await import("xlsx");
       const buffer = await file.arrayBuffer();
       const workbook = XLSX.read(buffer, { type: "array" });
       const sheetName = workbook.SheetNames[0];
