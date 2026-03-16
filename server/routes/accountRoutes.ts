@@ -40,7 +40,11 @@ export function registerAccountRoutes(app: Express) {
         console.log(`[SEARCH] Found ${accountResults.length} accounts for term "${term}"`);
         res.json(accountResults);
       } else {
-        const allAccounts = await storage.getAllAccounts();
+        const allAccounts = await db
+          .select()
+          .from(accounts)
+          .limit(limit)
+          .offset(offset);
         res.json(allAccounts);
       }
     } catch (error) {
