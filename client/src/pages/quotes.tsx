@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, lazy, Suspense } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
 import { AppHeader } from "@/components/app-header";
@@ -16,10 +16,11 @@ import { useAuth } from "@/hooks/useAuth";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { LoadingSpinner } from "@/components/loading-spinner";
-import { SimpleProposalGenerator } from "@/components/simple-proposal-generator";
 import { QuoteImporter } from "@/components/quote-importer";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { QuoteWithDetails } from "@shared/schema";
+
+const SimpleProposalGenerator = lazy(() => import("@/components/simple-proposal-generator").then(m => ({ default: m.SimpleProposalGenerator })));
 
 export default function Quotes() {
   const [searchTerm, setSearchTerm] = useState("");
@@ -512,16 +513,18 @@ export default function Quotes() {
         
         {/* Simple Proposal Generator Dialog */}
         {selectedQuoteForProposal && (
-          <SimpleProposalGenerator
-            quote={selectedQuoteForProposal}
-            open={proposalGeneratorOpen}
-            onOpenChange={(open) => {
-              setProposalGeneratorOpen(open);
-              if (!open) {
-                setSelectedQuoteForProposal(null);
-              }
-            }}
-          />
+          <Suspense fallback={null}>
+            <SimpleProposalGenerator
+              quote={selectedQuoteForProposal}
+              open={proposalGeneratorOpen}
+              onOpenChange={(open) => {
+                setProposalGeneratorOpen(open);
+                if (!open) {
+                  setSelectedQuoteForProposal(null);
+                }
+              }}
+            />
+          </Suspense>
         )}
 
         {/* Quote Importer */}
