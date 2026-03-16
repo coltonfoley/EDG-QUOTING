@@ -2,8 +2,8 @@ import type { Express } from "express";
 import { storage } from "../storage";
 import { z } from "zod";
 import { db } from "../db";
-import { accounts } from "@shared/schema";
-import { or, ilike } from "drizzle-orm";
+import { accounts, quotes } from "@shared/schema";
+import { or, ilike, sql, desc } from "drizzle-orm";
 import { isAuthenticated } from "../replitAuth";
 import {
   insertAccountSchema,
@@ -19,13 +19,31 @@ export function registerAccountRoutes(app: Express) {
       const searchTerm = req.query.search as string;
       const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
       const offset = parseInt(req.query.offset as string) || 0;
+
+      const accountFields = {
+        id: accounts.id,
+        name: accounts.name,
+        email: accounts.email,
+        phone: accounts.phone,
+        company: accounts.company,
+        accountType: accounts.accountType,
+        paymentTerms: accounts.paymentTerms,
+        billingAddress: accounts.billingAddress,
+        firstName: accounts.firstName,
+        lastName: accounts.lastName,
+        secondaryContacts: accounts.secondaryContacts,
+        qbCustomerId: accounts.qbCustomerId,
+        createdAt: accounts.createdAt,
+        updatedAt: accounts.updatedAt,
+        projectCount: sql<number>`(SELECT COUNT(*)::int FROM quotes WHERE quotes.account_id = accounts.id)`,
+      };
       
       if (searchTerm && searchTerm.length > 0) {
         console.log(`[SEARCH] Account search request: search="${searchTerm}"`);
         const term = searchTerm.toLowerCase();
         
         const accountResults = await db
-          .select()
+          .select(accountFields)
           .from(accounts)
           .where(
             or(
@@ -34,6 +52,7 @@ export function registerAccountRoutes(app: Express) {
               ilike(accounts.company, `%${term}%`)
             )
           )
+          .orderBy(desc(accounts.createdAt))
           .limit(limit)
           .offset(offset);
         
@@ -41,8 +60,9 @@ export function registerAccountRoutes(app: Express) {
         res.json(accountResults);
       } else {
         const allAccounts = await db
-          .select()
+          .select(accountFields)
           .from(accounts)
+          .orderBy(desc(accounts.createdAt))
           .limit(limit)
           .offset(offset);
         res.json(allAccounts);
