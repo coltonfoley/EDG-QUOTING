@@ -249,4 +249,36 @@ export function registerImageRoutes(app: Express) {
       res.status(500).json({ message: "Failed to proxy image" });
     }
   });
+
+  const BRAND_ASSET_MAP: Record<string, { objectPath: string; contentType: string }> = {
+    "brand-cover.jpg": { objectPath: "brand-assets/brand-cover.jpg", contentType: "image/jpeg" },
+    "brand-logo.png": { objectPath: "brand-assets/brand-logo.png", contentType: "image/png" },
+    "brand-back.jpg": { objectPath: "brand-assets/brand-back.jpg", contentType: "image/jpeg" },
+  };
+
+  app.get("/api/brand-assets/:filename", isAuthenticated, async (req, res) => {
+    try {
+      const { filename } = req.params;
+      const asset = BRAND_ASSET_MAP[filename];
+      if (!asset) {
+        return res.status(404).json({ message: "Asset not found" });
+      }
+
+      const objectStorageService = new ObjectStorageService();
+      const file = await objectStorageService.searchPublicObject(asset.objectPath);
+      if (!file) {
+        return res.status(404).json({ message: "Asset not found in storage" });
+      }
+
+      const [buffer] = await file.download();
+      const base64 = buffer.toString("base64");
+      const prefix = asset.contentType === "image/png" ? "data:image/png;base64," : "data:image/jpeg;base64,";
+
+      res.setHeader("Cache-Control", "public, max-age=86400");
+      res.json({ dataUri: prefix + base64 });
+    } catch (error) {
+      console.error("Error serving brand asset:", error);
+      res.status(500).json({ message: "Failed to load brand asset" });
+    }
+  });
 }
