@@ -1,6 +1,6 @@
 import { useParams } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useState, lazy, Suspense } from "react";
 import { AppHeader } from "@/components/app-header";
 import { QuoteHeader } from "@/components/quote-header";
 import { LineItemsTable } from "@/components/line-items-table";
@@ -12,7 +12,8 @@ import { useToast } from "@/hooks/use-toast";
 import { generateQuoteNumber } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { LoadingSpinner } from "@/components/loading-spinner";
-import { SimpleProposalGenerator } from "@/components/simple-proposal-generator";
+
+const SimpleProposalGenerator = lazy(() => import("@/components/simple-proposal-generator").then(m => ({ default: m.SimpleProposalGenerator })));
 import { Save, Loader2, FileText, CloudUpload, Copy, History } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -421,12 +422,14 @@ export default function QuoteBuilder() {
         )}
 
         {/* Simple Proposal Generator Dialog */}
-        {!isNewQuote && currentQuote.id && (
-          <SimpleProposalGenerator
-            quote={currentQuote}
-            open={proposalGeneratorOpen}
-            onOpenChange={setProposalGeneratorOpen}
-          />
+        {!isNewQuote && currentQuote.id && proposalGeneratorOpen && (
+          <Suspense fallback={null}>
+            <SimpleProposalGenerator
+              quote={currentQuote}
+              open={proposalGeneratorOpen}
+              onOpenChange={setProposalGeneratorOpen}
+            />
+          </Suspense>
         )}
 
       </div>

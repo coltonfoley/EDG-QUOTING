@@ -15,8 +15,6 @@ import { formatCurrency, calculateQuoteTotals } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import type { QuoteWithDetails, ContractTemplate } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
-import { generateSignedPDF, downloadSignedPDF } from "@/lib/generate-signed-pdf";
-import { generateBomPDF, downloadBomPDF } from "@/lib/generate-bom-pdf";
 import { SignatureCanvas, SignatureData } from "@/components/signature-canvas";
 import { ESignatureOptionsModal } from "@/components/esignature-options-modal";
 
@@ -99,7 +97,7 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
       const includePricing = fullQuote.esigIncludePricing ?? true;
       const includeContract = fullQuote.esigIncludeContract ?? true;
       
-      // Generate PDF
+      const { generateSignedPDF, downloadSignedPDF } = await import("@/lib/generate-signed-pdf");
       const pdfBlob = await generateSignedPDF({ 
         quote: fullQuote, 
         includeImages,
@@ -107,8 +105,6 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
         includeContract,
         groups
       });
-      
-      // Download
       downloadSignedPDF(pdfBlob, fullQuote);
     },
     onError: (error: any) => {
@@ -143,13 +139,11 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
         console.warn('Failed to fetch groups for BOM:', e);
       }
       
-      // Generate BOM PDF
+      const { generateBomPDF, downloadBomPDF } = await import("@/lib/generate-bom-pdf");
       const pdfBlob = await generateBomPDF({ 
         quote: fullQuote, 
         groups
       });
-      
-      // Download
       downloadBomPDF(pdfBlob, fullQuote);
     },
     onError: (error: any) => {
