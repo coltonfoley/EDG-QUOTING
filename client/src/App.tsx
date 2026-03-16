@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useState, useCallback } from "react";
 import { Switch, Route, Redirect, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider, useIsFetching, useIsMutating } from "@tanstack/react-query";
@@ -10,7 +10,7 @@ import { LoadingBar } from "@/components/loading-bar";
 import { LoadingSpinner } from "@/components/loading-spinner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { AlertTriangle, RefreshCw } from "lucide-react";
+import { AlertTriangle, RefreshCw, MessageCircle } from "lucide-react";
 import { ReportIssueButton } from "@/components/report-issue-button";
 
 const AIAssistant = lazy(() => import("@/components/ai-assistant").then(m => ({ default: m.AIAssistant })));
@@ -124,10 +124,36 @@ function Router() {
   );
 }
 
+function AIAssistantLauncher() {
+  const [activated, setActivated] = useState(false);
+
+  const handleOpen = useCallback(() => {
+    setActivated(true);
+  }, []);
+
+  if (!activated) {
+    return (
+      <Button
+        onClick={handleOpen}
+        size="icon"
+        className="fixed bottom-6 right-6 z-50 h-14 w-14 rounded-full shadow-lg bg-primary hover:bg-primary/90"
+        aria-label="Open AI Assistant"
+      >
+        <MessageCircle className="h-6 w-6" />
+      </Button>
+    );
+  }
+
+  return (
+    <Suspense fallback={null}>
+      <AIAssistant defaultOpen />
+    </Suspense>
+  );
+}
+
 function InternalUIComponents() {
   const [location] = useLocation();
   
-  // Hide internal UI on public-facing pages
   if (location.startsWith('/sign/')) {
     return null;
   }
@@ -135,9 +161,7 @@ function InternalUIComponents() {
   return (
     <>
       <ReportIssueButton />
-      <Suspense fallback={null}>
-        <AIAssistant />
-      </Suspense>
+      <AIAssistantLauncher />
     </>
   );
 }

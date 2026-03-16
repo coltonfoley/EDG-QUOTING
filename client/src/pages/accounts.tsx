@@ -22,16 +22,28 @@ interface AccountWithCounts extends Account {
   projectCount?: number;
 }
 
+const PAGE_SIZE = 50;
+
 export default function Accounts() {
   const [searchTerm, setSearchTerm] = useState("");
   const [accountTypeFilter, setAccountTypeFilter] = useState<string>("all");
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [page, setPage] = useState(0);
   const { toast } = useToast();
   const { isAuthenticated } = useAuth();
   const [, navigate] = useLocation();
   
   const { data: accounts, isLoading, error } = useQuery<AccountWithCounts[]>({
-    queryKey: ["/api/accounts"],
+    queryKey: ["/api/accounts", { limit: PAGE_SIZE, offset: page * PAGE_SIZE }],
+    queryFn: async () => {
+      const params = new URLSearchParams({
+        limit: String(PAGE_SIZE),
+        offset: String(page * PAGE_SIZE),
+      });
+      const response = await fetch(`/api/accounts?${params}`);
+      if (!response.ok) throw new Error("Failed to fetch accounts");
+      return response.json();
+    },
     enabled: isAuthenticated,
   });
 
@@ -356,6 +368,31 @@ export default function Accounts() {
               </table>
             </div>
           </CardContent>
+          {accounts && (
+            <div className="flex items-center justify-between px-6 py-3 border-t">
+              <span className="text-sm text-muted-foreground">
+                Page {page + 1} — showing {accounts.length} clients
+              </span>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={page === 0}
+                  onClick={() => setPage(p => Math.max(0, p - 1))}
+                >
+                  Previous
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={accounts.length < PAGE_SIZE}
+                  onClick={() => setPage(p => p + 1)}
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
+          )}
         </Card>
       </div>
 

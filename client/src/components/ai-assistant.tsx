@@ -16,9 +16,9 @@ interface Message {
   timestamp: Date;
 }
 
-export function AIAssistant() {
+export function AIAssistant({ defaultOpen = false }: { defaultOpen?: boolean }) {
   const { isAuthenticated } = useAuth();
-  const [isOpen, setIsOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(defaultOpen);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);

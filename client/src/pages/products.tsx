@@ -30,6 +30,8 @@ const productFormSchema = insertProductSchema.extend({
 });
 type ProductFormData = z.infer<typeof productFormSchema>;
 
+const PRODUCT_PAGE_SIZE = 200;
+
 export default function Products() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -39,15 +41,20 @@ export default function Products() {
   const [viewMode, setViewMode] = useState<"grid" | "table">("table");
   const [showPricingManager, setShowPricingManager] = useState(false);
   const [managingPricingProduct, setManagingPricingProduct] = useState<Product | null>(null);
+  const [page, setPage] = useState(0);
   
   
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
   const { data: products, isLoading } = useQuery<Product[]>({
-    queryKey: ["/api/products"],
+    queryKey: ["/api/products", { limit: PRODUCT_PAGE_SIZE, offset: page * PRODUCT_PAGE_SIZE }],
     queryFn: async () => {
-      const response = await fetch("/api/products");
+      const params = new URLSearchParams({
+        limit: String(PRODUCT_PAGE_SIZE),
+        offset: String(page * PRODUCT_PAGE_SIZE),
+      });
+      const response = await fetch(`/api/products?${params}`);
       if (!response.ok) {
         throw new Error("Failed to fetch products");
       }
@@ -958,6 +965,32 @@ export default function Products() {
                 </div>
               </div>
             ))}
+          </div>
+        )}
+
+        {products && (
+          <div className="flex items-center justify-between mt-4">
+            <span className="text-sm text-muted-foreground">
+              Page {page + 1} — showing {products.length} products
+            </span>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={page === 0}
+                onClick={() => setPage(p => Math.max(0, p - 1))}
+              >
+                Previous
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={products.length < PRODUCT_PAGE_SIZE}
+                onClick={() => setPage(p => p + 1)}
+              >
+                Next
+              </Button>
+            </div>
           </div>
         )}
       </div>
