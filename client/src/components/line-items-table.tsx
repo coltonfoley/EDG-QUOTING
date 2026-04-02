@@ -11,7 +11,7 @@ import { Trash2, Plus, Package, Search, Filter, X, FileText, Loader2, GripVertic
 import { formatCurrency, calculateLineItemTotal, calculateLineItemMargin, applyDiscountToPrice, isValidNumber, clampValue, roundCurrency, generateGroupId, sanitizeNumberString } from "@/lib/utils";
 import { apiRequest, NavigationAbortError } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import type { LineItem, Product } from "@shared/schema";
+import type { LineItem, Product, Color, ProductColor } from "@shared/schema";
 import { 
   DndContext, 
   DragEndEvent, 
@@ -55,11 +55,12 @@ interface SortableLineItemRowProps {
   handleFieldBlur: (itemId: number, field: 'description' | 'quantity' | 'unitPrice' | 'markupType' | 'markupValue') => void;
   validationErrors: Record<string, string>;
   tariffRate: string | number;
-  updateLineItemMutation: any; // Add this for the checkbox mutations
-  deleteLineItemMutation: any; // Add this for the delete button
-  formatCurrency: (value: number | string) => string; // Add this for formatting
-  calculateLineItemMargin: typeof calculateLineItemMargin; // Add this for margin calc
-  calculateLineItemTotal: typeof calculateLineItemTotal; // Add this for total calc
+  updateLineItemMutation: any;
+  deleteLineItemMutation: any;
+  formatCurrency: (value: number | string) => string;
+  calculateLineItemMargin: typeof calculateLineItemMargin;
+  calculateLineItemTotal: typeof calculateLineItemTotal;
+  availableColors?: (ProductColor & { color: Color })[];
 }
 
 const SortableLineItemRow = memo(function SortableLineItemRow({
@@ -77,7 +78,10 @@ const SortableLineItemRow = memo(function SortableLineItemRow({
   formatCurrency,
   calculateLineItemMargin,
   calculateLineItemTotal,
+  availableColors,
 }: SortableLineItemRowProps) {
+  const [colorDropdownOpen, setColorDropdownOpen] = useState(false);
+  const [colorUpdatePending, setColorUpdatePending] = useState(false);
   const {
     attributes,
     listeners,
@@ -166,23 +170,96 @@ const SortableLineItemRow = memo(function SortableLineItemRow({
         {(() => {
           try {
             const configData = item.configData ? (typeof item.configData === 'string' ? JSON.parse(item.configData) : item.configData) : null;
-            const colors = configData?.colors;
-            if (colors && Array.isArray(colors) && colors.length > 0) {
+            const currentColors = configData?.colors;
+            if (currentColors && Array.isArray(currentColors) && currentColors.length > 0) {
+              const hasAvailableColors = availableColors && availableColors.length > 0 && !colorUpdatePending;
               return (
-                <div className="flex gap-1 mt-1 flex-wrap">
-                  {colors.map((color: { name: string; hexCode: string }, idx: number) => (
-                    <div 
+                <div className="relative flex gap-1 mt-1 flex-wrap">
+                  {currentColors.map((color: { name: string; hexCode: string }, idx: number) => (
+                    <button
                       key={idx}
-                      className="inline-flex items-center gap-1 px-2 py-0.5 bg-muted rounded text-xs"
+                      type="button"
+                      onClick={(e) => {
+                        if (hasAvailableColors) {
+                          e.stopPropagation();
+                          setColorDropdownOpen(!colorDropdownOpen);
+                        }
+                      }}
+                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs transition-colors ${
+                        hasAvailableColors
+                          ? 'bg-muted hover:bg-muted/80 cursor-pointer border border-transparent hover:border-border'
+                          : 'bg-muted cursor-default'
+                      }`}
                       data-testid={`color-badge-${item.id}-${idx}`}
+                      title={hasAvailableColors ? `Click to change color` : color.name}
                     >
                       <div 
                         className="w-3 h-3 rounded-full border border-border"
                         style={{ backgroundColor: color.hexCode }}
                       />
                       <span>{color.name}</span>
-                    </div>
+                      {hasAvailableColors && (
+                        <svg className="w-3 h-3 ml-0.5 text-muted-foreground" viewBox="0 0 12 12" fill="none">
+                          <path d="M3 5L6 8L9 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                      )}
+                    </button>
                   ))}
+                  {colorDropdownOpen && hasAvailableColors && (
+                    <>
+                      <div 
+                        className="fixed inset-0 z-40" 
+                        onClick={() => setColorDropdownOpen(false)}
+                      />
+                      <div className="absolute top-full left-0 mt-1 z-50 bg-popover border border-border rounded-md shadow-md p-1 min-w-[140px]">
+                        {availableColors!.map((pc) => {
+                          const isCurrentColor = currentColors.some(
+                            (c: { name: string; hexCode: string }) => c.name === pc.color.name
+                          );
+                          return (
+                            <button
+                              key={pc.color.id}
+                              type="button"
+                              className={`w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs hover:bg-accent transition-colors ${
+                                isCurrentColor ? 'bg-accent font-medium' : ''
+                              }`}
+                              data-testid={`color-option-${item.id}-${pc.color.id}`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const freshConfigData = item.configData 
+                                  ? (typeof item.configData === 'string' ? JSON.parse(item.configData) : item.configData) 
+                                  : {};
+                                const updatedConfigData = {
+                                  ...freshConfigData,
+                                  colors: [{ name: pc.color.name, hexCode: pc.color.hexCode }]
+                                };
+                                setColorUpdatePending(true);
+                                updateLineItemMutation.mutate({
+                                  id: item.id,
+                                  data: { configData: updatedConfigData },
+                                  skipInvalidation: false
+                                }, {
+                                  onSettled: () => setColorUpdatePending(false)
+                                });
+                                setColorDropdownOpen(false);
+                              }}
+                            >
+                              <div 
+                                className="w-4 h-4 rounded-full border border-border flex-shrink-0"
+                                style={{ backgroundColor: pc.color.hexCode }}
+                              />
+                              <span>{pc.color.name}</span>
+                              {isCurrentColor && (
+                                <svg className="w-3 h-3 ml-auto text-primary" viewBox="0 0 12 12" fill="none">
+                                  <path d="M2 6L5 9L10 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                                </svg>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </>
+                  )}
                 </div>
               );
             }
@@ -607,6 +684,32 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
 
   const { data: products } = useQuery<Product[]>({
     queryKey: ["/api/products"],
+  });
+
+  const productIdsWithColors = useMemo(() => {
+    const ids = new Set<number>();
+    for (const item of lineItems) {
+      if (item.productId) {
+        try {
+          const cd = item.configData ? (typeof item.configData === 'string' ? JSON.parse(item.configData) : item.configData) : null;
+          if (cd?.colors && Array.isArray(cd.colors) && cd.colors.length > 0) {
+            ids.add(item.productId);
+          }
+        } catch {}
+      }
+    }
+    return Array.from(ids);
+  }, [lineItems]);
+
+  const { data: productColorsMap } = useQuery<Record<number, (ProductColor & { color: Color })[]>>({
+    queryKey: ['/api/product-colors', 'inline', productIdsWithColors.join(',')],
+    queryFn: async () => {
+      if (productIdsWithColors.length === 0) return {};
+      const response = await apiRequest('GET', `/api/products/colors/batch?productIds=${productIdsWithColors.join(',')}`);
+      return response.json();
+    },
+    enabled: productIdsWithColors.length > 0,
+    staleTime: 300_000,
   });
 
   // Fetch groups for this quote
@@ -2295,6 +2398,7 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
                           formatCurrency={formatCurrency}
                           calculateLineItemMargin={calculateLineItemMargin}
                           calculateLineItemTotal={calculateLineItemTotal}
+                          availableColors={item.productId ? productColorsMap?.[item.productId] : undefined}
                         />
                       ))}
                     </SortableContext>
@@ -2341,6 +2445,7 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
                               formatCurrency={formatCurrency}
                               calculateLineItemMargin={calculateLineItemMargin}
                               calculateLineItemTotal={calculateLineItemTotal}
+                              availableColors={item.productId ? productColorsMap?.[item.productId] : undefined}
                             />
                           ))}
                         </SortableContext>
