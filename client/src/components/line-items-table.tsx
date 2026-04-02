@@ -82,6 +82,7 @@ const SortableLineItemRow = memo(function SortableLineItemRow({
 }: SortableLineItemRowProps) {
   const [colorDropdownOpen, setColorDropdownOpen] = useState(false);
   const [colorUpdatePending, setColorUpdatePending] = useState(false);
+  const [optimisticColor, setOptimisticColor] = useState<{ name: string; hexCode: string } | null>(null);
   const {
     attributes,
     listeners,
@@ -170,7 +171,8 @@ const SortableLineItemRow = memo(function SortableLineItemRow({
         {(() => {
           try {
             const configData = item.configData ? (typeof item.configData === 'string' ? JSON.parse(item.configData) : item.configData) : null;
-            const currentColors = configData?.colors;
+            const rawColors = configData?.colors;
+            const currentColors = optimisticColor ? [optimisticColor] : rawColors;
             if (currentColors && Array.isArray(currentColors) && currentColors.length > 0) {
               const hasAvailableColors = availableColors && availableColors.length > 0 && !colorUpdatePending;
               return (
@@ -233,13 +235,17 @@ const SortableLineItemRow = memo(function SortableLineItemRow({
                                   ...freshConfigData,
                                   colors: [{ name: pc.color.name, hexCode: pc.color.hexCode }]
                                 };
+                                setOptimisticColor({ name: pc.color.name, hexCode: pc.color.hexCode });
                                 setColorUpdatePending(true);
                                 updateLineItemMutation.mutate({
                                   id: item.id,
                                   data: { configData: updatedConfigData },
                                   skipInvalidation: false
                                 }, {
-                                  onSettled: () => setColorUpdatePending(false)
+                                  onSettled: () => {
+                                    setColorUpdatePending(false);
+                                    setOptimisticColor(null);
+                                  }
                                 });
                                 setColorDropdownOpen(false);
                               }}
