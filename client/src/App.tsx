@@ -30,6 +30,7 @@ const Accounts = lazy(() => import("@/pages/accounts"));
 const AccountDetail = lazy(() => import("@/pages/account-detail"));
 const Pipeline = lazy(() => import("@/pages/pipeline"));
 const PublicSignPage = lazy(() => import("@/pages/public-sign"));
+const ChangePassword = lazy(() => import("@/pages/change-password"));
 
 function GlobalLoadingIndicator() {
   const isFetching = useIsFetching();
@@ -116,6 +117,7 @@ function Router() {
             <Route path="/admin/contracts" component={ContractsPage} />
             <Route path="/admin/quickbooks" component={QuickBooksSettings} />
             <Route path="/admin/google-contacts" component={GoogleContactsSettings} />
+            <Route path="/change-password" component={ChangePassword} />
             <Route component={NotFound} />
           </>
         )}

@@ -15,7 +15,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
-import { UserPlus, Shield, User as UserIcon, Trash2, Edit, FileSpreadsheet, Package, Settings, FileText, DollarSign, Users } from "lucide-react";
+import { UserPlus, Shield, User as UserIcon, Trash2, Edit, FileSpreadsheet, Package, Settings, FileText, DollarSign, Users, Copy, Eye, EyeOff } from "lucide-react";
 import { z } from "zod";
 import type { User, Product } from "@shared/schema";
 import { CSVProductImporter } from "@/components/csv-product-importer";
@@ -132,6 +132,9 @@ export default function AdminPage() {
       toast({ title: "User created successfully" });
       setShowCreateDialog(false);
       createUserForm.reset();
+      setGeneratedPassword(null);
+      setShowPassword(false);
+      setCopied(false);
     },
     onError: (error: Error) => {
       toast({ 
@@ -184,6 +187,10 @@ export default function AdminPage() {
     },
   });
 
+  const [generatedPassword, setGeneratedPassword] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
+  const [copied, setCopied] = useState(false);
+
   const generatePassword = () => {
     const lower = 'abcdefghijklmnopqrstuvwxyz';
     const upper = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
@@ -198,6 +205,22 @@ export default function AdminPage() {
     }
     password = password.split('').sort(() => Math.random() - 0.5).join('');
     createUserForm.setValue("password", password);
+    setGeneratedPassword(password);
+    setShowPassword(true);
+    setCopied(false);
+  };
+
+  const copyPassword = async () => {
+    if (generatedPassword) {
+      try {
+        await navigator.clipboard.writeText(generatedPassword);
+        setCopied(true);
+        toast({ title: "Password copied to clipboard" });
+        setTimeout(() => setCopied(false), 2000);
+      } catch {
+        toast({ title: "Unable to copy", description: "Please select and copy the password manually", variant: "destructive" });
+      }
+    }
   };
 
   const handleCreateUser = (data: CreateUserData) => {
@@ -284,7 +307,14 @@ export default function AdminPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>Team Members</CardTitle>
-            <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+            <Dialog open={showCreateDialog} onOpenChange={(open) => {
+              setShowCreateDialog(open);
+              if (!open) {
+                setGeneratedPassword(null);
+                setShowPassword(false);
+                setCopied(false);
+              }
+            }}>
               <DialogTrigger asChild>
                 <Button className="bg-edg-black hover:bg-edg-grey text-white">
                   <UserPlus className="mr-2 h-4 w-4" />
@@ -318,14 +348,33 @@ export default function AdminPage() {
                         <FormItem>
                           <FormLabel>Password</FormLabel>
                           <div className="flex gap-2">
-                            <FormControl>
-                              <Input {...field} type="password" placeholder="Enter password" />
-                            </FormControl>
+                            <div className="relative flex-1">
+                              <FormControl>
+                                <Input {...field} type={showPassword ? "text" : "password"} placeholder="Enter password" className="pr-10" />
+                              </FormControl>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                                onClick={() => setShowPassword(!showPassword)}
+                              >
+                                {showPassword ? <EyeOff className="h-4 w-4 text-muted-foreground" /> : <Eye className="h-4 w-4 text-muted-foreground" />}
+                              </Button>
+                            </div>
                             <Button type="button" variant="outline" onClick={generatePassword}>
                               Generate
                             </Button>
+                            {generatedPassword && (
+                              <Button type="button" variant="outline" size="icon" onClick={copyPassword} title="Copy password">
+                                <Copy className={`h-4 w-4 ${copied ? 'text-green-500' : ''}`} />
+                              </Button>
+                            )}
                           </div>
                           <FormMessage />
+                          <p className="text-xs text-muted-foreground">
+                            Min 8 characters, with uppercase, lowercase, and a number
+                          </p>
                         </FormItem>
                       )}
                     />

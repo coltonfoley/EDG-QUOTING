@@ -69,6 +69,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerProductRoutes(app);
   registerAIAssistantRoutes(app);
 
+  app.put('/api/user/change-password', isAuthenticated, async (req: any, res) => {
+    try {
+      const user = await storage.getUser(req.user?.id);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      const schema = z.object({
+        currentPassword: z.string().min(1, "Current password is required"),
+        newPassword: z.string()
+          .min(8, "Password must be at least 8 characters")
+          .max(128, "Password is too long")
+          .regex(/[A-Z]/, "Password must contain at least one uppercase letter")
+          .regex(/[a-z]/, "Password must contain at least one lowercase letter")
+          .regex(/[0-9]/, "Password must contain at least one number"),
+      });
+
+      const validated = schema.safeParse(req.body);
+      if (!validated.success) {
+        return res.status(400).json({ message: "Invalid data", errors: validated.error.errors });
+      }
+
+      const { comparePasswords } = await import("./replitAuth");
+      const isValid = await comparePasswords(validated.data.currentPassword, user.password);
+      if (!isValid) {
+        return res.status(400).json({ message: "Current password is incorrect" });
+      }
+
+      await storage.updateUser(user.id, { password: validated.data.newPassword });
+      res.json({ message: "Password updated successfully" });
+    } catch (error) {
+      console.error("Error changing password:", error);
+      res.status(500).json({ message: "Failed to change password" });
+    }
+  });
+
   app.get('/api/admin/users', isAuthenticated, async (req: any, res) => {
     try {
       const currentUser = await storage.getUser(req.user?.id);

@@ -50,6 +50,8 @@ Preferred communication style: Simple, everyday language.
     - Bulk product adjustment and price list uploading.
     - Cost tracking for true margin visibility in imported items.
     - **Product Configurator System**: Manufacturer-specific configurators (Sundance catalog-style) that insert grouped line items with complete product snapshots stored in configData for historical accuracy. Cache invalidation pattern requires invalidating both quote and groups queries.
+    - **Self-Service Password Change**: Users can change their own password from the header dropdown menu → "Change Password" (route: `/change-password`). Requires current password verification. Backend endpoint: `PUT /api/user/change-password`.
+    - **Admin User Creation UX**: Generated passwords are visible by default with show/hide toggle and a copy-to-clipboard button for easy sharing with new team members.
 
 ## External Dependencies
 
