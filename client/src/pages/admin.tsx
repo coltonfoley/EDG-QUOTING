@@ -21,8 +21,16 @@ import type { User, Product } from "@shared/schema";
 import { CSVProductImporter } from "@/components/csv-product-importer";
 
 const createUserSchema = z.object({
-  username: z.string().min(3, "Username must be at least 3 characters"),
-  password: z.string().min(6, "Password must be at least 6 characters"),
+  username: z.string()
+    .min(3, "Username must be at least 3 characters")
+    .max(50, "Username is too long")
+    .regex(/^[a-zA-Z0-9_-]+$/, "Username can only contain letters, numbers, underscores, and hyphens"),
+  password: z.string()
+    .min(8, "Password must be at least 8 characters")
+    .max(128, "Password is too long")
+    .regex(/[A-Z]/, "Password must contain at least one uppercase letter")
+    .regex(/[a-z]/, "Password must contain at least one lowercase letter")
+    .regex(/[0-9]/, "Password must contain at least one number"),
   email: z.string().email("Invalid email address").optional().or(z.literal("")),
   firstName: z.string().optional(),
   lastName: z.string().optional(),
@@ -30,12 +38,21 @@ const createUserSchema = z.object({
 });
 
 const editUserSchema = z.object({
-  username: z.string().min(3, "Username must be at least 3 characters"),
+  username: z.string()
+    .min(3, "Username must be at least 3 characters")
+    .max(50, "Username is too long")
+    .regex(/^[a-zA-Z0-9_-]+$/, "Username can only contain letters, numbers, underscores, and hyphens"),
   email: z.string().email("Invalid email address").optional().or(z.literal("")),
   firstName: z.string().optional(),
   lastName: z.string().optional(),
   role: z.enum(["user", "admin"]),
-  password: z.string().min(6, "Password must be at least 6 characters").optional().or(z.literal("")),
+  password: z.string()
+    .min(8, "Password must be at least 8 characters")
+    .max(128, "Password is too long")
+    .regex(/[A-Z]/, "Password must contain at least one uppercase letter")
+    .regex(/[a-z]/, "Password must contain at least one lowercase letter")
+    .regex(/[0-9]/, "Password must contain at least one number")
+    .optional().or(z.literal("")),
 });
 
 type CreateUserData = z.infer<typeof createUserSchema>;
@@ -168,7 +185,18 @@ export default function AdminPage() {
   });
 
   const generatePassword = () => {
-    const password = Math.random().toString(36).slice(-8) + Math.random().toString(36).slice(-8);
+    const lower = 'abcdefghijklmnopqrstuvwxyz';
+    const upper = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    const digits = '0123456789';
+    const all = lower + upper + digits;
+    let password = '';
+    password += upper[Math.floor(Math.random() * upper.length)];
+    password += lower[Math.floor(Math.random() * lower.length)];
+    password += digits[Math.floor(Math.random() * digits.length)];
+    for (let i = 0; i < 9; i++) {
+      password += all[Math.floor(Math.random() * all.length)];
+    }
+    password = password.split('').sort(() => Math.random() - 0.5).join('');
     createUserForm.setValue("password", password);
   };
 
