@@ -1093,7 +1093,8 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
         // Silent abort - don't show error toast for user-initiated cancellations
         return;
       }
-      toast({ title: "Error", description: "Failed to add line item", variant: "destructive" });
+      const errorMessage = error?.message || "Failed to add line item";
+      toast({ title: "Error", description: errorMessage, variant: "destructive" });
     },
   });
 
@@ -1218,7 +1219,8 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
         }));
       }
       
-      toast({ title: "Error", description: "Failed to update line item. Changes have been reverted.", variant: "destructive" });
+      const errorMessage = error?.message || "Failed to update line item";
+      toast({ title: "Error", description: `${errorMessage}. Changes have been reverted.`, variant: "destructive" });
     },
   });
   
@@ -1643,6 +1645,13 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
     const markupValue = parseFloat(newItem.markupValue || "0");
     if (isNaN(markupValue)) {
       errors.markupValue = "Markup value must be a valid number";
+    } else if (markupValue < 0) {
+      errors.markupValue = "Markup value cannot be negative";
+    }
+    
+    const discountValue = parseFloat(newItem.discountValue || "0");
+    if (isNaN(discountValue) || discountValue < 0) {
+      errors.discountValue = "Discount value cannot be negative";
     }
     
     if (Object.keys(errors).length > 0) {
@@ -2554,7 +2563,7 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
                   placeholder="0"
                   type="number"
                   step="0.01"
-                  min="-10000000"
+                  min="0"
                   className="text-sm flex-1"
                   data-testid="input-new-markup-value"
                 />
