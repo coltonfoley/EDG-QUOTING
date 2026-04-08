@@ -216,11 +216,12 @@ export function registerLineItemRoutes(app: Express) {
       if (error instanceof z.ZodError) {
         console.error("Line item validation error:", JSON.stringify(error.errors, null, 2));
         console.error("Request body:", JSON.stringify(req.body, null, 2));
-        return res.status(400).json({ message: "Invalid line item data", errors: error.errors });
+        const errorMessages = error.errors.map(e => e.message).join(", ");
+        return res.status(400).json({ message: errorMessages || "Invalid line item data", errors: error.errors });
       }
       console.error("Line item creation error:", error);
       console.error("Request body:", JSON.stringify(req.body, null, 2));
-      res.status(500).json({ message: "Internal server error" });
+      res.status(500).json({ message: "Something went wrong while saving the line item. Please try again." });
     }
   });
 
@@ -349,9 +350,13 @@ export function registerLineItemRoutes(app: Express) {
       res.json(lineItem);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: "Invalid line item data", errors: error.errors });
+        console.error("Line item update validation error:", JSON.stringify(error.errors, null, 2));
+        console.error("Request body:", JSON.stringify(req.body, null, 2));
+        const errorMessages = error.errors.map(e => e.message).join(", ");
+        return res.status(400).json({ message: errorMessages || "Invalid line item data", errors: error.errors });
       }
-      res.status(500).json({ message: "Internal server error" });
+      console.error("Line item update error:", error);
+      res.status(500).json({ message: "Something went wrong while updating the line item. Please try again." });
     }
   });
 
