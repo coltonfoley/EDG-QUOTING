@@ -214,8 +214,12 @@ export function registerLineItemRoutes(app: Express) {
     } catch (error) {
 
       if (error instanceof z.ZodError) {
+        console.error("Line item validation error:", JSON.stringify(error.errors, null, 2));
+        console.error("Request body:", JSON.stringify(req.body, null, 2));
         return res.status(400).json({ message: "Invalid line item data", errors: error.errors });
       }
+      console.error("Line item creation error:", error);
+      console.error("Request body:", JSON.stringify(req.body, null, 2));
       res.status(500).json({ message: "Internal server error" });
     }
   });
