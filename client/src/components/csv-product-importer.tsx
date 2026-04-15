@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Upload, FileSpreadsheet, AlertCircle, CheckCircle, ArrowRight, Download } from "lucide-react";
+import { Upload, FileSpreadsheet, AlertCircle, CheckCircle, ArrowRight, Download, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 
@@ -49,6 +49,8 @@ export function CSVProductImporter() {
   const [previewData, setPreviewData] = useState<PreviewProduct[]>([]);
   const [step, setStep] = useState<'upload' | 'mapping' | 'preview'>('upload');
   const [errors, setErrors] = useState<string[]>([]);
+  const [isParsing, setIsParsing] = useState(false);
+  const [importErrors, setImportErrors] = useState<string[]>([]);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -57,29 +59,29 @@ export function CSVProductImporter() {
     return columns.map(col => {
       const lowerCol = col.toLowerCase().trim();
       
-      if (lowerCol.includes('name') || lowerCol.includes('product') || lowerCol.includes('description') && lowerCol.length < 15) {
-        return { csvColumn: col, productField: 'name' };
+      if (lowerCol.includes('desc') || lowerCol.includes('detail')) {
+        return { csvColumn: col, productField: 'description' as const };
+      }
+      if (lowerCol.includes('name') || lowerCol.includes('product')) {
+        return { csvColumn: col, productField: 'name' as const };
       }
       if (lowerCol.includes('manufacturer') || lowerCol.includes('brand') || lowerCol.includes('mfr')) {
-        return { csvColumn: col, productField: 'manufacturer' };
+        return { csvColumn: col, productField: 'manufacturer' as const };
       }
       if (lowerCol.includes('category') || lowerCol.includes('type')) {
-        return { csvColumn: col, productField: 'category' };
+        return { csvColumn: col, productField: 'category' as const };
       }
       if (lowerCol.includes('retail') || lowerCol.includes('dealer') || lowerCol.includes('msrp') || lowerCol.includes('list price')) {
-        return { csvColumn: col, productField: 'retailPrice' };
+        return { csvColumn: col, productField: 'retailPrice' as const };
       }
       if (lowerCol.includes('cost') || lowerCol.includes('your price') || lowerCol.includes('net')) {
-        return { csvColumn: col, productField: 'cost' };
+        return { csvColumn: col, productField: 'cost' as const };
       }
       if (lowerCol.includes('unit') || lowerCol.includes('uom') || lowerCol === 'um') {
-        return { csvColumn: col, productField: 'unit' };
-      }
-      if (lowerCol.includes('desc') || lowerCol.includes('detail')) {
-        return { csvColumn: col, productField: 'description' };
+        return { csvColumn: col, productField: 'unit' as const };
       }
       
-      return { csvColumn: col, productField: 'skip' };
+      return { csvColumn: col, productField: 'skip' as const };
     });
   };
 
@@ -89,6 +91,8 @@ export function CSVProductImporter() {
 
     setFile(selectedFile);
     setErrors([]);
+    setImportErrors([]);
+    setIsParsing(true);
 
     try {
       const XLSX = await import("xlsx");
@@ -113,6 +117,8 @@ export function CSVProductImporter() {
 
     } catch (error) {
       setErrors(["Failed to parse file. Please ensure it's a valid CSV or Excel file."]);
+    } finally {
+      setIsParsing(false);
     }
   };
 
@@ -241,15 +247,21 @@ export function CSVProductImporter() {
         title: "Import Successful",
         description: `Created: ${data.created}, Updated: ${data.updated}`,
       });
+      if (data.errors && data.errors.length > 0) {
+        setImportErrors(data.errors);
+      }
       queryClient.invalidateQueries({ queryKey: ["/api/products"] });
       
-      setFile(null);
-      setCsvData([]);
-      setCsvColumns([]);
-      setColumnMappings([]);
-      setPreviewData([]);
-      setStep('upload');
-      setErrors([]);
+      if (!data.errors || data.errors.length === 0) {
+        setFile(null);
+        setCsvData([]);
+        setCsvColumns([]);
+        setColumnMappings([]);
+        setPreviewData([]);
+        setStep('upload');
+        setErrors([]);
+        setImportErrors([]);
+      }
     },
     onError: (error: Error) => {
       toast({
@@ -302,18 +314,29 @@ export function CSVProductImporter() {
         {step === 'upload' && (
           <div className="space-y-4">
             <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
-              <Upload className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-              <div className="space-y-2">
-                <h3 className="text-lg font-medium">Upload CSV File</h3>
-                <p className="text-sm text-gray-500">
-                  CSV or Excel files with product information
-                </p>
-              </div>
+              {isParsing ? (
+                <div className="flex flex-col items-center gap-3">
+                  <Loader2 className="h-12 w-12 text-gray-400 animate-spin" />
+                  <h3 className="text-lg font-medium">Parsing file...</h3>
+                  <p className="text-sm text-gray-500">Reading and analyzing your spreadsheet</p>
+                </div>
+              ) : (
+                <>
+                  <Upload className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+                  <div className="space-y-2">
+                    <h3 className="text-lg font-medium">Upload CSV File</h3>
+                    <p className="text-sm text-gray-500">
+                      CSV or Excel files with product information
+                    </p>
+                  </div>
+                </>
+              )}
               <Input
                 type="file"
                 accept=".csv,.xlsx,.xls"
                 onChange={handleFileChange}
                 className="mt-4 max-w-xs mx-auto"
+                disabled={isParsing}
                 data-testid="input-csv-file"
               />
             </div>
@@ -443,6 +466,23 @@ export function CSVProductImporter() {
               </table>
             </div>
 
+            {importErrors.length > 0 && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  <div className="font-semibold mb-2">Import completed with {importErrors.length} error(s):</div>
+                  <ul className="list-disc list-inside space-y-1 text-sm">
+                    {importErrors.slice(0, 10).map((error, index) => (
+                      <li key={index}>{error}</li>
+                    ))}
+                    {importErrors.length > 10 && (
+                      <li>... and {importErrors.length - 10} more</li>
+                    )}
+                  </ul>
+                </AlertDescription>
+              </Alert>
+            )}
+
             <div className="flex justify-end gap-3">
               <Button variant="outline" onClick={() => setStep('mapping')} data-testid="button-back-to-mapping">
                 Back to Mapping
@@ -453,7 +493,12 @@ export function CSVProductImporter() {
                 className="bg-edg-black hover:bg-edg-grey text-white"
                 data-testid="button-import-products"
               >
-                {importMutation.isPending ? "Importing..." : `Import ${previewData.length} Products`}
+                {importMutation.isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Importing...
+                  </>
+                ) : `Import ${previewData.length} Products`}
               </Button>
             </div>
           </div>
