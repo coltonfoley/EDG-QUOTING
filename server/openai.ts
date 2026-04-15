@@ -486,7 +486,7 @@ async function extractProductsFromPDF(pdfBuffer: Buffer, onProgress?: ProgressCa
     const { convertPDFToImagesServer } = await import('./quoteImageUtils');
     const pageImages = await convertPDFToImagesServer(pdfBuffer);
     const MAX_VISION_PAGES = 20;
-    const images = pageImages.map(p => p.base64).slice(0, MAX_VISION_PAGES);
+    const images = pageImages.map(p => p.imageBase64).slice(0, MAX_VISION_PAGES);
     if (pageImages.length > MAX_VISION_PAGES) {
       console.warn(`PDF has ${pageImages.length} pages, processing only first ${MAX_VISION_PAGES} via vision.`);
     }
