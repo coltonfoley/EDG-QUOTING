@@ -387,22 +387,34 @@ export async function extractProductsFromPriceSheet(
     const allProducts: ExtractedProduct[] = [];
     let detectedManufacturer: string | null = null;
     const seenNames = new Set<string>();
+    let completedChunks = 0;
+    const CONCURRENCY = 3;
 
-    for (let i = 0; i < chunks.length; i++) {
-      onProgress?.({ phase: 'extracting', current: i + 1, total: chunks.length, productsFound: allProducts.length });
-      console.log(`Processing chunk ${i + 1}/${chunks.length}...`);
-      const result = await extractProductsFromText(chunks[i]);
-      
-      if (result.detectedManufacturer && !detectedManufacturer) {
-        detectedManufacturer = result.detectedManufacturer;
-      }
-      for (const product of result.products) {
-        const key = product.name.toLowerCase().trim();
-        if (!seenNames.has(key)) {
-          seenNames.add(key);
-          allProducts.push(product);
+    for (let batchStart = 0; batchStart < chunks.length; batchStart += CONCURRENCY) {
+      const batch = chunks.slice(batchStart, batchStart + CONCURRENCY);
+      onProgress?.({ phase: 'extracting', current: completedChunks + 1, total: chunks.length, productsFound: allProducts.length });
+
+      const batchResults = await Promise.all(
+        batch.map((chunk, idx) => {
+          console.log(`Processing chunk ${batchStart + idx + 1}/${chunks.length}...`);
+          return extractProductsFromText(chunk);
+        })
+      );
+
+      for (const result of batchResults) {
+        if (result.detectedManufacturer && !detectedManufacturer) {
+          detectedManufacturer = result.detectedManufacturer;
+        }
+        for (const product of result.products) {
+          const key = product.name.toLowerCase().trim();
+          if (!seenNames.has(key)) {
+            seenNames.add(key);
+            allProducts.push(product);
+          }
         }
       }
+      completedChunks += batch.length;
+      onProgress?.({ phase: 'extracting', current: completedChunks, total: chunks.length, productsFound: allProducts.length });
     }
 
     onProgress?.({ phase: 'done', current: chunks.length, total: chunks.length, productsFound: allProducts.length });
@@ -441,20 +453,28 @@ async function extractProductsFromPDF(pdfBuffer: Buffer, onProgress?: ProgressCa
       const allProducts: ExtractedProduct[] = [];
       let detectedManufacturer: string | null = null;
       const seenNames = new Set<string>();
+      let completedChunks = 0;
+      const PDF_CONCURRENCY = 3;
 
-      for (let i = 0; i < chunks.length; i++) {
-        onProgress?.({ phase: 'extracting', current: i + 1, total: chunks.length, productsFound: allProducts.length });
-        const result = await extractProductsFromText(chunks[i]);
-        if (result.detectedManufacturer && !detectedManufacturer) {
-          detectedManufacturer = result.detectedManufacturer;
-        }
-        for (const product of result.products) {
-          const key = product.name.toLowerCase().trim();
-          if (!seenNames.has(key)) {
-            seenNames.add(key);
-            allProducts.push(product);
+      for (let batchStart = 0; batchStart < chunks.length; batchStart += PDF_CONCURRENCY) {
+        const batch = chunks.slice(batchStart, batchStart + PDF_CONCURRENCY);
+        onProgress?.({ phase: 'extracting', current: completedChunks + 1, total: chunks.length, productsFound: allProducts.length });
+
+        const batchResults = await Promise.all(batch.map(c => extractProductsFromText(c)));
+        for (const result of batchResults) {
+          if (result.detectedManufacturer && !detectedManufacturer) {
+            detectedManufacturer = result.detectedManufacturer;
+          }
+          for (const product of result.products) {
+            const key = product.name.toLowerCase().trim();
+            if (!seenNames.has(key)) {
+              seenNames.add(key);
+              allProducts.push(product);
+            }
           }
         }
+        completedChunks += batch.length;
+        onProgress?.({ phase: 'extracting', current: completedChunks, total: chunks.length, productsFound: allProducts.length });
       }
 
       onProgress?.({ phase: 'done', current: chunks.length, total: chunks.length, productsFound: allProducts.length });
@@ -474,20 +494,28 @@ async function extractProductsFromPDF(pdfBuffer: Buffer, onProgress?: ProgressCa
     const allProducts: ExtractedProduct[] = [];
     let detectedManufacturer: string | null = null;
     const seenNames = new Set<string>();
+    let completedPages = 0;
+    const VISION_CONCURRENCY = 2;
 
-    for (let i = 0; i < images.length; i++) {
-      onProgress?.({ phase: 'extracting_vision', current: i + 1, total: images.length, productsFound: allProducts.length });
-      const result = await extractProductsFromImage(images[i]);
-      if (result.detectedManufacturer && !detectedManufacturer) {
-        detectedManufacturer = result.detectedManufacturer;
-      }
-      for (const product of result.products) {
-        const key = product.name.toLowerCase().trim();
-        if (!seenNames.has(key)) {
-          seenNames.add(key);
-          allProducts.push(product);
+    for (let batchStart = 0; batchStart < images.length; batchStart += VISION_CONCURRENCY) {
+      const batch = images.slice(batchStart, batchStart + VISION_CONCURRENCY);
+      onProgress?.({ phase: 'extracting_vision', current: completedPages + 1, total: images.length, productsFound: allProducts.length });
+
+      const batchResults = await Promise.all(batch.map(img => extractProductsFromImage(img)));
+      for (const result of batchResults) {
+        if (result.detectedManufacturer && !detectedManufacturer) {
+          detectedManufacturer = result.detectedManufacturer;
+        }
+        for (const product of result.products) {
+          const key = product.name.toLowerCase().trim();
+          if (!seenNames.has(key)) {
+            seenNames.add(key);
+            allProducts.push(product);
+          }
         }
       }
+      completedPages += batch.length;
+      onProgress?.({ phase: 'extracting_vision', current: completedPages, total: images.length, productsFound: allProducts.length });
     }
 
     onProgress?.({ phase: 'done', current: images.length, total: images.length, productsFound: allProducts.length });
