@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { Upload, FileSpreadsheet, AlertCircle, CheckCircle, Calculator } from "lucide-react";
+import { Upload, FileSpreadsheet, AlertCircle, CheckCircle, Calculator, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiRequest } from "@/lib/queryClient";
@@ -165,11 +165,13 @@ function parseMatrixData(data: any[], calculateBasePrice: (retailPrice: number) 
 export function PricingTableUploader({ productId, onUploadComplete }: PricingTableUploaderProps) {
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<PricingData[]>([]);
+  const [fullParsedData, setFullParsedData] = useState<PricingData[]>([]);
   const [errors, setErrors] = useState<string[]>([]);
   const [skippedCount, setSkippedCount] = useState<number>(0);
   const [isProcessing, setIsProcessing] = useState(false);
   const [sourceUnit, setSourceUnit] = useState<"feet" | "inches" | "meters">("feet");
   const [isMatrixFormatDetected, setIsMatrixFormatDetected] = useState<boolean>(false);
+  const [showConfirmation, setShowConfirmation] = useState(false);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -212,7 +214,9 @@ export function PricingTableUploader({ productId, onUploadComplete }: PricingTab
       queryClient.invalidateQueries({ queryKey: ["/api/products", productId, "pricing-tables"] });
       setFile(null);
       setPreview([]);
+      setFullParsedData([]);
       setErrors([]);
+      setShowConfirmation(false);
       onUploadComplete?.();
     },
     onError: (error: Error) => {
@@ -338,8 +342,10 @@ export function PricingTableUploader({ productId, onUploadComplete }: PricingTab
     setIsProcessing(true);
     setErrors([]);
     setPreview([]);
+    setFullParsedData([]);
     setSkippedCount(0);
     setIsMatrixFormatDetected(false);
+    setShowConfirmation(false);
 
     try {
       if (!product) {
@@ -387,7 +393,8 @@ export function PricingTableUploader({ productId, onUploadComplete }: PricingTab
       setSkippedCount(skipped);
       
       if (validData.length > 0) {
-        setPreview(validData.slice(0, 10)); // Show first 10 rows for preview
+        setFullParsedData(validData);
+        setPreview(validData.slice(0, 10));
       }
 
     } catch (error) {
@@ -398,30 +405,13 @@ export function PricingTableUploader({ productId, onUploadComplete }: PricingTab
   };
 
   const handleUpload = () => {
-    if (!file || preview.length === 0) return;
+    if (!file || fullParsedData.length === 0) return;
+    setShowConfirmation(true);
+  };
 
-    // Process full file again for upload
-    const processFile = async () => {
-      const XLSX = await import("xlsx");
-      const buffer = await file.arrayBuffer();
-      const workbook = XLSX.read(buffer, { type: "array" });
-      const sheetName = workbook.SheetNames[0];
-      const sheet = workbook.Sheets[sheetName];
-      const jsonData = XLSX.utils.sheet_to_json(sheet);
-      
-      let validData: PricingData[] = [];
-      
-      if (isMatrixFormatDetected) {
-        validData = parseMatrixData(jsonData, calculateBasePrice);
-      } else {
-        const { valid } = validatePricingData(jsonData);
-        validData = valid;
-      }
-      
-      uploadMutation.mutate(validData);
-    };
-
-    processFile();
+  const confirmUpload = () => {
+    setShowConfirmation(false);
+    uploadMutation.mutate(fullParsedData);
   };
 
   return (
@@ -564,7 +554,7 @@ export function PricingTableUploader({ productId, onUploadComplete }: PricingTab
               <Alert>
                 <CheckCircle className="h-4 w-4" />
                 <AlertDescription>
-                  Found {preview.length} valid entries {skippedCount > 0 && `(${skippedCount} skipped)`} - showing first 10:
+                  Found {fullParsedData.length} valid entries {skippedCount > 0 && `(${skippedCount} skipped)`} - showing first 10:
                 </AlertDescription>
               </Alert>
               
@@ -600,16 +590,45 @@ export function PricingTableUploader({ productId, onUploadComplete }: PricingTab
             </div>
           )}
 
+          {showConfirmation && (
+            <Alert className="border-yellow-300 bg-yellow-50">
+              <AlertTriangle className="h-4 w-4 text-yellow-600" />
+              <AlertDescription className="text-yellow-800">
+                <strong>Warning:</strong> This will replace all existing pricing data for this product. This action cannot be undone.
+                <div className="flex gap-2 mt-3">
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    onClick={confirmUpload}
+                    disabled={uploadMutation.isPending}
+                  >
+                    {uploadMutation.isPending ? "Uploading..." : "Yes, Replace Pricing Data"}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setShowConfirmation(false)}
+                    disabled={uploadMutation.isPending}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </AlertDescription>
+            </Alert>
+          )}
+
           {/* Upload Button */}
-          <div className="flex justify-end space-x-3">
-            <Button
-              onClick={handleUpload}
-              disabled={!file || preview.length === 0 || errors.length > 0 || uploadMutation.isPending || isLoadingProduct}
-              className="bg-edg-black hover:bg-edg-grey text-white"
-            >
-              {uploadMutation.isPending ? "Uploading..." : `Upload ${preview.length} Entries`}
-            </Button>
-          </div>
+          {!showConfirmation && (
+            <div className="flex justify-end space-x-3">
+              <Button
+                onClick={handleUpload}
+                disabled={!file || fullParsedData.length === 0 || errors.length > 0 || uploadMutation.isPending || isLoadingProduct}
+                className="bg-edg-black hover:bg-edg-grey text-white"
+              >
+                {uploadMutation.isPending ? "Uploading..." : `Upload ${fullParsedData.length} Entries`}
+              </Button>
+            </div>
+          )}
         </div>
       </CardContent>
     </Card>

@@ -221,6 +221,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let updated = 0;
       const errors: string[] = [];
 
+      const allProducts = await storage.getAllProducts();
+      const productLookup = new Map<string, typeof allProducts[0]>();
+      for (const p of allProducts) {
+        productLookup.set(p.name.toLowerCase().trim(), p);
+      }
+
       for (const product of products) {
         try {
           const { name, manufacturer, category, unit, description, retailPrice, cost } = product;
@@ -232,10 +238,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           const manufacturerDiscount = retailPrice - cost;
 
-          const allProducts = await storage.getAllProducts();
-          const existingProduct = allProducts.find(p => 
-            p.name.toLowerCase().trim() === name.toLowerCase().trim()
-          );
+          const existingProduct = productLookup.get(name.toLowerCase().trim());
 
           if (existingProduct) {
             const updateData: any = {
@@ -267,7 +270,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
               unit: unit || 'each',
             };
             
-            await storage.createProduct(productData);
+            const newProduct = await storage.createProduct(productData);
+            productLookup.set(name.toLowerCase().trim(), newProduct);
             created++;
           }
         } catch (error) {
