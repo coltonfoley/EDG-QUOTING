@@ -124,62 +124,99 @@ export function AIProductImporter() {
         formData.append('costColumn', String(costCol));
       }
 
-      const response = await fetch('/api/admin/import-products-ai', {
-        method: 'POST',
-        body: formData,
-        credentials: 'include',
-        headers: { 'Accept': 'text/event-stream' },
-      });
+      const ext = fileToUpload.name.toLowerCase().split('.').pop();
+      const isPDF = ext === 'pdf';
 
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({ message: 'Failed to process file' }));
-        throw new Error(err.message);
-      }
+      if (isPDF) {
+        const response = await fetch('/api/admin/import-products-ai', {
+          method: 'POST',
+          body: formData,
+          credentials: 'include',
+          headers: { 'Accept': 'text/event-stream' },
+        });
 
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-      let result: AIExtractionResult | null = null;
+        if (!response.ok) {
+          const err = await response.json().catch(() => ({ message: 'Failed to process file' }));
+          throw new Error(err.message);
+        }
 
-      if (reader) {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
+        const reader = response.body?.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let result: AIExtractionResult | null = null;
 
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split('\n\n');
-          buffer = lines.pop() || '';
+        if (reader) {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
 
-          for (const line of lines) {
-            const dataMatch = line.match(/^data: (.+)$/m);
-            if (!dataMatch) continue;
-            try {
-              const parsed = JSON.parse(dataMatch[1]);
-              if (parsed.type === 'progress') {
-                setProgress({ phase: parsed.phase, current: parsed.current, total: parsed.total, productsFound: parsed.productsFound });
-              } else if (parsed.type === 'complete') {
-                result = parsed;
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n\n');
+            buffer = lines.pop() || '';
+
+            for (const line of lines) {
+              const dataMatch = line.match(/^data: (.+)$/m);
+              if (!dataMatch) continue;
+              try {
+                const parsed = JSON.parse(dataMatch[1]);
+                if (parsed.type === 'progress') {
+                  setProgress({ phase: parsed.phase, current: parsed.current, total: parsed.total, productsFound: parsed.productsFound });
+                } else if (parsed.type === 'complete') {
+                  result = parsed;
+                }
+              } catch (parseErr) {
+                console.error('Failed to parse SSE event:', parseErr);
               }
-            } catch (parseErr) {
-              console.error('Failed to parse SSE event:', parseErr);
             }
           }
         }
-      }
 
-      if (!result) {
-        throw new Error('No result received from server');
-      }
+        if (!result) {
+          throw new Error('No result received from server');
+        }
 
-      setExtractedProducts(result.products);
-      setDetectedManufacturer(result.detectedManufacturer || '');
-      setManufacturerOverride(result.detectedManufacturer || '');
-      setRemovedIndices(new Set());
-      if (result.products.length === 0) {
-        setErrors(['No products could be extracted from this file. Try a different file or use the manual CSV import.']);
-        setStep('upload');
+        setExtractedProducts(result.products);
+        setDetectedManufacturer(result.detectedManufacturer || '');
+        setManufacturerOverride(result.detectedManufacturer || '');
+        setRemovedIndices(new Set());
+
+        if (result.products.length === 0) {
+          setErrors(['No products could be extracted from this file. Try a different file or use the manual CSV import.']);
+          setStep('upload');
+        } else {
+          setStep('preview');
+        }
       } else {
-        setStep('preview');
+        setProgress({ phase: 'reading', current: 0, total: 1, productsFound: 0 });
+
+        const response = await fetch('/api/admin/import-products-ai', {
+          method: 'POST',
+          body: formData,
+          credentials: 'include',
+        });
+
+        if (!response.ok) {
+          const err = await response.json().catch(() => ({ message: 'Failed to process file' }));
+          throw new Error(err.message);
+        }
+
+        const result = await response.json();
+
+        if (!result.success) {
+          throw new Error(result.message || 'Failed to extract products');
+        }
+
+        setExtractedProducts(result.products);
+        setDetectedManufacturer(result.detectedManufacturer || '');
+        setManufacturerOverride(result.detectedManufacturer || '');
+        setRemovedIndices(new Set());
+
+        if (result.products.length === 0) {
+          setErrors(['No products could be extracted from this file. Try a different file or use the manual CSV import.']);
+          setStep('upload');
+        } else {
+          setStep('preview');
+        }
       }
     } catch (error: any) {
       setErrors([error.message || 'Failed to extract products']);
