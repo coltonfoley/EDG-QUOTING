@@ -901,7 +901,7 @@ function ProductBulkEditor() {
                 <TableHead>Product Name</TableHead>
                 <TableHead data-testid="header-manufacturer">Manufacturer</TableHead>
                 <TableHead>Unit</TableHead>
-                <TableHead>Price</TableHead>
+                <TableHead>Retail Price</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -919,17 +919,7 @@ function ProductBulkEditor() {
                   <TableCell data-testid={`text-manufacturer-${product.id}`}>{product.manufacturer || "Unspecified"}</TableCell>
                   <TableCell>{product.unit}</TableCell>
                   <TableCell>
-                    {(() => {
-                      const retail = parseFloat(product.retailPrice?.toString() || "0");
-                      const discountValue = parseFloat(product.defaultDiscountValue?.toString() || "0");
-                      let cost = 0;
-                      if (product.defaultDiscountType === "percentage") {
-                        cost = retail * (1 - discountValue / 100);
-                      } else {
-                        cost = Math.max(0, retail - discountValue);
-                      }
-                      return `$${cost.toFixed(2)}`;
-                    })()}
+                    ${parseFloat(product.retailPrice?.toString() || "0").toFixed(2)}
                   </TableCell>
                 </TableRow>
               ))}
