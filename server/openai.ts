@@ -340,15 +340,20 @@ export async function extractProductsFromText(text: string): Promise<ExtractedPr
   }
 }
 
+export type ProgressCallback = (progress: { phase: string; current: number; total: number; productsFound: number }) => void;
+
 export async function extractProductsFromPriceSheet(
   fileBuffer: Buffer,
   fileType: 'csv' | 'excel' | 'pdf',
-  originalName?: string
+  originalName?: string,
+  onProgress?: ProgressCallback
 ): Promise<ExtractedProductsResult> {
   try {
     if (fileType === 'pdf') {
-      return await extractProductsFromPDF(fileBuffer);
+      return await extractProductsFromPDF(fileBuffer, onProgress);
     }
+
+    onProgress?.({ phase: 'reading', current: 0, total: 1, productsFound: 0 });
 
     const XLSX = await import('xlsx');
     const workbook = XLSX.read(fileBuffer, { type: 'buffer' });
@@ -364,7 +369,9 @@ export async function extractProductsFromPriceSheet(
     const CHUNK_SIZE = 150;
 
     if (lines.length <= CHUNK_SIZE + 10) {
+      onProgress?.({ phase: 'extracting', current: 1, total: 1, productsFound: 0 });
       const result = await extractProductsFromText(fullText);
+      onProgress?.({ phase: 'done', current: 1, total: 1, productsFound: result.products.length });
       return result;
     }
 
@@ -377,18 +384,15 @@ export async function extractProductsFromPriceSheet(
       chunks.push(headerLines + '\n' + chunkLines.join('\n'));
     }
 
-    const chunkResults = await Promise.all(
-      chunks.map((chunk, idx) => {
-        console.log(`Processing chunk ${idx + 1}/${chunks.length}...`);
-        return extractProductsFromText(chunk);
-      })
-    );
-
     const allProducts: ExtractedProduct[] = [];
     let detectedManufacturer: string | null = null;
     const seenNames = new Set<string>();
 
-    for (const result of chunkResults) {
+    for (let i = 0; i < chunks.length; i++) {
+      onProgress?.({ phase: 'extracting', current: i + 1, total: chunks.length, productsFound: allProducts.length });
+      console.log(`Processing chunk ${i + 1}/${chunks.length}...`);
+      const result = await extractProductsFromText(chunks[i]);
+      
       if (result.detectedManufacturer && !detectedManufacturer) {
         detectedManufacturer = result.detectedManufacturer;
       }
@@ -401,6 +405,7 @@ export async function extractProductsFromPriceSheet(
       }
     }
 
+    onProgress?.({ phase: 'done', current: chunks.length, total: chunks.length, productsFound: allProducts.length });
     console.log(`Chunked extraction complete: ${allProducts.length} products from ${chunks.length} chunks`);
     return { products: allProducts, detectedManufacturer };
 
@@ -410,8 +415,9 @@ export async function extractProductsFromPriceSheet(
   }
 }
 
-async function extractProductsFromPDF(pdfBuffer: Buffer): Promise<ExtractedProductsResult> {
+async function extractProductsFromPDF(pdfBuffer: Buffer, onProgress?: ProgressCallback): Promise<ExtractedProductsResult> {
   try {
+    onProgress?.({ phase: 'reading_pdf', current: 0, total: 1, productsFound: 0 });
     const textContent = await extractTextFromPDF(pdfBuffer);
     
     if (textContent && textContent.trim().length > 50) {
@@ -420,7 +426,10 @@ async function extractProductsFromPDF(pdfBuffer: Buffer): Promise<ExtractedProdu
       const CHUNK_SIZE = 200;
       
       if (lines.length <= CHUNK_SIZE + 10) {
-        return await extractProductsFromText(textContent);
+        onProgress?.({ phase: 'extracting', current: 1, total: 1, productsFound: 0 });
+        const result = await extractProductsFromText(textContent);
+        onProgress?.({ phase: 'done', current: 1, total: 1, productsFound: result.products.length });
+        return result;
       }
 
       const headerLines = lines.slice(0, 5).join('\n');
@@ -429,12 +438,13 @@ async function extractProductsFromPDF(pdfBuffer: Buffer): Promise<ExtractedProdu
         chunks.push(headerLines + '\n' + lines.slice(i, i + CHUNK_SIZE).join('\n'));
       }
 
-      const results = await Promise.all(chunks.map(c => extractProductsFromText(c)));
       const allProducts: ExtractedProduct[] = [];
       let detectedManufacturer: string | null = null;
       const seenNames = new Set<string>();
 
-      for (const result of results) {
+      for (let i = 0; i < chunks.length; i++) {
+        onProgress?.({ phase: 'extracting', current: i + 1, total: chunks.length, productsFound: allProducts.length });
+        const result = await extractProductsFromText(chunks[i]);
         if (result.detectedManufacturer && !detectedManufacturer) {
           detectedManufacturer = result.detectedManufacturer;
         }
@@ -446,10 +456,13 @@ async function extractProductsFromPDF(pdfBuffer: Buffer): Promise<ExtractedProdu
           }
         }
       }
+
+      onProgress?.({ phase: 'done', current: chunks.length, total: chunks.length, productsFound: allProducts.length });
       return { products: allProducts, detectedManufacturer };
     }
 
     console.log('PDF text extraction insufficient, falling back to vision...');
+    onProgress?.({ phase: 'converting_pages', current: 0, total: 1, productsFound: 0 });
     const { convertPDFToImagesServer } = await import('./quoteImageUtils');
     const pageImages = await convertPDFToImagesServer(pdfBuffer);
     const images = pageImages.map(p => p.base64).slice(0, 10);
@@ -458,15 +471,13 @@ async function extractProductsFromPDF(pdfBuffer: Buffer): Promise<ExtractedProdu
       return { products: [], detectedManufacturer: null };
     }
 
-    const imageResults = await Promise.all(
-      images.map(img => extractProductsFromImage(img))
-    );
-
     const allProducts: ExtractedProduct[] = [];
     let detectedManufacturer: string | null = null;
     const seenNames = new Set<string>();
 
-    for (const result of imageResults) {
+    for (let i = 0; i < images.length; i++) {
+      onProgress?.({ phase: 'extracting_vision', current: i + 1, total: images.length, productsFound: allProducts.length });
+      const result = await extractProductsFromImage(images[i]);
       if (result.detectedManufacturer && !detectedManufacturer) {
         detectedManufacturer = result.detectedManufacturer;
       }
@@ -479,6 +490,7 @@ async function extractProductsFromPDF(pdfBuffer: Buffer): Promise<ExtractedProdu
       }
     }
 
+    onProgress?.({ phase: 'done', current: images.length, total: images.length, productsFound: allProducts.length });
     return { products: allProducts, detectedManufacturer };
   } catch (error) {
     console.error('Error extracting products from PDF:', error);
