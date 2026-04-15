@@ -5,7 +5,8 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { Upload, Sparkles, AlertCircle, CheckCircle, Loader2, Trash2, X } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
+import { Upload, Sparkles, AlertCircle, CheckCircle, Loader2, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 
@@ -28,7 +29,23 @@ interface AIExtractionResult {
   totalExtracted: number;
 }
 
+interface ProgressState {
+  phase: string;
+  current: number;
+  total: number;
+  productsFound: number;
+}
+
 type Step = 'upload' | 'processing' | 'preview' | 'results';
+
+const PHASE_LABELS: Record<string, string> = {
+  reading: 'Reading file...',
+  reading_pdf: 'Parsing PDF...',
+  extracting: 'AI is extracting products...',
+  extracting_vision: 'Analyzing pages with vision AI...',
+  converting_pages: 'Converting PDF pages...',
+  done: 'Extraction complete!',
+};
 
 export function AIProductImporter() {
   const [file, setFile] = useState<File | null>(null);
@@ -37,47 +54,90 @@ export function AIProductImporter() {
   const [detectedManufacturer, setDetectedManufacturer] = useState<string>('');
   const [manufacturerOverride, setManufacturerOverride] = useState<string>('');
   const [errors, setErrors] = useState<string[]>([]);
-  const [importResults, setImportResults] = useState<{ created: number; updated: number; errors: string[] } | null>(null);
+  const [importResults, setImportResults] = useState<{ created: number; updated: number; skipped: number; errors: string[] } | null>(null);
   const [removedIndices, setRemovedIndices] = useState<Set<number>>(new Set());
   const [editingCell, setEditingCell] = useState<{ row: number; field: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [progress, setProgress] = useState<ProgressState | null>(null);
+  const [isExtracting, setIsExtracting] = useState(false);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const extractMutation = useMutation({
-    mutationFn: async (fileToUpload: File): Promise<AIExtractionResult> => {
+  const startExtraction = useCallback(async (fileToUpload: File) => {
+    setIsExtracting(true);
+    setProgress(null);
+    setErrors([]);
+    setStep('processing');
+
+    try {
       const formData = new FormData();
       formData.append('file', fileToUpload);
+
       const response = await fetch('/api/admin/import-products-ai', {
         method: 'POST',
         body: formData,
         credentials: 'include',
+        headers: { 'Accept': 'text/event-stream' },
       });
+
       if (!response.ok) {
         const err = await response.json().catch(() => ({ message: 'Failed to process file' }));
         throw new Error(err.message);
       }
-      return response.json();
-    },
-    onSuccess: (data) => {
-      setExtractedProducts(data.products);
-      setDetectedManufacturer(data.detectedManufacturer || '');
-      setManufacturerOverride(data.detectedManufacturer || '');
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let result: AIExtractionResult | null = null;
+
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n\n');
+          buffer = lines.pop() || '';
+
+          for (const line of lines) {
+            const dataMatch = line.match(/^data: (.+)$/m);
+            if (!dataMatch) continue;
+            try {
+              const parsed = JSON.parse(dataMatch[1]);
+              if (parsed.type === 'progress') {
+                setProgress({ phase: parsed.phase, current: parsed.current, total: parsed.total, productsFound: parsed.productsFound });
+              } else if (parsed.type === 'complete') {
+                result = parsed;
+              }
+            } catch {}
+          }
+        }
+      }
+
+      if (!result) {
+        throw new Error('No result received from server');
+      }
+
+      setExtractedProducts(result.products);
+      setDetectedManufacturer(result.detectedManufacturer || '');
+      setManufacturerOverride(result.detectedManufacturer || '');
       setRemovedIndices(new Set());
-      if (data.products.length === 0) {
+      if (result.products.length === 0) {
         setErrors(['No products could be extracted from this file. Try a different file or use the manual CSV import.']);
         setStep('upload');
       } else {
         setStep('preview');
       }
-    },
-    onError: (error: Error) => {
-      setErrors([error.message]);
+    } catch (error: any) {
+      setErrors([error.message || 'Failed to extract products']);
       setStep('upload');
-    },
-  });
+    } finally {
+      setIsExtracting(false);
+      setProgress(null);
+    }
+  }, []);
 
   const importMutation = useMutation({
     mutationFn: async (products: Array<{ name: string; manufacturer?: string; category?: string; unit?: string; description?: string; retailPrice: number; cost: number }>) => {
@@ -85,7 +145,9 @@ export function AIProductImporter() {
       return response.json();
     },
     onSuccess: (data) => {
-      setImportResults({ created: data.created, updated: data.updated, errors: data.errors || [] });
+      const totalSubmitted = extractedProducts.filter((_, i) => !removedIndices.has(i)).length;
+      const skipped = totalSubmitted - data.created - data.updated - (data.errors?.length || 0);
+      setImportResults({ created: data.created, updated: data.updated, skipped: Math.max(0, skipped), errors: data.errors || [] });
       setStep('results');
       queryClient.invalidateQueries({ queryKey: ["/api/products"] });
       toast({
@@ -110,9 +172,8 @@ export function AIProductImporter() {
     }
     setFile(selectedFile);
     setErrors([]);
-    setStep('processing');
-    extractMutation.mutate(selectedFile);
-  }, []);
+    startExtraction(selectedFile);
+  }, [startExtraction]);
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const selected = event.target.files?.[0];
@@ -151,12 +212,12 @@ export function AIProductImporter() {
   };
 
   const handleImport = () => {
-    const manufacturer = manufacturerOverride.trim();
+    const batchMfr = manufacturerOverride.trim();
     const products = extractedProducts
       .filter((_, i) => !removedIndices.has(i))
       .map(p => ({
         name: p.name,
-        manufacturer: manufacturer || p.manufacturer || 'Imported',
+        manufacturer: p.manufacturer || batchMfr || 'Imported',
         category: p.category || undefined,
         unit: p.unit || 'each',
         description: p.description || undefined,
@@ -182,6 +243,7 @@ export function AIProductImporter() {
     setImportResults(null);
     setRemovedIndices(new Set());
     setEditingCell(null);
+    setProgress(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
@@ -192,6 +254,12 @@ export function AIProductImporter() {
     if (confidence >= 0.9) return <Badge variant="default" className="bg-green-100 text-green-800 text-xs">High</Badge>;
     if (confidence >= 0.7) return <Badge variant="default" className="bg-yellow-100 text-yellow-800 text-xs">Medium</Badge>;
     return <Badge variant="default" className="bg-red-100 text-red-800 text-xs">Low</Badge>;
+  };
+
+  const getProgressPercent = () => {
+    if (!progress || progress.total === 0) return 0;
+    if (progress.phase === 'done') return 100;
+    return Math.round((progress.current / progress.total) * 100);
   };
 
   return (
@@ -246,15 +314,31 @@ export function AIProductImporter() {
         )}
 
         {step === 'processing' && (
-          <div className="text-center py-12">
+          <div className="text-center py-12 space-y-4">
             <Loader2 className="mx-auto h-12 w-12 text-teal-600 animate-spin mb-4" />
             <h3 className="text-lg font-medium mb-2">AI is reading your price sheet...</h3>
             <p className="text-sm text-gray-500 mb-1">
               Analyzing <strong>{file?.name}</strong>
             </p>
-            <p className="text-xs text-gray-400">
-              This may take 10-30 seconds depending on file size
-            </p>
+
+            {progress && (
+              <div className="max-w-md mx-auto space-y-2">
+                <Progress value={getProgressPercent()} className="h-2" />
+                <div className="flex justify-between items-center text-xs text-gray-500">
+                  <span>{PHASE_LABELS[progress.phase] || progress.phase}</span>
+                  <span>
+                    {progress.total > 1 && `Chunk ${progress.current}/${progress.total} · `}
+                    {progress.productsFound} products found
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {!progress && (
+              <p className="text-xs text-gray-400">
+                This may take 10-30 seconds depending on file size
+              </p>
+            )}
           </div>
         )}
 
@@ -269,11 +353,11 @@ export function AIProductImporter() {
             </Alert>
 
             <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-              <label className="text-sm font-medium whitespace-nowrap">Manufacturer / Vendor:</label>
+              <label className="text-sm font-medium whitespace-nowrap">Batch Manufacturer:</label>
               <Input
                 value={manufacturerOverride}
                 onChange={(e) => setManufacturerOverride(e.target.value)}
-                placeholder="Set manufacturer for all products"
+                placeholder="Apply to products without a manufacturer"
                 className="max-w-sm"
               />
               {detectedManufacturer && manufacturerOverride !== detectedManufacturer && (
@@ -294,6 +378,7 @@ export function AIProductImporter() {
                   <tr className="border-b">
                     <th className="text-left py-2 px-2 w-8"></th>
                     <th className="text-left py-2 px-2">Name</th>
+                    <th className="text-left py-2 px-2">Manufacturer</th>
                     <th className="text-left py-2 px-2">Category</th>
                     <th className="text-left py-2 px-2">Unit</th>
                     <th className="text-right py-2 px-2">Retail Price</th>
@@ -320,6 +405,21 @@ export function AIProductImporter() {
                           ) : (
                             <span className="cursor-pointer hover:underline" onClick={() => setEditingCell({ row: index, field: 'name' })}>
                               {product.name}
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-1 px-2">
+                          {editingCell?.row === index && editingCell.field === 'manufacturer' ? (
+                            <Input
+                              autoFocus
+                              defaultValue={product.manufacturer || ''}
+                              className="h-7 text-sm"
+                              onBlur={(e) => { handleCellEdit(index, 'manufacturer', e.target.value); setEditingCell(null); }}
+                              onKeyDown={(e) => { if (e.key === 'Enter') { handleCellEdit(index, 'manufacturer', (e.target as HTMLInputElement).value); setEditingCell(null); } }}
+                            />
+                          ) : (
+                            <span className="cursor-pointer hover:underline text-gray-600" onClick={() => setEditingCell({ row: index, field: 'manufacturer' })}>
+                              {product.manufacturer || <span className="text-gray-400 italic">batch</span>}
                             </span>
                           )}
                         </td>
@@ -432,9 +532,10 @@ export function AIProductImporter() {
               <CheckCircle className="h-4 w-4 text-green-600" />
               <AlertDescription className="text-green-800">
                 <strong>Import Complete!</strong>
-                <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
-                  <div>Products Created: <strong>{importResults.created}</strong></div>
-                  <div>Products Updated: <strong>{importResults.updated}</strong></div>
+                <div className="mt-2 grid grid-cols-3 gap-2 text-sm">
+                  <div>Created: <strong>{importResults.created}</strong></div>
+                  <div>Updated: <strong>{importResults.updated}</strong></div>
+                  <div>Skipped: <strong>{importResults.skipped}</strong></div>
                 </div>
               </AlertDescription>
             </Alert>

@@ -346,16 +346,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
         fileType = 'excel';
       }
 
-      console.log(`AI product import: ${file.originalname} (${fileType}, ${(file.size / 1024).toFixed(1)} KB)`);
+      const useSSE = req.headers.accept === 'text/event-stream';
+      console.log(`AI product import: ${file.originalname} (${fileType}, ${(file.size / 1024).toFixed(1)} KB, sse=${useSSE})`);
 
-      const result = await extractProductsFromPriceSheet(file.buffer, fileType, file.originalname);
+      if (useSSE) {
+        res.writeHead(200, {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          'Connection': 'keep-alive',
+        });
 
-      res.json({
-        success: true,
-        products: result.products,
-        detectedManufacturer: result.detectedManufacturer,
-        totalExtracted: result.products.length,
-      });
+        const sendProgress = (data: any) => {
+          res.write(`data: ${JSON.stringify({ type: 'progress', ...data })}\n\n`);
+        };
+
+        const result = await extractProductsFromPriceSheet(file.buffer, fileType, file.originalname, (progress) => {
+          sendProgress(progress);
+        });
+
+        res.write(`data: ${JSON.stringify({
+          type: 'complete',
+          success: true,
+          products: result.products,
+          detectedManufacturer: result.detectedManufacturer,
+          totalExtracted: result.products.length,
+        })}\n\n`);
+        res.end();
+      } else {
+        const result = await extractProductsFromPriceSheet(file.buffer, fileType, file.originalname);
+        res.json({
+          success: true,
+          products: result.products,
+          detectedManufacturer: result.detectedManufacturer,
+          totalExtracted: result.products.length,
+        });
+      }
     } catch (error: any) {
       console.error("AI product import error:", error);
       if (error.message?.includes('Unsupported file type')) {
