@@ -12,7 +12,7 @@ import {
 } from "./validation-schemas";
 import { nanoid } from "nanoid";
 import multer from "multer";
-import { extractProductsFromPriceSheet } from "./openai";
+import { extractProductsFromPriceSheet, analyzePriceSheetColumns } from "./openai";
 
 import { registerAccountRoutes } from "./routes/accountRoutes";
 import { registerQuoteRoutes } from "./routes/quoteRoutes";
@@ -332,6 +332,56 @@ export async function registerRoutes(app: Express): Promise<Server> {
     },
   });
 
+  app.post('/api/admin/analyze-price-sheet', isAuthenticated, (req: any, res: any, next: any) => {
+    aiUpload.single('file')(req, res, (err: any) => {
+      if (err) {
+        if (err.code === 'LIMIT_FILE_SIZE') {
+          return res.status(400).json({ message: 'File too large. Maximum size is 50MB.' });
+        }
+        return res.status(400).json({ message: err.message || 'File upload error' });
+      }
+      next();
+    });
+  }, async (req: any, res) => {
+    try {
+      const currentUser = await storage.getUser(req.user?.id);
+      if (currentUser?.role !== 'admin') {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+
+      if (!req.file) {
+        return res.status(400).json({ message: "No file uploaded" });
+      }
+
+      const file = req.file;
+      const ext = file.originalname.toLowerCase().split('.').pop();
+      let fileType: 'csv' | 'excel' | 'pdf';
+
+      if (ext === 'pdf') {
+        fileType = 'pdf';
+      } else if (ext === 'csv') {
+        fileType = 'csv';
+      } else {
+        fileType = 'excel';
+      }
+
+      const analysis = await analyzePriceSheetColumns(file.buffer, fileType, file.originalname);
+      if (!analysis) {
+        return res.json({ needsColumnSelection: false });
+      }
+
+      res.json({
+        needsColumnSelection: true,
+        detectedColumns: analysis.detectedColumns,
+        detectedManufacturer: analysis.detectedManufacturer,
+        totalRows: analysis.totalRows,
+      });
+    } catch (error: any) {
+      console.error("Price sheet analysis error:", error);
+      res.status(500).json({ message: "Failed to analyze file." });
+    }
+  });
+
   app.post('/api/admin/import-products-ai', isAuthenticated, (req: any, res: any, next: any) => {
     aiUpload.single('file')(req, res, (err: any) => {
       if (err) {
@@ -365,8 +415,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         fileType = 'excel';
       }
 
+      const columnOptions: { retailPriceColumn?: number; costColumn?: number } = {};
+      const retailCol = req.body?.retailPriceColumn;
+      const costCol = req.body?.costColumn;
+      if (retailCol !== undefined && retailCol !== null && retailCol !== '') {
+        columnOptions.retailPriceColumn = parseInt(retailCol, 10);
+      }
+      if (costCol !== undefined && costCol !== null && costCol !== '') {
+        columnOptions.costColumn = parseInt(costCol, 10);
+      }
+
       const useSSE = (req.headers.accept || '').includes('text/event-stream');
-      console.log(`AI product import: ${file.originalname} (${fileType}, ${(file.size / 1024).toFixed(1)} KB, sse=${useSSE})`);
+      console.log(`AI product import: ${file.originalname} (${fileType}, ${(file.size / 1024).toFixed(1)} KB, sse=${useSSE}, cols=${JSON.stringify(columnOptions)})`);
 
       if (useSSE) {
         res.writeHead(200, {
@@ -381,7 +441,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         const result = await extractProductsFromPriceSheet(file.buffer, fileType, file.originalname, (progress) => {
           sendProgress(progress);
-        });
+        }, Object.keys(columnOptions).length > 0 ? columnOptions : undefined);
 
         res.write(`data: ${JSON.stringify({
           type: 'complete',
@@ -392,7 +452,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         })}\n\n`);
         res.end();
       } else {
-        const result = await extractProductsFromPriceSheet(file.buffer, fileType, file.originalname);
+        const result = await extractProductsFromPriceSheet(file.buffer, fileType, file.originalname, undefined, Object.keys(columnOptions).length > 0 ? columnOptions : undefined);
         res.json({
           success: true,
           products: result.products,

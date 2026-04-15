@@ -105,9 +105,19 @@ export const ExtractedProductSchema = z.object({
   confidence: z.number().min(0).max(1).optional(),
 });
 
+export const DetectedColumnSchema = z.object({
+  index: z.number(),
+  header: z.string(),
+  role: z.enum(['sku', 'name', 'price', 'cost', 'unknown']),
+  sampleValues: z.array(z.string()),
+});
+
+export type DetectedColumn = z.infer<typeof DetectedColumnSchema>;
+
 export const ExtractedProductsSchema = z.object({
   products: z.array(ExtractedProductSchema),
   detectedManufacturer: z.string().nullable().optional(),
+  detectedColumns: z.array(DetectedColumnSchema).optional(),
 });
 
 export type ExtractedProduct = z.infer<typeof ExtractedProductSchema>;
@@ -383,9 +393,34 @@ function detectManufacturerFromFilename(filename?: string): string | null {
   return null;
 }
 
-function parseStructuredPriceSheet(rows: any[][]): ExtractedProductsResult | null {
-  const priceColAliases = ['list price', 'retail price', 'price', 'msrp', 'list', 'retail', 'dealer price', 'unit price'];
-  const costColAliases = ['cost', 'net', 'net price', 'wholesale', 'your price', 'dealer cost', 'your cost'];
+function matchesColumnAlias(cellValue: string, aliases: string[]): boolean {
+  const lower = cellValue.toLowerCase().trim();
+  if (aliases.includes(lower)) return true;
+  for (const alias of aliases) {
+    if (lower.includes(alias)) return true;
+  }
+  return false;
+}
+
+function classifyColumn(header: string): 'sku' | 'name' | 'price' | 'cost' | 'unknown' {
+  const priceKeywords = ['list price', 'retail price', 'price', 'msrp', 'list', 'retail', 'dealer price', 'unit price', 'umrp', 'srp'];
+  const costKeywords = ['cost', 'net', 'net price', 'wholesale', 'your price', 'dealer cost', 'your cost', 'deal cost'];
+  const skuKeywords = ['code', 'sku', 'item', 'item number', 'part', 'part number', 'model', 'product code', 'item #', 'part #'];
+  const nameKeywords = ['description', 'name', 'product', 'product name', 'item description', 'desc'];
+
+  if (matchesColumnAlias(header, costKeywords)) return 'cost';
+  if (matchesColumnAlias(header, priceKeywords)) return 'price';
+  if (matchesColumnAlias(header, skuKeywords)) return 'sku';
+  if (matchesColumnAlias(header, nameKeywords)) return 'name';
+  return 'unknown';
+}
+
+interface ParseOptions {
+  retailPriceColumn?: number;
+  costColumn?: number;
+}
+
+function parseStructuredPriceSheet(rows: any[][], options?: ParseOptions): ExtractedProductsResult | null {
   const skuColAliases = ['code', 'sku', 'item', 'item number', 'part', 'part number', 'model', 'product code', 'item #', 'part #'];
   const nameColAliases = ['description', 'name', 'product', 'product name', 'item description', 'desc'];
 
@@ -393,6 +428,8 @@ function parseStructuredPriceSheet(rows: any[][]): ExtractedProductsResult | nul
   let currentCategory = '';
   const products: ExtractedProduct[] = [];
   let headerFound = false;
+  let detectedColumns: DetectedColumn[] = [];
+  let headerRowIndex = -1;
 
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
@@ -401,17 +438,47 @@ function parseStructuredPriceSheet(rows: any[][]): ExtractedProductsResult | nul
     const cells = row.map((c: any) => String(c ?? '').trim());
     const cellsLower = cells.map((c: string) => c.toLowerCase());
 
-    if (!headerFound || (cells.length >= 2 && cellsLower.some(c => skuColAliases.includes(c) || nameColAliases.includes(c)))) {
-      const foundSku = cellsLower.findIndex(c => skuColAliases.includes(c));
-      const foundName = cellsLower.findIndex(c => nameColAliases.includes(c));
-      const foundPrice = cellsLower.findIndex(c => priceColAliases.includes(c));
-      const foundCost = cellsLower.findIndex(c => costColAliases.includes(c));
+    if (!headerFound || (cells.length >= 2 && cellsLower.some(c => matchesColumnAlias(c, skuColAliases) || matchesColumnAlias(c, nameColAliases)))) {
+      const foundSku = cellsLower.findIndex(c => matchesColumnAlias(c, skuColAliases));
+      const foundName = cellsLower.findIndex(c => matchesColumnAlias(c, nameColAliases));
 
-      if ((foundSku >= 0 || foundName >= 0) && foundPrice >= 0) {
+      const priceColumns: { index: number; header: string; role: 'price' | 'cost' }[] = [];
+      cells.forEach((cell, ci) => {
+        const role = classifyColumn(cell);
+        if (role === 'price' || role === 'cost') {
+          priceColumns.push({ index: ci, header: cell, role });
+        }
+      });
+
+      const hasAnyPriceCol = priceColumns.length > 0;
+
+      if ((foundSku >= 0 || foundName >= 0) && hasAnyPriceCol) {
         skuCol = foundSku;
         nameCol = foundName >= 0 ? foundName : (foundSku >= 0 ? foundSku : -1);
-        priceCol = foundPrice;
-        costCol = foundCost;
+        headerRowIndex = i;
+
+        detectedColumns = cells.map((cell, ci) => ({
+          index: ci,
+          header: cell,
+          role: classifyColumn(cell) as any,
+          sampleValues: [] as string[],
+        })).filter(c => c.header.length > 0);
+
+        if (options?.retailPriceColumn !== undefined) {
+          priceCol = options.retailPriceColumn;
+        } else {
+          const msrpCol = priceColumns.find(c => c.header.toLowerCase().includes('msrp'));
+          const retailCol = priceColumns.find(c => c.role === 'price');
+          priceCol = msrpCol?.index ?? retailCol?.index ?? priceColumns[priceColumns.length - 1]?.index ?? -1;
+        }
+
+        if (options?.costColumn !== undefined) {
+          costCol = options.costColumn;
+        } else {
+          const costColFound = priceColumns.find(c => c.role === 'cost');
+          costCol = costColFound?.index ?? -1;
+        }
+
         headerFound = true;
         continue;
       }
@@ -427,6 +494,15 @@ function parseStructuredPriceSheet(rows: any[][]): ExtractedProductsResult | nul
     }
 
     if (!headerFound) continue;
+
+    if (products.length < 3) {
+      detectedColumns.forEach(col => {
+        const cellVal = cells[col.index] || '';
+        if (cellVal && col.sampleValues.length < 3) {
+          col.sampleValues.push(cellVal);
+        }
+      });
+    }
 
     const nameVal = nameCol >= 0 ? cells[nameCol] : '';
     const skuVal = skuCol >= 0 ? cells[skuCol] : '';
@@ -456,18 +532,46 @@ function parseStructuredPriceSheet(rows: any[][]): ExtractedProductsResult | nul
   }
 
   if (products.length >= 3) {
-    console.log(`Deterministic parser found ${products.length} products`);
-    return { products, detectedManufacturer: null };
+    console.log(`Deterministic parser found ${products.length} products (priceCol=${priceCol}, costCol=${costCol})`);
+    return { products, detectedManufacturer: null, detectedColumns };
   }
 
   return null;
+}
+
+export async function analyzePriceSheetColumns(
+  fileBuffer: Buffer,
+  fileType: 'csv' | 'excel' | 'pdf',
+  originalName?: string,
+): Promise<{ detectedColumns: DetectedColumn[]; detectedManufacturer: string | null; totalRows: number } | null> {
+  if (fileType === 'pdf') return null;
+
+  const XLSX = await import('xlsx');
+  const workbook = XLSX.read(fileBuffer, { type: 'buffer' });
+  const sheet = workbook.Sheets[workbook.SheetNames[0]];
+  const rows: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+  if (!rows || rows.length === 0) return null;
+
+  const result = parseStructuredPriceSheet(rows);
+  if (!result || !result.detectedColumns || result.detectedColumns.length === 0) return null;
+
+  const priceOrCostCols = result.detectedColumns.filter(c => c.role === 'price' || c.role === 'cost');
+  if (priceOrCostCols.length < 2) return null;
+
+  const filenameMfr = detectManufacturerFromFilename(originalName);
+  return {
+    detectedColumns: result.detectedColumns,
+    detectedManufacturer: filenameMfr,
+    totalRows: result.products.length,
+  };
 }
 
 export async function extractProductsFromPriceSheet(
   fileBuffer: Buffer,
   fileType: 'csv' | 'excel' | 'pdf',
   originalName?: string,
-  onProgress?: ProgressCallback
+  onProgress?: ProgressCallback,
+  columnOptions?: ParseOptions,
 ): Promise<ExtractedProductsResult> {
   try {
     if (fileType === 'pdf') {
@@ -492,7 +596,7 @@ export async function extractProductsFromPriceSheet(
 
     onProgress?.({ phase: 'extracting', current: 0, total: 1, productsFound: 0 });
 
-    const deterministicResult = parseStructuredPriceSheet(rows);
+    const deterministicResult = parseStructuredPriceSheet(rows, columnOptions);
     if (deterministicResult && deterministicResult.products.length > 0) {
       const filenameMfr = detectManufacturerFromFilename(originalName);
       deterministicResult.detectedManufacturer = filenameMfr;
