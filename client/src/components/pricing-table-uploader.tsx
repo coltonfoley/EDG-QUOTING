@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { Upload, FileSpreadsheet, AlertCircle, CheckCircle, Calculator, AlertTriangle } from "lucide-react";
+import { Upload, FileSpreadsheet, AlertCircle, CheckCircle, Calculator, AlertTriangle, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiRequest } from "@/lib/queryClient";
@@ -446,13 +446,23 @@ export function PricingTableUploader({ productId, onUploadComplete }: PricingTab
           </div>
 
           <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
-            <Upload className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-            <div className="space-y-2">
-              <h3 className="text-lg font-medium">Choose a file to upload</h3>
-              <p className="text-sm text-gray-500">
-                Excel (.xlsx, .xls) or CSV files with LengthMin, LengthMax, WidthMin, WidthMax, RetailPrice columns
-              </p>
-            </div>
+            {isProcessing ? (
+              <div className="flex flex-col items-center gap-3">
+                <Loader2 className="h-12 w-12 text-gray-400 animate-spin" />
+                <h3 className="text-lg font-medium">Parsing pricing data...</h3>
+                <p className="text-sm text-gray-500">Reading and analyzing your spreadsheet</p>
+              </div>
+            ) : (
+              <>
+                <Upload className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+                <div className="space-y-2">
+                  <h3 className="text-lg font-medium">Choose a file to upload</h3>
+                  <p className="text-sm text-gray-500">
+                    Excel (.xlsx, .xls) or CSV files with LengthMin, LengthMax, WidthMin, WidthMax, RetailPrice columns
+                  </p>
+                </div>
+              </>
+            )}
             <Input
               type="file"
               accept=".xlsx,.xls,.csv"

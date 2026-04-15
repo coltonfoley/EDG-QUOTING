@@ -484,7 +484,7 @@ export function CSVProductImporter() {
             )}
 
             <div className="flex justify-end gap-3">
-              <Button variant="outline" onClick={() => setStep('mapping')} data-testid="button-back-to-mapping">
+              <Button variant="outline" onClick={() => { setStep('mapping'); setImportErrors([]); }} data-testid="button-back-to-mapping">
                 Back to Mapping
               </Button>
               <Button 
