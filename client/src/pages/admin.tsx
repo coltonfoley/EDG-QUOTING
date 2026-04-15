@@ -761,11 +761,17 @@ function ProductBulkEditor() {
     return { hasDiscount, yourCost, discountLabel, retail, discountVal, discountType };
   };
 
+  const manufacturerFilteredProducts = useMemo(() => {
+    if (!products) return [];
+    if (selectedManufacturer === "all") return products;
+    return products.filter(p => (p.manufacturer || "Unspecified") === selectedManufacturer);
+  }, [products, selectedManufacturer]);
+
   const productStats = useMemo(() => {
-    if (!products) return { total: 0, withDiscount: 0, withoutDiscount: 0 };
-    const withDiscount = products.filter(p => parseFloat(p.defaultDiscountValue?.toString() || "0") > 0).length;
-    return { total: products.length, withDiscount, withoutDiscount: products.length - withDiscount };
-  }, [products]);
+    const list = manufacturerFilteredProducts;
+    const withDiscount = list.filter(p => parseFloat(p.defaultDiscountValue?.toString() || "0") > 0).length;
+    return { total: list.length, withDiscount, withoutDiscount: list.length - withDiscount };
+  }, [manufacturerFilteredProducts]);
 
   const filteredProducts = useMemo(() => {
     if (!products) return [];
@@ -904,7 +910,7 @@ function ProductBulkEditor() {
         >
           <div className="flex items-center gap-2">
             <Package className="h-4 w-4 text-gray-500" />
-            <span className="text-sm font-medium text-gray-700">All Products</span>
+            <span className="text-sm font-medium text-gray-700">{selectedManufacturer === "all" ? "All Products" : selectedManufacturer}</span>
           </div>
           <p className="text-2xl font-bold mt-1">{productStats.total}</p>
         </button>
