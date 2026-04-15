@@ -61,6 +61,7 @@ export function AIProductImporter() {
   const [isDragOver, setIsDragOver] = useState(false);
   const [progress, setProgress] = useState<ProgressState | null>(null);
   const [isExtracting, setIsExtracting] = useState(false);
+  const [applyMfrToAll, setApplyMfrToAll] = useState(false);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -199,7 +200,11 @@ export function AIProductImporter() {
   }, []);
 
   const handleRemoveProduct = (index: number) => {
-    setRemovedIndices(prev => new Set([...prev, index]));
+    setRemovedIndices(prev => {
+      const next = new Set(prev);
+      next.add(index);
+      return next;
+    });
   };
 
   const handleCellEdit = (index: number, field: string, value: string) => {
@@ -219,7 +224,7 @@ export function AIProductImporter() {
       .filter((_, i) => !removedIndices.has(i))
       .map(p => ({
         name: p.name,
-        manufacturer: p.manufacturer || batchMfr || 'Imported',
+        manufacturer: applyMfrToAll && batchMfr ? batchMfr : (p.manufacturer || batchMfr || 'Imported'),
         category: p.category || undefined,
         unit: p.unit || 'each',
         description: p.description || undefined,
@@ -246,6 +251,7 @@ export function AIProductImporter() {
     setRemovedIndices(new Set());
     setEditingCell(null);
     setProgress(null);
+    setApplyMfrToAll(false);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
@@ -354,24 +360,35 @@ export function AIProductImporter() {
               </AlertDescription>
             </Alert>
 
-            <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-              <label className="text-sm font-medium whitespace-nowrap">Batch Manufacturer:</label>
-              <Input
-                value={manufacturerOverride}
-                onChange={(e) => setManufacturerOverride(e.target.value)}
-                placeholder="Apply to products without a manufacturer"
-                className="max-w-sm"
-              />
-              {detectedManufacturer && manufacturerOverride !== detectedManufacturer && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setManufacturerOverride(detectedManufacturer)}
-                  className="text-xs text-teal-600"
-                >
-                  Use detected: {detectedManufacturer}
-                </Button>
-              )}
+            <div className="flex flex-col gap-2 p-3 bg-gray-50 rounded-lg">
+              <div className="flex items-center gap-3">
+                <label className="text-sm font-medium whitespace-nowrap">Batch Manufacturer:</label>
+                <Input
+                  value={manufacturerOverride}
+                  onChange={(e) => setManufacturerOverride(e.target.value)}
+                  placeholder="Manufacturer name"
+                  className="max-w-sm"
+                />
+                {detectedManufacturer && manufacturerOverride !== detectedManufacturer && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setManufacturerOverride(detectedManufacturer)}
+                    className="text-xs text-teal-600"
+                  >
+                    Use detected: {detectedManufacturer}
+                  </Button>
+                )}
+              </div>
+              <label className="flex items-center gap-2 text-xs text-gray-600 ml-1 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={applyMfrToAll}
+                  onChange={(e) => setApplyMfrToAll(e.target.checked)}
+                  className="rounded border-gray-300"
+                />
+                Override all rows (replaces per-row manufacturer values)
+              </label>
             </div>
 
             <div className="bg-gray-50 rounded-lg max-h-[500px] overflow-auto">
