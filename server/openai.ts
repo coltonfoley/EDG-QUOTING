@@ -211,8 +211,7 @@ export async function extractProductsFromImage(base64Image: string): Promise<Ext
         },
       ],
       response_format: { type: "json_object" },
-      max_tokens: 8000, // Increased token limit
-      // GPT-5 only supports default temperature (1), so we remove this parameter
+      max_completion_tokens: 8000,
     });
 
     const content = response.choices[0].message.content;
@@ -287,28 +286,26 @@ export async function extractProductsFromText(text: string): Promise<ExtractedPr
         },
       ],
       response_format: { type: "json_object" },
-      max_tokens: 8000, // Increased token limit
-      // GPT-5 only supports default temperature (1), so we remove this parameter
+      max_completion_tokens: 8000,
     });
 
     const content = response.choices[0].message.content;
     if (!content) {
+      console.warn('extractProductsFromText: empty response from OpenAI');
       return { products: [], detectedManufacturer: null };
     }
+
+    console.log(`extractProductsFromText: got ${content.length} char response`);
 
     let parsedContent;
     try {
       parsedContent = JSON.parse(content);
     } catch (jsonError) {
-      // JSON parsing failed
-      
-      // Try to extract products from truncated response
+      console.warn('extractProductsFromText: JSON parse failed, trying fallback...');
       try {
-        // Attempting to parse truncated response
-        
-        // Find the start of the products array
         const productsStart = content.indexOf('"products": [');
         if (productsStart === -1) {
+          console.warn('extractProductsFromText: no products array found in response');
           return { products: [], detectedManufacturer: null };
         }
 
@@ -329,13 +326,39 @@ export async function extractProductsFromText(text: string): Promise<ExtractedPr
         const fixedJson = `{"products": [${productsContent}]}`;
         parsedContent = JSON.parse(fixedJson);
       } catch (fallbackError) {
+        console.error('extractProductsFromText: fallback parse also failed:', fallbackError);
         return { products: [], detectedManufacturer: null };
       }
     }
 
-    const parsed = ExtractedProductsSchema.parse(parsedContent);
-    return parsed;
+    const rawProductCount = parsedContent?.products?.length ?? 0;
+    console.log(`extractProductsFromText: parsed ${rawProductCount} raw products, manufacturer: ${parsedContent?.detectedManufacturer || 'none'}`);
+
+    try {
+      const parsed = ExtractedProductsSchema.parse(parsedContent);
+      console.log(`extractProductsFromText: validated ${parsed.products.length} products`);
+      return parsed;
+    } catch (zodError: any) {
+      console.error('extractProductsFromText: Zod validation failed:', zodError.errors || zodError.message);
+      const safeProducts = (parsedContent?.products || []).filter((p: any) => p && typeof p.name === 'string' && typeof p.price === 'number' && p.price > 0);
+      console.log(`extractProductsFromText: recovered ${safeProducts.length} products after Zod failure`);
+      return {
+        products: safeProducts.map((p: any) => ({
+          sku: p.sku || null,
+          name: p.name,
+          manufacturer: p.manufacturer || null,
+          category: p.category || null,
+          unit: p.unit || null,
+          price: Number(p.price),
+          cost: p.cost != null ? Number(p.cost) : null,
+          description: p.description || null,
+          confidence: typeof p.confidence === 'number' ? Math.min(1, Math.max(0, p.confidence)) : undefined,
+        })),
+        detectedManufacturer: parsedContent?.detectedManufacturer || null,
+      };
+    }
   } catch (error) {
+    console.error('extractProductsFromText error:', error);
     return { products: [], detectedManufacturer: null };
   }
 }
@@ -367,6 +390,8 @@ export async function extractProductsFromPriceSheet(
 
     const lines = fullText.split('\n');
     const CHUNK_SIZE = 150;
+
+    console.log(`extractProductsFromPriceSheet: ${lines.length} lines, first 3 lines:`, lines.slice(0, 3));
 
     if (lines.length <= CHUNK_SIZE + 10) {
       onProgress?.({ phase: 'extracting', current: 1, total: 1, productsFound: 0 });
