@@ -15,7 +15,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
-import { UserPlus, Shield, User as UserIcon, Trash2, Edit, FileSpreadsheet, Package, Settings, FileText, DollarSign, Users, Copy, Eye, EyeOff, Sparkles } from "lucide-react";
+import { UserPlus, Shield, User as UserIcon, Trash2, Edit, FileSpreadsheet, Package, Settings, FileText, DollarSign, Users, Copy, Eye, EyeOff, Sparkles, AlertTriangle, CheckCircle2, Filter } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { z } from "zod";
 import type { User, Product } from "@shared/schema";
 import { CSVProductImporter } from "@/components/csv-product-importer";
@@ -717,6 +718,7 @@ function ProductBulkEditor() {
   const [showBulkEditForm, setShowBulkEditForm] = useState(false);
   const [selectedManufacturer, setSelectedManufacturer] = useState<string>("all");
   const [searchTerm, setSearchTerm] = useState<string>("");
+  const [discountFilter, setDiscountFilter] = useState<string>("all");
 
   const [productPage, setProductPage] = useState(0);
   const PRODUCTS_PER_PAGE = 50;
@@ -739,7 +741,32 @@ function ProductBulkEditor() {
     return uniqueManufacturers.sort();
   }, [products]);
 
-  // Filter products by manufacturer and search term
+  const getDiscountInfo = (product: Product) => {
+    const retail = parseFloat(product.retailPrice?.toString() || "0");
+    const discountVal = parseFloat(product.defaultDiscountValue?.toString() || "0") || 0;
+    const discountType = product.defaultDiscountType || "percentage";
+    const hasDiscount = discountVal > 0;
+
+    let yourCost = retail;
+    let discountLabel = "";
+    if (hasDiscount) {
+      if (discountType === "percentage") {
+        yourCost = retail * (1 - discountVal / 100);
+        discountLabel = `${discountVal}%`;
+      } else {
+        yourCost = Math.max(0, retail - discountVal);
+        discountLabel = `$${discountVal.toFixed(2)}`;
+      }
+    }
+    return { hasDiscount, yourCost, discountLabel, retail, discountVal, discountType };
+  };
+
+  const productStats = useMemo(() => {
+    if (!products) return { total: 0, withDiscount: 0, withoutDiscount: 0 };
+    const withDiscount = products.filter(p => parseFloat(p.defaultDiscountValue?.toString() || "0") > 0).length;
+    return { total: products.length, withDiscount, withoutDiscount: products.length - withDiscount };
+  }, [products]);
+
   const filteredProducts = useMemo(() => {
     if (!products) return [];
     
@@ -751,10 +778,15 @@ function ProductBulkEditor() {
       const matchesSearch = searchTerm === "" || 
         product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (product.description || "").toLowerCase().includes(searchTerm.toLowerCase());
+
+      const discountVal = parseFloat(product.defaultDiscountValue?.toString() || "0");
+      const matchesDiscount = discountFilter === "all" ||
+        (discountFilter === "with" && discountVal > 0) ||
+        (discountFilter === "without" && discountVal === 0);
       
-      return matchesManufacturer && matchesSearch;
+      return matchesManufacturer && matchesSearch && matchesDiscount;
     });
-  }, [products, selectedManufacturer, searchTerm]);
+  }, [products, selectedManufacturer, searchTerm, discountFilter]);
 
   const totalPages = Math.ceil(filteredProducts.length / PRODUCTS_PER_PAGE);
   const paginatedProducts = filteredProducts.slice(
@@ -764,7 +796,7 @@ function ProductBulkEditor() {
 
   useEffect(() => {
     setProductPage(0);
-  }, [selectedManufacturer, searchTerm]);
+  }, [selectedManufacturer, searchTerm, discountFilter]);
 
   const bulkUpdateForm = useForm<BulkUpdateData>({
     resolver: zodResolver(bulkUpdateSchema),
@@ -864,7 +896,42 @@ function ProductBulkEditor() {
         )}
       </div>
 
-      {/* Filter Controls */}
+      <div className="grid grid-cols-3 gap-3">
+        <button
+          type="button"
+          className={`p-3 rounded-lg border text-left transition-colors ${discountFilter === "all" ? "bg-gray-100 border-gray-400" : "bg-white border-gray-200 hover:bg-gray-50"}`}
+          onClick={() => setDiscountFilter("all")}
+        >
+          <div className="flex items-center gap-2">
+            <Package className="h-4 w-4 text-gray-500" />
+            <span className="text-sm font-medium text-gray-700">All Products</span>
+          </div>
+          <p className="text-2xl font-bold mt-1">{productStats.total}</p>
+        </button>
+        <button
+          type="button"
+          className={`p-3 rounded-lg border text-left transition-colors ${discountFilter === "with" ? "bg-emerald-50 border-emerald-400" : "bg-white border-gray-200 hover:bg-emerald-50/50"}`}
+          onClick={() => setDiscountFilter("with")}
+        >
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+            <span className="text-sm font-medium text-emerald-700">Discount Set</span>
+          </div>
+          <p className="text-2xl font-bold mt-1 text-emerald-700">{productStats.withDiscount}</p>
+        </button>
+        <button
+          type="button"
+          className={`p-3 rounded-lg border text-left transition-colors ${discountFilter === "without" ? "bg-amber-50 border-amber-400" : "bg-white border-gray-200 hover:bg-amber-50/50"}`}
+          onClick={() => setDiscountFilter("without")}
+        >
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 text-amber-600" />
+            <span className="text-sm font-medium text-amber-700">No Discount</span>
+          </div>
+          <p className="text-2xl font-bold mt-1 text-amber-700">{productStats.withoutDiscount}</p>
+        </button>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-gray-50 rounded-lg">
         <div>
           <Label htmlFor="manufacturer-filter" data-testid="label-manufacturer-filter">Filter by Manufacturer</Label>
@@ -920,28 +987,51 @@ function ProductBulkEditor() {
                   <TableHead>Product Name</TableHead>
                   <TableHead data-testid="header-manufacturer">Manufacturer</TableHead>
                   <TableHead>Unit</TableHead>
-                  <TableHead>Retail Price</TableHead>
+                  <TableHead className="text-right">Retail Price</TableHead>
+                  <TableHead className="text-center">Discount</TableHead>
+                  <TableHead className="text-right">Your Cost</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {paginatedProducts.map((product: Product) => (
-                  <TableRow key={product.id}>
-                    <TableCell>
-                      <input
-                        type="checkbox"
-                        checked={selectedProducts.includes(product.id)}
-                        onChange={(e) => handleSelectProduct(product.id, e.target.checked)}
-                        className="rounded border-gray-300"
-                      />
-                    </TableCell>
-                    <TableCell className="font-medium" data-testid={`text-product-name-${product.id}`}>{product.name}</TableCell>
-                    <TableCell data-testid={`text-manufacturer-${product.id}`}>{product.manufacturer || "Unspecified"}</TableCell>
-                    <TableCell>{product.unit}</TableCell>
-                    <TableCell>
-                      ${parseFloat(product.retailPrice?.toString() || "0").toFixed(2)}
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {paginatedProducts.map((product: Product) => {
+                  const info = getDiscountInfo(product);
+                  return (
+                    <TableRow key={product.id} className={!info.hasDiscount ? "bg-amber-50/50" : ""}>
+                      <TableCell>
+                        <input
+                          type="checkbox"
+                          checked={selectedProducts.includes(product.id)}
+                          onChange={(e) => handleSelectProduct(product.id, e.target.checked)}
+                          className="rounded border-gray-300"
+                        />
+                      </TableCell>
+                      <TableCell className="font-medium" data-testid={`text-product-name-${product.id}`}>{product.name}</TableCell>
+                      <TableCell data-testid={`text-manufacturer-${product.id}`}>{product.manufacturer || "Unspecified"}</TableCell>
+                      <TableCell>{product.unit}</TableCell>
+                      <TableCell className="text-right text-gray-500">
+                        ${info.retail.toFixed(2)}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {info.hasDiscount ? (
+                          <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">
+                            {info.discountLabel} off
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="bg-amber-50 text-amber-600 border-amber-200">
+                            None
+                          </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right font-semibold">
+                        {info.hasDiscount ? (
+                          <span className="text-emerald-700">${info.yourCost.toFixed(2)}</span>
+                        ) : (
+                          <span className="text-amber-600">${info.retail.toFixed(2)}</span>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </div>
