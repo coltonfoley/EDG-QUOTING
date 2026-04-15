@@ -15,10 +15,12 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
-import { UserPlus, Shield, User as UserIcon, Trash2, Edit, FileSpreadsheet, Package, Settings, FileText, DollarSign, Users, Copy, Eye, EyeOff } from "lucide-react";
+import { UserPlus, Shield, User as UserIcon, Trash2, Edit, FileSpreadsheet, Package, Settings, FileText, DollarSign, Users, Copy, Eye, EyeOff, Sparkles } from "lucide-react";
 import { z } from "zod";
 import type { User, Product } from "@shared/schema";
 import { CSVProductImporter } from "@/components/csv-product-importer";
+import { AIProductImporter } from "@/components/ai-product-importer";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const createUserSchema = z.object({
   username: z.string()
@@ -661,16 +663,33 @@ export default function AdminPage() {
             </Form>
           </DialogContent>
         </Dialog>
-        {/* CSV Product Importer Section */}
+        {/* Product Import Section */}
         <Card className="mt-8">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <FileSpreadsheet className="h-5 w-5" />
-              CSV Product Importer
+              <Package className="h-5 w-5" />
+              Product Import
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <CSVProductImporter />
+            <Tabs defaultValue="ai" className="w-full">
+              <TabsList className="mb-4">
+                <TabsTrigger value="ai" className="gap-2">
+                  <Sparkles className="h-4 w-4" />
+                  AI Import
+                </TabsTrigger>
+                <TabsTrigger value="manual" className="gap-2">
+                  <FileSpreadsheet className="h-4 w-4" />
+                  Manual CSV Import
+                </TabsTrigger>
+              </TabsList>
+              <TabsContent value="ai">
+                <AIProductImporter />
+              </TabsContent>
+              <TabsContent value="manual">
+                <CSVProductImporter />
+              </TabsContent>
+            </Tabs>
           </CardContent>
         </Card>
 

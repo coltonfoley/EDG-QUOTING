@@ -11,6 +11,8 @@ import {
   bulkUpdateProductsSchema,
 } from "./validation-schemas";
 import { nanoid } from "nanoid";
+import multer from "multer";
+import { extractProductsFromPriceSheet } from "./openai";
 
 import { registerAccountRoutes } from "./routes/accountRoutes";
 import { registerQuoteRoutes } from "./routes/quoteRoutes";
@@ -289,6 +291,77 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("CSV import error:", error);
       res.status(500).json({ message: "Failed to import products" });
+    }
+  });
+
+  const aiUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 50 * 1024 * 1024 },
+    fileFilter: (_req, file, cb) => {
+      const allowed = [
+        'text/csv',
+        'application/vnd.ms-excel',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'application/pdf',
+        'application/octet-stream',
+      ];
+      if (allowed.includes(file.mimetype) || file.originalname.match(/\.(csv|xlsx|xls|pdf)$/i)) {
+        cb(null, true);
+      } else {
+        cb(new Error('Unsupported file type. Please upload CSV, Excel, or PDF files.'));
+      }
+    },
+  });
+
+  app.post('/api/admin/import-products-ai', isAuthenticated, (req: any, res: any, next: any) => {
+    aiUpload.single('file')(req, res, (err: any) => {
+      if (err) {
+        if (err.code === 'LIMIT_FILE_SIZE') {
+          return res.status(400).json({ message: 'File too large. Maximum size is 50MB.' });
+        }
+        return res.status(400).json({ message: err.message || 'File upload error' });
+      }
+      next();
+    });
+  }, async (req: any, res) => {
+    try {
+      const currentUser = await storage.getUser(req.user?.id);
+      if (currentUser?.role !== 'admin') {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+
+      if (!req.file) {
+        return res.status(400).json({ message: "No file uploaded" });
+      }
+
+      const file = req.file;
+      const ext = file.originalname.toLowerCase().split('.').pop();
+      let fileType: 'csv' | 'excel' | 'pdf';
+
+      if (ext === 'pdf') {
+        fileType = 'pdf';
+      } else if (ext === 'csv') {
+        fileType = 'csv';
+      } else {
+        fileType = 'excel';
+      }
+
+      console.log(`AI product import: ${file.originalname} (${fileType}, ${(file.size / 1024).toFixed(1)} KB)`);
+
+      const result = await extractProductsFromPriceSheet(file.buffer, fileType, file.originalname);
+
+      res.json({
+        success: true,
+        products: result.products,
+        detectedManufacturer: result.detectedManufacturer,
+        totalExtracted: result.products.length,
+      });
+    } catch (error: any) {
+      console.error("AI product import error:", error);
+      if (error.message?.includes('Unsupported file type')) {
+        return res.status(400).json({ message: error.message });
+      }
+      res.status(500).json({ message: "Failed to process file with AI. Please try again." });
     }
   });
 

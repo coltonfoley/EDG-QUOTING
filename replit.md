@@ -48,6 +48,7 @@ Preferred communication style: Simple, everyday language.
     - Customizable PDF generation with company branding.
     - Email integration for sending quotes and e-signature links.
     - Bulk product adjustment and price list uploading.
+    - **AI-Powered Price Sheet Import**: Drop any manufacturer price sheet (CSV, Excel, PDF) and GPT-5 automatically extracts products with name, price, cost, category, manufacturer, and confidence scores. Supports chunked processing for large files, editable preview table with inline editing, manufacturer override, and dedup against existing products. Available on Admin page under "AI Import" tab (with manual CSV import as fallback). Backend: `POST /api/admin/import-products-ai` (multer file upload → `extractProductsFromPriceSheet` → OpenAI). Frontend: `client/src/components/ai-product-importer.tsx`.
     - Cost tracking for true margin visibility in imported items.
     - **Product Configurator System**: Manufacturer-specific configurators (Sundance catalog-style) that insert grouped line items with complete product snapshots stored in configData for historical accuracy. Cache invalidation pattern requires invalidating both quote and groups queries.
     - **Self-Service Password Change**: Users can change their own password from the header dropdown menu → "Change Password" (route: `/change-password`). Requires current password verification. Backend endpoint: `PUT /api/user/change-password`.

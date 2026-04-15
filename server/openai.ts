@@ -96,13 +96,18 @@ setInterval(() => {
 export const ExtractedProductSchema = z.object({
   sku: z.string().nullable().optional(),
   name: z.string(),
+  manufacturer: z.string().nullable().optional(),
+  category: z.string().nullable().optional(),
   unit: z.string().nullable().optional(),
   price: z.number(),
+  cost: z.number().nullable().optional(),
   description: z.string().nullable().optional(),
+  confidence: z.number().min(0).max(1).optional(),
 });
 
 export const ExtractedProductsSchema = z.object({
   products: z.array(ExtractedProductSchema),
+  detectedManufacturer: z.string().nullable().optional(),
 });
 
 export type ExtractedProduct = z.infer<typeof ExtractedProductSchema>;
@@ -156,37 +161,45 @@ export const ExtractedQuoteWithPageRefsSchema = ExtractedQuoteSchema.extend({
 
 export type ExtractedQuoteWithPageRefs = z.infer<typeof ExtractedQuoteWithPageRefsSchema>;
 
-export async function extractProductsFromImage(base64Image: string): Promise<ExtractedProduct[]> {
+export type ExtractedProductsResult = z.infer<typeof ExtractedProductsSchema>;
+
+export async function extractProductsFromImage(base64Image: string): Promise<ExtractedProductsResult> {
   try {
     const response = await openai.chat.completions.create({
       model: "gpt-5", // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
       messages: [
         {
           role: "system",
-          content: `You are a data extraction expert. Extract product information from price lists and catalogs.
+          content: `You are a data extraction expert specializing in construction industry price lists and catalogs.
           
-          IMPORTANT: Limit your response to the FIRST 100 products to avoid truncation.
+          IMPORTANT: Extract up to 200 products. Be thorough — capture every product row.
           
           For each product found, return JSON objects with these exact fields:
-          - "sku": product code/SKU (string, or null if not found)
+          - "sku": product code/SKU/item number (string, or null if not found)
           - "name": product name (string, required)
-          - "unit": unit of measurement (string like "each", or null if not specified)
-          - "price": price as number (not string, required)
+          - "manufacturer": manufacturer or brand name (string, or null if not in this row — check document header/title)
+          - "category": product category/group (string, or null if not found)
+          - "unit": unit of measurement like "each", "sq ft", "linear ft" (string, or null if not specified)
+          - "price": retail/list/dealer price as number (not string, required — use the HIGHER price if multiple price columns exist)
+          - "cost": your cost/net price/wholesale price as number (or null if only one price column exists)
           - "description": additional details (string, or null if not found)
+          - "confidence": how confident you are in this extraction, 0.0 to 1.0
+          
+          Also detect the manufacturer/vendor name from the document header, title, logo text, or watermark.
           
           Return valid JSON in this exact format:
-          {"products": [{"sku": "ABC123", "name": "Product Name", "unit": "each", "price": 25.99, "description": "Details"}]}
+          {"detectedManufacturer": "Company Name or null", "products": [{"sku": "ABC123", "name": "Product Name", "manufacturer": "Brand", "category": "Category", "unit": "each", "price": 25.99, "cost": 18.50, "description": "Details", "confidence": 0.95}]}
           
           Only include products with valid names and prices > 0.
-          Focus on complete product entries with clear pricing.
-          Keep product names concise to save space.`,
+          If there are two price columns, the higher one is typically retail/list price and the lower is cost/net.
+          Focus on complete product entries with clear pricing.`,
         },
         {
           role: "user",
           content: [
             {
               type: "text",
-              text: "Extract all product information from this price list image. Return as structured JSON.",
+              text: "Extract all product information from this price list image. Detect the manufacturer/vendor name from the document. Return as structured JSON.",
             },
             {
               type: "image_url",
@@ -204,43 +217,34 @@ export async function extractProductsFromImage(base64Image: string): Promise<Ext
 
     const content = response.choices[0].message.content;
     if (!content) {
-      // Empty response from OpenAI
-      return [];
+      return { products: [], detectedManufacturer: null };
     }
 
-    // More robust JSON parsing with error handling
     let parsedContent;
     try {
       parsedContent = JSON.parse(content);
     } catch (jsonError) {
-      // JSON parsing failed for image
-      
-      // Try to extract valid JSON from partial response
       try {
         const productsMatch = content.match(/"products"\s*:\s*\[(.*?)\]/);
         if (productsMatch) {
           const productsStr = `{"products": [${productsMatch[1]}]}`;
           parsedContent = JSON.parse(productsStr);
         } else {
-          // Could not extract products array from image response
-          return [];
+          return { products: [], detectedManufacturer: null };
         }
       } catch (fallbackError) {
-        // Fallback parsing also failed for image
-        return [];
+        return { products: [], detectedManufacturer: null };
       }
     }
 
-    // Validate and parse with schema
     const parsed = ExtractedProductsSchema.parse(parsedContent);
-    return parsed.products || [];
+    return parsed;
   } catch (error) {
-    // Error extracting products from image
-    return []; // Return empty array instead of throwing
+    return { products: [], detectedManufacturer: null };
   }
 }
 
-export async function extractProductsFromText(text: string): Promise<ExtractedProduct[]> {
+export async function extractProductsFromText(text: string): Promise<ExtractedProductsResult> {
   try {
     // Truncate text if too long to prevent token limit issues
     const maxTextLength = 15000; // Reasonable limit for GPT-4
@@ -253,27 +257,33 @@ export async function extractProductsFromText(text: string): Promise<ExtractedPr
       messages: [
         {
           role: "system",
-          content: `You are a data extraction expert. Extract product information from price list text.
+          content: `You are a data extraction expert specializing in construction industry price lists and catalogs.
           
-          IMPORTANT: Limit your response to the FIRST 100 products to avoid truncation.
+          IMPORTANT: Extract ALL products found. Be thorough — capture every product row.
           
           For each product found, return JSON objects with these exact fields:
-          - "sku": product code/SKU (string, or null if not found)
+          - "sku": product code/SKU/item number (string, or null if not found)
           - "name": product name (string, required)
-          - "unit": unit of measurement (string like "each", or null if not specified)
-          - "price": price as number (not string, required)
+          - "manufacturer": manufacturer or brand name (string, or null if not in this row — check document header/title)
+          - "category": product category/group/section heading (string, or null if not found)
+          - "unit": unit of measurement like "each", "sq ft", "linear ft" (string, or null if not specified)
+          - "price": retail/list/dealer price as number (not string, required — use the HIGHER price if multiple price columns exist)
+          - "cost": your cost/net price/wholesale price as number (or null if only one price column exists)
           - "description": additional details (string, or null if not found)
+          - "confidence": how confident you are in this extraction, 0.0 to 1.0
+          
+          Also detect the manufacturer/vendor name from the document header, title, or any identifying information at the top.
           
           Return valid JSON in this exact format:
-          {"products": [{"sku": "ABC123", "name": "Product Name", "unit": "each", "price": 25.99, "description": "Details"}]}
+          {"detectedManufacturer": "Company Name or null", "products": [{"sku": "ABC123", "name": "Product Name", "manufacturer": "Brand", "category": "Category", "unit": "each", "price": 25.99, "cost": 18.50, "description": "Details", "confidence": 0.95}]}
           
           Only include products with valid names and prices > 0.
-          Focus on complete product entries with clear pricing.
-          Keep product names concise to save space.`,
+          If there are two price columns, the higher one is typically retail/list price and the lower is cost/net.
+          Focus on complete product entries with clear pricing.`,
         },
         {
           role: "user",
-          content: `Extract product information from this price list:\n\n${truncatedText}`,
+          content: `Extract all product information from this price list. Detect the manufacturer/vendor name from the document. Return as structured JSON.\n\n${truncatedText}`,
         },
       ],
       response_format: { type: "json_object" },
@@ -283,11 +293,9 @@ export async function extractProductsFromText(text: string): Promise<ExtractedPr
 
     const content = response.choices[0].message.content;
     if (!content) {
-      // Empty response from OpenAI
-      return [];
+      return { products: [], detectedManufacturer: null };
     }
 
-    // More robust JSON parsing with error handling
     let parsedContent;
     try {
       parsedContent = JSON.parse(content);
@@ -301,45 +309,180 @@ export async function extractProductsFromText(text: string): Promise<ExtractedPr
         // Find the start of the products array
         const productsStart = content.indexOf('"products": [');
         if (productsStart === -1) {
-          // No products array found in response
-          return [];
+          return { products: [], detectedManufacturer: null };
         }
 
-        // Extract everything after the products array start
-        let productsContent = content.substring(productsStart + 13); // Skip '"products": ['
+        let productsContent = content.substring(productsStart + 13);
         
-        // Remove the incomplete final product by finding the last complete one
         const lastCompleteProduct = productsContent.lastIndexOf('}, {');
         if (lastCompleteProduct !== -1) {
-          // Keep everything up to and including the closing brace of the last complete product
           productsContent = productsContent.substring(0, lastCompleteProduct + 1);
         } else {
-          // If no multiple products, try to find at least one complete product
           const firstProductEnd = productsContent.indexOf('}');
           if (firstProductEnd !== -1) {
             productsContent = productsContent.substring(0, firstProductEnd + 1);
           } else {
-            // No complete products found in truncated response
-            return [];
+            return { products: [], detectedManufacturer: null };
           }
         }
 
-        // Reconstruct valid JSON
         const fixedJson = `{"products": [${productsContent}]}`;
         parsedContent = JSON.parse(fixedJson);
-        // Successfully recovered products from truncated response
       } catch (fallbackError) {
-        // Fallback parsing also failed
-        return [];
+        return { products: [], detectedManufacturer: null };
       }
     }
 
-    // Validate and parse with schema
     const parsed = ExtractedProductsSchema.parse(parsedContent);
-    return parsed.products || [];
+    return parsed;
   } catch (error) {
-    // Error extracting products from text
-    return []; // Return empty array instead of throwing
+    return { products: [], detectedManufacturer: null };
+  }
+}
+
+export async function extractProductsFromPriceSheet(
+  fileBuffer: Buffer,
+  fileType: 'csv' | 'excel' | 'pdf',
+  originalName?: string
+): Promise<ExtractedProductsResult> {
+  try {
+    if (fileType === 'pdf') {
+      return await extractProductsFromPDF(fileBuffer);
+    }
+
+    const XLSX = await import('xlsx');
+    const workbook = XLSX.read(fileBuffer, { type: 'buffer' });
+    const sheetName = workbook.SheetNames[0];
+    const sheet = workbook.Sheets[sheetName];
+    const fullText = XLSX.utils.sheet_to_csv(sheet);
+
+    if (!fullText || fullText.trim().length === 0) {
+      return { products: [], detectedManufacturer: null };
+    }
+
+    const lines = fullText.split('\n');
+    const CHUNK_SIZE = 150;
+
+    if (lines.length <= CHUNK_SIZE + 10) {
+      const result = await extractProductsFromText(fullText);
+      return result;
+    }
+
+    console.log(`Large file detected (${lines.length} lines). Processing in chunks...`);
+    const headerLines = lines.slice(0, 5).join('\n');
+    const chunks: string[] = [];
+    
+    for (let i = 5; i < lines.length; i += CHUNK_SIZE) {
+      const chunkLines = lines.slice(i, i + CHUNK_SIZE);
+      chunks.push(headerLines + '\n' + chunkLines.join('\n'));
+    }
+
+    const chunkResults = await Promise.all(
+      chunks.map((chunk, idx) => {
+        console.log(`Processing chunk ${idx + 1}/${chunks.length}...`);
+        return extractProductsFromText(chunk);
+      })
+    );
+
+    const allProducts: ExtractedProduct[] = [];
+    let detectedManufacturer: string | null = null;
+    const seenNames = new Set<string>();
+
+    for (const result of chunkResults) {
+      if (result.detectedManufacturer && !detectedManufacturer) {
+        detectedManufacturer = result.detectedManufacturer;
+      }
+      for (const product of result.products) {
+        const key = product.name.toLowerCase().trim();
+        if (!seenNames.has(key)) {
+          seenNames.add(key);
+          allProducts.push(product);
+        }
+      }
+    }
+
+    console.log(`Chunked extraction complete: ${allProducts.length} products from ${chunks.length} chunks`);
+    return { products: allProducts, detectedManufacturer };
+
+  } catch (error) {
+    console.error('Error in extractProductsFromPriceSheet:', error);
+    return { products: [], detectedManufacturer: null };
+  }
+}
+
+async function extractProductsFromPDF(pdfBuffer: Buffer): Promise<ExtractedProductsResult> {
+  try {
+    const textContent = await extractTextFromPDF(pdfBuffer);
+    
+    if (textContent && textContent.trim().length > 50) {
+      console.log(`PDF text extracted (${textContent.length} chars). Processing with text extraction...`);
+      const lines = textContent.split('\n');
+      const CHUNK_SIZE = 200;
+      
+      if (lines.length <= CHUNK_SIZE + 10) {
+        return await extractProductsFromText(textContent);
+      }
+
+      const headerLines = lines.slice(0, 5).join('\n');
+      const chunks: string[] = [];
+      for (let i = 5; i < lines.length; i += CHUNK_SIZE) {
+        chunks.push(headerLines + '\n' + lines.slice(i, i + CHUNK_SIZE).join('\n'));
+      }
+
+      const results = await Promise.all(chunks.map(c => extractProductsFromText(c)));
+      const allProducts: ExtractedProduct[] = [];
+      let detectedManufacturer: string | null = null;
+      const seenNames = new Set<string>();
+
+      for (const result of results) {
+        if (result.detectedManufacturer && !detectedManufacturer) {
+          detectedManufacturer = result.detectedManufacturer;
+        }
+        for (const product of result.products) {
+          const key = product.name.toLowerCase().trim();
+          if (!seenNames.has(key)) {
+            seenNames.add(key);
+            allProducts.push(product);
+          }
+        }
+      }
+      return { products: allProducts, detectedManufacturer };
+    }
+
+    console.log('PDF text extraction insufficient, falling back to vision...');
+    const { convertPDFToImagesServer } = await import('./quoteImageUtils');
+    const pageImages = await convertPDFToImagesServer(pdfBuffer);
+    const images = pageImages.map(p => p.base64).slice(0, 10);
+    
+    if (!images || images.length === 0) {
+      return { products: [], detectedManufacturer: null };
+    }
+
+    const imageResults = await Promise.all(
+      images.map(img => extractProductsFromImage(img))
+    );
+
+    const allProducts: ExtractedProduct[] = [];
+    let detectedManufacturer: string | null = null;
+    const seenNames = new Set<string>();
+
+    for (const result of imageResults) {
+      if (result.detectedManufacturer && !detectedManufacturer) {
+        detectedManufacturer = result.detectedManufacturer;
+      }
+      for (const product of result.products) {
+        const key = product.name.toLowerCase().trim();
+        if (!seenNames.has(key)) {
+          seenNames.add(key);
+          allProducts.push(product);
+        }
+      }
+    }
+
+    return { products: allProducts, detectedManufacturer };
+  } catch (error) {
+    console.error('Error extracting products from PDF:', error);
+    return { products: [], detectedManufacturer: null };
   }
 }
 
