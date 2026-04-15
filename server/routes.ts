@@ -252,6 +252,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
             if (manufacturer !== undefined) {
               updateData.manufacturer = manufacturer;
             }
+            if (category !== undefined) {
+              updateData.category = category;
+            }
             if (unit !== undefined) {
               updateData.unit = unit;
             }
@@ -262,15 +265,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
             await storage.updateProduct(existingProduct.id, updateData);
             updated++;
           } else {
-            const productData = {
+            const productData: any = {
               name: name.trim(),
               description: description || '',
-              manufacturer: manufacturer || category || 'Imported',
+              manufacturer: manufacturer || 'Imported',
               retailPrice: retailPrice.toString(),
               defaultDiscountType: 'dollar' as const,
               defaultDiscountValue: manufacturerDiscount.toString(),
               unit: unit || 'each',
             };
+            if (category) {
+              productData.category = category;
+            }
             
             const newProduct = await storage.createProduct(productData);
             productLookup.set(name.toLowerCase().trim(), newProduct);
@@ -346,7 +352,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         fileType = 'excel';
       }
 
-      const useSSE = req.headers.accept === 'text/event-stream';
+      const useSSE = (req.headers.accept || '').includes('text/event-stream');
       console.log(`AI product import: ${file.originalname} (${fileType}, ${(file.size / 1024).toFixed(1)} KB, sse=${useSSE})`);
 
       if (useSSE) {
