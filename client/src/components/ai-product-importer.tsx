@@ -29,6 +29,20 @@ interface AIExtractionResult {
   totalExtracted: number;
 }
 
+interface DetectedColumn {
+  index: number;
+  header: string;
+  role: 'sku' | 'name' | 'price' | 'cost' | 'unknown';
+  sampleValues: string[];
+}
+
+interface ColumnAnalysis {
+  needsColumnSelection: boolean;
+  detectedColumns?: DetectedColumn[];
+  detectedManufacturer?: string | null;
+  totalRows?: number;
+}
+
 interface ProgressState {
   phase: string;
   current: number;
@@ -36,7 +50,7 @@ interface ProgressState {
   productsFound: number;
 }
 
-type Step = 'upload' | 'processing' | 'preview' | 'results';
+type Step = 'upload' | 'analyzing' | 'column-select' | 'processing' | 'preview' | 'results';
 
 const PHASE_LABELS: Record<string, string> = {
   reading: 'Reading file...',
@@ -62,11 +76,39 @@ export function AIProductImporter() {
   const [progress, setProgress] = useState<ProgressState | null>(null);
   const [isExtracting, setIsExtracting] = useState(false);
   const [applyMfrToAll, setApplyMfrToAll] = useState(false);
+  const [columnAnalysis, setColumnAnalysis] = useState<ColumnAnalysis | null>(null);
+  const [selectedRetailCol, setSelectedRetailCol] = useState<number | null>(null);
+  const [selectedCostCol, setSelectedCostCol] = useState<number | null>(null);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const startExtraction = useCallback(async (fileToUpload: File) => {
+  const analyzeFile = useCallback(async (fileToAnalyze: File) => {
+    setStep('analyzing');
+    setErrors([]);
+
+    try {
+      const formData = new FormData();
+      formData.append('file', fileToAnalyze);
+
+      const response = await fetch('/api/admin/analyze-price-sheet', {
+        method: 'POST',
+        body: formData,
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        return null;
+      }
+
+      const analysis: ColumnAnalysis = await response.json();
+      return analysis;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const startExtraction = useCallback(async (fileToUpload: File, retailCol?: number, costCol?: number) => {
     setIsExtracting(true);
     setProgress(null);
     setErrors([]);
@@ -75,6 +117,12 @@ export function AIProductImporter() {
     try {
       const formData = new FormData();
       formData.append('file', fileToUpload);
+      if (retailCol !== undefined) {
+        formData.append('retailPriceColumn', String(retailCol));
+      }
+      if (costCol !== undefined) {
+        formData.append('costColumn', String(costCol));
+      }
 
       const response = await fetch('/api/admin/import-products-ai', {
         method: 'POST',
@@ -167,7 +215,7 @@ export function AIProductImporter() {
     },
   });
 
-  const handleFileSelect = useCallback((selectedFile: File) => {
+  const handleFileSelect = useCallback(async (selectedFile: File) => {
     const ext = selectedFile.name.toLowerCase().split('.').pop();
     if (!['csv', 'xlsx', 'xls', 'pdf'].includes(ext || '')) {
       setErrors(['Unsupported file type. Please upload CSV, Excel (.xlsx/.xls), or PDF files.']);
@@ -175,8 +223,24 @@ export function AIProductImporter() {
     }
     setFile(selectedFile);
     setErrors([]);
-    startExtraction(selectedFile);
-  }, [startExtraction]);
+
+    const analysis = await analyzeFile(selectedFile);
+    if (analysis?.needsColumnSelection && analysis.detectedColumns) {
+      setColumnAnalysis(analysis);
+      setDetectedManufacturer(analysis.detectedManufacturer || '');
+      setManufacturerOverride(analysis.detectedManufacturer || '');
+
+      const priceCols = analysis.detectedColumns.filter(c => c.role === 'price' || c.role === 'cost');
+      const defaultRetail = priceCols.find(c => c.header.toLowerCase().includes('msrp'))
+        ?? priceCols.find(c => c.role === 'price');
+      const defaultCost = priceCols.find(c => c.role === 'cost');
+      setSelectedRetailCol(defaultRetail?.index ?? null);
+      setSelectedCostCol(defaultCost?.index ?? null);
+      setStep('column-select');
+    } else {
+      startExtraction(selectedFile);
+    }
+  }, [analyzeFile, startExtraction]);
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const selected = event.target.files?.[0];
@@ -253,6 +317,9 @@ export function AIProductImporter() {
     setEditingCell(null);
     setProgress(null);
     setApplyMfrToAll(false);
+    setColumnAnalysis(null);
+    setSelectedRetailCol(null);
+    setSelectedCostCol(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
@@ -319,6 +386,111 @@ export function AIProductImporter() {
                 </AlertDescription>
               </Alert>
             )}
+          </div>
+        )}
+
+        {step === 'analyzing' && (
+          <div className="text-center py-12 space-y-4">
+            <Loader2 className="mx-auto h-12 w-12 text-teal-600 animate-spin mb-4" />
+            <h3 className="text-lg font-medium mb-2">Analyzing columns...</h3>
+            <p className="text-sm text-gray-500">
+              Scanning <strong>{file?.name}</strong> for price columns
+            </p>
+          </div>
+        )}
+
+        {step === 'column-select' && columnAnalysis?.detectedColumns && (
+          <div className="space-y-4">
+            <Alert className="border-blue-200 bg-blue-50">
+              <AlertCircle className="h-4 w-4 text-blue-600" />
+              <AlertDescription className="text-blue-800">
+                We found <strong>multiple price columns</strong> in <strong>{file?.name}</strong>.
+                Please select which column to use as the retail price and which as your cost.
+              </AlertDescription>
+            </Alert>
+
+            <div className="bg-gray-50 rounded-lg overflow-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-100">
+                  <tr className="border-b">
+                    <th className="text-left py-2 px-3 font-medium">Column</th>
+                    <th className="text-left py-2 px-3 font-medium">Sample Values</th>
+                    <th className="text-center py-2 px-3 font-medium">Use as Retail Price</th>
+                    <th className="text-center py-2 px-3 font-medium">Use as Your Cost</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {columnAnalysis.detectedColumns
+                    .filter(col => col.role === 'price' || col.role === 'cost')
+                    .map(col => (
+                      <tr key={col.index} className="border-b">
+                        <td className="py-2 px-3 font-medium">{col.header}</td>
+                        <td className="py-2 px-3 text-gray-500 font-mono text-xs">
+                          {col.sampleValues.map(v => {
+                            const num = parseFloat(String(v).replace(/[$,]/g, ''));
+                            return isNaN(num) ? v : `$${num.toLocaleString()}`;
+                          }).join(', ')}
+                        </td>
+                        <td className="py-2 px-3 text-center">
+                          <input
+                            type="radio"
+                            name="retailCol"
+                            checked={selectedRetailCol === col.index}
+                            onChange={() => {
+                              setSelectedRetailCol(col.index);
+                              if (selectedCostCol === col.index) setSelectedCostCol(null);
+                            }}
+                            className="h-4 w-4 text-teal-600"
+                          />
+                        </td>
+                        <td className="py-2 px-3 text-center">
+                          <input
+                            type="radio"
+                            name="costCol"
+                            checked={selectedCostCol === col.index}
+                            onChange={() => {
+                              setSelectedCostCol(col.index);
+                              if (selectedRetailCol === col.index) setSelectedRetailCol(null);
+                            }}
+                            className="h-4 w-4 text-teal-600"
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+
+            {selectedRetailCol !== null && selectedCostCol !== null && (
+              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-sm text-emerald-800">
+                <strong>Retail Price:</strong> {columnAnalysis.detectedColumns.find(c => c.index === selectedRetailCol)?.header} | <strong>Your Cost:</strong> {columnAnalysis.detectedColumns.find(c => c.index === selectedCostCol)?.header}
+              </div>
+            )}
+
+            <p className="text-xs text-gray-500">
+              {columnAnalysis.totalRows} products detected in this file
+            </p>
+
+            <div className="flex justify-between items-center">
+              <Button variant="outline" onClick={resetImporter}>
+                Start Over
+              </Button>
+              <Button
+                onClick={() => {
+                  if (file) {
+                    startExtraction(
+                      file,
+                      selectedRetailCol ?? undefined,
+                      selectedCostCol ?? undefined
+                    );
+                  }
+                }}
+                disabled={selectedRetailCol === null}
+                className="bg-edg-black hover:bg-edg-grey text-white"
+              >
+                Continue with Selected Columns
+              </Button>
+            </div>
           </div>
         )}
 
