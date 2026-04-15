@@ -364,6 +364,105 @@ export async function extractProductsFromText(text: string, originalName?: strin
 
 export type ProgressCallback = (progress: { phase: string; current: number; total: number; productsFound: number }) => void;
 
+function detectManufacturerFromFilename(filename?: string): string | null {
+  if (!filename) return null;
+  const clean = filename
+    .replace(/\.\w+$/, '')
+    .replace(/[_\-,]/g, ' ')
+    .replace(/\d{4}/g, '')
+    .replace(/\d+/g, '')
+    .trim();
+  const stopWords = ['retail', 'price', 'list', 'effective', 'excel', 'sheet', 'catalog', 'catalogue', 'wholesale', 'dealer', 'msrp'];
+  const words = clean.split(/\s+/).filter(w => w.length > 1 && !stopWords.includes(w.toLowerCase()));
+  if (words.length > 0 && words.length <= 4) {
+    return words.join(' ');
+  }
+  if (words.length > 4) {
+    return words.slice(0, 3).join(' ');
+  }
+  return null;
+}
+
+function parseStructuredPriceSheet(rows: any[][]): ExtractedProductsResult | null {
+  const priceColAliases = ['list price', 'retail price', 'price', 'msrp', 'list', 'retail', 'dealer price', 'unit price'];
+  const costColAliases = ['cost', 'net', 'net price', 'wholesale', 'your price', 'dealer cost', 'your cost'];
+  const skuColAliases = ['code', 'sku', 'item', 'item number', 'part', 'part number', 'model', 'product code', 'item #', 'part #'];
+  const nameColAliases = ['description', 'name', 'product', 'product name', 'item description', 'desc'];
+
+  let skuCol = -1, nameCol = -1, priceCol = -1, costCol = -1;
+  let currentCategory = '';
+  const products: ExtractedProduct[] = [];
+  let headerFound = false;
+
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    if (!row || row.length === 0) continue;
+
+    const cells = row.map((c: any) => String(c ?? '').trim());
+    const cellsLower = cells.map((c: string) => c.toLowerCase());
+
+    if (!headerFound || (cells.length >= 2 && cellsLower.some(c => skuColAliases.includes(c) || nameColAliases.includes(c)))) {
+      const foundSku = cellsLower.findIndex(c => skuColAliases.includes(c));
+      const foundName = cellsLower.findIndex(c => nameColAliases.includes(c));
+      const foundPrice = cellsLower.findIndex(c => priceColAliases.includes(c));
+      const foundCost = cellsLower.findIndex(c => costColAliases.includes(c));
+
+      if ((foundSku >= 0 || foundName >= 0) && foundPrice >= 0) {
+        skuCol = foundSku;
+        nameCol = foundName >= 0 ? foundName : (foundSku >= 0 ? foundSku : -1);
+        priceCol = foundPrice;
+        costCol = foundCost;
+        headerFound = true;
+        continue;
+      }
+    }
+
+    const nonEmpty = cells.filter(c => c.length > 0);
+    if (nonEmpty.length === 1 && cells[0].length > 0) {
+      const val = cells[0];
+      if (!/^\d+(\.\d+)?$/.test(val) && val.length > 2) {
+        currentCategory = val;
+        continue;
+      }
+    }
+
+    if (!headerFound) continue;
+
+    const nameVal = nameCol >= 0 ? cells[nameCol] : '';
+    const skuVal = skuCol >= 0 ? cells[skuCol] : '';
+    const priceRaw = priceCol >= 0 ? cells[priceCol] : '';
+    const costRaw = costCol >= 0 ? cells[costCol] : '';
+
+    const priceNum = parseFloat(priceRaw.replace(/[$,]/g, ''));
+    const costNum = costRaw ? parseFloat(costRaw.replace(/[$,]/g, '')) : null;
+
+    if (!nameVal && !skuVal) continue;
+    if (isNaN(priceNum) || priceNum <= 0) continue;
+
+    const productName = nameVal || skuVal;
+    if (productName.length < 2) continue;
+
+    products.push({
+      sku: skuVal || null,
+      name: productName,
+      manufacturer: null,
+      category: currentCategory || null,
+      unit: 'each',
+      price: priceNum,
+      cost: costNum && !isNaN(costNum) && costNum > 0 ? costNum : null,
+      description: null,
+      confidence: 0.99,
+    });
+  }
+
+  if (products.length >= 3) {
+    console.log(`Deterministic parser found ${products.length} products`);
+    return { products, detectedManufacturer: null };
+  }
+
+  return null;
+}
+
 export async function extractProductsFromPriceSheet(
   fileBuffer: Buffer,
   fileType: 'csv' | 'excel' | 'pdf',
@@ -381,7 +480,28 @@ export async function extractProductsFromPriceSheet(
     const workbook = XLSX.read(fileBuffer, { type: 'buffer' });
     const sheetName = workbook.SheetNames[0];
     const sheet = workbook.Sheets[sheetName];
+
+    const rows: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
     const fullText = XLSX.utils.sheet_to_csv(sheet);
+
+    if (!rows || rows.length === 0) {
+      return { products: [], detectedManufacturer: null };
+    }
+
+    console.log(`extractProductsFromPriceSheet: ${rows.length} rows, first 3:`, rows.slice(0, 3).map(r => r.map(String).join(' | ')));
+
+    onProgress?.({ phase: 'extracting', current: 0, total: 1, productsFound: 0 });
+
+    const deterministicResult = parseStructuredPriceSheet(rows);
+    if (deterministicResult && deterministicResult.products.length > 0) {
+      const filenameMfr = detectManufacturerFromFilename(originalName);
+      deterministicResult.detectedManufacturer = filenameMfr;
+      console.log(`Deterministic parse successful: ${deterministicResult.products.length} products, manufacturer: ${filenameMfr || 'none'}`);
+      onProgress?.({ phase: 'done', current: 1, total: 1, productsFound: deterministicResult.products.length });
+      return deterministicResult;
+    }
+
+    console.log('Deterministic parse failed, falling back to AI extraction...');
 
     if (!fullText || fullText.trim().length === 0) {
       return { products: [], detectedManufacturer: null };
@@ -389,8 +509,6 @@ export async function extractProductsFromPriceSheet(
 
     const lines = fullText.split('\n');
     const CHUNK_SIZE = 150;
-
-    console.log(`extractProductsFromPriceSheet: ${lines.length} lines, first 3 lines:`, lines.slice(0, 3));
 
     if (lines.length <= CHUNK_SIZE + 10) {
       onProgress?.({ phase: 'extracting', current: 1, total: 1, productsFound: 0 });
