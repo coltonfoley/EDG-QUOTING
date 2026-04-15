@@ -67,7 +67,7 @@ export function registerProductRoutes(app: Express) {
   app.get("/api/products", isAuthenticated, async (req, res) => {
     try {
       const manufacturerFilter = req.query.manufacturer as string;
-      const limit = Math.min(parseInt(req.query.limit as string) || 200, 500);
+      const limit = Math.min(parseInt(req.query.limit as string) || 200, 10000);
       const offset = parseInt(req.query.offset as string) || 0;
       
       let productList;

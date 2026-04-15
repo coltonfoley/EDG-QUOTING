@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { AppHeader } from "@/components/app-header";
@@ -718,9 +718,16 @@ function ProductBulkEditor() {
   const [selectedManufacturer, setSelectedManufacturer] = useState<string>("all");
   const [searchTerm, setSearchTerm] = useState<string>("");
 
-  // Fetch all products
+  const [productPage, setProductPage] = useState(0);
+  const PRODUCTS_PER_PAGE = 50;
+
   const { data: products = [], isLoading } = useQuery<Product[]>({
-    queryKey: ["/api/products"],
+    queryKey: ["/api/products", { limit: 10000 }],
+    queryFn: async () => {
+      const res = await fetch("/api/products?limit=10000", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch products");
+      return res.json();
+    },
   });
 
   // Get unique manufacturers
@@ -748,6 +755,16 @@ function ProductBulkEditor() {
       return matchesManufacturer && matchesSearch;
     });
   }, [products, selectedManufacturer, searchTerm]);
+
+  const totalPages = Math.ceil(filteredProducts.length / PRODUCTS_PER_PAGE);
+  const paginatedProducts = filteredProducts.slice(
+    productPage * PRODUCTS_PER_PAGE,
+    (productPage + 1) * PRODUCTS_PER_PAGE
+  );
+
+  useEffect(() => {
+    setProductPage(0);
+  }, [selectedManufacturer, searchTerm]);
 
   const bulkUpdateForm = useForm<BulkUpdateData>({
     resolver: zodResolver(bulkUpdateSchema),
@@ -896,6 +913,7 @@ function ProductBulkEditor() {
                     onChange={(e) => handleSelectAll(e.target.checked)}
                     className="rounded border-gray-300"
                     data-testid="checkbox-select-all-products"
+                    title={`Select all ${filteredProducts.length} filtered products`}
                   />
                 </TableHead>
                 <TableHead>Product Name</TableHead>
@@ -905,7 +923,7 @@ function ProductBulkEditor() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredProducts.map((product: Product) => (
+              {paginatedProducts.map((product: Product) => (
                 <TableRow key={product.id}>
                   <TableCell>
                     <input
@@ -926,6 +944,38 @@ function ProductBulkEditor() {
             </TableBody>
           </Table>
         </div>
+
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between pt-2">
+            <p className="text-sm text-gray-500">
+              Showing {productPage * PRODUCTS_PER_PAGE + 1}–{Math.min((productPage + 1) * PRODUCTS_PER_PAGE, filteredProducts.length)} of {filteredProducts.length}
+              {selectedProducts.length > 0 && (
+                <span className="ml-2 font-medium text-teal-700">({selectedProducts.length} selected)</span>
+              )}
+            </p>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setProductPage(p => Math.max(0, p - 1))}
+                disabled={productPage === 0}
+              >
+                Previous
+              </Button>
+              <span className="text-sm self-center text-gray-600">
+                Page {productPage + 1} of {totalPages}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setProductPage(p => Math.min(totalPages - 1, p + 1))}
+                disabled={productPage >= totalPages - 1}
+              >
+                Next
+              </Button>
+            </div>
+          </div>
+        )}
       )}
 
       {/* Bulk Edit Dialog */}
