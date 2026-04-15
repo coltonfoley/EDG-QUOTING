@@ -224,14 +224,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const errors: string[] = [];
 
       const allProducts = await storage.getAllProducts();
-      const productLookup = new Map<string, typeof allProducts[0]>();
+      const productLookupByName = new Map<string, typeof allProducts[0]>();
+      const productLookupBySku = new Map<string, typeof allProducts[0]>();
+      const skuRegex = /\(([A-Z0-9][A-Z0-9\-]+)\)\s*$/i;
       for (const p of allProducts) {
-        productLookup.set(p.name.toLowerCase().trim(), p);
+        productLookupByName.set(p.name.toLowerCase().trim(), p);
+        const skuMatch = p.name.match(skuRegex);
+        if (skuMatch) {
+          productLookupBySku.set(skuMatch[1].toUpperCase(), p);
+        }
       }
 
       for (const product of products) {
         try {
-          const { name, manufacturer, category, unit, description, retailPrice, cost } = product;
+          const { name, sku, manufacturer, category, unit, description, retailPrice, cost } = product;
 
           if (!name || typeof retailPrice !== 'number' || typeof cost !== 'number') {
             errors.push(`Invalid product data for: ${name || 'unnamed'}`);
@@ -240,7 +246,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           const manufacturerDiscount = retailPrice - cost;
 
-          const existingProduct = productLookup.get(name.toLowerCase().trim());
+          let existingProduct = productLookupByName.get(name.toLowerCase().trim());
+          if (!existingProduct && sku) {
+            existingProduct = productLookupBySku.get(sku.toUpperCase());
+          }
 
           if (existingProduct) {
             const updateData: any = {
@@ -277,7 +286,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
             };
             
             const newProduct = await storage.createProduct(productData);
-            productLookup.set(name.toLowerCase().trim(), newProduct);
+            productLookupByName.set(name.toLowerCase().trim(), newProduct);
+            if (sku) {
+              productLookupBySku.set(sku.toUpperCase(), newProduct);
+            }
             created++;
           }
         } catch (error) {
