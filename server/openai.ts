@@ -163,7 +163,7 @@ export type ExtractedQuoteWithPageRefs = z.infer<typeof ExtractedQuoteWithPageRe
 
 export type ExtractedProductsResult = z.infer<typeof ExtractedProductsSchema>;
 
-export async function extractProductsFromImage(base64Image: string): Promise<ExtractedProductsResult> {
+export async function extractProductsFromImage(base64Image: string, originalName?: string): Promise<ExtractedProductsResult> {
   try {
     const response = await openai.chat.completions.create({
       model: "gpt-4o",
@@ -185,7 +185,7 @@ export async function extractProductsFromImage(base64Image: string): Promise<Ext
           - "description": additional details (string, or null if not found)
           - "confidence": how confident you are in this extraction, 0.0 to 1.0
           
-          Also detect the manufacturer/vendor name from the document header, title, logo text, or watermark.
+          Also detect the manufacturer/brand name. IMPORTANT: The "detectedManufacturer" should be the BRAND or COMPANY that makes these products, NOT a generic header or document title. For example, if the header says "US SMART-HEATING PRICE LIST" but the products are from "Bromic", use "Bromic". Look at the filename, product naming patterns, logos, and brand references to determine the actual manufacturer.
           
           Return valid JSON in this exact format:
           {"detectedManufacturer": "Company Name or null", "products": [{"sku": "ABC123", "name": "Product Name", "manufacturer": "Brand", "category": "Category", "unit": "each", "price": 25.99, "cost": 18.50, "description": "Details", "confidence": 0.95}]}
@@ -199,7 +199,7 @@ export async function extractProductsFromImage(base64Image: string): Promise<Ext
           content: [
             {
               type: "text",
-              text: "Extract all product information from this price list image. Detect the manufacturer/vendor name from the document. Return as structured JSON.",
+              text: `Extract all product information from this price list image. Detect the actual manufacturer/brand name (not just header text).${originalName ? ` The filename is: ${originalName}` : ''} Return as structured JSON.`,
             },
             {
               type: "image_url",
@@ -243,10 +243,9 @@ export async function extractProductsFromImage(base64Image: string): Promise<Ext
   }
 }
 
-export async function extractProductsFromText(text: string): Promise<ExtractedProductsResult> {
+export async function extractProductsFromText(text: string, originalName?: string): Promise<ExtractedProductsResult> {
   try {
-    // Truncate text if too long to prevent token limit issues
-    const maxTextLength = 15000; // Reasonable limit for GPT-4
+    const maxTextLength = 15000;
     const truncatedText = text.length > maxTextLength 
       ? text.substring(0, maxTextLength) + "\n... (truncated)"
       : text;
@@ -271,7 +270,7 @@ export async function extractProductsFromText(text: string): Promise<ExtractedPr
           - "description": additional details (string, or null if not found)
           - "confidence": how confident you are in this extraction, 0.0 to 1.0
           
-          Also detect the manufacturer/vendor name from the document header, title, or any identifying information at the top.
+          Also detect the manufacturer/brand name. IMPORTANT: The "detectedManufacturer" should be the BRAND or COMPANY that makes these products, NOT a generic header or document title. For example, if the header says "US SMART-HEATING PRICE LIST" but the products are from "Bromic", use "Bromic". Look at the filename, product naming patterns, and brand references to determine the actual manufacturer. If the filename contains a brand name (e.g., "Bromic_Retail_Price_List"), prefer that.
           
           Return valid JSON in this exact format:
           {"detectedManufacturer": "Company Name or null", "products": [{"sku": "ABC123", "name": "Product Name", "manufacturer": "Brand", "category": "Category", "unit": "each", "price": 25.99, "cost": 18.50, "description": "Details", "confidence": 0.95}]}
@@ -282,7 +281,7 @@ export async function extractProductsFromText(text: string): Promise<ExtractedPr
         },
         {
           role: "user",
-          content: `Extract all product information from this price list. Detect the manufacturer/vendor name from the document. Return as structured JSON.\n\n${truncatedText}`,
+          content: `Extract all product information from this price list. Detect the actual manufacturer/brand name (not just the document header text). The filename is relevant context for identifying the manufacturer.\n\nFilename: ${originalName || 'unknown'}\n\n${truncatedText}`,
         },
       ],
       response_format: { type: "json_object" },
@@ -373,7 +372,7 @@ export async function extractProductsFromPriceSheet(
 ): Promise<ExtractedProductsResult> {
   try {
     if (fileType === 'pdf') {
-      return await extractProductsFromPDF(fileBuffer, onProgress);
+      return await extractProductsFromPDF(fileBuffer, onProgress, originalName);
     }
 
     onProgress?.({ phase: 'reading', current: 0, total: 1, productsFound: 0 });
@@ -395,7 +394,7 @@ export async function extractProductsFromPriceSheet(
 
     if (lines.length <= CHUNK_SIZE + 10) {
       onProgress?.({ phase: 'extracting', current: 1, total: 1, productsFound: 0 });
-      const result = await extractProductsFromText(fullText);
+      const result = await extractProductsFromText(fullText, originalName);
       onProgress?.({ phase: 'done', current: 1, total: 1, productsFound: result.products.length });
       return result;
     }
@@ -422,7 +421,7 @@ export async function extractProductsFromPriceSheet(
       const batchResults = await Promise.all(
         batch.map((chunk, idx) => {
           console.log(`Processing chunk ${batchStart + idx + 1}/${chunks.length}...`);
-          return extractProductsFromText(chunk);
+          return extractProductsFromText(chunk, originalName);
         })
       );
 
@@ -452,7 +451,7 @@ export async function extractProductsFromPriceSheet(
   }
 }
 
-async function extractProductsFromPDF(pdfBuffer: Buffer, onProgress?: ProgressCallback): Promise<ExtractedProductsResult> {
+async function extractProductsFromPDF(pdfBuffer: Buffer, onProgress?: ProgressCallback, originalName?: string): Promise<ExtractedProductsResult> {
   try {
     onProgress?.({ phase: 'reading_pdf', current: 0, total: 1, productsFound: 0 });
     const textContent = await extractTextFromPDF(pdfBuffer);
@@ -464,7 +463,7 @@ async function extractProductsFromPDF(pdfBuffer: Buffer, onProgress?: ProgressCa
       
       if (lines.length <= CHUNK_SIZE + 10) {
         onProgress?.({ phase: 'extracting', current: 1, total: 1, productsFound: 0 });
-        const result = await extractProductsFromText(textContent);
+        const result = await extractProductsFromText(textContent, originalName);
         onProgress?.({ phase: 'done', current: 1, total: 1, productsFound: result.products.length });
         return result;
       }
@@ -485,7 +484,7 @@ async function extractProductsFromPDF(pdfBuffer: Buffer, onProgress?: ProgressCa
         const batch = chunks.slice(batchStart, batchStart + PDF_CONCURRENCY);
         onProgress?.({ phase: 'extracting', current: completedChunks + 1, total: chunks.length, productsFound: allProducts.length });
 
-        const batchResults = await Promise.all(batch.map(c => extractProductsFromText(c)));
+        const batchResults = await Promise.all(batch.map(c => extractProductsFromText(c, originalName)));
         for (const result of batchResults) {
           if (result.detectedManufacturer && !detectedManufacturer) {
             detectedManufacturer = result.detectedManufacturer;
@@ -530,7 +529,7 @@ async function extractProductsFromPDF(pdfBuffer: Buffer, onProgress?: ProgressCa
       const batch = images.slice(batchStart, batchStart + VISION_CONCURRENCY);
       onProgress?.({ phase: 'extracting_vision', current: completedPages + 1, total: images.length, productsFound: allProducts.length });
 
-      const batchResults = await Promise.all(batch.map(img => extractProductsFromImage(img)));
+      const batchResults = await Promise.all(batch.map(img => extractProductsFromImage(img, originalName)));
       for (const result of batchResults) {
         if (result.detectedManufacturer && !detectedManufacturer) {
           detectedManufacturer = result.detectedManufacturer;

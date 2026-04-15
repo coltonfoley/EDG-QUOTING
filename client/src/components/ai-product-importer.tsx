@@ -224,6 +224,7 @@ export function AIProductImporter() {
       .filter((_, i) => !removedIndices.has(i))
       .map(p => ({
         name: p.name,
+        sku: p.sku || undefined,
         manufacturer: applyMfrToAll && batchMfr ? batchMfr : (p.manufacturer || batchMfr || 'Imported'),
         category: p.category || undefined,
         unit: p.unit || 'each',
@@ -360,14 +361,18 @@ export function AIProductImporter() {
               </AlertDescription>
             </Alert>
 
-            <div className="flex flex-col gap-2 p-3 bg-gray-50 rounded-lg">
+            <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg space-y-3">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 text-amber-600 flex-shrink-0" />
+                <span className="text-sm font-semibold text-amber-800">Confirm Manufacturer Before Importing</span>
+              </div>
               <div className="flex items-center gap-3">
-                <label className="text-sm font-medium whitespace-nowrap">Batch Manufacturer:</label>
+                <label className="text-sm font-medium whitespace-nowrap">Manufacturer:</label>
                 <Input
                   value={manufacturerOverride}
                   onChange={(e) => setManufacturerOverride(e.target.value)}
-                  placeholder="Manufacturer name"
-                  className="max-w-sm"
+                  placeholder="e.g. Bromic, Infratech, etc."
+                  className="max-w-sm border-amber-300 focus:border-amber-500"
                 />
                 {detectedManufacturer && manufacturerOverride !== detectedManufacturer && (
                   <Button
@@ -380,15 +385,20 @@ export function AIProductImporter() {
                   </Button>
                 )}
               </div>
-              <label className="flex items-center gap-2 text-xs text-gray-600 ml-1 cursor-pointer">
+              <label className="flex items-center gap-2 text-sm text-amber-700 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={applyMfrToAll}
                   onChange={(e) => setApplyMfrToAll(e.target.checked)}
-                  className="rounded border-gray-300"
+                  className="rounded border-amber-400"
                 />
-                Override all rows (replaces per-row manufacturer values)
+                Apply to all rows (overrides per-row values)
               </label>
+              {detectedManufacturer && (
+                <p className="text-xs text-amber-600">
+                  AI detected: <strong>{detectedManufacturer}</strong> — verify this is the correct brand name before importing.
+                </p>
+              )}
             </div>
 
             <div className="bg-gray-50 rounded-lg max-h-[500px] overflow-auto">
@@ -396,10 +406,10 @@ export function AIProductImporter() {
                 <thead className="sticky top-0 bg-gray-100 z-10">
                   <tr className="border-b">
                     <th className="text-left py-2 px-2 w-8"></th>
+                    <th className="text-left py-2 px-2">SKU</th>
                     <th className="text-left py-2 px-2">Name</th>
                     <th className="text-left py-2 px-2">Manufacturer</th>
                     <th className="text-left py-2 px-2">Category</th>
-                    <th className="text-left py-2 px-2">Unit</th>
                     <th className="text-right py-2 px-2">Retail Price</th>
                     <th className="text-right py-2 px-2">Cost</th>
                     <th className="text-center py-2 px-2">Confidence</th>
@@ -412,6 +422,7 @@ export function AIProductImporter() {
                     return (
                       <tr key={index} className="border-b hover:bg-white/50">
                         <td className="py-1 px-2 text-gray-400 text-xs">{index + 1}</td>
+                        <td className="py-1 px-2 text-gray-500 text-xs font-mono">{product.sku || '—'}</td>
                         <td className="py-1 px-2">
                           {editingCell?.row === index && editingCell.field === 'name' ? (
                             <Input
@@ -457,7 +468,6 @@ export function AIProductImporter() {
                             </span>
                           )}
                         </td>
-                        <td className="py-1 px-2 text-gray-600">{product.unit || 'each'}</td>
                         <td className="py-1 px-2 text-right">
                           {editingCell?.row === index && editingCell.field === 'price' ? (
                             <Input
