@@ -244,7 +244,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             continue;
           }
 
-          const manufacturerDiscount = retailPrice - cost;
+          const hasCostData = cost > 0 && cost < retailPrice;
+          const manufacturerDiscount = hasCostData ? (retailPrice - cost) : 0;
 
           let existingProduct = productLookupByName.get(name.toLowerCase().trim());
           if (!existingProduct && sku) {
@@ -254,9 +255,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (existingProduct) {
             const updateData: any = {
               retailPrice: retailPrice.toString(),
-              defaultDiscountType: 'dollar',
-              defaultDiscountValue: manufacturerDiscount.toString(),
             };
+            if (hasCostData) {
+              updateData.defaultDiscountType = 'dollar';
+              updateData.defaultDiscountValue = manufacturerDiscount.toString();
+            }
             
             if (manufacturer !== undefined) {
               updateData.manufacturer = manufacturer;
@@ -281,7 +284,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               category: category || null,
               retailPrice: retailPrice.toString(),
               defaultDiscountType: 'dollar' as const,
-              defaultDiscountValue: manufacturerDiscount.toString(),
+              defaultDiscountValue: hasCostData ? manufacturerDiscount.toString() : '0',
               unit: unit || 'each',
             };
             
