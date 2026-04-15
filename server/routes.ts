@@ -265,18 +265,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
             await storage.updateProduct(existingProduct.id, updateData);
             updated++;
           } else {
-            const productData: any = {
+            const productData = {
               name: name.trim(),
               description: description || '',
               manufacturer: manufacturer || 'Imported',
+              category: category || null,
               retailPrice: retailPrice.toString(),
               defaultDiscountType: 'dollar' as const,
               defaultDiscountValue: manufacturerDiscount.toString(),
               unit: unit || 'each',
             };
-            if (category) {
-              productData.category = category;
-            }
             
             const newProduct = await storage.createProduct(productData);
             productLookup.set(name.toLowerCase().trim(), newProduct);

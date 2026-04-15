@@ -111,7 +111,9 @@ export function AIProductImporter() {
               } else if (parsed.type === 'complete') {
                 result = parsed;
               }
-            } catch {}
+            } catch (parseErr) {
+              console.error('Failed to parse SSE event:', parseErr);
+            }
           }
         }
       }
