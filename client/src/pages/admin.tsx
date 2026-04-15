@@ -902,80 +902,82 @@ function ProductBulkEditor() {
           <p className="text-sm">Try adjusting your filters or importing products above.</p>
         </div>
       ) : (
-        <div className="border rounded-lg overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-12">
-                  <input
-                    type="checkbox"
-                    checked={selectedProducts.length === filteredProducts.length && filteredProducts.length > 0}
-                    onChange={(e) => handleSelectAll(e.target.checked)}
-                    className="rounded border-gray-300"
-                    data-testid="checkbox-select-all-products"
-                    title={`Select all ${filteredProducts.length} filtered products`}
-                  />
-                </TableHead>
-                <TableHead>Product Name</TableHead>
-                <TableHead data-testid="header-manufacturer">Manufacturer</TableHead>
-                <TableHead>Unit</TableHead>
-                <TableHead>Retail Price</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {paginatedProducts.map((product: Product) => (
-                <TableRow key={product.id}>
-                  <TableCell>
+        <>
+          <div className="border rounded-lg overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-12">
                     <input
                       type="checkbox"
-                      checked={selectedProducts.includes(product.id)}
-                      onChange={(e) => handleSelectProduct(product.id, e.target.checked)}
+                      checked={selectedProducts.length === filteredProducts.length && filteredProducts.length > 0}
+                      onChange={(e) => handleSelectAll(e.target.checked)}
                       className="rounded border-gray-300"
+                      data-testid="checkbox-select-all-products"
+                      title={`Select all ${filteredProducts.length} filtered products`}
                     />
-                  </TableCell>
-                  <TableCell className="font-medium" data-testid={`text-product-name-${product.id}`}>{product.name}</TableCell>
-                  <TableCell data-testid={`text-manufacturer-${product.id}`}>{product.manufacturer || "Unspecified"}</TableCell>
-                  <TableCell>{product.unit}</TableCell>
-                  <TableCell>
-                    ${parseFloat(product.retailPrice?.toString() || "0").toFixed(2)}
-                  </TableCell>
+                  </TableHead>
+                  <TableHead>Product Name</TableHead>
+                  <TableHead data-testid="header-manufacturer">Manufacturer</TableHead>
+                  <TableHead>Unit</TableHead>
+                  <TableHead>Retail Price</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between pt-2">
-            <p className="text-sm text-gray-500">
-              Showing {productPage * PRODUCTS_PER_PAGE + 1}&ndash;{Math.min((productPage + 1) * PRODUCTS_PER_PAGE, filteredProducts.length)} of {filteredProducts.length}
-              {selectedProducts.length > 0 && (
-                <span className="ml-2 font-medium text-teal-700">({selectedProducts.length} selected)</span>
-              )}
-            </p>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setProductPage(p => Math.max(0, p - 1))}
-                disabled={productPage === 0}
-              >
-                Previous
-              </Button>
-              <span className="text-sm self-center text-gray-600">
-                Page {productPage + 1} of {totalPages}
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setProductPage(p => Math.min(totalPages - 1, p + 1))}
-                disabled={productPage >= totalPages - 1}
-              >
-                Next
-              </Button>
-            </div>
+              </TableHeader>
+              <TableBody>
+                {paginatedProducts.map((product: Product) => (
+                  <TableRow key={product.id}>
+                    <TableCell>
+                      <input
+                        type="checkbox"
+                        checked={selectedProducts.includes(product.id)}
+                        onChange={(e) => handleSelectProduct(product.id, e.target.checked)}
+                        className="rounded border-gray-300"
+                      />
+                    </TableCell>
+                    <TableCell className="font-medium" data-testid={`text-product-name-${product.id}`}>{product.name}</TableCell>
+                    <TableCell data-testid={`text-manufacturer-${product.id}`}>{product.manufacturer || "Unspecified"}</TableCell>
+                    <TableCell>{product.unit}</TableCell>
+                    <TableCell>
+                      ${parseFloat(product.retailPrice?.toString() || "0").toFixed(2)}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           </div>
-        )}
+
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between pt-2">
+              <p className="text-sm text-gray-500">
+                Showing {productPage * PRODUCTS_PER_PAGE + 1} - {Math.min((productPage + 1) * PRODUCTS_PER_PAGE, filteredProducts.length)} of {filteredProducts.length}
+                {selectedProducts.length > 0 && (
+                  <span className="ml-2 font-medium text-teal-700">({selectedProducts.length} selected)</span>
+                )}
+              </p>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setProductPage(p => Math.max(0, p - 1))}
+                  disabled={productPage === 0}
+                >
+                  Previous
+                </Button>
+                <span className="text-sm self-center text-gray-600">
+                  Page {productPage + 1} of {totalPages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setProductPage(p => Math.min(totalPages - 1, p + 1))}
+                  disabled={productPage >= totalPages - 1}
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       {/* Bulk Edit Dialog */}
