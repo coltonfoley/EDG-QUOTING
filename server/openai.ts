@@ -498,11 +498,22 @@ function parseStructuredPriceSheet(rows: any[][], options?: ParseOptions): Extra
     }
 
     const nonEmpty = cells.filter(c => c.length > 0);
-    if (nonEmpty.length === 1 && cells[0].length > 0) {
-      const val = cells[0];
+    if (nonEmpty.length === 1) {
+      const val = nonEmpty[0];
       if (!/^\d+(\.\d+)?$/.test(val) && val.length > 2) {
         currentCategory = val;
         continue;
+      }
+    }
+    if (headerFound && nameCol >= 0 && nonEmpty.length <= 2) {
+      const nameVal = cells[nameCol];
+      if (nameVal && nameVal.length > 2) {
+        const hasPrice = priceCol >= 0 && cells[priceCol] && !isNaN(parseFloat(String(cells[priceCol]).replace(/[$,]/g, '')));
+        const hasSku = skuCol >= 0 && cells[skuCol] && cells[skuCol].length > 0;
+        if (!hasPrice && !hasSku) {
+          currentCategory = nameVal;
+          continue;
+        }
       }
     }
 
