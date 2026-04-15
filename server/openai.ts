@@ -166,7 +166,7 @@ export type ExtractedProductsResult = z.infer<typeof ExtractedProductsSchema>;
 export async function extractProductsFromImage(base64Image: string): Promise<ExtractedProductsResult> {
   try {
     const response = await openai.chat.completions.create({
-      model: "gpt-5", // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
+      model: "gpt-4o",
       messages: [
         {
           role: "system",
@@ -211,7 +211,7 @@ export async function extractProductsFromImage(base64Image: string): Promise<Ext
         },
       ],
       response_format: { type: "json_object" },
-      max_completion_tokens: 8000,
+      max_tokens: 8000,
     });
 
     const content = response.choices[0].message.content;
@@ -252,7 +252,7 @@ export async function extractProductsFromText(text: string): Promise<ExtractedPr
       : text;
 
     const response = await openai.chat.completions.create({
-      model: "gpt-5", // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
+      model: "gpt-4o",
       messages: [
         {
           role: "system",
@@ -286,7 +286,7 @@ export async function extractProductsFromText(text: string): Promise<ExtractedPr
         },
       ],
       response_format: { type: "json_object" },
-      max_completion_tokens: 8000,
+      max_tokens: 8000,
     });
 
     const content = response.choices[0].message.content;
