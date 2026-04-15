@@ -403,15 +403,28 @@ function matchesColumnAlias(cellValue: string, aliases: string[]): boolean {
 }
 
 function classifyColumn(header: string): 'sku' | 'name' | 'price' | 'cost' | 'unknown' {
-  const priceKeywords = ['list price', 'retail price', 'price', 'msrp', 'list', 'retail', 'dealer price', 'unit price', 'umrp', 'srp'];
-  const costKeywords = ['cost', 'net', 'net price', 'wholesale', 'your price', 'dealer cost', 'your cost', 'deal cost'];
-  const skuKeywords = ['code', 'sku', 'item', 'item number', 'part', 'part number', 'model', 'product code', 'item #', 'part #'];
-  const nameKeywords = ['description', 'name', 'product', 'product name', 'item description', 'desc'];
+  const lower = header.toLowerCase().trim();
 
-  if (matchesColumnAlias(header, costKeywords)) return 'cost';
-  if (matchesColumnAlias(header, priceKeywords)) return 'price';
-  if (matchesColumnAlias(header, skuKeywords)) return 'sku';
-  if (matchesColumnAlias(header, nameKeywords)) return 'name';
+  const exactCostMatches = ['cost', 'net', 'net price', 'wholesale', 'your price', 'dealer cost', 'your cost', 'deal cost', 'dealer'];
+  const exactPriceMatches = ['list price', 'retail price', 'price', 'msrp', 'list', 'retail', 'dealer price', 'unit price', 'umrp', 'srp'];
+  const exactSkuMatches = ['code', 'sku', 'item', 'item number', 'part', 'part number', 'model', 'product code', 'item #', 'part #', 'model no.', 'model no', 'model #'];
+  const exactNameMatches = ['description', 'name', 'product', 'product name', 'item description', 'desc'];
+
+  if (exactCostMatches.includes(lower)) return 'cost';
+  if (exactPriceMatches.includes(lower)) return 'price';
+  if (exactSkuMatches.includes(lower)) return 'sku';
+  if (exactNameMatches.includes(lower)) return 'name';
+
+  const containsCostKeywords = ['cost', 'net price', 'wholesale'];
+  const containsPriceKeywords = ['msrp', 'umrp', 'srp', 'list price', 'retail price', 'unit price'];
+  const containsSkuKeywords = ['part num', 'item num', 'product code'];
+  const containsNameKeywords = ['description', 'product name'];
+
+  if (containsCostKeywords.some(k => lower.includes(k))) return 'cost';
+  if (containsPriceKeywords.some(k => lower.includes(k))) return 'price';
+  if (containsSkuKeywords.some(k => lower.includes(k))) return 'sku';
+  if (containsNameKeywords.some(k => lower.includes(k))) return 'name';
+
   return 'unknown';
 }
 
