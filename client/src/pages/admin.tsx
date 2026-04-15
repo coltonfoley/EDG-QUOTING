@@ -948,7 +948,7 @@ function ProductBulkEditor() {
         {totalPages > 1 && (
           <div className="flex items-center justify-between pt-2">
             <p className="text-sm text-gray-500">
-              Showing {productPage * PRODUCTS_PER_PAGE + 1}–{Math.min((productPage + 1) * PRODUCTS_PER_PAGE, filteredProducts.length)} of {filteredProducts.length}
+              Showing {productPage * PRODUCTS_PER_PAGE + 1}&ndash;{Math.min((productPage + 1) * PRODUCTS_PER_PAGE, filteredProducts.length)} of {filteredProducts.length}
               {selectedProducts.length > 0 && (
                 <span className="ml-2 font-medium text-teal-700">({selectedProducts.length} selected)</span>
               )}
