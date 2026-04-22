@@ -624,6 +624,7 @@ export function registerLineItemRoutes(app: Express) {
         await storage.createLineItem({
           quoteId,
           productId: item.productId,
+          sku: manufacturer === "Sundance" ? (snapshot.sku || snapshot.name) : snapshot.sku,
           description: snapshot.name,
           quantity: item.quantity.toString(),
           retailPrice: snapshot.retailPrice,
