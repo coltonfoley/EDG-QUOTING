@@ -248,6 +248,7 @@ export function SundanceCatalogConfigurator({
           // Include full product snapshot for historical accuracy
           productSnapshot: {
             name: product!.name,
+            sku: product!.name,
             description: product!.description,
             category: product!.category,
             manufacturer: product!.manufacturer,
