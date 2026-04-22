@@ -27,6 +27,7 @@ import sharp from "sharp";
 import { extractQuoteDataFromImages, extractQuoteDataFromPDF } from "../openai";
 import { ObjectStorageService, objectStorageClient } from "../objectStorage";
 import { nanoid } from "nanoid";
+import { sendQuoteToOperations } from "../integrations/operations";
 
 const quotesQuerySchema = z.object({
   page: z.coerce.number().int().gte(1).optional(),
@@ -995,9 +996,17 @@ export function registerQuoteRoutes(app: Express) {
       if (!quote) {
         return res.status(404).json({ message: "Quote not found" });
       }
+
+      let operationsImport;
+      if (deal_stage === 'closed_won') {
+        operationsImport = await sendQuoteToOperations(params.data.id);
+        if (!operationsImport.success) {
+          console.error(`Operations import did not complete for quote ${params.data.id}:`, operationsImport);
+        }
+      }
       
       console.log(`✅ Updated quote ${params.data.id} stage to ${deal_stage}`);
-      res.json(quote);
+      res.json(operationsImport ? { ...quote, operationsImport } : quote);
     } catch (error) {
       console.error("Error updating quote stage:", error);
       res.status(500).json({ message: "Internal server error" });
