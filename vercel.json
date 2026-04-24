@@ -1,0 +1,31 @@
+{
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist/public",
+  "functions": {
+    "api/index.ts": {
+      "maxDuration": 60
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/api",
+      "destination": "/api/index?__path=/api"
+    },
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/index?__path=/api/$1"
+    },
+    {
+      "source": "/objects/(.*)",
+      "destination": "/api/index?__path=/objects/$1"
+    },
+    {
+      "source": "/quote-images/(.*)",
+      "destination": "/api/index?__path=/quote-images/$1"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
