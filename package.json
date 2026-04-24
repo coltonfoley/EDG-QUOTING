@@ -13,6 +13,7 @@
     "smoke:email": "tsx scripts/smoke-email.ts",
     "storage:inventory": "node scripts/storage-inventory.mjs",
     "db:ensure-lead-fields": "node scripts/ensure-lead-fields.mjs",
+    "db:create-admin": "tsx scripts/create-admin-user.ts",
     "db:push": "drizzle-kit push"
   },
   "dependencies": {
