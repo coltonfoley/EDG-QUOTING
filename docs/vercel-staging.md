@@ -4,6 +4,16 @@ Rainmaker can now be tested on Vercel without changing the live Replit bridge.
 The Replit app should remain production until the Vercel preview proves database,
 storage, email, login, quote creation, PDFs, and lead intake.
 
+## Current Status
+
+As of 2026-04-24:
+
+- EDG Vercel project `edgpatioshade/rainmaker` exists and is linked locally.
+- The project is set to Node.js `22.x`.
+- `vercel build --yes` passes locally when placeholder Vercel-target env vars are supplied.
+- No real Preview/Production environment variables have been added to the Vercel project yet.
+- No Vercel preview deployment has been created yet.
+
 ## Runtime Shape
 
 - `server/app.ts` builds the Express app without calling `listen()`.
@@ -104,4 +114,3 @@ After the first preview deploy:
 - Browser-direct image upload routes still rely on Replit-style signed upload URLs; server-side quote image uploads have the first Vercel Blob path.
 - The first preview should use a staging database or reviewed clone, not an unreviewed destructive migration against production.
 - Google Workspace staff OAuth is still a later consolidation step; local username/password auth remains the bridge.
-
