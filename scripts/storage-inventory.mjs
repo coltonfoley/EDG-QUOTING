@@ -7,6 +7,7 @@ if (!process.env.DATABASE_URL) {
 }
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const includeSamples = process.env.STORAGE_INVENTORY_INCLUDE_SAMPLES === "true";
 
 const storageQueries = [
   {
@@ -74,23 +75,27 @@ try {
     console.log(`- missing urls: ${row.missing}`);
   }
 
-  console.log("\nRecent active samples");
-  console.log("---------------------");
+  if (includeSamples) {
+    console.log("\nRecent active samples");
+    console.log("---------------------");
 
-  for (const query of sampleQueries) {
-    const { rows } = await pool.query(query.sql);
-    console.log(`\n${query.label}`);
+    for (const query of sampleQueries) {
+      const { rows } = await pool.query(query.sql);
+      console.log(`\n${query.label}`);
 
-    if (!rows.length) {
-      console.log("- none");
-      continue;
+      if (!rows.length) {
+        console.log("- none");
+        continue;
+      }
+
+      for (const row of rows) {
+        console.log(`- #${row.id} quote ${row.quote_id}: ${row.filename} -> ${row.storage_url}`);
+      }
     }
-
-    for (const row of rows) {
-      console.log(`- #${row.id} quote ${row.quote_id}: ${row.filename} -> ${row.storage_url}`);
-    }
+  } else {
+    console.log("\nRecent active samples skipped.");
+    console.log("Set STORAGE_INVENTORY_INCLUDE_SAMPLES=true to include file-path samples.");
   }
 } finally {
   await pool.end();
 }
-
