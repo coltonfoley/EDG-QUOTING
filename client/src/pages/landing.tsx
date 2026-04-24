@@ -23,7 +23,7 @@ export default function Landing() {
           <Button 
             onClick={handleLogin}
             size="lg"
-            className="bg-edg-teal hover:bg-edg-dark-teal text-edg-black px-8 py-3 text-lg"
+            className="bg-edg-teal hover:bg-edg-dark-teal text-white px-8 py-3 text-lg"
           >
             Team Login
           </Button>

@@ -23,7 +23,7 @@ export function AppHeader() {
   
   return (
     <>
-      <div className="bg-black text-edg-teal px-4 py-2">
+      <div className="bg-black text-edg-brand-teal px-4 py-2">
         <div className="max-w-7xl mx-auto flex items-center justify-center gap-2 text-sm font-medium">
           <CloudRain className="h-4 w-4" />
           <span>Turn quotes into contracts - Make it rain! 💧</span>
@@ -122,7 +122,7 @@ export function AppHeader() {
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="flex items-center space-x-2 hover:bg-muted">
                   <Avatar className="h-8 w-8">
-                    <AvatarFallback className="bg-edg-teal text-edg-black font-medium text-xs">
+                    <AvatarFallback className="bg-edg-teal text-white font-medium text-xs">
                       {user?.firstName?.[0]}{user?.lastName?.[0] || user?.username?.[0]}
                     </AvatarFallback>
                   </Avatar>

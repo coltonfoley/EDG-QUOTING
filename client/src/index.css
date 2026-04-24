@@ -8,7 +8,7 @@
   --background: hsl(0, 0%, 100%);
   --foreground: hsl(210, 11%, 15%);
   --muted: hsl(210, 40%, 96%);
-  --muted-foreground: hsl(215, 13%, 65%);
+  --muted-foreground: hsl(215, 13%, 42%);
   --popover: hsl(0, 0%, 100%);
   --popover-foreground: hsl(210, 11%, 15%);
   --card: hsl(0, 0%, 100%);
@@ -27,13 +27,18 @@
   --radius: 0.5rem;
   
   /* Rainmaker, by EDG Brand Colors */
-  --edg-black: hsl(0, 0%, 0%);
-  --edg-white: hsl(0, 0%, 100%);
-  --edg-teal: hsl(165, 100%, 63%);
-  --edg-dark-teal: hsl(165, 85%, 55%);
-  --edg-light-teal: hsl(165, 100%, 70%);
-  --edg-grey: hsl(0, 0%, 40%);
-  --edg-light-grey: hsl(0, 0%, 96%);
+  --edg-black: 210 23% 7%;
+  --edg-white: 0 0% 100%;
+  --edg-brand-teal: 165 100% 63%;
+  --edg-teal-bg: 169 88% 26%;
+  --edg-teal-text: 169 88% 26%;
+  --edg-teal-border: 169 88% 26%;
+  --edg-dark-teal-bg: 171 85% 20%;
+  --edg-dark-teal-text: 171 85% 20%;
+  --edg-light-teal-bg: 164 55% 93%;
+  --edg-light-teal-text: 169 80% 18%;
+  --edg-grey: 215 13% 42%;
+  --edg-light-grey: 210 20% 96%;
 }
 
 .dark {
@@ -58,13 +63,18 @@
   --ring: hsl(240, 5%, 84%);
   
   /* Rainmaker, by EDG Brand Colors - Dark Mode */
-  --edg-black: hsl(0, 0%, 95%);
-  --edg-white: hsl(240, 10%, 8%);
-  --edg-teal: hsl(165, 100%, 63%);
-  --edg-dark-teal: hsl(165, 85%, 55%);
-  --edg-light-teal: hsl(165, 100%, 70%);
-  --edg-grey: hsl(0, 0%, 70%);
-  --edg-light-grey: hsl(240, 4%, 16%);
+  --edg-black: 0 0% 95%;
+  --edg-white: 240 10% 8%;
+  --edg-brand-teal: 165 100% 63%;
+  --edg-teal-bg: 169 88% 26%;
+  --edg-teal-text: 164 78% 70%;
+  --edg-teal-border: 164 78% 58%;
+  --edg-dark-teal-bg: 171 85% 20%;
+  --edg-dark-teal-text: 164 78% 78%;
+  --edg-light-teal-bg: 166 40% 18%;
+  --edg-light-teal-text: 164 78% 72%;
+  --edg-grey: 215 15% 72%;
+  --edg-light-grey: 240 4% 16%;
 }
 
 @layer base {
@@ -80,58 +90,86 @@
 
 @layer utilities {
   .text-edg-black {
-    color: var(--edg-black);
+    color: hsl(var(--edg-black));
   }
   
   .bg-edg-black {
-    background-color: var(--edg-black);
+    background-color: hsl(var(--edg-black));
   }
   
   .text-edg-white {
-    color: var(--edg-white);
+    color: hsl(var(--edg-white));
   }
   
   .bg-edg-white {
-    background-color: var(--edg-white);
+    background-color: hsl(var(--edg-white));
+  }
+
+  .text-edg-brand-teal {
+    color: hsl(var(--edg-brand-teal));
+  }
+  
+  .bg-edg-brand-teal {
+    background-color: hsl(var(--edg-brand-teal));
   }
   
   .text-edg-teal {
-    color: var(--edg-teal);
+    color: hsl(var(--edg-teal-text));
   }
   
   .bg-edg-teal {
-    background-color: var(--edg-teal);
+    background-color: hsl(var(--edg-teal-bg));
   }
   
   .text-edg-dark-teal {
-    color: var(--edg-dark-teal);
+    color: hsl(var(--edg-dark-teal-text));
   }
   
   .bg-edg-dark-teal {
-    background-color: var(--edg-dark-teal);
+    background-color: hsl(var(--edg-dark-teal-bg));
   }
   
   .text-edg-light-teal {
-    color: var(--edg-light-teal);
+    color: hsl(var(--edg-light-teal-text));
   }
   
   .bg-edg-light-teal {
-    background-color: var(--edg-light-teal);
+    background-color: hsl(var(--edg-light-teal-bg));
   }
   
   .text-edg-grey {
-    color: var(--edg-grey);
+    color: hsl(var(--edg-grey));
   }
   
   .bg-edg-grey {
-    background-color: var(--edg-grey);
+    background-color: hsl(var(--edg-grey));
   }
   
   .text-edg-light-grey {
-    color: var(--edg-light-grey);
+    color: hsl(var(--edg-light-grey));
   }
   
   .bg-edg-light-grey {
-    background-color: var(--edg-light-grey);
+    background-color: hsl(var(--edg-light-grey));
+  }
+
+  .border-edg-teal {
+    border-color: hsl(var(--edg-teal-border));
+  }
+
+  .border-b-edg-teal {
+    border-bottom-color: hsl(var(--edg-teal-border));
+  }
+
+  .border-l-edg-teal {
+    border-left-color: hsl(var(--edg-teal-border));
+  }
+
+  .hover\:text-edg-teal:hover {
+    color: hsl(var(--edg-teal-text));
+  }
+
+  .hover\:text-edg-dark-teal:hover {
+    color: hsl(var(--edg-dark-teal-text));
   }
 }

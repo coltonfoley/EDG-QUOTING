@@ -113,7 +113,7 @@ export default function AuthPage() {
       </div>
 
       {/* Right side - Hero section */}
-      <div className="hidden lg:flex lg:w-1/2 bg-edg-teal text-edg-black p-12 items-center">
+      <div className="hidden lg:flex lg:w-1/2 bg-edg-teal text-white p-12 items-center">
         <div>
           <h2 className="text-4xl font-bold mb-6">Rainmaker, by EDG</h2>
           <h3 className="text-2xl font-semibold mb-4">Quote Management System</h3>
@@ -122,19 +122,19 @@ export default function AuthPage() {
           </p>
           <ul className="space-y-3 opacity-90">
             <li className="flex items-center">
-              <div className="w-2 h-2 bg-edg-black/80 rounded-full mr-3"></div>
+              <div className="w-2 h-2 bg-white/80 rounded-full mr-3"></div>
               Create professional quotes with detailed line items
             </li>
             <li className="flex items-center">
-              <div className="w-2 h-2 bg-edg-black/80 rounded-full mr-3"></div>
+              <div className="w-2 h-2 bg-white/80 rounded-full mr-3"></div>
               Manage customer information and project details
             </li>
             <li className="flex items-center">
-              <div className="w-2 h-2 bg-edg-black/80 rounded-full mr-3"></div>
+              <div className="w-2 h-2 bg-white/80 rounded-full mr-3"></div>
               Generate PDF quotes with company branding
             </li>
             <li className="flex items-center">
-              <div className="w-2 h-2 bg-edg-black/80 rounded-full mr-3"></div>
+              <div className="w-2 h-2 bg-white/80 rounded-full mr-3"></div>
               Track quote status and manage your pipeline
             </li>
           </ul>
