@@ -24,6 +24,10 @@ export async function createApp(options: CreateAppOptions = {}): Promise<{
 
   const isProduction = process.env.NODE_ENV === "production";
 
+  app.get("/health", (_req, res) => {
+    res.status(200).json({ status: "ok", timestamp: new Date().toISOString() });
+  });
+
   app.use(helmet({
     contentSecurityPolicy: isProduction ? {
       directives: {
