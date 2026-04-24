@@ -307,6 +307,11 @@ export default function Accounts() {
                           <div>
                             <div className="text-sm font-medium text-gray-900">
                               {account.company || account.name}
+                              {account.leadStatus === "new" && (
+                                <Badge variant="outline" className="ml-2 border-sky-200 bg-sky-50 text-sky-800">
+                                  New Lead
+                                </Badge>
+                              )}
                             </div>
                             <div className="text-sm text-gray-500">{account.email}</div>
                           </div>

@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Building2, Briefcase, Edit, ChevronLeft, User, FolderPlus, Users, Mail, Phone, ChevronDown, ChevronRight, FileStack } from "lucide-react";
+import { Building2, Briefcase, Edit, ChevronLeft, User, FolderPlus, Users, Mail, Phone, ChevronDown, ChevronRight, FileStack, Inbox } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
@@ -64,6 +64,16 @@ export default function AccountDetail() {
 
   const formatAccountType = (type: string) => {
     return type.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+  };
+
+  const formatLeadStatus = (status: string) => {
+    return status.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+  };
+
+  const extractLeadMessage = (message?: string | null) => {
+    if (!message) return null;
+    const match = message.match(/Message:\s*([\s\S]*?)(?:\n\nMetadata:|$)/);
+    return (match?.[1] || message).trim();
   };
 
 
@@ -243,6 +253,44 @@ export default function AccountDetail() {
                 </p>
               </div>
             </div>
+
+            {account.leadStatus && (
+              <div className="mt-6 border-t pt-6">
+                <div className="mb-4 flex flex-wrap items-center gap-3">
+                  <div className="flex items-center gap-2">
+                    <Inbox className="h-5 w-5 text-edg-teal" />
+                    <h3 className="text-lg font-semibold">Lead Details</h3>
+                  </div>
+                  <Badge variant="outline" className="border-sky-200 bg-sky-50 text-sky-800">
+                    {formatLeadStatus(account.leadStatus)}
+                  </Badge>
+                  {account.leadReceivedAt && (
+                    <span className="text-sm text-gray-500">
+                      Received {format(new Date(account.leadReceivedAt), 'MMM d, yyyy h:mm a')}
+                    </span>
+                  )}
+                </div>
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                  <div>
+                    <p className="text-sm text-gray-500">Source</p>
+                    <p className="font-medium">{account.leadSource || 'Website'}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-500">Project Type</p>
+                    <p className="font-medium">{account.leadProjectType || 'Not provided'}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-500">Location / ZIP</p>
+                    <p className="font-medium">{account.billingAddress || account.zipCode || 'Not provided'}</p>
+                  </div>
+                </div>
+                {extractLeadMessage(account.leadMessage) && (
+                  <p className="mt-4 max-w-3xl text-sm leading-6 text-gray-700">
+                    {extractLeadMessage(account.leadMessage)}
+                  </p>
+                )}
+              </div>
+            )}
 
             {/* Secondary Contacts Section */}
             {secondaryContacts.length > 0 && (

@@ -2,7 +2,9 @@ import type { Express } from "express";
 import { z } from "zod";
 import { storage } from "../storage";
 import { isAuthenticated } from "../replitAuth";
-import type { InsertAccount, InsertQuote } from "@shared/schema";
+import { db } from "../db";
+import { accounts, type InsertAccount } from "@shared/schema";
+import { and, desc, eq, isNotNull, sql } from "drizzle-orm";
 
 const leadIntakeSchema = z.object({
   email: z.string().email().transform((value) => value.trim().toLowerCase()),
@@ -18,6 +20,19 @@ const leadIntakeSchema = z.object({
 });
 
 type LeadIntakePayload = z.infer<typeof leadIntakeSchema>;
+
+const leadStatusSchema = z.enum([
+  "new",
+  "contacted",
+  "qualified",
+  "unresponsive",
+  "converted",
+  "archived",
+]);
+
+const leadStatusUpdateSchema = z.object({
+  status: leadStatusSchema,
+});
 
 function accountTypeFromLead(customerType?: string | null): InsertAccount["accountType"] {
   switch ((customerType || "").toLowerCase()) {
@@ -35,12 +50,6 @@ function accountTypeFromLead(customerType?: string | null): InsertAccount["accou
 
 function buildLeadName(lead: LeadIntakePayload): string {
   return [lead.firstName, lead.lastName].filter(Boolean).join(" ").trim();
-}
-
-function buildProjectName(lead: LeadIntakePayload): string {
-  const name = buildLeadName(lead);
-  const projectType = lead.projectType || "Website Lead";
-  return name ? `${name} - ${projectType}` : projectType;
 }
 
 function buildLeadNotes(lead: LeadIntakePayload): string {
@@ -63,10 +72,6 @@ function buildLeadNotes(lead: LeadIntakePayload): string {
   return lines.join("\n");
 }
 
-function isLikelyZipCode(value?: string | null): boolean {
-  return !!value && /^\d{5}(?:-\d{4})?$/.test(value.trim());
-}
-
 function mapLeadToAccount(lead: LeadIntakePayload): InsertAccount {
   const name = buildLeadName(lead) || lead.email;
   return {
@@ -79,29 +84,119 @@ function mapLeadToAccount(lead: LeadIntakePayload): InsertAccount {
     accountType: accountTypeFromLead(lead.customerType),
     paymentTerms: "net_30",
     billingAddress: lead.location || undefined,
-  };
-}
-
-function mapLeadToQuote(lead: LeadIntakePayload, accountId: number): InsertQuote {
-  return {
-    accountId,
-    quoteNumber: "",
-    projectName: buildProjectName(lead),
-    jobsiteAddress: lead.location || undefined,
-    jobsiteZipCode: isLikelyZipCode(lead.location)
-      ? lead.location || undefined
-      : undefined,
-    dealStage: "new_lead",
-    notes: buildLeadNotes(lead),
-    taxRate: "0",
-    discount: "0",
-    tariffRate: "0",
-    shipping: "0",
-    isShippingTaxable: false,
+    leadStatus: "new",
+    leadSource: lead.source || "website",
+    leadProjectType: lead.projectType || undefined,
+    leadMessage: buildLeadNotes(lead),
+    leadReceivedAt: new Date(),
   };
 }
 
 export function registerLeadIntakeRoutes(app: Express) {
+  app.get("/api/leads", isAuthenticated, async (req, res) => {
+    try {
+      const statusParam = typeof req.query.status === "string" ? req.query.status : "new";
+      const status = statusParam === "all" ? "all" : leadStatusSchema.parse(statusParam);
+      const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
+      const offset = parseInt(req.query.offset as string) || 0;
+
+      const where = status === "all"
+        ? isNotNull(accounts.leadStatus)
+        : and(isNotNull(accounts.leadStatus), eq(accounts.leadStatus, status));
+
+      const leads = await db
+        .select({
+          id: accounts.id,
+          name: accounts.name,
+          email: accounts.email,
+          phone: accounts.phone,
+          company: accounts.company,
+          accountType: accounts.accountType,
+          paymentTerms: accounts.paymentTerms,
+          billingAddress: accounts.billingAddress,
+          streetAddress: accounts.streetAddress,
+          addressLine2: accounts.addressLine2,
+          city: accounts.city,
+          state: accounts.state,
+          zipCode: accounts.zipCode,
+          country: accounts.country,
+          placeId: accounts.placeId,
+          firstName: accounts.firstName,
+          lastName: accounts.lastName,
+          secondaryContacts: accounts.secondaryContacts,
+          qbCustomerId: accounts.qbCustomerId,
+          googleContactId: accounts.googleContactId,
+          leadStatus: accounts.leadStatus,
+          leadSource: accounts.leadSource,
+          leadProjectType: accounts.leadProjectType,
+          leadMessage: accounts.leadMessage,
+          leadReceivedAt: accounts.leadReceivedAt,
+          leadLastContactedAt: accounts.leadLastContactedAt,
+          leadConvertedAt: accounts.leadConvertedAt,
+          createdAt: accounts.createdAt,
+          updatedAt: accounts.updatedAt,
+          projectCount: sql<number>`
+            (SELECT COUNT(*)::int
+             FROM quotes
+             WHERE quotes.account_id = accounts.id)
+          `,
+        })
+        .from(accounts)
+        .where(where)
+        .orderBy(sql`${accounts.leadReceivedAt} DESC NULLS LAST`, desc(accounts.createdAt))
+        .limit(limit)
+        .offset(offset);
+
+      res.json(leads);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({
+          message: "Invalid lead query",
+          errors: error.errors,
+        });
+      }
+
+      console.error("Error fetching leads:", error);
+      res.status(500).json({ message: "Failed to fetch leads" });
+    }
+  });
+
+  app.patch("/api/leads/:id/status", isAuthenticated, async (req, res) => {
+    try {
+      const id = z.coerce.number().int().positive().parse(req.params.id);
+      const { status } = leadStatusUpdateSchema.parse(req.body);
+
+      const updates: Partial<InsertAccount> = {
+        leadStatus: status,
+      };
+
+      if (status === "contacted") {
+        updates.leadLastContactedAt = new Date();
+      }
+
+      if (status === "converted") {
+        updates.leadConvertedAt = new Date();
+      }
+
+      const account = await storage.updateAccount(id, updates);
+      if (!account || !account.leadStatus) {
+        return res.status(404).json({ message: "Lead not found" });
+      }
+
+      res.json(account);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({
+          message: "Invalid lead status",
+          errors: error.errors,
+        });
+      }
+
+      console.error("Error updating lead status:", error);
+      res.status(500).json({ message: "Failed to update lead status" });
+    }
+  });
+
   app.post("/api/leads/intake", isAuthenticated, async (req: any, res) => {
     try {
       if (!req.apiKeyAuthenticated) {
@@ -119,13 +214,12 @@ export function registerLeadIntakeRoutes(app: Express) {
         createPrimaryContact: false,
       });
 
-      const quote = await storage.createQuote(mapLeadToQuote(lead, account.id));
-
       res.status(201).json({
         success: true,
+        leadId: account.id,
         accountId: account.id,
-        quoteId: quote.id,
-        quoteNumber: quote.quoteNumber,
+        leadStatus: account.leadStatus || "new",
+        createdQuote: false,
       });
     } catch (error) {
       if (error instanceof z.ZodError) {
