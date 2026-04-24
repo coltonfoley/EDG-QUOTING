@@ -1,17 +1,25 @@
 import OpenAI from "openai";
 import { z } from "zod";
-import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
 import os from "os";
 
-// the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
-const openai = new OpenAI({ 
-  apiKey: process.env.OPENAI_API_KEY,
-  timeout: 240000, // 4 minutes timeout for complex PDF processing
-  maxRetries: 2 // Retry failed requests up to 2 times
-});
+let openai: OpenAI | null = null;
+
+function getOpenAI(): OpenAI {
+  if (!process.env.OPENAI_API_KEY) {
+    throw new Error("OPENAI_API_KEY is required for AI-powered quote extraction.");
+  }
+
+  openai ??= new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY,
+    timeout: 240000, // 4 minutes timeout for complex PDF processing
+    maxRetries: 2 // Retry failed requests up to 2 times
+  });
+
+  return openai;
+}
 
 // Simple in-memory cache for OpenAI API responses
 interface CacheEntry {
@@ -175,7 +183,7 @@ export type ExtractedProductsResult = z.infer<typeof ExtractedProductsSchema>;
 
 export async function extractProductsFromImage(base64Image: string, originalName?: string): Promise<ExtractedProductsResult> {
   try {
-    const response = await openai.chat.completions.create({
+    const response = await getOpenAI().chat.completions.create({
       model: "gpt-4o",
       messages: [
         {
@@ -260,7 +268,7 @@ export async function extractProductsFromText(text: string, originalName?: strin
       ? text.substring(0, maxTextLength) + "\n... (truncated)"
       : text;
 
-    const response = await openai.chat.completions.create({
+    const response = await getOpenAI().chat.completions.create({
       model: "gpt-4o",
       messages: [
         {
@@ -808,6 +816,7 @@ async function extractTextFromPDF(pdfBuffer: Buffer): Promise<string | null> {
       await import('@ungap/with-resolvers' as any);
     }
 
+    const { getDocument } = await import('pdfjs-dist/legacy/build/pdf.mjs');
     const uint8Array = new Uint8Array(pdfBuffer);
     const loadingTask = getDocument({
       data: uint8Array,
@@ -852,7 +861,7 @@ async function extractQuoteDataFromText(textContent: string): Promise<ExtractedQ
   try {
     console.log('🤖 Processing text with OpenAI for quote extraction');
     
-    const response = await openai.chat.completions.create({
+    const response = await getOpenAI().chat.completions.create({
       model: "gpt-4o",
       messages: [
         {
@@ -1110,7 +1119,7 @@ async function processImagesInSingleCall(images: Array<{index: number, imageBase
       ];
     }).flat();
 
-    const response = await openai.chat.completions.create({
+    const response = await getOpenAI().chat.completions.create({
       model: "gpt-5", // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
       messages: [
         {

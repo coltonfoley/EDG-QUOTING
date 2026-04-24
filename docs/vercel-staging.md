@@ -82,6 +82,8 @@ Run these before deploying a preview:
 npm run env:check
 npm run check
 npm run build
+vercel build --target=preview --yes
+npm run vercel:bundle-function
 npm run storage:inventory
 ```
 

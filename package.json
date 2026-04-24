@@ -11,6 +11,7 @@
     "env:check": "node scripts/validate-env.mjs",
     "smoke:lead-intake": "node scripts/smoke-lead-intake.mjs",
     "smoke:email": "tsx scripts/smoke-email.ts",
+    "vercel:bundle-function": "node scripts/bundle-vercel-function.mjs",
     "storage:inventory": "node scripts/storage-inventory.mjs",
     "db:ensure-lead-fields": "node scripts/ensure-lead-fields.mjs",
     "db:create-admin": "tsx scripts/create-admin-user.ts",
