@@ -94,7 +94,11 @@ if (storageProvider === "replit") {
   requireVars(["BLOB_READ_WRITE_TOKEN"], "Vercel Blob uploads need the project Blob token.");
 }
 
-const emailProvider = allowValue("EMAIL_PROVIDER", ["replit-gmail", "google-workspace-gmail"], "replit-gmail");
+const emailProvider = allowValue(
+  "EMAIL_PROVIDER",
+  ["replit-gmail", "google-workspace-gmail", "resend"],
+  "replit-gmail"
+);
 
 if (emailProvider === "replit-gmail") {
   requireVars(["REPLIT_CONNECTORS_HOSTNAME"], "Replit Gmail needs the connector hostname.");
@@ -110,6 +114,12 @@ if (emailProvider === "replit-gmail") {
     "Google Workspace Gmail uses OAuth refresh-token credentials."
   );
   warnMissing("GOOGLE_WORKSPACE_EMAIL_FROM", "Set this to the EDG mailbox that should send customer emails.");
+} else if (emailProvider === "resend") {
+  requireVars(["RESEND_API_KEY"], "Resend transactional email needs an API key.");
+  requireOneOf(
+    ["RESEND_EMAIL_FROM", "EMAIL_FROM"],
+    "Resend needs a verified sender address, for example EDG Patio & Shade <quotes@edgpatioshade.com>."
+  );
 }
 
 warnMissing("RAINMAKER_API_KEY", "Website lead intake and scripts/smoke-lead-intake.mjs need it.");
