@@ -71,12 +71,22 @@ export const accounts = pgTable("accounts", {
   qbCustomerId: text("qb_customer_id"), // QuickBooks customer ID
   // Google Contacts integration
   googleContactId: text("google_contact_id"), // Google People API resource name
+  // Lead intake tracking
+  leadStatus: text("lead_status"), // new, contacted, qualified, unresponsive, converted, archived
+  leadSource: text("lead_source"),
+  leadProjectType: text("lead_project_type"),
+  leadMessage: text("lead_message"),
+  leadReceivedAt: timestamp("lead_received_at"),
+  leadLastContactedAt: timestamp("lead_last_contacted_at"),
+  leadConvertedAt: timestamp("lead_converted_at"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => [
   index("idx_accounts_email").on(table.email),
   index("idx_accounts_phone").on(table.phone),
   index("idx_accounts_type").on(table.accountType),
+  index("idx_accounts_lead_status").on(table.leadStatus),
+  index("idx_accounts_lead_received_at").on(table.leadReceivedAt),
   index("idx_accounts_qb_customer_id").on(table.qbCustomerId),
 ]);
 

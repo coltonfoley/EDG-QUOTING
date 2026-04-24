@@ -73,6 +73,13 @@ export function AppHeader() {
               }`}>
                 Home
               </Link>
+              <Link href="/leads" className={`text-sm font-medium transition-colors hover:text-edg-teal ${
+                location.startsWith('/leads')
+                  ? 'text-edg-teal border-b-2 border-edg-teal pb-4' 
+                  : 'text-edg-grey'
+              }`}>
+                Leads
+              </Link>
               <Link href="/accounts" className={`text-sm font-medium transition-colors hover:text-edg-teal ${
                 location.startsWith('/accounts')
                   ? 'text-edg-teal border-b-2 border-edg-teal pb-4' 

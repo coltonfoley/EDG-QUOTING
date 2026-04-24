@@ -10,6 +10,7 @@
     "check": "tsc",
     "env:check": "node scripts/validate-env.mjs",
     "smoke:lead-intake": "node scripts/smoke-lead-intake.mjs",
+    "db:ensure-lead-fields": "node scripts/ensure-lead-fields.mjs",
     "db:push": "drizzle-kit push"
   },
   "dependencies": {
