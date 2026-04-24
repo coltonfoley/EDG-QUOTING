@@ -278,7 +278,7 @@ async function executeToolCall(name: string, args: any): Promise<string> {
         
         if (quote.lineItems && quote.lineItems.length > 0) {
           details += `\nLine Items:\n`;
-          quote.lineItems.slice(0, 15).forEach(item => {
+          quote.lineItems.slice(0, 15).forEach((item: any) => {
             const itemTotal = parseFloat(String(item.quantity || 0)) * parseFloat(String(item.unitPrice || 0));
             details += `  - ${item.description}: ${item.quantity} x $${item.unitPrice} = $${itemTotal.toFixed(2)}\n`;
           });

@@ -14,6 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { formatCurrency, cn } from "@/lib/utils";
+import { calculateLineItemsValue } from "@/lib/quote-value";
 import { 
   DndContext, 
   DragOverlay,
@@ -71,17 +72,7 @@ const SortableColumn = memo(function SortableColumn({
 
   // Calculate column total
   const columnTotal = quotes.reduce((sum, quote) => {
-    const quoteTotal = quote.lineItems.reduce((itemSum, item) => {
-      const qty = parseFloat(item.quantity.toString());
-      const price = parseFloat(item.unitPrice.toString());
-      const markup = parseFloat(item.markupValue.toString());
-      const baseTotal = qty * price;
-      const total = item.markupType === 'percentage' 
-        ? baseTotal + (baseTotal * (markup / 100))
-        : baseTotal + markup;
-      return itemSum + total;
-    }, 0);
-    return sum + quoteTotal;
+    return sum + calculateLineItemsValue(quote.lineItems);
   }, 0);
 
   return (
@@ -350,17 +341,7 @@ export default function Pipeline() {
   const stats = useMemo(() => {
     const totalDeals = filteredQuotes.length;
     const totalValue = filteredQuotes.reduce((sum, quote) => {
-      const quoteTotal = quote.lineItems.reduce((itemSum, item) => {
-        const qty = parseFloat(item.quantity.toString());
-        const price = parseFloat(item.unitPrice.toString());
-        const markup = parseFloat(item.markupValue.toString());
-        const baseTotal = qty * price;
-        const total = item.markupType === 'percentage' 
-          ? baseTotal + (baseTotal * (markup / 100))
-          : baseTotal + markup;
-        return itemSum + total;
-      }, 0);
-      return sum + quoteTotal;
+      return sum + calculateLineItemsValue(quote.lineItems);
     }, 0);
 
     const wonDeals = filteredQuotes.filter(q => isWonStage(q.dealStage || '')).length;

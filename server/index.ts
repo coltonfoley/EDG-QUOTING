@@ -5,6 +5,7 @@ import cors from "cors";
 import rateLimit from "express-rate-limit";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import { getAllowedOrigins, getServerHost, getServerPort } from "./config";
 
 const app = express();
 
@@ -34,7 +35,7 @@ app.use(helmet({
 // CORS configuration
 const corsOptions: cors.CorsOptions = {
   origin: isProduction 
-    ? (process.env.REPLIT_DOMAINS?.split(',').map(d => `https://${d}`) || [])
+    ? getAllowedOrigins()
     : true, // Allow all origins in development
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
@@ -104,15 +105,13 @@ app.use((req, res, next) => {
     serveStatic(app);
   }
 
-  // ALWAYS serve the app on port 5000
-  // this serves both the API and the client.
-  // It is the only port that is not firewalled.
-  const port = 5000;
+  const port = getServerPort();
+  const host = getServerHost();
   server.listen({
     port,
-    host: "0.0.0.0",
+    host,
     reusePort: true,
   }, () => {
-    log(`serving on port ${port}`);
+    log(`serving on ${host}:${port}`);
   });
 })();

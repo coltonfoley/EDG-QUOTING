@@ -81,7 +81,7 @@ export default function Landing() {
 
         <div className="mt-16 text-center">
           <p className="text-muted-foreground">
-            Secure team access powered by Replit authentication
+            Secure team access for EDG staff
           </p>
         </div>
       </div>

@@ -8,6 +8,7 @@
     "build": "vite build && esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
     "start": "NODE_ENV=production node dist/index.js",
     "check": "tsc",
+    "env:check": "node scripts/validate-env.mjs",
     "smoke:lead-intake": "node scripts/smoke-lead-intake.mjs",
     "db:push": "drizzle-kit push"
   },
@@ -64,6 +65,7 @@
     "@uppy/file-input": "^4.2.1",
     "@uppy/progress-bar": "^4.3.1",
     "@uppy/react": "^4.5.1",
+    "@vercel/blob": "^2.3.3",
     "@vitest/coverage-v8": "^4.0.14",
     "axios": "^1.12.2",
     "class-variance-authority": "^0.7.1",

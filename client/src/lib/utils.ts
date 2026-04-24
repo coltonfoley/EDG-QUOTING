@@ -268,7 +268,18 @@ export function calculateLineItemMargin(
  * @param tariffRate - Tariff percentage to increase cost (0-100)
  * @returns Object with subtotal, discounts, tax, total, and margin
  */
-export function calculateQuoteTotals(lineItems: any[], taxRate: number | string = 0, discount: number | string = 0, shipping: number | string = 0, isShippingTaxable: boolean = false, tariffRate: number | string = 0) {
+export type QuoteTotalsLineItem = {
+  quantity: number | string;
+  unitPrice: number | string;
+  markupType: string;
+  markupValue: number | string;
+  discountType?: string | null;
+  discountValue?: number | string | null;
+  isTaxable?: boolean | null;
+  isTariffApplicable?: boolean | null;
+};
+
+export function calculateQuoteTotals(lineItems: QuoteTotalsLineItem[], taxRate: number | string = 0, discount: number | string = 0, shipping: number | string = 0, isShippingTaxable: boolean = false, tariffRate: number | string = 0) {
   // Safely parse and validate inputs
   const tax = typeof taxRate === 'string' ? parseFloat(sanitizeNumberString(taxRate)) : taxRate;
   const disc = typeof discount === 'string' ? parseFloat(sanitizeNumberString(discount)) : discount;
