@@ -74,6 +74,7 @@ Run these before deploying a preview:
 npm run env:check
 npm run check
 npm run build
+npm run storage:inventory
 ```
 
 To verify the Vercel-target variable set without real secrets, this shape should
@@ -111,6 +112,7 @@ After the first preview deploy:
 ## Known Gaps Before Production Cutover
 
 - Existing Replit object storage files still need an export/import plan.
+- `npm run storage:inventory` should be run against the real Rainmaker database before storage cutover to count and sample quote image references.
 - Browser-direct image upload routes still rely on Replit-style signed upload URLs; server-side quote image uploads have the first Vercel Blob path.
 - The first preview should use a staging database or reviewed clone, not an unreviewed destructive migration against production.
 - Google Workspace staff OAuth is still a later consolidation step; local username/password auth remains the bridge.
