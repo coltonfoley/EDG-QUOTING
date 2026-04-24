@@ -363,7 +363,7 @@ export default function AccountDetail() {
                                 </Badge>
                               </div>
                               <p className="text-sm text-gray-500 mt-1">
-                                {mainQuote.projectAddress || 'No address specified'}
+                                {mainQuote.jobsiteAddress || mainQuote.jobsiteStreetAddress || 'No address specified'}
                               </p>
                               <p className="text-sm text-gray-600 mt-2">
                                 Latest: {mainQuote.createdAt ? format(new Date(mainQuote.createdAt), 'MMM d, yyyy') : 'N/A'}

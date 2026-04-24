@@ -2,6 +2,7 @@ import { Link } from "wouter";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency } from "@/lib/utils";
+import { calculateLineItemsValue } from "@/lib/quote-value";
 import { CalendarDays, User, Building2 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import type { QuoteWithDetails } from "@shared/schema";
@@ -13,17 +14,7 @@ interface PipelineCardProps {
 }
 
 export function PipelineCard({ quote, isDragging }: PipelineCardProps) {
-  // Calculate total value
-  const totalValue = quote.lineItems.reduce((sum, item) => {
-    const qty = parseFloat(item.quantity.toString());
-    const price = parseFloat(item.unitPrice.toString());
-    const markup = parseFloat(item.markupValue.toString());
-    const baseTotal = qty * price;
-    const total = item.markupType === 'percentage' 
-      ? baseTotal + (baseTotal * (markup / 100))
-      : baseTotal + markup;
-    return sum + total;
-  }, 0);
+  const totalValue = calculateLineItemsValue(quote.lineItems);
 
 
   // Assignment feature disabled until new system is implemented

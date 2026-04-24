@@ -1,5 +1,5 @@
 import jsPDF from 'jspdf';
-import type { QuoteWithDetails } from '@shared/schema';
+import type { QuoteProductRendering, QuoteWithDetails } from '@shared/schema';
 import { barlowRegularBase64, barlowSemiBoldBase64 } from './fonts';
 import { generateBrandedSequencePDF } from './pdf-branded-sequence';
 import { normalizeImageToDataUrl } from './pdf-image-pipeline';
@@ -38,7 +38,7 @@ export async function generateSignedPDF(options: GenerateSignedPDFOptions): Prom
   let normalizedImages: Array<{ dataUrl: string; format: 'PNG' | 'JPEG' }> = [];
   if (includeImages && quote.productRenderings && quote.productRenderings.length > 0) {
     const imageResults = await Promise.allSettled(
-      quote.productRenderings.map(async (rendering) => {
+      quote.productRenderings.map(async (rendering: QuoteProductRendering) => {
         return await normalizeImageToDataUrl(rendering.storageUrl);
       })
     );

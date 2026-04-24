@@ -831,7 +831,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await storage.updateAccountQbCustomerId(quote.account.id, qbCustomerId);
       }
 
-      const lineItems = quote.lineItems.map(item => ({
+      const lineItems = quote.lineItems.map((item: any) => ({
         description: item.description,
         quantity: item.quantity,
         amount: parseFloat(item.unitPrice) * parseFloat(item.quantity)

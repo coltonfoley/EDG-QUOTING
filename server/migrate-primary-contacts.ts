@@ -1,7 +1,4 @@
-import { drizzle } from 'drizzle-orm/neon-serverless';
 import { neonConfig, Pool } from '@neondatabase/serverless';
-import { accounts, contacts } from '../shared/schema';
-import { eq, and } from 'drizzle-orm';
 import dotenv from 'dotenv';
 import ws from 'ws';
 
@@ -9,33 +6,44 @@ dotenv.config();
 
 neonConfig.webSocketConstructor = ws;
 
+type PrimaryContactRow = {
+  contactId: number;
+  contactFirstName: string | null;
+  contactLastName: string | null;
+  contactEmail: string | null;
+  accountId: number;
+  accountName: string;
+  accountFirstName: string | null;
+  accountLastName: string | null;
+};
+
 async function migrateContactsToAccounts() {
   if (!process.env.DATABASE_URL) {
     throw new Error('DATABASE_URL environment variable is required');
   }
 
   const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-  const db = drizzle(pool);
 
   console.log('\n=== Starting Contact to Account Migration ===\n');
   console.log('This script will copy firstName and lastName from primary contacts into their parent accounts.');
   console.log('Original contact records will be preserved for rollback safety.\n');
 
   try {
-    const primaryContacts = await db
-      .select({
-        contactId: contacts.id,
-        contactFirstName: contacts.firstName,
-        contactLastName: contacts.lastName,
-        contactEmail: contacts.email,
-        accountId: contacts.accountId,
-        accountName: accounts.name,
-        accountFirstName: accounts.firstName,
-        accountLastName: accounts.lastName,
-      })
-      .from(contacts)
-      .innerJoin(accounts, eq(contacts.accountId, accounts.id))
-      .where(eq(contacts.isPrimary, true));
+    const result = await pool.query(`
+      SELECT
+        c.id AS "contactId",
+        c.first_name AS "contactFirstName",
+        c.last_name AS "contactLastName",
+        c.email AS "contactEmail",
+        c.account_id AS "accountId",
+        a.name AS "accountName",
+        a.first_name AS "accountFirstName",
+        a.last_name AS "accountLastName"
+      FROM contacts c
+      INNER JOIN accounts a ON c.account_id = a.id
+      WHERE c.is_primary = true
+    `) as { rows: PrimaryContactRow[] };
+    const primaryContacts = result.rows;
 
     console.log(`Found ${primaryContacts.length} primary contacts to migrate.\n`);
 
@@ -69,13 +77,14 @@ async function migrateContactsToAccounts() {
       }
 
       try {
-        await db
-          .update(accounts)
-          .set({
-            firstName: contact.contactFirstName,
-            lastName: contact.contactLastName,
-          })
-          .where(eq(accounts.id, contact.accountId));
+        await pool.query(
+          `
+            UPDATE accounts
+            SET first_name = $1, last_name = $2
+            WHERE id = $3
+          `,
+          [contact.contactFirstName, contact.contactLastName, contact.accountId]
+        );
 
         console.log(`✅ UPDATE: Account ${contact.accountId} (${contact.accountName})`);
         console.log(`   Set: ${contact.contactFirstName} ${contact.contactLastName}`);

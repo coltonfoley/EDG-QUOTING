@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { storage } from "../storage";
 import { z } from "zod";
 import { db } from "../db";
-import { quotes as quotesTable } from "@shared/schema";
+import { quotes as quotesTable, type InsertQuote } from "@shared/schema";
 import { eq, sql } from "drizzle-orm";
 import { isAuthenticated } from "../replitAuth";
 import fs from "fs";
@@ -25,9 +25,10 @@ import {
 import multer from "multer";
 import sharp from "sharp";
 import { extractQuoteDataFromImages, extractQuoteDataFromPDF } from "../openai";
-import { ObjectStorageService, objectStorageClient } from "../objectStorage";
+import { ObjectStorageService } from "../objectStorage";
 import { nanoid } from "nanoid";
 import { sendQuoteToOperations } from "../integrations/operations";
+import { buildAppUrl } from "../config";
 
 const quotesQuerySchema = z.object({
   page: z.coerce.number().int().gte(1).optional(),
@@ -417,7 +418,12 @@ export function registerQuoteRoutes(app: Express) {
         ...baseQuoteData,
         accountId: resolvedAccountId,
         quoteNumber: `Q-${Date.now()}`,
+        taxRate: baseQuoteData.taxRate ?? "0",
+        discount: baseQuoteData.discount ?? "0",
+        tariffRate: baseQuoteData.tariffRate ?? "0",
+        shipping: baseQuoteData.shipping ?? "0",
         isShippingTaxable: false,
+        dealStage: baseQuoteData.dealStage ?? "new_lead",
       };
       
       const quote = await storage.createQuote(quoteData);
@@ -689,6 +695,7 @@ export function registerQuoteRoutes(app: Express) {
             estimatedStartDate: firstQuote.date || new Date().toISOString().split('T')[0],
             notes: `Combined import from ${importData.extractedQuotes.length} PDFs: ${combinedFilenames}`,
             taxRate: '0',
+            tariffRate: '0',
             discount: '0',
             shipping: '0',
             isShippingTaxable: false,
@@ -778,6 +785,7 @@ export function registerQuoteRoutes(app: Express) {
               estimatedStartDate: extractedQuote.date || new Date().toISOString().split('T')[0],
               notes: extractedQuote.notes ? `Imported from PDF: ${extractedQuote.filename}\n\n${extractedQuote.notes}` : `Imported from PDF: ${extractedQuote.filename}`,
               taxRate: extractedQuote.taxRate?.toString() || '0',
+              tariffRate: '0',
               discount: '0',
               shipping: '0',
               isShippingTaxable: false,
@@ -1148,7 +1156,7 @@ export function registerQuoteRoutes(app: Express) {
         return res.status(400).json({ message: "Customer email not found" });
       }
 
-      const { sendEmail } = await import("../gmail");
+      const { sendEmail } = await import("../email");
 
       // Load logo for email
       const logoPath = path.join(process.cwd(), 'attached_assets', 'Logo_Full_Color_Black_1766097629382.png');
@@ -1174,13 +1182,7 @@ export function registerQuoteRoutes(app: Express) {
       };
       const safePersonalizedMessage = personalizedMessage ? escapeHtml(personalizedMessage) : '';
 
-      const baseUrl = process.env.REPLIT_DOMAINS
-        ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}`
-        : process.env.REPLIT_DEV_DOMAIN 
-          ? `https://${process.env.REPLIT_DEV_DOMAIN}` 
-          : req.get('origin') || `${req.protocol}://${req.get('host')}`;
-      
-      const signingUrl = `${baseUrl}/sign/${quote.signingToken}`;
+      const signingUrl = buildAppUrl(`/sign/${quote.signingToken}`, req);
 
       const customerName = quote.account.firstName 
         ? `${quote.account.firstName} ${quote.account.lastName || ''}`.trim()
@@ -1387,19 +1389,13 @@ export function registerQuoteRoutes(app: Express) {
       let emailSent = false;
       if (signerType === 'client' && quote.account?.email) {
         try {
-          const { sendEmail } = await import("../gmail");
+          const { sendEmail } = await import("../email");
           
           const customerName = quote.account.firstName 
             ? `${quote.account.firstName} ${quote.account.lastName || ''}`.trim()
             : quote.account.name;
 
-          const baseUrl = process.env.REPLIT_DOMAINS
-            ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}`
-            : process.env.REPLIT_DEV_DOMAIN 
-              ? `https://${process.env.REPLIT_DEV_DOMAIN}` 
-              : req.get('origin') || `${req.protocol}://${req.get('host')}`;
-          
-          const downloadUrl = `${baseUrl}/sign/${quote.signingToken}`;
+          const downloadUrl = buildAppUrl(`/sign/${quote.signingToken}`, req);
 
           const signedDate = new Date().toLocaleString('en-US', {
             weekday: 'long',
@@ -1602,23 +1598,11 @@ export function registerQuoteRoutes(app: Express) {
       const timestamp = Date.now();
       const customPath = `cover-photos/${timestamp}-${sanitizedFilename}`;
       
-      const privateDir = objectStorageService.getPrivateObjectDir();
-      const fullPath = `${privateDir}/${customPath}`;
-      
-      const pathParts = fullPath.split('/');
-      const bucketName = pathParts[1];
-      const objectName = pathParts.slice(2).join('/');
-      
-      const bucket = objectStorageClient.bucket(bucketName);
-      const cloudFile = bucket.file(objectName);
-      
-      await cloudFile.save(file.buffer, {
-        metadata: {
-          contentType: file.mimetype,
-        },
+      const uploadedObject = await objectStorageService.uploadPublicObjectEntityBuffer(customPath, file.buffer, {
+        contentType: file.mimetype,
       });
       
-      const publicUrl = `${req.protocol}://${req.get('host')}/quote-images/${sanitizedFilename}`;
+      const publicUrl = uploadedObject.publicUrl ?? buildAppUrl(`/quote-images/${sanitizedFilename}`, req);
       
       const photoData = {
         quoteId: params.data.quoteId,
@@ -1664,23 +1648,11 @@ export function registerQuoteRoutes(app: Express) {
       const timestamp = Date.now();
       const customPath = `product-renderings/${timestamp}-${sanitizedFilename}`;
       
-      const privateDir = objectStorageService.getPrivateObjectDir();
-      const fullPath = `${privateDir}/${customPath}`;
-      
-      const pathParts = fullPath.split('/');
-      const bucketName = pathParts[1];
-      const objectName = pathParts.slice(2).join('/');
-      
-      const bucket = objectStorageClient.bucket(bucketName);
-      const cloudFile = bucket.file(objectName);
-      
-      await cloudFile.save(file.buffer, {
-        metadata: {
-          contentType: file.mimetype,
-        },
+      const uploadedObject = await objectStorageService.uploadPublicObjectEntityBuffer(customPath, file.buffer, {
+        contentType: file.mimetype,
       });
       
-      const publicUrl = `${req.protocol}://${req.get('host')}/quote-images/${sanitizedFilename}`;
+      const publicUrl = uploadedObject.publicUrl ?? buildAppUrl(`/quote-images/${sanitizedFilename}`, req);
       
       const renderingData = {
         quoteId: params.data.quoteId,

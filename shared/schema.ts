@@ -1,10 +1,9 @@
-import { pgTable, text, serial, integer, decimal, timestamp, boolean, varchar, jsonb, index } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, decimal, timestamp, boolean, varchar, jsonb, index, type AnyPgColumn } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { sql } from "drizzle-orm";
 
-// Session storage table.
-// (IMPORTANT) This table is mandatory for Replit Auth, don't drop it.
+// Session storage table for staff authentication.
 export const sessions = pgTable(
   "sessions",
   {
@@ -160,8 +159,7 @@ export const quotes = pgTable("quotes", {
   qbSyncedAt: timestamp("qb_synced_at"),
   qbSyncError: text("qb_sync_error"),
   // Version control fields
-  // @ts-expect-error - Self-referencing foreign key causes TypeScript inference issue
-  parentQuoteId: integer("parent_quote_id").references((): typeof quotes => quotes, { onDelete: "set null" }), // Links versions together
+  parentQuoteId: integer("parent_quote_id").references((): AnyPgColumn => quotes.id, { onDelete: "set null" }), // Links versions together
   versionNumber: integer("version_number").notNull().default(1), // Version number (1, 2, 3, etc.)
   isLatestVersion: boolean("is_latest_version").notNull().default(true), // Flag for filtering to latest version
   createdAt: timestamp("created_at").defaultNow(),
@@ -676,4 +674,3 @@ export type User = typeof users.$inferSelect;
 export const getProductManufacturer = (product: { manufacturer: string | null }) => {
   return product.manufacturer || "Unknown";
 };
-

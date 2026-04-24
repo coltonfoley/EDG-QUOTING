@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { FileText, Upload, X, Download, Loader2, Eye, Image, Camera } from 'lucide-react';
-import { formatCurrency, calculateQuoteTotals, calculateLineItemTotal } from '@/lib/utils';
+import { formatCurrency, calculateQuoteTotals, calculateLineItemTotal, type QuoteTotalsLineItem } from '@/lib/utils';
 import { getProxiedImageUrl } from '@/lib/image-utils';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import type { QuoteWithDetails, QuoteCoverPhoto, QuoteProductRendering } from '@shared/schema';
@@ -279,7 +279,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
   const productRenderings = getEffectiveProductRenderings();
 
   const totals = calculateQuoteTotals(
-    quote.lineItems.map(item => ({
+    quote.lineItems.map((item: QuoteTotalsLineItem) => ({
       quantity: item.quantity,
       unitPrice: item.unitPrice,
       markupType: item.markupType,

@@ -22,6 +22,7 @@ import { Link } from "wouter";
 import { AppHeader } from "@/components/app-header";
 import { useQuery } from "@tanstack/react-query";
 import { formatCurrency, cn, calculateQuoteTotals } from "@/lib/utils";
+import { calculateLineItemsValue } from "@/lib/quote-value";
 import { format, startOfMonth, endOfMonth, isWithinInterval } from "date-fns";
 import type { QuoteWithDetails, Account } from "@shared/schema";
 import { DEAL_STAGES, getDealStageById, isWonStage, isLostStage, isFinalStage, isActiveStage } from "@shared/dealStageConstants";
@@ -40,16 +41,7 @@ export default function Home() {
 
   // Sum line items with markup only; discounts, shipping, and tax adjustments are handled elsewhere
   function calculateQuoteTotal(quote: QuoteWithDetails): number {
-    return quote.lineItems.reduce((sum, item) => {
-      const qty = parseFloat(item.quantity.toString());
-      const price = parseFloat(item.unitPrice.toString());
-      const markup = parseFloat(item.markupValue.toString());
-      const baseTotal = qty * price;
-      const total = item.markupType === 'percentage' 
-        ? baseTotal + (baseTotal * (markup / 100))
-        : baseTotal + markup;
-      return sum + total;
-    }, 0);
+    return calculateLineItemsValue(quote.lineItems);
   }
 
   // Calculate quote margin (profit)

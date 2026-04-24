@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { FileText, Bookmark, Plus, Eye, Send, Mail, CheckCircle, AlertCircle, Clock, Link2, Copy, Download, PenTool, Package } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { formatCurrency, calculateQuoteTotals } from "@/lib/utils";
+import { formatCurrency, calculateQuoteTotals, type QuoteTotalsLineItem } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import type { QuoteWithDetails, ContractTemplate } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
@@ -328,7 +328,7 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
   };
 
   const totals = calculateQuoteTotals(
-    quote.lineItems.map(item => ({
+    quote.lineItems.map((item: QuoteTotalsLineItem) => ({
       quantity: item.quantity,
       unitPrice: item.unitPrice,
       markupType: item.markupType,
