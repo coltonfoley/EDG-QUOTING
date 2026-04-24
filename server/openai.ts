@@ -1245,7 +1245,10 @@ async function processImagesInSingleCall(images: Array<{index: number, imageBase
 async function consolidateQuoteParts(parts: ExtractedQuoteWithPageRefs[]): Promise<ExtractedQuote> {
   try {
     // Consolidate multiple extraction results into a single quote
-    const consolidated: ExtractedQuote = {
+    const consolidated: ExtractedQuote & {
+      customer: NonNullable<ExtractedQuote["customer"]>;
+      lineItems: NonNullable<ExtractedQuote["lineItems"]>;
+    } = {
       customer: { 
         name: null, email: null, phone: null, company: null, address: null,
         streetAddress: null, addressLine2: null, city: null, state: null, zipCode: null, country: null

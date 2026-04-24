@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { storage } from './storage';
+import { buildAppUrl } from './config';
 
 const QB_API_BASE = process.env.NODE_ENV === 'production' 
   ? 'https://quickbooks.api.intuit.com'
@@ -309,7 +310,7 @@ export class QuickBooksService {
 export function createQuickBooksService(): QuickBooksService | null {
   const clientId = process.env.QB_CLIENT_ID;
   const clientSecret = process.env.QB_CLIENT_SECRET;
-  const redirectUri = process.env.QB_REDIRECT_URI || `${process.env.REPLIT_DEV_DOMAIN}/api/quickbooks/callback`;
+  const redirectUri = process.env.QB_REDIRECT_URI || buildAppUrl("/api/quickbooks/callback");
 
   if (!clientId || !clientSecret) {
     console.warn('QuickBooks credentials not configured');

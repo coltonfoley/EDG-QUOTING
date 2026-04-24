@@ -1,4 +1,5 @@
 import { Storage, File } from "@google-cloud/storage";
+import { put } from "@vercel/blob";
 import { Response } from "express";
 import { randomUUID } from "crypto";
 import {
@@ -11,24 +12,60 @@ import {
 
 const REPLIT_SIDECAR_ENDPOINT = "http://127.0.0.1:1106";
 
-// The object storage client is used to interact with the object storage service.
-export const objectStorageClient = new Storage({
-  credentials: {
-    audience: "replit",
-    subject_token_type: "access_token",
-    token_url: `${REPLIT_SIDECAR_ENDPOINT}/token`,
-    type: "external_account",
-    credential_source: {
-      url: `${REPLIT_SIDECAR_ENDPOINT}/credential`,
-      format: {
-        type: "json",
-        subject_token_field_name: "access_token",
+export type ObjectStorageProvider = "replit" | "vercel-blob";
+
+type SignObjectUrlParams = {
+  bucketName: string;
+  objectName: string;
+  method: "GET" | "PUT" | "DELETE" | "HEAD";
+  ttlSec: number;
+};
+
+type UploadObjectBufferOptions = {
+  contentType?: string;
+};
+
+type UploadedObjectEntity = {
+  provider: ObjectStorageProvider;
+  objectPath: string;
+  publicUrl?: string;
+};
+
+export function getObjectStorageProvider(): ObjectStorageProvider {
+  const provider = (process.env.OBJECT_STORAGE_PROVIDER || "replit").trim();
+
+  if (provider === "replit" || provider === "vercel-blob") {
+    return provider;
+  }
+
+  throw new Error(
+    `Unsupported OBJECT_STORAGE_PROVIDER "${provider}". Supported providers: replit, vercel-blob.`
+  );
+}
+
+function createReplitObjectStorageClient(): Storage {
+  return new Storage({
+    credentials: {
+      audience: "replit",
+      subject_token_type: "access_token",
+      token_url: `${REPLIT_SIDECAR_ENDPOINT}/token`,
+      type: "external_account",
+      credential_source: {
+        url: `${REPLIT_SIDECAR_ENDPOINT}/credential`,
+        format: {
+          type: "json",
+          subject_token_field_name: "access_token",
+        },
       },
+      universe_domain: "googleapis.com",
     },
-    universe_domain: "googleapis.com",
-  },
-  projectId: "",
-});
+    projectId: "",
+  });
+}
+
+// Legacy Replit/GCS-compatible client. New code should prefer ObjectStorageService
+// methods so Vercel Blob can be supported without touching route handlers.
+export const objectStorageClient = createReplitObjectStorageClient();
 
 export class ObjectNotFoundError extends Error {
   constructor() {
@@ -41,6 +78,52 @@ export class ObjectNotFoundError extends Error {
 // The object storage service is used to interact with the object storage service.
 export class ObjectStorageService {
   constructor() {}
+
+  async uploadPublicObjectEntityBuffer(
+    objectId: string,
+    buffer: Buffer,
+    options: UploadObjectBufferOptions = {}
+  ): Promise<UploadedObjectEntity> {
+    const normalizedObjectId = normalizeObjectEntityId(objectId);
+
+    switch (getObjectStorageProvider()) {
+      case "replit":
+        return this.uploadReplitObjectEntityBuffer(
+          normalizedObjectId,
+          buffer,
+          options
+        );
+      case "vercel-blob":
+        return uploadVercelBlobObjectEntityBuffer(
+          normalizedObjectId,
+          buffer,
+          options
+        );
+    }
+  }
+
+  private async uploadReplitObjectEntityBuffer(
+    objectId: string,
+    buffer: Buffer,
+    options: UploadObjectBufferOptions
+  ): Promise<UploadedObjectEntity> {
+    const privateObjectDir = this.getPrivateObjectDir();
+    const fullPath = `${privateObjectDir}/${objectId}`;
+    const { bucketName, objectName } = parseObjectPath(fullPath);
+    const bucket = objectStorageClient.bucket(bucketName);
+    const file = bucket.file(objectName);
+
+    await file.save(buffer, {
+      metadata: {
+        contentType: options.contentType || "application/octet-stream",
+      },
+    });
+
+    return {
+      provider: "replit",
+      objectPath: `/objects/${objectId}`,
+    };
+  }
 
   // Gets the public object search paths.
   getPublicObjectSearchPaths(): Array<string> {
@@ -76,6 +159,8 @@ export class ObjectStorageService {
 
   // Search for a public object from the search paths.
   async searchPublicObject(filePath: string): Promise<File | null> {
+    assertReplitObjectStorage("Public object search");
+
     for (const searchPath of this.getPublicObjectSearchPaths()) {
       const fullPath = `${searchPath}/${filePath}`;
 
@@ -132,6 +217,8 @@ export class ObjectStorageService {
 
   // Gets the upload URL for an object entity with custom path support
   async getObjectEntityUploadURL(customPath?: string): Promise<{url: string, objectPath: string}> {
+    assertReplitObjectStorage("Signed browser upload URLs");
+
     const privateObjectDir = this.getPrivateObjectDir();
     if (!privateObjectDir) {
       throw new Error(
@@ -161,6 +248,8 @@ export class ObjectStorageService {
 
   // Gets the object entity file from the object path.
   async getObjectEntityFile(objectPath: string): Promise<File> {
+    assertReplitObjectStorage("Object entity file lookup");
+
     if (!objectPath.startsWith("/objects/")) {
       throw new ObjectNotFoundError();
     }
@@ -189,6 +278,8 @@ export class ObjectStorageService {
   normalizeObjectEntityPath(
     rawPath: string,
   ): string {
+    assertReplitObjectStorage("Object entity path normalization");
+
     if (!rawPath.startsWith("https://storage.googleapis.com/")) {
       return rawPath;
     }
@@ -270,12 +361,24 @@ async function signObjectURL({
   objectName,
   method,
   ttlSec,
-}: {
-  bucketName: string;
-  objectName: string;
-  method: "GET" | "PUT" | "DELETE" | "HEAD";
-  ttlSec: number;
-}): Promise<string> {
+}: SignObjectUrlParams): Promise<string> {
+  switch (getObjectStorageProvider()) {
+    case "replit":
+      return signReplitObjectURL({ bucketName, objectName, method, ttlSec });
+    case "vercel-blob":
+      throw new Error(
+        "Signed object URLs are not supported for OBJECT_STORAGE_PROVIDER=vercel-blob yet. " +
+          "Use server-side uploads or add Vercel Blob client-upload routes."
+      );
+  }
+}
+
+async function signReplitObjectURL({
+  bucketName,
+  objectName,
+  method,
+  ttlSec,
+}: SignObjectUrlParams): Promise<string> {
   const request = {
     bucket_name: bucketName,
     object_name: objectName,
@@ -295,10 +398,48 @@ async function signObjectURL({
   if (!response.ok) {
     throw new Error(
       `Failed to sign object URL, errorcode: ${response.status}, ` +
-        `make sure you're running on Replit`
+        `make sure OBJECT_STORAGE_PROVIDER=replit is running on Replit`
     );
   }
 
   const { signed_url: signedURL } = await response.json();
   return signedURL;
+}
+
+function normalizeObjectEntityId(objectId: string): string {
+  const normalizedObjectId = objectId.replace(/^\/+/, "");
+
+  if (!normalizedObjectId || normalizedObjectId.includes("..")) {
+    throw new Error("Invalid object id");
+  }
+
+  return normalizedObjectId;
+}
+
+async function uploadVercelBlobObjectEntityBuffer(
+  objectId: string,
+  buffer: Buffer,
+  options: UploadObjectBufferOptions
+): Promise<UploadedObjectEntity> {
+  const blob = await put(objectId, buffer, {
+    access: "public",
+    addRandomSuffix: false,
+    allowOverwrite: true,
+    cacheControlMaxAge: 60 * 60 * 24 * 30,
+    contentType: options.contentType || "application/octet-stream",
+  });
+
+  return {
+    provider: "vercel-blob",
+    objectPath: blob.pathname,
+    publicUrl: blob.url,
+  };
+}
+
+function assertReplitObjectStorage(feature: string) {
+  if (getObjectStorageProvider() !== "replit") {
+    throw new Error(
+      `${feature} is still Replit-only. Convert this flow to Vercel Blob client uploads before enabling it with OBJECT_STORAGE_PROVIDER=vercel-blob.`
+    );
+  }
 }

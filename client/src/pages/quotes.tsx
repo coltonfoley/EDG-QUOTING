@@ -18,6 +18,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { LoadingSpinner } from "@/components/loading-spinner";
 import { QuoteImporter } from "@/components/quote-importer";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { calculateLineItemsValue } from "@/lib/quote-value";
 import type { QuoteWithDetails } from "@shared/schema";
 
 const SimpleProposalGenerator = lazy(() => import("@/components/simple-proposal-generator").then(m => ({ default: m.SimpleProposalGenerator })));
@@ -105,17 +106,7 @@ export default function Quotes() {
 
   const totalQuotes = quotes?.length || 0;
   const totalValue = quotes?.reduce((sum, quote) => {
-    const lineItemsTotal = quote.lineItems.reduce((itemSum, item) => {
-      const qty = parseFloat(item.quantity.toString());
-      const price = parseFloat(item.unitPrice.toString());
-      const markup = parseFloat(item.markupValue.toString());
-      const baseTotal = qty * price;
-      const total = item.markupType === 'percentage' 
-        ? baseTotal + (baseTotal * (markup / 100))
-        : baseTotal + markup;
-      return itemSum + total;
-    }, 0);
-    return sum + lineItemsTotal;
+    return sum + calculateLineItemsValue(quote.lineItems);
   }, 0) || 0;
 
   if (isLoading) {
@@ -341,17 +332,8 @@ export default function Quotes() {
                     </tr>
                   </thead>
                   <tbody className="bg-card divide-y divide-border">
-                    {(filteredQuotes || quotes).map((quote) => {
-                      const total = quote.lineItems.reduce((sum, item) => {
-                        const qty = parseFloat(item.quantity.toString());
-                        const price = parseFloat(item.unitPrice.toString());
-                        const markup = parseFloat(item.markupValue.toString());
-                        const baseTotal = qty * price;
-                        const itemTotal = item.markupType === 'percentage' 
-                          ? baseTotal + (baseTotal * (markup / 100))
-                          : baseTotal + markup;
-                        return sum + itemTotal;
-                      }, 0);
+	                    {(filteredQuotes || quotes).map((quote) => {
+	                      const total = calculateLineItemsValue(quote.lineItems);
 
                       return (
                         <tr key={quote.id} className="hover:bg-muted/30">

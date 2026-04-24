@@ -97,6 +97,7 @@ function mapLeadToQuote(lead: LeadIntakePayload, accountId: number): InsertQuote
     discount: "0",
     tariffRate: "0",
     shipping: "0",
+    isShippingTaxable: false,
   };
 }
 
