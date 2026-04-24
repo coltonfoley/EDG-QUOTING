@@ -524,7 +524,7 @@ export default function Home() {
                   <div className="text-center py-6">
                     <FileText className="h-12 w-12 text-edg-grey mx-auto mb-3 opacity-50" />
                     <p className="text-edg-grey text-sm">No recent quotes</p>
-                    <Link href="/quote-builder">
+                    <Link href="/quotes/new">
                       <Button variant="outline" size="sm" className="mt-2">
                         Create Your First Quote
                       </Button>
@@ -543,7 +543,7 @@ export default function Home() {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <Link href="/pipeline">
+              <Link href="/quotes/new">
                 <Button variant="outline" className="w-full justify-start">
                   <UserPlus className="h-4 w-4 mr-2 text-edg-teal" />
                   New Lead
@@ -561,7 +561,7 @@ export default function Home() {
                   View Accounts
                 </Button>
               </Link>
-              <Link href="/quote-builder">
+              <Link href="/quotes/new">
                 <Button variant="outline" className="w-full justify-start">
                   <FileText className="h-4 w-4 mr-2 text-edg-teal" />
                   Create Quote

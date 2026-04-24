@@ -20,6 +20,7 @@ import { registerLineItemRoutes } from "./routes/lineItemRoutes";
 import { registerProductRoutes } from "./routes/productRoutes";
 import { registerImageRoutes } from "./routes/imageRoutes";
 import { registerAIAssistantRoutes } from "./routes/aiAssistantRoutes";
+import { registerLeadIntakeRoutes } from "./routes/leadIntakeRoutes";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
@@ -65,6 +66,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   registerImageRoutes(app);
+  registerLeadIntakeRoutes(app);
   registerAccountRoutes(app);
   registerQuoteRoutes(app);
   registerLineItemRoutes(app);
