@@ -73,12 +73,12 @@ const isProduction = value("NODE_ENV") === "production";
 requireVars(["DATABASE_URL", "SESSION_SECRET"], "The app needs these before it can start reliably.");
 
 if (isProduction) {
-  requireVars(["APP_BASE_URL"], "Production email links and redirects need the public app URL.");
+  requireOneOf(["APP_BASE_URL", "VERCEL_URL"], "Production email links and redirects need the public app URL.");
 } else if (!has("APP_BASE_URL")) {
   warnings.push("APP_BASE_URL is not set. Local links will fall back to Replit/localhost behavior.");
 }
 
-if (isProduction && value("APP_BASE_URL").includes("localhost")) {
+if (isProduction && has("APP_BASE_URL") && value("APP_BASE_URL").includes("localhost")) {
   errors.push("APP_BASE_URL points at localhost in production.");
 }
 

@@ -11,7 +11,8 @@ As of 2026-04-24:
 - EDG Vercel project `edgpatioshade/rainmaker` exists and is linked locally.
 - The project is set to Node.js `22.x`.
 - `vercel build --yes` passes locally when placeholder Vercel-target env vars are supplied.
-- No real Preview/Production environment variables have been added to the Vercel project yet.
+- A Neon database named `rainmaker-staging` is connected to the Vercel `rainmaker` project for Preview and Development.
+- The Neon connection creates `DATABASE_URL` and related encrypted database variables for Preview and Development only.
 - No Vercel preview deployment has been created yet.
 
 ## Runtime Shape
@@ -39,9 +40,16 @@ Set these in the Rainmaker Vercel project for Preview first:
 
 ```env
 NODE_ENV=production
-APP_BASE_URL=https://rainmaker-git-preview-url.vercel.app
+APP_BASE_URL=
 DATABASE_URL=
 SESSION_SECRET=
+ADMIN_USERNAME=
+ADMIN_PASSWORD=
+ADMIN_EMAIL=
+ADMIN_FIRST_NAME=
+ADMIN_LAST_NAME=
+ADMIN_ROLE=admin
+ADMIN_UPDATE_PASSWORD=false
 OBJECT_STORAGE_PROVIDER=vercel-blob
 BLOB_READ_WRITE_TOKEN=
 EMAIL_PROVIDER=resend
@@ -77,12 +85,20 @@ npm run build
 npm run storage:inventory
 ```
 
+After a fresh staging database is provisioned and migrated, create the first
+staff login from environment variables instead of using the legacy hardcoded dev
+admin:
+
+```bash
+ADMIN_ENV_FILE=.vercel/.env.preview.local npm run db:create-admin
+```
+
 To verify the Vercel-target variable set without real secrets, this shape should
 pass:
 
 ```bash
 NODE_ENV=production \
-APP_BASE_URL=https://rainmaker-staging.edgpatioshade.com \
+VERCEL_URL=rainmaker-git-preview-url.vercel.app \
 DATABASE_URL=postgres://user:pass@localhost:5432/edg \
 SESSION_SECRET=dev-session-secret \
 OBJECT_STORAGE_PROVIDER=vercel-blob \

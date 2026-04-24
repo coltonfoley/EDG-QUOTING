@@ -49,6 +49,9 @@ export function getAppBaseUrl(req?: Request): string {
   const configuredUrl = withHttpsIfNeeded(process.env.APP_BASE_URL);
   if (configuredUrl) return configuredUrl;
 
+  const vercelUrl = withHttpsIfNeeded(process.env.VERCEL_URL);
+  if (vercelUrl) return vercelUrl;
+
   const replitUrl = getReplitBaseUrl();
   if (replitUrl) return replitUrl;
 
