@@ -617,12 +617,22 @@ export class DatabaseStorage implements IStorage {
           const updated = await this.updateAccount(duplicate.id, {
             // Only update fields that have values in the new data
             ...(insertAccount.name && { name: insertAccount.name }),
+            ...(insertAccount.firstName !== undefined && { firstName: insertAccount.firstName }),
+            ...(insertAccount.lastName !== undefined && { lastName: insertAccount.lastName }),
             ...(insertAccount.email && { email: insertAccount.email }),
             ...(insertAccount.phone && { phone: insertAccount.phone }),
             ...(insertAccount.company !== undefined && { company: insertAccount.company }),
             ...(insertAccount.accountType && { accountType: insertAccount.accountType }),
             ...(insertAccount.paymentTerms !== undefined && { paymentTerms: insertAccount.paymentTerms }),
             ...(insertAccount.billingAddress !== undefined && { billingAddress: insertAccount.billingAddress }),
+            ...(insertAccount.streetAddress !== undefined && { streetAddress: insertAccount.streetAddress }),
+            ...(insertAccount.addressLine2 !== undefined && { addressLine2: insertAccount.addressLine2 }),
+            ...(insertAccount.city !== undefined && { city: insertAccount.city }),
+            ...(insertAccount.state !== undefined && { state: insertAccount.state }),
+            ...(insertAccount.zipCode !== undefined && { zipCode: insertAccount.zipCode }),
+            ...(insertAccount.country !== undefined && { country: insertAccount.country }),
+            ...(insertAccount.placeId !== undefined && { placeId: insertAccount.placeId }),
+            ...(insertAccount.secondaryContacts !== undefined && { secondaryContacts: insertAccount.secondaryContacts }),
           });
           
           console.log(`Updated existing account ${duplicate.id} instead of creating duplicate`);
