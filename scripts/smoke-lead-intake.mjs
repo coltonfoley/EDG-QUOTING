@@ -45,4 +45,5 @@ if (!response.ok) {
 }
 
 console.log("Lead intake smoke test passed.");
+console.log("Rainmaker accepted the lead without creating a quote shell.");
 console.log(JSON.stringify(body, null, 2));

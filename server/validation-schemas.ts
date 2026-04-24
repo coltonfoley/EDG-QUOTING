@@ -57,7 +57,14 @@ export const insertAccountSchema = baseAccountSchema.extend({
   state: z.string().max(100, "State is too long").optional().nullable(),
   zipCode: z.string().max(20, "ZIP code is too long").optional().nullable(),
   country: z.string().max(255, "Country is too long").optional().nullable(),
-  placeId: z.string().max(500, "Place ID is too long").optional().nullable()
+  placeId: z.string().max(500, "Place ID is too long").optional().nullable(),
+  leadStatus: z.enum(["new", "contacted", "qualified", "unresponsive", "converted", "archived"]).optional().nullable(),
+  leadSource: z.string().max(255, "Lead source is too long").optional().nullable(),
+  leadProjectType: z.string().max(255, "Lead project type is too long").optional().nullable(),
+  leadMessage: z.string().max(5000, "Lead message is too long").optional().nullable(),
+  leadReceivedAt: z.coerce.date().optional().nullable(),
+  leadLastContactedAt: z.coerce.date().optional().nullable(),
+  leadConvertedAt: z.coerce.date().optional().nullable()
 });
 
 // More lenient update schema for accounts that handles empty strings and partial updates
@@ -138,7 +145,23 @@ export const updateAccountSchema = z.object({
     (v) => (v === "" ? null : v),
     z.string().max(500, "Place ID is too long").optional().nullable()
   ),
-  secondaryContacts: z.any().optional().nullable()
+  secondaryContacts: z.any().optional().nullable(),
+  leadStatus: z.enum(["new", "contacted", "qualified", "unresponsive", "converted", "archived"]).optional().nullable(),
+  leadSource: z.preprocess(
+    (v) => (v === "" ? null : v),
+    z.string().max(255, "Lead source is too long").optional().nullable()
+  ),
+  leadProjectType: z.preprocess(
+    (v) => (v === "" ? null : v),
+    z.string().max(255, "Lead project type is too long").optional().nullable()
+  ),
+  leadMessage: z.preprocess(
+    (v) => (v === "" ? null : v),
+    z.string().max(5000, "Lead message is too long").optional().nullable()
+  ),
+  leadReceivedAt: z.coerce.date().optional().nullable(),
+  leadLastContactedAt: z.coerce.date().optional().nullable(),
+  leadConvertedAt: z.coerce.date().optional().nullable()
 });
 
 // Legacy Customer validation for backward compatibility
@@ -901,4 +924,3 @@ export const submitSignatureSchema = z.object({
   signatureData: signatureDataSchema,
   signerType: z.enum(["client", "company"], { errorMap: () => ({ message: "Signer type must be 'client' or 'company'" }) })
 });
-

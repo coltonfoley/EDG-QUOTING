@@ -11,12 +11,11 @@ import {
   TrendingUp, 
   DollarSign,
   Target,
-  UserPlus,
   ChevronRight,
   Activity,
-  Calendar,
   Award,
-  BarChart3
+  BarChart3,
+  Inbox
 } from "lucide-react";
 import { Link } from "wouter";
 import { AppHeader } from "@/components/app-header";
@@ -39,6 +38,17 @@ export default function Home() {
     queryKey: ['/api/accounts'],
   });
 
+  const { data: newLeads, isLoading: leadsLoading } = useQuery<Account[]>({
+    queryKey: ['/api/leads', 'new'],
+    queryFn: async () => {
+      const response = await fetch('/api/leads?status=new&limit=200', {
+        credentials: 'include',
+      });
+      if (!response.ok) throw new Error('Failed to fetch leads');
+      return response.json();
+    },
+  });
+
   // Sum line items with markup only; discounts, shipping, and tax adjustments are handled elsewhere
   function calculateQuoteTotal(quote: QuoteWithDetails): number {
     return calculateLineItemsValue(quote.lineItems);
@@ -59,6 +69,7 @@ export default function Home() {
 
   // Calculate metrics
   const metrics = {
+    newLeads: newLeads?.length || 0,
     totalAccounts: accounts?.length || 0,
     activeDeals: quotes?.filter(q => isActiveStage(q.dealStage || 'new_lead')).length || 0,
     totalDeals: quotes?.length || 0,
@@ -159,7 +170,7 @@ export default function Home() {
   };
 
 
-  const isLoading = quotesLoading || accountsLoading;
+  const isLoading = quotesLoading || accountsLoading || leadsLoading;
 
   return (
     <div className="min-h-screen bg-background">
@@ -173,7 +184,28 @@ export default function Home() {
         </div>
 
         {/* Key Metrics Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
+          <Card className="border-l-4 border-l-sky-500">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm font-medium text-edg-grey">
+                  New Leads
+                </CardTitle>
+                <Inbox className="h-4 w-4 text-sky-500" />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-edg-black">
+                {isLoading ? "-" : metrics.newLeads}
+              </div>
+              <Link href="/leads">
+                <Button variant="link" className="mt-1 h-auto p-0 text-xs text-edg-teal">
+                  View website leads
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
+
           <Card className="border-l-4 border-l-edg-teal">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
@@ -535,10 +567,10 @@ export default function Home() {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <Link href="/quotes/new">
+              <Link href="/leads">
                 <Button variant="outline" className="w-full justify-start">
-                  <UserPlus className="h-4 w-4 mr-2 text-edg-teal" />
-                  New Lead
+                  <Inbox className="h-4 w-4 mr-2 text-edg-teal" />
+                  Website Leads
                 </Button>
               </Link>
               <Link href="/pipeline">

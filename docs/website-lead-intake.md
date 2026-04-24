@@ -8,9 +8,9 @@ to Rainmaker instead of storing them in a separate lead database.
 1. A visitor submits a website form.
 2. The website `POST /api/leads` route validates spam/rate-limit rules.
 3. The website forwards the lead to Rainmaker `POST /api/leads/intake`.
-4. Rainmaker creates or updates an account.
-5. Rainmaker creates a quote shell in the `new_lead` stage.
-6. Jacob works the lead from the Rainmaker pipeline.
+4. Rainmaker creates or updates an account and marks it as a `new` lead.
+5. Jacob works the lead from the Rainmaker Leads page.
+6. Jacob creates a quote later when the lead is qualified.
 
 ## Rainmaker Endpoint
 
@@ -44,9 +44,10 @@ Successful response:
 ```json
 {
   "success": true,
+  "leadId": 123,
   "accountId": 123,
-  "quoteId": 456,
-  "quoteNumber": "QT-2026-..."
+  "leadStatus": "new",
+  "createdQuote": false
 }
 ```
 
@@ -84,4 +85,5 @@ RAINMAKER_API_KEY=<generated-rainmaker-api-key> \
 npm run smoke:lead-intake
 ```
 
-This creates a test account/quote in the configured Rainmaker environment.
+This creates or updates a test lead account in the configured Rainmaker
+environment. It does not create a quote.

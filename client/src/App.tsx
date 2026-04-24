@@ -21,6 +21,7 @@ const QuoteBuilder = lazy(() => import("@/pages/quote-builder"));
 const Products = lazy(() => import("@/pages/products"));
 const Landing = lazy(() => import("@/pages/landing"));
 const Home = lazy(() => import("@/pages/home"));
+const Leads = lazy(() => import("@/pages/leads"));
 const AuthPage = lazy(() => import("@/pages/auth-page"));
 const AdminPage = lazy(() => import("@/pages/admin"));
 const ContractsPage = lazy(() => import("@/pages/contracts"));
@@ -105,6 +106,7 @@ function Router() {
             </Route>
             <Route path="/accounts" component={Accounts} />
             <Route path="/accounts/:id" component={AccountDetail} />
+            <Route path="/leads" component={Leads} />
             <Route path="/quotes" component={Quotes} />
             <Route path="/pipeline" component={Pipeline} />
             <Route path="/quotes/new" component={QuoteBuilder} />

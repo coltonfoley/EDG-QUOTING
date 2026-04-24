@@ -246,6 +246,13 @@ export class MemStorage {
       secondaryContacts: insertCustomer.secondaryContacts || null,
       qbCustomerId: null,
       googleContactId: null,
+      leadStatus: insertCustomer.leadStatus || null,
+      leadSource: insertCustomer.leadSource || null,
+      leadProjectType: insertCustomer.leadProjectType || null,
+      leadMessage: insertCustomer.leadMessage || null,
+      leadReceivedAt: insertCustomer.leadReceivedAt || null,
+      leadLastContactedAt: insertCustomer.leadLastContactedAt || null,
+      leadConvertedAt: insertCustomer.leadConvertedAt || null,
       createdAt: new Date(),
       updatedAt: new Date()
     };
@@ -642,6 +649,13 @@ export class DatabaseStorage implements IStorage {
             ...(insertAccount.country !== undefined && { country: insertAccount.country }),
             ...(insertAccount.placeId !== undefined && { placeId: insertAccount.placeId }),
             ...(insertAccount.secondaryContacts !== undefined && { secondaryContacts: insertAccount.secondaryContacts }),
+            ...(insertAccount.leadStatus !== undefined && { leadStatus: insertAccount.leadStatus }),
+            ...(insertAccount.leadSource !== undefined && { leadSource: insertAccount.leadSource }),
+            ...(insertAccount.leadProjectType !== undefined && { leadProjectType: insertAccount.leadProjectType }),
+            ...(insertAccount.leadMessage !== undefined && { leadMessage: insertAccount.leadMessage }),
+            ...(insertAccount.leadReceivedAt !== undefined && { leadReceivedAt: insertAccount.leadReceivedAt }),
+            ...(insertAccount.leadLastContactedAt !== undefined && { leadLastContactedAt: insertAccount.leadLastContactedAt }),
+            ...(insertAccount.leadConvertedAt !== undefined && { leadConvertedAt: insertAccount.leadConvertedAt }),
           });
           
           console.log(`Updated existing account ${duplicate.id} instead of creating duplicate`);
@@ -700,6 +714,13 @@ export class DatabaseStorage implements IStorage {
       secondaryContacts: accounts.secondaryContacts,
       qbCustomerId: accounts.qbCustomerId,
       googleContactId: accounts.googleContactId,
+      leadStatus: accounts.leadStatus,
+      leadSource: accounts.leadSource,
+      leadProjectType: accounts.leadProjectType,
+      leadMessage: accounts.leadMessage,
+      leadReceivedAt: accounts.leadReceivedAt,
+      leadLastContactedAt: accounts.leadLastContactedAt,
+      leadConvertedAt: accounts.leadConvertedAt,
       createdAt: accounts.createdAt,
       updatedAt: accounts.updatedAt,
       projectCount: sql<number>`
