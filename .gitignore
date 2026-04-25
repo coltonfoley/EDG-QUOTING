@@ -5,6 +5,8 @@ server/public
 vite.config.ts.*
 *.tar.gz
 .vercel
+.playwright-cli/
+output/
 
 # local secrets and deployment env
 .env
