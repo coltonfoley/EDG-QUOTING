@@ -61,8 +61,16 @@ function readBoolean(name: string, fallback = false) {
   return ["1", "true", "yes", "on"].includes(raw);
 }
 
+function getGoogleClientId() {
+  return process.env.GOOGLE_AUTH_CLIENT_ID?.trim();
+}
+
+function getGoogleClientSecret() {
+  return process.env.GOOGLE_AUTH_CLIENT_SECRET?.trim();
+}
+
 export function isGoogleAuthConfigured() {
-  return Boolean(process.env.GOOGLE_AUTH_CLIENT_ID && process.env.GOOGLE_AUTH_CLIENT_SECRET);
+  return Boolean(getGoogleClientId() && getGoogleClientSecret());
 }
 
 function makeGoogleOnlyPassword(email: string) {
@@ -185,10 +193,14 @@ export function setupAuth(app: Express) {
     if (googleStrategyRegistered) return true;
 
     googleStrategyPromise ??= (async () => {
+      const clientId = getGoogleClientId();
+      const clientSecret = getGoogleClientSecret();
+      if (!clientId || !clientSecret) return false;
+
       const config = await oidc.discovery(
         new URL("https://accounts.google.com"),
-        process.env.GOOGLE_AUTH_CLIENT_ID!,
-        process.env.GOOGLE_AUTH_CLIENT_SECRET,
+        clientId,
+        clientSecret,
       );
 
       const verify: VerifyFunction = async (tokens, verified) => {
