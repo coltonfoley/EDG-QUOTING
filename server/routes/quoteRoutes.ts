@@ -23,7 +23,7 @@ import {
   submitSignatureSchema
 } from "../validation-schemas";
 import multer from "multer";
-import { extractQuoteDataFromImages, extractQuoteDataFromPDF } from "../openai";
+import { extractQuoteDataFromImages, extractQuoteDataFromPDF, isOpenAIConfigured } from "../openai";
 import { ObjectStorageService } from "../objectStorage";
 import { nanoid } from "nanoid";
 import { sendQuoteToOperations } from "../integrations/operations";
@@ -135,6 +135,19 @@ const rateLimitPDFProcessing = (req: any, res: any, next: any) => {
   
   next();
 };
+
+function rejectIfAIQuoteExtractionIsNotConfigured(res: any): boolean {
+  if (isOpenAIConfigured()) {
+    return false;
+  }
+
+  res.status(503).json({
+    message: "AI quote extraction is not configured for this environment. Set OPENAI_API_KEY before using PDF import.",
+    success: false,
+    code: "AI_NOT_CONFIGURED",
+  });
+  return true;
+}
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -471,6 +484,10 @@ export function registerQuoteRoutes(app: Express) {
         });
       }
 
+      if (rejectIfAIQuoteExtractionIsNotConfigured(res)) {
+        return;
+      }
+
       console.log(`📄 Processing PDF directly with GPT-5: ${file.originalname} (${(file.size / 1024 / 1024).toFixed(2)}MB)`);
 
       const extractedQuote = await extractQuoteDataFromPDF(file.buffer);
@@ -547,6 +564,10 @@ export function registerQuoteRoutes(app: Express) {
       }
 
       console.log(`🔍 Processing vision-based extraction for ${filename} (${pages.length} pages)`);
+
+      if (rejectIfAIQuoteExtractionIsNotConfigured(res)) {
+        return;
+      }
 
       const extractedQuote = await extractQuoteDataFromImages(pages);
       
