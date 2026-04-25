@@ -1,6 +1,3 @@
-import sharp from 'sharp';
-import puppeteer from 'puppeteer';
-
 interface PDFPageImage {
   index: number;
   imageBase64: string;
@@ -15,6 +12,7 @@ export async function convertPDFToImagesServer(pdfBuffer: Buffer): Promise<PDFPa
     // First try Sharp - it can handle PDFs if libvips has PDFium enabled
     try {
       console.log('📄 Attempting PDF conversion with Sharp...');
+      const { default: sharp } = await import('sharp');
       
       // Get metadata to check page count
       const metadata = await sharp(pdfBuffer).metadata();
@@ -48,6 +46,7 @@ export async function convertPDFToImagesServer(pdfBuffer: Buffer): Promise<PDFPa
       console.log('⚠️ Sharp PDF conversion failed, trying Puppeteer fallback:', sharpError.message);
       
       // Fallback to Puppeteer with PDF.js
+      const { default: puppeteer } = await import('puppeteer');
       const browser = await puppeteer.launch({
         headless: true,
         args: ['--no-sandbox', '--disable-setuid-sandbox']

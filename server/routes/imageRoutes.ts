@@ -1,6 +1,5 @@
 import type { Express } from "express";
 import { isAuthenticated } from "../replitAuth";
-import sharp from "sharp";
 import { ObjectStorageService, ObjectNotFoundError, objectStorageClient } from "../objectStorage";
 import { ObjectPermission } from "../objectAcl";
 import {
@@ -74,6 +73,7 @@ export function registerImageRoutes(app: Express) {
         
         // 2. Normalize the image with Sharp (auto-orient + quality optimization)
         console.log(`🔧 Normalizing image with Sharp...`);
+        const { default: sharp } = await import("sharp");
         const normalizedBuffer = await sharp(fileContents)
           .rotate() // Auto-orient based on EXIF data - THIS FIXES THE ROTATION ISSUE
           .resize({
