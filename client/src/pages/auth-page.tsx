@@ -11,7 +11,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { insertUserSchema } from "@shared/schema";
 import { z } from "zod";
-import { Loader2 } from "lucide-react";
+import { Loader2, LogIn } from "lucide-react";
 
 const loginSchema = z.object({
   username: z.string().min(1, "Username is required"),
@@ -23,6 +23,7 @@ type LoginData = z.infer<typeof loginSchema>;
 export default function AuthPage() {
   const [, navigate] = useLocation();
   const { user, isLoading, loginMutation } = useAuth();
+  const [googleSignInEnabled, setGoogleSignInEnabled] = useState(false);
 
   // Redirect if already logged in
   useEffect(() => {
@@ -30,6 +31,23 @@ export default function AuthPage() {
       navigate("/");
     }
   }, [user, isLoading, navigate]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    fetch("/api/auth/google/status")
+      .then((response) => (response.ok ? response.json() : { enabled: false }))
+      .then((status) => {
+        if (!cancelled) setGoogleSignInEnabled(Boolean(status.enabled));
+      })
+      .catch(() => {
+        if (!cancelled) setGoogleSignInEnabled(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const loginForm = useForm<LoginData>({
     resolver: zodResolver(loginSchema),
@@ -63,6 +81,24 @@ export default function AuthPage() {
               <CardTitle>Login to your account</CardTitle>
             </CardHeader>
             <CardContent>
+              {googleSignInEnabled && (
+                <div className="mb-6 space-y-4">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => window.location.assign("/api/auth/google")}
+                  >
+                    <LogIn className="mr-2 h-4 w-4" />
+                    Continue with Google
+                  </Button>
+                  <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                    <div className="h-px flex-1 bg-border" />
+                    <span>Password login</span>
+                    <div className="h-px flex-1 bg-border" />
+                  </div>
+                </div>
+              )}
               <Form {...loginForm}>
                 <form onSubmit={loginForm.handleSubmit(onLogin)} className="space-y-4">
                   <FormField

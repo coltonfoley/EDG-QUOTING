@@ -82,6 +82,21 @@ if (isProduction && has("APP_BASE_URL") && value("APP_BASE_URL").includes("local
   errors.push("APP_BASE_URL points at localhost in production.");
 }
 
+const googleAuthEnabled = has("GOOGLE_AUTH_CLIENT_ID") || has("GOOGLE_AUTH_CLIENT_SECRET");
+if (googleAuthEnabled) {
+  requireVars(
+    ["GOOGLE_AUTH_CLIENT_ID", "GOOGLE_AUTH_CLIENT_SECRET"],
+    "Google Workspace sign-in needs OAuth client credentials."
+  );
+
+  const allowedDomain = value("GOOGLE_AUTH_ALLOWED_DOMAINS", value("GOOGLE_AUTH_ALLOWED_DOMAIN", "edgpatioshade.com"));
+  if (!allowedDomain.includes("edgpatioshade.com")) {
+    warnings.push("GOOGLE_AUTH_ALLOWED_DOMAIN(S) does not include edgpatioshade.com.");
+  }
+} else {
+  warnings.push("Google Workspace sign-in is not configured. Password login remains available.");
+}
+
 const storageProvider = allowValue("OBJECT_STORAGE_PROVIDER", ["replit", "vercel-blob"], "replit");
 
 if (storageProvider === "replit") {
@@ -154,6 +169,7 @@ console.log(
 );
 console.log(`Storage provider: ${storageProvider}`);
 console.log(`Email provider: ${emailProvider}`);
+console.log(`Google sign-in: ${googleAuthEnabled ? "configured" : "not configured"}`);
 
 if (warnings.length) {
   console.log("\nWarnings:");
