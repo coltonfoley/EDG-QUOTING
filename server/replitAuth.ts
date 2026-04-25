@@ -8,6 +8,11 @@ import { storage } from "./storage";
 import connectPg from "connect-pg-simple";
 import { User as SelectUser } from "@shared/schema";
 
+type PublicUser = Omit<
+  SelectUser,
+  "password" | "googleAccessToken" | "googleRefreshToken"
+>;
+
 declare global {
   namespace Express {
     interface User extends SelectUser {}
@@ -27,6 +32,21 @@ export async function comparePasswords(supplied: string, stored: string) {
   const hashedBuf = Buffer.from(hashed, "hex");
   const suppliedBuf = (await scryptAsync(supplied, salt, 64)) as Buffer;
   return timingSafeEqual(hashedBuf, suppliedBuf);
+}
+
+export function sanitizeUser(user: SelectUser): PublicUser;
+export function sanitizeUser(user: SelectUser | null | undefined): PublicUser | null;
+export function sanitizeUser(user: SelectUser | null | undefined): PublicUser | null {
+  if (!user) return null;
+
+  const {
+    password: _password,
+    googleAccessToken: _googleAccessToken,
+    googleRefreshToken: _googleRefreshToken,
+    ...publicUser
+  } = user;
+
+  return publicUser;
 }
 
 export function setupAuth(app: Express) {
@@ -96,7 +116,7 @@ export function setupAuth(app: Express) {
 
       req.login(user, (err) => {
         if (err) return next(err);
-        res.status(201).json(user);
+        res.status(201).json(sanitizeUser(user));
       });
     } catch (error) {
       res.status(500).json({ message: "Registration failed" });
@@ -104,7 +124,7 @@ export function setupAuth(app: Express) {
   });
 
   app.post("/api/login", passport.authenticate("local"), (req, res) => {
-    res.status(200).json(req.user);
+    res.status(200).json(sanitizeUser(req.user));
   });
 
   app.post("/api/logout", (req, res, next) => {
