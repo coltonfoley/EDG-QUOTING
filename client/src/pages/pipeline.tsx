@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { getStageUpdateToast } from "@/lib/operations-import-toast";
 import { formatCurrency, cn } from "@/lib/utils";
 import { calculateLineItemsValue } from "@/lib/quote-value";
 import { 
@@ -238,7 +239,7 @@ export default function Pipeline() {
         variant: "destructive",
       });
     },
-    onSuccess: (updatedQuote, { quoteId }) => {
+    onSuccess: (updatedQuote, { quoteId, dealStage }) => {
       // Merge server response into the cache to capture any server-side changes
       queryClient.setQueryData<QuoteWithDetails[]>(["/api/quotes"], (old) => {
         if (!old) return old;
@@ -249,10 +250,7 @@ export default function Pipeline() {
         );
       });
       
-      toast({
-        title: "Success",
-        description: "Deal stage updated successfully.",
-      });
+      toast(getStageUpdateToast(updatedQuote, dealStage));
     },
   });
 
