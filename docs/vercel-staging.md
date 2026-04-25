@@ -84,6 +84,7 @@ Run these before deploying a preview:
 
 ```bash
 npm run env:check
+npm run cutover:preflight
 npm run check
 npm run build
 vercel build --target=preview --yes
