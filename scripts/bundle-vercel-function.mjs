@@ -6,23 +6,31 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  writeFileSync,
 } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { build } from "esbuild";
 
+const outputDir = path.resolve(".vercel/output");
+const staticSourceDir = path.resolve("dist/public");
+const staticOutputDir = path.join(outputDir, "static");
 const functionDir = path.resolve(".vercel/output/functions/api/index.func");
 
-if (!existsSync(functionDir)) {
-  throw new Error("Missing Vercel function output. Run `vercel build --target=preview` first.");
+if (!existsSync(staticSourceDir)) {
+  throw new Error("Missing dist/public. Run `npm run build` before bundling the Vercel output.");
 }
+
+rmSync(outputDir, { recursive: true, force: true });
+mkdirSync(outputDir, { recursive: true });
+cpSync(staticSourceDir, staticOutputDir, { recursive: true });
+mkdirSync(path.join(functionDir, "api"), { recursive: true });
 
 await build({
   entryPoints: ["api/index.ts"],
   bundle: true,
   platform: "node",
-  packages: "external",
-  external: ["./vite"],
+  external: ["./vite", "bufferutil", "pg-native", "utf-8-validate"],
   format: "esm",
   banner: {
     js: 'import { createRequire as __createRequire } from "node:module"; const require = __createRequire(import.meta.url);',
@@ -30,6 +38,55 @@ await build({
   outfile: path.join(functionDir, "api/index.js"),
   sourcemap: true,
 });
+
+writeFileSync(
+  path.join(functionDir, "package.json"),
+  JSON.stringify({ type: "module" }, null, 2),
+);
+
+writeFileSync(
+  path.join(functionDir, ".vc-config.json"),
+  JSON.stringify(
+    {
+      handler: "api/index.js",
+      runtime: "nodejs22.x",
+      architecture: "arm64",
+      maxDuration: 300,
+      environment: {},
+      shouldDisableAutomaticFetchInstrumentation: false,
+      launcherType: "Nodejs",
+      shouldAddHelpers: true,
+      shouldAddSourcemapSupport: true,
+      awsLambdaHandler: "",
+    },
+    null,
+    2,
+  ),
+);
+
+writeFileSync(
+  path.join(outputDir, "config.json"),
+  JSON.stringify(
+    {
+      version: 3,
+      routes: [
+        { handle: "filesystem" },
+        { src: "^/health$", dest: "/api/index?__path=%2Fhealth", check: true },
+        { src: "^/api$", dest: "/api/index?__path=%2Fapi", check: true },
+        { src: "^/api(?:/(.*))$", dest: "/api/index?__path=%2Fapi%2F$1", check: true },
+        { src: "^/objects(?:/(.*))$", dest: "/api/index?__path=%2Fobjects%2F$1", check: true },
+        { src: "^/quote-images(?:/(.*))$", dest: "/api/index?__path=%2Fquote-images%2F$1", check: true },
+        { src: "^(?:/(.*))$", dest: "/index.html", check: true },
+      ],
+      framework: {
+        version: "5.4.19",
+      },
+      crons: [],
+    },
+    null,
+    2,
+  ),
+);
 
 const packageJson = JSON.parse(readFileSync("package.json", "utf8"));
 const sharpVersion =
@@ -83,4 +140,4 @@ if (sharpVersion) {
   rmSync(sharpTempDir, { recursive: true, force: true });
 }
 
-console.log("Bundled api/index.ts into the Vercel function output.");
+console.log("Prepared static assets and bundled api/index.ts into .vercel/output.");

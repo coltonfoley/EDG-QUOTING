@@ -10,7 +10,7 @@ As of 2026-04-25:
 
 - EDG Vercel project `edgpatioshade/rainmaker` exists and is linked locally.
 - The Vercel project and repo are both pinned to Node.js `22.x`.
-- Preview/staging used the prebuilt flow: `vercel build --target=preview --yes`, `npm run vercel:bundle-function`, then `vercel deploy --prebuilt`.
+- Preview/staging should use the direct prebuilt flow: `npm run build`, `npm run vercel:bundle-function`, then `vercel deploy --prebuilt`.
 - Production was redeployed through the Vercel REST API because the locally installed Vercel CLI is too old for the current production deploy endpoint.
 - A Neon database named `rainmaker-staging` is connected to the Vercel `rainmaker` project for Preview and Development.
 - The Neon connection creates `DATABASE_URL` and related encrypted database variables for Preview and Development only.
@@ -101,7 +101,6 @@ npm run env:check
 npm run cutover:preflight
 npm run check
 npm run build
-vercel build --target=preview --yes
 npm run vercel:bundle-function
 npm run storage:inventory
 npm run storage:migrate-to-blob
