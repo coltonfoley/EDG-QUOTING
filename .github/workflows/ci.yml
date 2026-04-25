@@ -29,3 +29,6 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      - name: Cutover preflight sanity
+        run: PREFLIGHT_HEALTH_URL=skip PREFLIGHT_SKIP_LOCAL_CHECKS=true npm run cutover:preflight
