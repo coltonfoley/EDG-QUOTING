@@ -1,5 +1,5 @@
 import { Storage, File } from "@google-cloud/storage";
-import { put } from "@vercel/blob";
+import { head, put } from "@vercel/blob";
 import { Response } from "express";
 import { randomUUID } from "crypto";
 import {
@@ -25,10 +25,36 @@ type UploadObjectBufferOptions = {
   contentType?: string;
 };
 
+type ClientUploadTargetOptions = {
+  allowedContentTypes?: string[];
+  cacheControlMaxAge?: number;
+  maximumSizeInBytes?: number;
+};
+
 type UploadedObjectEntity = {
   provider: ObjectStorageProvider;
   objectPath: string;
   publicUrl?: string;
+};
+
+type ObjectEntityUploadTarget =
+  | {
+      provider: "replit";
+      uploadMode: "signed-url";
+      uploadUrl: string;
+      objectPath: string;
+    }
+  | {
+      provider: "vercel-blob";
+      uploadMode: "vercel-blob-client-token";
+      clientToken: string;
+      objectPath: string;
+      pathname: string;
+    };
+
+type PublicObjectEntityMetadata = UploadedObjectEntity & {
+  contentType?: string;
+  size?: number;
 };
 
 export function getObjectStorageProvider(): ObjectStorageProvider {
@@ -78,6 +104,45 @@ export class ObjectNotFoundError extends Error {
 // The object storage service is used to interact with the object storage service.
 export class ObjectStorageService {
   constructor() {}
+
+  async getObjectEntityUploadTarget(
+    customPath?: string,
+    options: ClientUploadTargetOptions = {}
+  ): Promise<ObjectEntityUploadTarget> {
+    const objectId = normalizeObjectEntityId(customPath || `uploads/${randomUUID()}`);
+
+    switch (getObjectStorageProvider()) {
+      case "replit": {
+        const { url, objectPath } = await this.getObjectEntityUploadURL(objectId);
+        return {
+          provider: "replit",
+          uploadMode: "signed-url",
+          uploadUrl: url,
+          objectPath,
+        };
+      }
+      case "vercel-blob": {
+        const { generateClientTokenFromReadWriteToken } = await import("@vercel/blob/client");
+        const clientToken = await generateClientTokenFromReadWriteToken({
+          pathname: objectId,
+          addRandomSuffix: false,
+          allowOverwrite: true,
+          allowedContentTypes: options.allowedContentTypes,
+          cacheControlMaxAge: options.cacheControlMaxAge ?? 60 * 60 * 24 * 30,
+          maximumSizeInBytes: options.maximumSizeInBytes ?? 25 * 1024 * 1024,
+          validUntil: Date.now() + 15 * 60 * 1000,
+        });
+
+        return {
+          provider: "vercel-blob",
+          uploadMode: "vercel-blob-client-token",
+          clientToken,
+          objectPath: objectId,
+          pathname: objectId,
+        };
+      }
+    }
+  }
 
   async uploadPublicObjectEntityBuffer(
     objectId: string,
@@ -317,6 +382,26 @@ export class ObjectStorageService {
     return normalizedPath;
   }
 
+  async getPublicObjectEntityMetadata(rawPath: string): Promise<PublicObjectEntityMetadata> {
+    switch (getObjectStorageProvider()) {
+      case "replit":
+        return {
+          provider: "replit",
+          objectPath: this.normalizeObjectEntityPath(rawPath),
+        };
+      case "vercel-blob": {
+        const blob = await head(normalizeVercelBlobLocator(rawPath));
+        return {
+          provider: "vercel-blob",
+          objectPath: blob.pathname,
+          publicUrl: blob.url,
+          contentType: blob.contentType,
+          size: blob.size,
+        };
+      }
+    }
+  }
+
   // Checks if the user can access the object entity.
   async canAccessObjectEntity({
     userId,
@@ -414,6 +499,14 @@ function normalizeObjectEntityId(objectId: string): string {
   }
 
   return normalizedObjectId;
+}
+
+function normalizeVercelBlobLocator(rawPath: string): string {
+  if (/^https?:\/\//i.test(rawPath)) {
+    return rawPath;
+  }
+
+  return normalizeObjectEntityId(rawPath.replace(/^\/objects\//, ""));
 }
 
 async function uploadVercelBlobObjectEntityBuffer(
