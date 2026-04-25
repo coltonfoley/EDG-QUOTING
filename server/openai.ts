@@ -1197,7 +1197,7 @@ async function processImagesInSingleCall(images: Array<{index: number, imageBase
         },
       ],
       response_format: { type: "json_object" },
-      max_tokens: 6000, // gpt-5 doesn't support temperature parameter, do not use it
+      max_completion_tokens: 6000, // gpt-5 doesn't support temperature parameter, do not use it
     });
 
     const content = response.choices[0].message.content;

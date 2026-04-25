@@ -24,7 +24,7 @@ import {
 } from "../validation-schemas";
 import multer from "multer";
 import { extractQuoteDataFromImages, extractQuoteDataFromPDF, isOpenAIConfigured } from "../openai";
-import { ObjectStorageService } from "../objectStorage";
+import { ObjectStorageService, getObjectStorageProvider } from "../objectStorage";
 import { nanoid } from "nanoid";
 import { sendQuoteToOperations } from "../integrations/operations";
 import { buildAppUrl } from "../config";
@@ -33,6 +33,88 @@ const quotesQuerySchema = z.object({
   page: z.coerce.number().int().gte(1).optional(),
   pageSize: z.coerce.number().int().gte(1).lte(500).optional(),
 });
+
+const DEFAULT_MAX_QUOTE_PDF_UPLOAD_BYTES = 75 * 1024 * 1024;
+const quotePdfUploadUrlSchema = z.object({
+  filename: z.string().min(1).max(255),
+  fileSize: z.number().int().positive().optional(),
+});
+const uploadedQuotePdfImportSchema = z.object({
+  objectPath: z.string().min(1).max(1024),
+  filename: z.string().min(1).max(255),
+  fileSize: z.number().int().positive().optional(),
+});
+
+function getMaxQuotePdfUploadBytes(): number {
+  const configuredMb = Number(process.env.MAX_QUOTE_PDF_UPLOAD_MB || "");
+  if (Number.isFinite(configuredMb) && configuredMb > 0) {
+    return Math.floor(configuredMb * 1024 * 1024);
+  }
+
+  return DEFAULT_MAX_QUOTE_PDF_UPLOAD_BYTES;
+}
+
+function formatMegabytes(bytes: number): string {
+  return `${Math.round(bytes / 1024 / 1024)}MB`;
+}
+
+function sanitizeQuotePdfFilename(filename: string): string {
+  return filename
+    .replace(/[/\\]/g, "_")
+    .replace(/[^a-zA-Z0-9._ -]/g, "_")
+    .replace(/\s+/g, "_")
+    .slice(0, 120);
+}
+
+async function readUploadedQuotePdfBuffer(objectPath: string): Promise<{
+  buffer: Buffer;
+  size: number;
+  contentType?: string;
+}> {
+  const objectStorageService = new ObjectStorageService();
+
+  if (getObjectStorageProvider() === "vercel-blob") {
+    const metadata = await objectStorageService.getPublicObjectEntityMetadata(objectPath);
+    if (!metadata.publicUrl) {
+      throw new Error("Uploaded PDF URL was not available.");
+    }
+
+    const response = await fetch(metadata.publicUrl);
+    if (!response.ok) {
+      throw new Error(`Failed to download uploaded PDF: ${response.status} ${response.statusText}`);
+    }
+
+    const buffer = Buffer.from(await response.arrayBuffer());
+    return {
+      buffer,
+      size: metadata.size ?? buffer.length,
+      contentType: metadata.contentType,
+    };
+  }
+
+  const objectFile = await objectStorageService.getObjectEntityFile(objectPath);
+  const [metadata] = await objectFile.getMetadata();
+  const [buffer] = await objectFile.download();
+  return {
+    buffer,
+    size: Number(metadata.size || buffer.length),
+    contentType: metadata.contentType,
+  };
+}
+
+async function cleanupTemporaryQuotePdf(objectPath: string): Promise<void> {
+  if (getObjectStorageProvider() !== "vercel-blob") {
+    return;
+  }
+
+  try {
+    const { del } = await import("@vercel/blob");
+    await del(objectPath);
+    console.log(`🧹 Deleted temporary uploaded quote PDF: ${objectPath}`);
+  } catch (error) {
+    console.warn(`⚠️ Failed to delete temporary uploaded quote PDF ${objectPath}:`, error);
+  }
+}
 
 function formatJobsiteAddress(quote: any): string | null {
   const parts: string[] = [];
@@ -459,6 +541,149 @@ export function registerQuoteRoutes(app: Express) {
     }
   });
 
+  app.post("/api/quotes/pdf-upload-url", isAuthenticated, async (req: any, res) => {
+    try {
+      const parsed = quotePdfUploadUrlSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({
+          message: "Invalid upload request",
+          success: false,
+          errors: parsed.error.errors,
+        });
+      }
+
+      const maxFileSize = getMaxQuotePdfUploadBytes();
+      const { filename, fileSize } = parsed.data;
+      if (fileSize && fileSize > maxFileSize) {
+        return res.status(413).json({
+          message: `File too large. Please upload a PDF smaller than ${formatMegabytes(maxFileSize)}.`,
+          success: false,
+          maxFileSize,
+        });
+      }
+
+      const objectStorageService = new ObjectStorageService();
+      const sanitizedFilename = sanitizeQuotePdfFilename(filename);
+      const userId = String(req.user?.id || "unknown");
+      const objectId = `quote-pdf-imports/${userId}/${Date.now()}-${nanoid(8)}-${sanitizedFilename}`;
+      const uploadTarget = await objectStorageService.getObjectEntityUploadTarget(objectId, {
+        allowedContentTypes: ["application/pdf"],
+        maximumSizeInBytes: maxFileSize,
+        cacheControlMaxAge: 60 * 60,
+      });
+
+      if (uploadTarget.provider === "replit") {
+        return res.json({
+          uploadMode: uploadTarget.uploadMode,
+          uploadUrl: uploadTarget.uploadUrl,
+          objectPath: uploadTarget.objectPath,
+          maxFileSize,
+        });
+      }
+
+      res.json({
+        uploadMode: uploadTarget.uploadMode,
+        clientToken: uploadTarget.clientToken,
+        objectPath: uploadTarget.objectPath,
+        pathname: uploadTarget.pathname,
+        maxFileSize,
+      });
+    } catch (error) {
+      console.error("Error creating quote PDF upload target:", error);
+      res.status(500).json({
+        message: "Failed to prepare PDF upload. Please try again.",
+        success: false,
+      });
+    }
+  });
+
+  app.post("/api/quotes/import-vision-uploaded", isAuthenticated, rateLimitPDFProcessing, async (req: any, res) => {
+    let uploadedObjectPath: string | null = null;
+
+    try {
+      const parsed = uploadedQuotePdfImportSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({
+          message: "Invalid uploaded PDF request",
+          success: false,
+          errors: parsed.error.errors,
+        });
+      }
+
+      const { objectPath, filename, fileSize } = parsed.data;
+      uploadedObjectPath = objectPath;
+      const maxFileSize = getMaxQuotePdfUploadBytes();
+
+      if (fileSize && fileSize > maxFileSize) {
+        return res.status(413).json({
+          message: `File too large. Please upload a PDF smaller than ${formatMegabytes(maxFileSize)}.`,
+          success: false,
+          maxFileSize,
+        });
+      }
+
+      if (rejectIfAIQuoteExtractionIsNotConfigured(res)) {
+        return;
+      }
+
+      const uploadedPdf = await readUploadedQuotePdfBuffer(objectPath);
+      const contentType = uploadedPdf.contentType?.toLowerCase();
+      if (contentType && !contentType.includes("application/pdf")) {
+        return res.status(400).json({
+          message: "Invalid file type. Please upload a PDF file.",
+          success: false,
+        });
+      }
+
+      if (uploadedPdf.size > maxFileSize || uploadedPdf.buffer.length > maxFileSize) {
+        return res.status(413).json({
+          message: `File too large. Please upload a PDF smaller than ${formatMegabytes(maxFileSize)}.`,
+          success: false,
+          maxFileSize,
+        });
+      }
+
+      console.log(`📄 Processing uploaded PDF with GPT-5: ${filename} (${(uploadedPdf.buffer.length / 1024 / 1024).toFixed(2)}MB)`);
+
+      const extractedQuote = await extractQuoteDataFromPDF(uploadedPdf.buffer);
+
+      if (!extractedQuote) {
+        return res.status(400).json({
+          message: "Could not extract quote data from PDF. This could be due to: (1) The document doesn't contain recognizable quote/invoice information, (2) The text is unclear or heavily formatted, (3) The document is password-protected or corrupted. Please try a different PDF or ensure it contains standard quote/invoice data.",
+          success: false
+        });
+      }
+
+      console.log(`✅ Quote data extracted from uploaded PDF ${filename}`);
+
+      res.status(200).json({
+        success: true,
+        filename,
+        extractedData: extractedQuote,
+        message: "Quote data extracted successfully using temporary upload processing",
+        processingMethod: "temporary-upload"
+      });
+    } catch (error: any) {
+      console.error("Uploaded PDF processing error:", error);
+
+      if (error.message?.includes("API") || error.message?.includes("rate limit") || error.message?.includes("quota")) {
+        return res.status(503).json({
+          message: "AI processing service is temporarily unavailable. Please try again later.",
+          success: false
+        });
+      }
+
+      return res.status(500).json({
+        message: `PDF processing failed: ${error.message || 'Unexpected error occurred while processing the PDF. Please try again or contact support if the issue persists.'}`,
+        success: false
+      });
+    } finally {
+      if (uploadedObjectPath) {
+        await cleanupTemporaryQuotePdf(uploadedObjectPath);
+      }
+    }
+  });
+
   app.post("/api/quotes/import-vision-direct", isAuthenticated, rateLimitPDFProcessing, upload.single('pdf'), async (req: any, res) => {
     try {
       if (!req.file) {
@@ -477,9 +702,10 @@ export function registerQuoteRoutes(app: Express) {
         });
       }
 
-      if (file.size > 30 * 1024 * 1024) {
+      const maxFileSize = getMaxQuotePdfUploadBytes();
+      if (file.size > maxFileSize) {
         return res.status(400).json({ 
-          message: "File too large. Please upload a PDF smaller than 30MB.",
+          message: `File too large. Please upload a PDF smaller than ${formatMegabytes(maxFileSize)}.`,
           success: false 
         });
       }

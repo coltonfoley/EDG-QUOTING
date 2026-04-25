@@ -3,7 +3,7 @@
   "outputDirectory": "dist/public",
   "functions": {
     "api/index.ts": {
-      "maxDuration": 60
+      "maxDuration": 300
     }
   },
   "rewrites": [
