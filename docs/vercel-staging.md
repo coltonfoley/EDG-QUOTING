@@ -10,13 +10,27 @@ As of 2026-04-25:
 
 - EDG Vercel project `edgpatioshade/rainmaker` exists and is linked locally.
 - The project is set to Node.js `22.x`.
-- `npm run check` and `npm run build` pass locally.
-- The Vercel prebuilt flow is the known-good deployment path: `vercel build --target=preview --yes`, `npm run vercel:bundle-function`, then `vercel deploy --prebuilt`.
+- Preview/staging used the prebuilt flow: `vercel build --target=preview --yes`, `npm run vercel:bundle-function`, then `vercel deploy --prebuilt`.
+- Production was redeployed through the Vercel REST API because the locally installed Vercel CLI is too old for the current production deploy endpoint.
 - A Neon database named `rainmaker-staging` is connected to the Vercel `rainmaker` project for Preview and Development.
 - The Neon connection creates `DATABASE_URL` and related encrypted database variables for Preview and Development only.
 - Stable staging subdomain: `https://rainmaker-staging.edgpatioshade.com`.
 - Latest verified staging deployment: `https://rainmaker-lseb4k9bw-edgpatioshade.vercel.app`.
 - Staging health, login, leads, accounts, products, quotes, quote image uploads, Rainmaker-to-Ops closed-won handoff, and large PDF/AI quote import have all passed.
+
+## Production Cutover
+
+As of 2026-04-25:
+
+- Live Vercel URL: `https://rainmaker.edgpatioshade.com`.
+- Latest production deployment: `https://rainmaker-3tz8809yc-edgpatioshade.vercel.app`.
+- Live production database: `rainmaker_cutover_20260425200501` in the EDG Neon cluster.
+- The cutover database was built from the current Replit Rainmaker database, then merged with the real website lead that had already landed in the prior Vercel database.
+- Final cutover counts: 93 accounts, 218 quotes, 1,819 line items, 62 groups, 1,147 products, 242 quote renderings, 9 cover photos, 5 users, and 2 API keys.
+- The two synthetic smoke-test leads from the previous Vercel database were not copied into the cutover database.
+- Live dashboard verification after reload showed 2 new leads, 155 active deals, and `$6,373,113.73` pipeline value.
+- Live Leads page showed the two new leads: Christopher and david chang.
+- Old Replit Rainmaker remained live at `https://edgquote.replit.app` and returned HTTP 200 after cutover.
 
 ## Runtime Shape
 
@@ -136,10 +150,9 @@ After the first preview deploy:
 
 ## Known Gaps Before Production Cutover
 
-- Existing Replit-hosted quote image URLs still need to be copied into Vercel Blob after the final production DB copy.
-- `npm run storage:inventory` was run against the real Rainmaker database on 2026-04-25. It found 9 quote cover photo rows and 234 product rendering rows, all stored as absolute Replit-hosted URLs.
-- `npm run storage:migrate-to-blob` is ready for the final copied database. A dry run against production data with `MIGRATE_STORAGE_LIMIT=1` downloaded one cover photo and one product rendering successfully without changing any rows.
+- Existing Replit-hosted quote image URLs were copied into Vercel Blob after the final production DB copy.
+- `npm run storage:migrate-to-blob` migrated 251 files on 2026-04-25 with 0 failures: 9 quote cover photos and 242 product renderings.
+- The migrated quote image data is about 0.232 GB, which fits within the 0.5 GB free Vercel Blob storage allowance for now.
 - Staging PDF import is verified with `OPENAI_API_KEY` using browser-side PDF rendering. Server-side PDF text/image conversion still hits Vercel canvas/Chrome limits and should not be the primary cutover path.
 - Browser-direct image upload routes now support Vercel Blob client uploads on staging while preserving the Replit signed-upload path for live Replit.
-- The first preview should use a staging database or reviewed clone, not an unreviewed destructive migration against production.
-- Google Workspace staff OAuth is still a later consolidation step; local username/password auth remains the bridge.
+- Google Workspace staff OAuth is configured for the Vercel app, while local username/password auth remains available as the bridge.
