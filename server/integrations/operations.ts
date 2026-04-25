@@ -101,6 +101,14 @@ const getOperationsImportUrl = (): string | null => {
   return `${process.env.OPERATIONS_BASE_URL.replace(/\/$/, "")}/api/integrations/quotes/import`;
 };
 
+const getOperationsVercelBypassSecret = (): string | null => {
+  const secret =
+    process.env.OPERATIONS_VERCEL_BYPASS_SECRET ||
+    process.env.OPERATIONS_VERCEL_PROTECTION_BYPASS;
+
+  return secret?.trim() || null;
+};
+
 const buildOperationsPayload = (quote: any) => {
   const totals = calculateQuoteTotals(quote);
 
@@ -171,12 +179,19 @@ export async function sendQuoteToOperations(quoteId: number): Promise<Operations
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${token}`,
+      "X-Integration-Token": token,
+    };
+    const vercelBypassSecret = getOperationsVercelBypassSecret();
+    if (vercelBypassSecret) {
+      headers["x-vercel-protection-bypass"] = vercelBypassSecret;
+    }
+
     const response = await fetch(importUrl, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${token}`,
-      },
+      headers,
       body: JSON.stringify(buildOperationsPayload(quote)),
       signal: controller.signal,
     });

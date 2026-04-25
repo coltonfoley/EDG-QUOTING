@@ -132,6 +132,10 @@ if (value("OPERATIONS_IMPORT_ON_CLOSED_WON", "false") === "true") {
     ["OPERATIONS_IMPORT_URL", "OPERATIONS_BASE_URL"],
     "Closed-won quote handoff needs the Ops import URL or base URL."
   );
+  warnMissing(
+    "OPERATIONS_VERCEL_BYPASS_SECRET",
+    "Protected Vercel Preview Ops deployments need an automation bypass secret for server-to-server smoke tests."
+  );
 }
 
 const hasQuickBooksValue = ["QB_CLIENT_ID", "QB_CLIENT_SECRET", "QB_REDIRECT_URI"].some(has);
