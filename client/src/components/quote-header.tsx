@@ -13,6 +13,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { getStageUpdateToast } from "@/lib/operations-import-toast";
 import { z } from "zod";
 import { useEffect, useState, useCallback, useRef } from "react";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
@@ -106,13 +107,15 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
   const updateDealStageMutation = useMutation({
     mutationFn: async ({ dealStage }: { dealStage: string }) => {
       if (!quote?.id) throw new Error("No quote ID");
-      const response = await apiRequest('PUT', `/api/quotes/${quote.id}`, { dealStage });
+      const response = dealStage === "closed_lost"
+        ? await apiRequest('PUT', `/api/quotes/${quote.id}`, { dealStage })
+        : await apiRequest('PATCH', `/api/quotes/${quote.id}/stage`, { deal_stage: dealStage });
       return response.json();
     },
     onSuccess: (updatedQuote, variables) => {
       // Update form state to match the new dealStage
       form.setValue("dealStage", variables.dealStage);
-      toast({ title: "Quote updated successfully" });
+      toast(getStageUpdateToast(updatedQuote, variables.dealStage));
       
       // Update the specific quote cache
       queryClient.setQueryData([`/api/quotes/${quote?.id}`], (oldData: any) => {

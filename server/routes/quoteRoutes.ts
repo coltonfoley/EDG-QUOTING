@@ -1191,8 +1191,16 @@ export function registerQuoteRoutes(app: Express) {
       if (!quote) {
         return res.status(404).json({ message: "Quote not found" });
       }
+
+      let operationsImport;
+      if (quoteData.dealStage === 'closed_won' && originalQuote.dealStage !== 'closed_won') {
+        operationsImport = await sendQuoteToOperations(params.data.id);
+        if (!operationsImport.success) {
+          console.error(`Operations import did not complete for quote ${params.data.id}:`, operationsImport);
+        }
+      }
       
-      res.json(quote);
+      res.json(operationsImport ? { ...quote, operationsImport } : quote);
     } catch (error: any) {
       if (error instanceof z.ZodError) {
         console.error("Quote validation errors:", JSON.stringify(error.errors, null, 2));
