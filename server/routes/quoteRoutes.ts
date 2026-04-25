@@ -23,7 +23,6 @@ import {
   submitSignatureSchema
 } from "../validation-schemas";
 import multer from "multer";
-import sharp from "sharp";
 import { extractQuoteDataFromImages, extractQuoteDataFromPDF } from "../openai";
 import { ObjectStorageService } from "../objectStorage";
 import { nanoid } from "nanoid";

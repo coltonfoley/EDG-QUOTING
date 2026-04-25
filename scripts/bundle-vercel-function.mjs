@@ -12,6 +12,7 @@ await build({
   entryPoints: ["api/index.ts"],
   bundle: true,
   platform: "node",
+  packages: "external",
   external: ["./vite"],
   format: "esm",
   banner: {

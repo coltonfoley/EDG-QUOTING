@@ -1,13 +1,24 @@
 import type { Express } from "express";
 import { isAuthenticated } from "../replitAuth";
 import { storage } from "../storage";
-import OpenAI from "openai";
 import type { ChatCompletionMessageParam, ChatCompletionTool } from "openai/resources/chat/completions";
 import { isActiveStage, isWonStage, isFinalStage, getDealStageLabel } from "@shared/dealStageConstants";
 
-const openai = new OpenAI({ 
-  apiKey: process.env.OPENAI_API_KEY 
-});
+type OpenAIClient = InstanceType<typeof import("openai").default>;
+
+let openai: OpenAIClient | null = null;
+
+async function getOpenAI(): Promise<OpenAIClient> {
+  if (!process.env.OPENAI_API_KEY) {
+    throw new Error("OPENAI_API_KEY is required for the AI assistant.");
+  }
+
+  const { default: OpenAI } = await import("openai");
+  openai ??= new OpenAI({ 
+    apiKey: process.env.OPENAI_API_KEY 
+  });
+  return openai;
+}
 
 // Calculate quote total WITH markup (matches dashboard logic)
 function calculateQuoteTotal(quote: any): number {
@@ -481,6 +492,7 @@ export function registerAIAssistantRoutes(app: Express) {
       }
 
       console.log("🤖 AI Assistant: Processing request with tool calling...");
+      const openai = await getOpenAI();
 
       const messages: ChatCompletionMessageParam[] = [
         { role: "system", content: SYSTEM_PROMPT },
