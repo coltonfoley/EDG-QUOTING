@@ -9,7 +9,7 @@ storage, email, login, quote creation, PDFs, and lead intake.
 As of 2026-04-25:
 
 - EDG Vercel project `edgpatioshade/rainmaker` exists and is linked locally.
-- The project is set to Node.js `22.x`.
+- The Vercel project and repo are both pinned to Node.js `22.x`.
 - Preview/staging used the prebuilt flow: `vercel build --target=preview --yes`, `npm run vercel:bundle-function`, then `vercel deploy --prebuilt`.
 - Production was redeployed through the Vercel REST API because the locally installed Vercel CLI is too old for the current production deploy endpoint.
 - A Neon database named `rainmaker-staging` is connected to the Vercel `rainmaker` project for Preview and Development.
@@ -156,3 +156,5 @@ After the first preview deploy:
 - Staging PDF import is verified with `OPENAI_API_KEY` using browser-side PDF rendering. Server-side PDF text/image conversion still hits Vercel canvas/Chrome limits and should not be the primary cutover path.
 - Browser-direct image upload routes now support Vercel Blob client uploads on staging while preserving the Replit signed-upload path for live Replit.
 - Google Workspace staff OAuth is configured for the Vercel app, while local username/password auth remains available as the bridge.
+- Production Rainmaker-to-Ops handoff is configured to send closed-won quotes to `https://ops.edgpatioshade.com/api/integrations/quotes/import`; Ops supports a protected dry-run smoke path for validating that token/endpoint without writing a dummy job.
+- Keep the old Replit Rainmaker app live through the confidence window before removing any Replit resources.
