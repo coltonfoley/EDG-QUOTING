@@ -1,6 +1,11 @@
 import type { Express } from "express";
 import { isAuthenticated } from "../replitAuth";
-import { ObjectStorageService, ObjectNotFoundError, objectStorageClient } from "../objectStorage";
+import {
+  ObjectStorageService,
+  ObjectNotFoundError,
+  getObjectStorageProvider,
+  objectStorageClient,
+} from "../objectStorage";
 import { ObjectPermission } from "../objectAcl";
 import {
   uploadUrlSchema,
@@ -29,14 +34,26 @@ export function registerImageRoutes(app: Express) {
       const timestamp = Date.now();
       const customPath = `${imageType}s/${timestamp}-${sanitizedFilename}`;
       
-      const { url, objectPath } = await objectStorageService.getObjectEntityUploadURL(customPath);
+      const uploadTarget = await objectStorageService.getObjectEntityUploadTarget(customPath, {
+        allowedContentTypes: ["image/*"],
+      });
       
-      console.log(`🔧 Generated upload URL for ${imageType}: ${objectPath}`);
+      console.log(`🔧 Generated upload target for ${imageType}: ${uploadTarget.objectPath}`);
       
-      res.json({ 
-        uploadUrl: url, 
-        objectPath: objectPath,
-        publicUrl: `${req.protocol}://${req.get('host')}/objects${objectPath.replace('/objects', '')}`
+      if (uploadTarget.provider === "replit") {
+        return res.json({
+          uploadMode: uploadTarget.uploadMode,
+          uploadUrl: uploadTarget.uploadUrl,
+          objectPath: uploadTarget.objectPath,
+          publicUrl: `${req.protocol}://${req.get('host')}/objects${uploadTarget.objectPath.replace('/objects', '')}`
+        });
+      }
+
+      res.json({
+        uploadMode: uploadTarget.uploadMode,
+        clientToken: uploadTarget.clientToken,
+        objectPath: uploadTarget.objectPath,
+        pathname: uploadTarget.pathname,
       });
     } catch (error) {
       console.error("❌ Error generating upload URL:", error);
@@ -64,7 +81,59 @@ export function registerImageRoutes(app: Express) {
       }
       
       const objectStorageService = new ObjectStorageService();
-      
+      const provider = getObjectStorageProvider();
+
+      if (provider === "vercel-blob") {
+        const uploadedObject = await objectStorageService.getPublicObjectEntityMetadata(objectPath);
+        let publicUrl = uploadedObject.publicUrl;
+        let normalizedObjectPath = uploadedObject.objectPath;
+
+        try {
+          console.log(`📥 Downloading Vercel Blob image for normalization: ${uploadedObject.objectPath}`);
+          if (!uploadedObject.publicUrl) {
+            throw new Error("Vercel Blob public URL was not available.");
+          }
+
+          const response = await fetch(uploadedObject.publicUrl);
+          if (!response.ok) {
+            throw new Error(`Failed to fetch uploaded image: ${response.status} ${response.statusText}`);
+          }
+
+          const fileContents = Buffer.from(await response.arrayBuffer());
+
+          console.log(`🔧 Normalizing Vercel Blob image with Sharp...`);
+          const { default: sharp } = await import("sharp");
+          const normalizedBuffer = await sharp(fileContents)
+            .rotate()
+            .resize({
+              width: 1600,
+              height: 1200,
+              fit: 'inside',
+              withoutEnlargement: true,
+            })
+            .jpeg({ quality: 80, mozjpeg: true })
+            .toBuffer();
+
+          const normalizedObject = await objectStorageService.uploadPublicObjectEntityBuffer(
+            uploadedObject.objectPath,
+            normalizedBuffer,
+            { contentType: 'image/jpeg' }
+          );
+
+          publicUrl = normalizedObject.publicUrl ?? publicUrl;
+          normalizedObjectPath = normalizedObject.objectPath;
+          console.log(`✅ Vercel Blob image normalized and saved`);
+        } catch (normalizeError) {
+          console.warn(`⚠️ Vercel Blob image normalization failed, proceeding with uploaded original:`, normalizeError);
+        }
+
+        return res.json({
+          success: true,
+          objectPath: normalizedObjectPath,
+          publicUrl,
+        });
+      }
+
       try {
         // 1. Download the uploaded image from object storage
         console.log(`📥 Downloading image for normalization: ${objectPath}`);
