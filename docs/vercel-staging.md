@@ -6,14 +6,17 @@ storage, email, login, quote creation, PDFs, and lead intake.
 
 ## Current Status
 
-As of 2026-04-24:
+As of 2026-04-25:
 
 - EDG Vercel project `edgpatioshade/rainmaker` exists and is linked locally.
 - The project is set to Node.js `22.x`.
-- `vercel build --yes` passes locally when placeholder Vercel-target env vars are supplied.
+- `npm run check` and `npm run build` pass locally.
+- The Vercel prebuilt flow is the known-good deployment path: `vercel build --target=preview --yes`, `npm run vercel:bundle-function`, then `vercel deploy --prebuilt`.
 - A Neon database named `rainmaker-staging` is connected to the Vercel `rainmaker` project for Preview and Development.
 - The Neon connection creates `DATABASE_URL` and related encrypted database variables for Preview and Development only.
-- No Vercel preview deployment has been created yet.
+- Stable staging subdomain: `https://rainmaker-staging.edgpatioshade.com`.
+- Latest verified staging deployment: `https://rainmaker-lseb4k9bw-edgpatioshade.vercel.app`.
+- Staging health, login, leads, accounts, products, quotes, quote image uploads, Rainmaker-to-Ops closed-won handoff, and large PDF/AI quote import have all passed.
 
 ## Runtime Shape
 
@@ -86,6 +89,7 @@ npm run build
 vercel build --target=preview --yes
 npm run vercel:bundle-function
 npm run storage:inventory
+npm run storage:migrate-to-blob
 ```
 
 After a fresh staging database is provisioned and migrated, create the first
@@ -125,13 +129,16 @@ After the first preview deploy:
 5. Create a quote manually from an existing test account.
 6. Upload a cover photo and product rendering with Vercel Blob enabled.
 7. Generate proposal/PDF output.
-8. Send one smoke email from the preview sender.
-9. Do not connect the production website to the Vercel preview until the above passes.
+8. Import a large OEM PDF quote through the browser-rendered vision path.
+9. Send one smoke email from the preview sender.
+10. Do not connect the production website to the Vercel preview until the above passes.
 
 ## Known Gaps Before Production Cutover
 
-- Existing Replit object storage files still need an export/import plan.
-- `npm run storage:inventory` should be run against the real Rainmaker database before storage cutover to count quote image references. Add `STORAGE_INVENTORY_INCLUDE_SAMPLES=true` only when file-path samples are needed.
-- Browser-direct image upload routes still rely on Replit-style signed upload URLs; server-side quote image uploads have the first Vercel Blob path.
+- Existing Replit-hosted quote image URLs still need to be copied into Vercel Blob after the final production DB copy.
+- `npm run storage:inventory` was run against the real Rainmaker database on 2026-04-25. It found 9 quote cover photo rows and 234 product rendering rows, all stored as absolute Replit-hosted URLs.
+- `npm run storage:migrate-to-blob` is ready for the final copied database. A dry run against production data with `MIGRATE_STORAGE_LIMIT=1` downloaded one cover photo and one product rendering successfully without changing any rows.
+- Staging PDF import is verified with `OPENAI_API_KEY` using browser-side PDF rendering. Server-side PDF text/image conversion still hits Vercel canvas/Chrome limits and should not be the primary cutover path.
+- Browser-direct image upload routes now support Vercel Blob client uploads on staging while preserving the Replit signed-upload path for live Replit.
 - The first preview should use a staging database or reviewed clone, not an unreviewed destructive migration against production.
 - Google Workspace staff OAuth is still a later consolidation step; local username/password auth remains the bridge.

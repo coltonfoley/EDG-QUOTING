@@ -1,5 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "http";
 import type { Express } from "express";
+import { createApp } from "../server/app";
+import { handleLeadIntake } from "./lead-intake";
 
 let appPromise: Promise<Express> | null = null;
 
@@ -27,7 +29,7 @@ function sendJson(res: ServerResponse, statusCode: number, payload: unknown) {
 }
 
 async function getApp() {
-  appPromise ??= import("../server/app").then(({ createApp }) => createApp({ serveClient: false }).then(({ app }) => app));
+  appPromise ??= createApp({ serveClient: false }).then(({ app }) => app);
   return appPromise;
 }
 
@@ -40,7 +42,6 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   }
 
   if (path === "/api/leads/intake") {
-    const { handleLeadIntake } = await import("./lead-intake");
     return handleLeadIntake(req, res);
   }
 

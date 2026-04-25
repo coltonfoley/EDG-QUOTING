@@ -31,6 +31,7 @@ import { useToast } from '@/hooks/use-toast';
 import { formatCurrency } from '@/lib/utils';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import type { QuoteWithDetails } from '@shared/schema';
+import { put as putBlob } from '@vercel/blob/client';
 
 // Types for extracted quote data from OpenAI
 interface ExtractedLineItem {
@@ -79,8 +80,23 @@ interface PDFImportResponse {
   filename: string;
   extractedData: ExtractedQuote;
   message: string;
-  processingMethod?: 'vision' | 'text';
+  processingMethod?: 'vision' | 'text' | 'temporary-upload';
 }
+
+type QuotePdfUploadTarget =
+  | {
+      uploadMode: 'vercel-blob-client-token';
+      clientToken: string;
+      objectPath: string;
+      pathname: string;
+      maxFileSize: number;
+    }
+  | {
+      uploadMode: 'signed-url';
+      uploadUrl: string;
+      objectPath: string;
+      maxFileSize: number;
+    };
 
 interface PDFPageImage {
   index: number;
@@ -340,6 +356,164 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
     });
   }, [toast]);
 
+  const renderPdfPageToImage = async (page: any, pageIndex: number): Promise<PDFPageImage> => {
+    const baseViewport = page.getViewport({ scale: 1 });
+    const maxWidth = 1500;
+    const scale = Math.min(2, maxWidth / baseViewport.width);
+    const viewport = page.getViewport({ scale });
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d');
+
+    if (!context) {
+      throw new Error('Browser canvas is not available for PDF rendering');
+    }
+
+    canvas.width = Math.floor(viewport.width);
+    canvas.height = Math.floor(viewport.height);
+
+    await page.render({ canvasContext: context, viewport }).promise;
+
+    let quality = 0.75;
+    let dataUrl = canvas.toDataURL('image/jpeg', quality);
+    const maxBase64Length = 900_000;
+
+    while (dataUrl.length > maxBase64Length && quality > 0.35) {
+      quality -= 0.1;
+      dataUrl = canvas.toDataURL('image/jpeg', quality);
+    }
+
+    return {
+      index: pageIndex,
+      imageBase64: dataUrl.split(',')[1] || '',
+    };
+  };
+
+  const renderPdfToImages = async (file: File, pdfId: string): Promise<PDFPageImage[]> => {
+    const pdfjs = await import('pdfjs-dist');
+    pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+      'pdfjs-dist/build/pdf.worker.mjs',
+      import.meta.url
+    ).toString();
+
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf = await pdfjs.getDocument({ data: arrayBuffer }).promise;
+    const pageCount = Math.min(pdf.numPages, 8);
+    const pages: PDFPageImage[] = [];
+
+    for (let pageNumber = 1; pageNumber <= pageCount; pageNumber++) {
+      const page = await pdf.getPage(pageNumber);
+      pages.push(await renderPdfPageToImage(page, pageNumber - 1));
+      setProcessedPDFs(prev => prev.map(p =>
+        p.id === pdfId
+          ? { ...p, progress: 30 + Math.round((pageNumber / pageCount) * 40), status: 'processing' }
+          : p
+      ));
+    }
+
+    return pages;
+  };
+
+  const processPdfWithClientVision = async (file: File, pdfId: string): Promise<PDFImportResponse> => {
+    const pages = await renderPdfToImages(file, pdfId);
+
+    setProcessedPDFs(prev => prev.map(p =>
+      p.id === pdfId ? { ...p, progress: 75, status: 'processing' } : p
+    ));
+
+    const response = await fetch('/api/quotes/import-vision', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({
+        filename: file.name,
+        pages,
+      }),
+    });
+
+    const result = await response.json();
+    if (!response.ok) {
+      throw new Error(result.message || 'Failed to process PDF images');
+    }
+
+    return result;
+  };
+
+  const processPdfWithTemporaryUpload = async (file: File, pdfId: string): Promise<PDFImportResponse> => {
+    const uploadTargetResponse = await fetch('/api/quotes/pdf-upload-url', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({
+        filename: file.name,
+        fileSize: file.size,
+      }),
+    });
+
+    const uploadTarget = await uploadTargetResponse.json();
+    if (!uploadTargetResponse.ok) {
+      throw new Error(uploadTarget.message || 'Failed to prepare PDF upload');
+    }
+
+    const target = uploadTarget as QuotePdfUploadTarget;
+    let objectPath = target.objectPath;
+
+    setProcessedPDFs(prev => prev.map(p =>
+      p.id === pdfId ? { ...p, progress: 35, status: 'processing' } : p
+    ));
+
+    if (target.uploadMode === 'vercel-blob-client-token') {
+      const blob = await putBlob(target.pathname, file, {
+        access: 'public',
+        token: target.clientToken,
+        contentType: 'application/pdf',
+        multipart: file.size > 5 * 1024 * 1024,
+        onUploadProgress: ({ percentage }) => {
+          setProcessedPDFs(prev => prev.map(p =>
+            p.id === pdfId ? { ...p, progress: 35 + Math.round(percentage * 0.35), status: 'processing' } : p
+          ));
+        },
+      });
+
+      objectPath = blob.pathname;
+    } else {
+      const uploadResponse = await fetch(target.uploadUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/pdf' },
+        body: file,
+      });
+
+      if (!uploadResponse.ok) {
+        throw new Error('Failed to upload PDF for processing');
+      }
+
+      setProcessedPDFs(prev => prev.map(p =>
+        p.id === pdfId ? { ...p, progress: 70, status: 'processing' } : p
+      ));
+    }
+
+    setProcessedPDFs(prev => prev.map(p =>
+      p.id === pdfId ? { ...p, progress: 75, status: 'processing' } : p
+    ));
+
+    const processResponse = await fetch('/api/quotes/import-vision-uploaded', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({
+        objectPath,
+        filename: file.name,
+        fileSize: file.size,
+      }),
+    });
+
+    const result = await processResponse.json();
+    if (!processResponse.ok) {
+      throw new Error(result.message || 'Failed to process PDF');
+    }
+
+    return result;
+  };
+
   // Main processing function - send PDF directly to backend  
   const processFileWithVisionFirst = async (file: File) => {
     const pdfId = `pdf_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -361,22 +535,13 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
         p.id === pdfId ? { ...p, progress: 30, status: 'processing' } : p
       ));
       
-      // Send PDF directly to backend for processing
-      const formData = new FormData();
-      formData.append('pdf', file);
-      
-      const response = await fetch('/api/quotes/import-vision-direct', {
-        method: 'POST',
-        body: formData,
-        credentials: 'include'
-      });
-      
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Failed to process PDF');
+      let result: PDFImportResponse;
+      try {
+        result = await processPdfWithClientVision(file, pdfId);
+      } catch (clientVisionError) {
+        console.warn('Client-side PDF vision processing failed, falling back to temporary upload:', clientVisionError);
+        result = await processPdfWithTemporaryUpload(file, pdfId);
       }
-      
-      const result = await response.json();
       
       setProcessedPDFs(prev => prev.map(p => 
         p.id === pdfId ? { 
