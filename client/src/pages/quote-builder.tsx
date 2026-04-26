@@ -1,6 +1,6 @@
 import { useParams } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState, lazy, Suspense } from "react";
+import { useState, Suspense } from "react";
 import { AppHeader } from "@/components/app-header";
 import { QuoteHeader } from "@/components/quote-header";
 import { LineItemsTable } from "@/components/line-items-table";
@@ -12,8 +12,9 @@ import { useToast } from "@/hooks/use-toast";
 import { generateQuoteNumber } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { LoadingSpinner } from "@/components/loading-spinner";
+import { lazyWithReload } from "@/lib/lazy-with-reload";
 
-const SimpleProposalGenerator = lazy(() => import("@/components/simple-proposal-generator").then(m => ({ default: m.SimpleProposalGenerator })));
+const SimpleProposalGenerator = lazyWithReload(() => import("@/components/simple-proposal-generator").then(m => ({ default: m.SimpleProposalGenerator })), "simple-proposal-generator");
 import { Save, Loader2, FileText, CloudUpload, Copy, History } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";

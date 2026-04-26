@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { AlertTriangle, RefreshCw, Home, Bug } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { isDynamicImportError } from "@/lib/lazy-with-reload";
 
 interface Props {
   children: ReactNode;
@@ -64,12 +65,16 @@ export class ErrorBoundary extends Component<Props, State> {
 
       const isDevelopment = process.env.NODE_ENV === 'development';
       const errorMessage = this.state.error?.message || "An unexpected error occurred";
+      const isAppUpdateError = isDynamicImportError(this.state.error);
       
       // Determine error type and provide user-friendly message
       let userFriendlyMessage = "Something went wrong while loading this page.";
       let actionMessage = "We've been notified and are working to fix it.";
       
-      if (errorMessage.includes("Network") || errorMessage.includes("fetch")) {
+      if (isAppUpdateError) {
+        userFriendlyMessage = "Rainmaker was updated while this browser tab was open.";
+        actionMessage = "Refresh this page to load the latest version.";
+      } else if (errorMessage.includes("Network") || errorMessage.includes("fetch")) {
         userFriendlyMessage = "Unable to connect to the server.";
         actionMessage = "Please check your internet connection and try again.";
       } else if (errorMessage.includes("404")) {
