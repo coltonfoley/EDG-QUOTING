@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, lazy, Suspense } from "react";
+import { useState, useMemo, useEffect, Suspense } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
 import { AppHeader } from "@/components/app-header";
@@ -19,9 +19,10 @@ import { LoadingSpinner } from "@/components/loading-spinner";
 import { QuoteImporter } from "@/components/quote-importer";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { calculateLineItemsValue } from "@/lib/quote-value";
+import { lazyWithReload } from "@/lib/lazy-with-reload";
 import type { QuoteWithDetails } from "@shared/schema";
 
-const SimpleProposalGenerator = lazy(() => import("@/components/simple-proposal-generator").then(m => ({ default: m.SimpleProposalGenerator })));
+const SimpleProposalGenerator = lazyWithReload(() => import("@/components/simple-proposal-generator").then(m => ({ default: m.SimpleProposalGenerator })), "simple-proposal-generator");
 
 export default function Quotes() {
   const [searchTerm, setSearchTerm] = useState("");

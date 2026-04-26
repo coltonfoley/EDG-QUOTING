@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState, useCallback } from "react";
+import { Suspense, useState, useCallback } from "react";
 import { Switch, Route, Redirect, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider, useIsFetching, useIsMutating } from "@tanstack/react-query";
@@ -12,26 +12,27 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, RefreshCw, MessageCircle } from "lucide-react";
 import { ReportIssueButton } from "@/components/report-issue-button";
+import { lazyWithReload } from "@/lib/lazy-with-reload";
 
-const AIAssistant = lazy(() => import("@/components/ai-assistant").then(m => ({ default: m.AIAssistant })));
+const AIAssistant = lazyWithReload(() => import("@/components/ai-assistant").then(m => ({ default: m.AIAssistant })), "ai-assistant");
 
-const NotFound = lazy(() => import("@/pages/not-found"));
-const Quotes = lazy(() => import("@/pages/quotes"));
-const QuoteBuilder = lazy(() => import("@/pages/quote-builder"));
-const Products = lazy(() => import("@/pages/products"));
-const Landing = lazy(() => import("@/pages/landing"));
-const Home = lazy(() => import("@/pages/home"));
-const Leads = lazy(() => import("@/pages/leads"));
-const AuthPage = lazy(() => import("@/pages/auth-page"));
-const AdminPage = lazy(() => import("@/pages/admin"));
-const ContractsPage = lazy(() => import("@/pages/contracts"));
-const QuickBooksSettings = lazy(() => import("@/pages/quickbooks-settings"));
-const GoogleContactsSettings = lazy(() => import("@/pages/google-contacts-settings"));
-const Accounts = lazy(() => import("@/pages/accounts"));
-const AccountDetail = lazy(() => import("@/pages/account-detail"));
-const Pipeline = lazy(() => import("@/pages/pipeline"));
-const PublicSignPage = lazy(() => import("@/pages/public-sign"));
-const ChangePassword = lazy(() => import("@/pages/change-password"));
+const NotFound = lazyWithReload(() => import("@/pages/not-found"), "not-found");
+const Quotes = lazyWithReload(() => import("@/pages/quotes"), "quotes");
+const QuoteBuilder = lazyWithReload(() => import("@/pages/quote-builder"), "quote-builder");
+const Products = lazyWithReload(() => import("@/pages/products"), "products");
+const Landing = lazyWithReload(() => import("@/pages/landing"), "landing");
+const Home = lazyWithReload(() => import("@/pages/home"), "home");
+const Leads = lazyWithReload(() => import("@/pages/leads"), "leads");
+const AuthPage = lazyWithReload(() => import("@/pages/auth-page"), "auth-page");
+const AdminPage = lazyWithReload(() => import("@/pages/admin"), "admin");
+const ContractsPage = lazyWithReload(() => import("@/pages/contracts"), "contracts");
+const QuickBooksSettings = lazyWithReload(() => import("@/pages/quickbooks-settings"), "quickbooks-settings");
+const GoogleContactsSettings = lazyWithReload(() => import("@/pages/google-contacts-settings"), "google-contacts-settings");
+const Accounts = lazyWithReload(() => import("@/pages/accounts"), "accounts");
+const AccountDetail = lazyWithReload(() => import("@/pages/account-detail"), "account-detail");
+const Pipeline = lazyWithReload(() => import("@/pages/pipeline"), "pipeline");
+const PublicSignPage = lazyWithReload(() => import("@/pages/public-sign"), "public-sign");
+const ChangePassword = lazyWithReload(() => import("@/pages/change-password"), "change-password");
 
 function GlobalLoadingIndicator() {
   const isFetching = useIsFetching();
