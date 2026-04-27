@@ -1,5 +1,5 @@
 import type { Express } from "express";
-import { get as getBlob } from "@vercel/blob";
+import { get as getBlob, list as listBlobs } from "@vercel/blob";
 import { isAuthenticated } from "../replitAuth";
 import {
   ObjectStorageService,
@@ -196,6 +196,26 @@ export function registerImageRoutes(app: Express) {
   app.get("/quote-images/:filename", async (req, res) => {
     try {
       const { filename } = req.params;
+
+      if (getObjectStorageProvider() === "vercel-blob") {
+        const pathname = await findVercelBlobQuoteImagePath(filename);
+        if (!pathname) {
+          return res.status(404).json({ message: "Image not found" });
+        }
+
+        const blob = await getBlob(pathname, { access: "public" });
+        if (!blob || blob.statusCode !== 200 || !blob.stream) {
+          return res.status(404).json({ message: "Image not found" });
+        }
+
+        const buffer = await readBlobStream(blob.stream);
+        res.setHeader("Content-Type", blob.blob.contentType || "application/octet-stream");
+        res.setHeader("Access-Control-Allow-Origin", "*");
+        res.setHeader("Cache-Control", "public, max-age=3600");
+        res.send(buffer);
+        return;
+      }
+
       const objectStorageService = new ObjectStorageService();
       
       // Get the bucket and list files to find the one ending with our filename
@@ -345,6 +365,38 @@ export function registerImageRoutes(app: Express) {
     }
 
     return Buffer.concat(chunks, byteLength);
+  }
+
+  async function findVercelBlobQuoteImagePath(filename: string): Promise<string | null> {
+    const decodedFilename = decodeURIComponent(filename);
+    const prefixes = [
+      "cover-photos/",
+      "product-renderings/",
+      "rainmaker-migrated/quote-cover-photos/",
+      "rainmaker-migrated/quote-product-renderings/",
+    ];
+
+    for (const prefix of prefixes) {
+      let cursor: string | undefined;
+
+      do {
+        const result = await listBlobs({ prefix, cursor, limit: 1000 });
+        const match = result.blobs.find((blob) => {
+          return blob.pathname.endsWith(`/${filename}`)
+            || blob.pathname.endsWith(`/${decodedFilename}`)
+            || blob.pathname === filename
+            || blob.pathname === decodedFilename;
+        });
+
+        if (match) {
+          return match.pathname;
+        }
+
+        cursor = result.hasMore ? result.cursor : undefined;
+      } while (cursor);
+    }
+
+    return null;
   }
 
   app.get("/api/brand-assets/:filename", async (req, res) => {
