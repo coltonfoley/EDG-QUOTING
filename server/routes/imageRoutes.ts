@@ -382,8 +382,8 @@ export function registerImageRoutes(app: Express) {
       do {
         const result = await listBlobs({ prefix, cursor, limit: 1000 });
         const match = result.blobs.find((blob) => {
-          return blob.pathname.endsWith(`/${filename}`)
-            || blob.pathname.endsWith(`/${decodedFilename}`)
+          return blob.pathname.endsWith(filename)
+            || blob.pathname.endsWith(decodedFilename)
             || blob.pathname === filename
             || blob.pathname === decodedFilename;
         });
