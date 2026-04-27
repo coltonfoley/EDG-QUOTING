@@ -1,4 +1,4 @@
-import { accounts, customers, quotes, lineItems, groups, products, users, apiKeys, contractTemplates, pricingTables, productAccessories, colors, productColors, quoteCoverPhotos, quoteProductRenderings, issueReports, quickbooksSettings, type Account, type Customer, type Quote, type LineItem, type Group, type Product, type User, type ApiKey, type ContractTemplate, type PricingTable, type ProductAccessory, type Color, type ProductColor, type QuoteCoverPhoto, type QuoteProductRendering, type IssueReport, type QuickBooksSettings, type InsertAccount, type InsertCustomer, type InsertQuote, type InsertLineItem, type InsertGroup, type InsertProduct, type InsertUser, type InsertApiKey, type InsertContractTemplate, type InsertPricingTable, type InsertProductAccessory, type InsertColor, type InsertProductColor, type InsertQuoteCoverPhoto, type InsertQuoteProductRendering, type InsertIssueReport, type QuoteWithDetails, type ProductWithDetails } from "@shared/schema";
+import { accounts, customers, quotes, lineItems, groups, products, users, apiKeys, contractTemplates, pricingTables, productAccessories, colors, productColors, quoteCoverPhotos, quoteProductRenderings, issueReports, type Account, type Customer, type Quote, type LineItem, type Group, type Product, type User, type ApiKey, type ContractTemplate, type PricingTable, type ProductAccessory, type Color, type ProductColor, type QuoteCoverPhoto, type QuoteProductRendering, type IssueReport, type InsertAccount, type InsertCustomer, type InsertQuote, type InsertLineItem, type InsertGroup, type InsertProduct, type InsertUser, type InsertApiKey, type InsertContractTemplate, type InsertPricingTable, type InsertProductAccessory, type InsertColor, type InsertProductColor, type InsertQuoteCoverPhoto, type InsertQuoteProductRendering, type InsertIssueReport, type QuoteWithDetails, type ProductWithDetails } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, asc, inArray, sql, and, ne, or, ilike } from "drizzle-orm";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
@@ -189,13 +189,6 @@ export interface IStorage {
   getApiKeyByHash(keyHash: string): Promise<any | undefined>;
   updateApiKeyLastUsed(id: number): Promise<void>;
 
-  // QuickBooks integration methods
-  getQuickBooksSettings(): Promise<QuickBooksSettings | undefined>;
-  saveQuickBooksSettings(settings: { realmId: string; accessToken: string; refreshToken: string; tokenExpiresAt: Date }): Promise<QuickBooksSettings>;
-  updateQuickBooksTokens(realmId: string, accessToken: string, refreshToken: string, tokenExpiresAt: Date): Promise<void>;
-  disconnectQuickBooks(): Promise<void>;
-  updateAccountQbCustomerId(accountId: number, qbCustomerId: string): Promise<void>;
-  updateQuoteQbSync(quoteId: number, data: { qbEstimateId?: string; qbSyncStatus?: string; qbSyncedAt?: Date; qbSyncError?: string }): Promise<void>;
 }
 
 export class MemStorage {
@@ -1320,7 +1313,7 @@ export class DatabaseStorage implements IStorage {
         companySignatureData: null,
         companySignedAt: null,
         companySignedIp: null,
-        qbEstimateId: null, // Reset QuickBooks sync fields
+        qbEstimateId: null,
         qbSyncStatus: null,
         qbSyncedAt: null,
         qbSyncError: null,
@@ -2200,65 +2193,6 @@ export class DatabaseStorage implements IStorage {
     await db.update(apiKeys)
       .set({ lastUsedAt: new Date() })
       .where(eq(apiKeys.id, id));
-  }
-
-  // QuickBooks integration methods
-  async getQuickBooksSettings(): Promise<QuickBooksSettings | undefined> {
-    const [settings] = await db.select()
-      .from(quickbooksSettings)
-      .where(eq(quickbooksSettings.isActive, true))
-      .orderBy(desc(quickbooksSettings.createdAt))
-      .limit(1);
-    return settings || undefined;
-  }
-
-  async saveQuickBooksSettings(settings: { realmId: string; accessToken: string; refreshToken: string; tokenExpiresAt: Date }): Promise<QuickBooksSettings> {
-    // Mark all existing active settings as inactive
-    await db.update(quickbooksSettings)
-      .set({ isActive: false })
-      .where(eq(quickbooksSettings.isActive, true));
-    
-    // Delete all inactive settings to avoid unique constraint violations when switching accounts
-    await db.delete(quickbooksSettings)
-      .where(eq(quickbooksSettings.isActive, false));
-    
-    // Insert new settings
-    const [newSettings] = await db.insert(quickbooksSettings)
-      .values(settings)
-      .returning();
-    return newSettings;
-  }
-
-  async updateQuickBooksTokens(realmId: string, accessToken: string, refreshToken: string, tokenExpiresAt: Date): Promise<void> {
-    await db.update(quickbooksSettings)
-      .set({ 
-        accessToken, 
-        refreshToken, 
-        tokenExpiresAt,
-        updatedAt: new Date() 
-      })
-      .where(eq(quickbooksSettings.realmId, realmId));
-  }
-
-  async disconnectQuickBooks(): Promise<void> {
-    await db.update(quickbooksSettings)
-      .set({ isActive: false, updatedAt: new Date() })
-      .where(eq(quickbooksSettings.isActive, true));
-  }
-
-  async updateAccountQbCustomerId(accountId: number, qbCustomerId: string): Promise<void> {
-    await db.update(accounts)
-      .set({ qbCustomerId, updatedAt: new Date() })
-      .where(eq(accounts.id, accountId));
-  }
-
-  async updateQuoteQbSync(quoteId: number, data: { qbEstimateId?: string; qbSyncStatus?: string; qbSyncedAt?: Date; qbSyncError?: string }): Promise<void> {
-    await db.update(quotes)
-      .set({ 
-        ...data,
-        updatedAt: new Date() 
-      })
-      .where(eq(quotes.id, quoteId));
   }
 
 }

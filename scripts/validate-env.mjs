@@ -153,14 +153,6 @@ if (value("OPERATIONS_IMPORT_ON_CLOSED_WON", "false") === "true") {
   );
 }
 
-const hasQuickBooksValue = ["QB_CLIENT_ID", "QB_CLIENT_SECRET", "QB_REDIRECT_URI"].some(has);
-
-if (hasQuickBooksValue) {
-  requireVars(["QB_CLIENT_ID", "QB_CLIENT_SECRET"], "QuickBooks OAuth needs both client credentials.");
-} else {
-  warnings.push("QuickBooks OAuth is not configured. QuickBooks sync features will stay unavailable.");
-}
-
 console.log(`${projectName} environment check`);
 console.log(
   loadedFiles.length

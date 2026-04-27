@@ -26,7 +26,6 @@ const Leads = lazyWithReload(() => import("@/pages/leads"), "leads");
 const AuthPage = lazyWithReload(() => import("@/pages/auth-page"), "auth-page");
 const AdminPage = lazyWithReload(() => import("@/pages/admin"), "admin");
 const ContractsPage = lazyWithReload(() => import("@/pages/contracts"), "contracts");
-const QuickBooksSettings = lazyWithReload(() => import("@/pages/quickbooks-settings"), "quickbooks-settings");
 const GoogleContactsSettings = lazyWithReload(() => import("@/pages/google-contacts-settings"), "google-contacts-settings");
 const Accounts = lazyWithReload(() => import("@/pages/accounts"), "accounts");
 const AccountDetail = lazyWithReload(() => import("@/pages/account-detail"), "account-detail");
@@ -118,7 +117,6 @@ function Router() {
             </Route>
             <Route path="/admin" component={AdminPage} />
             <Route path="/admin/contracts" component={ContractsPage} />
-            <Route path="/admin/quickbooks" component={QuickBooksSettings} />
             <Route path="/admin/google-contacts" component={GoogleContactsSettings} />
             <Route path="/change-password" component={ChangePassword} />
             <Route component={NotFound} />

@@ -72,7 +72,6 @@ Preferred communication style: Simple, everyday language.
     - **Vite**: Fast development server and build tool.
     - **ESBuild**: JavaScript bundler for production.
 - **Integrations**:
-    - **QuickBooks**: API integration for creating Estimates.
     - **Gmail connector**: For sending emails with quote details and signing links.
     - **html2canvas and jsPDF**: For client-side PDF generation.
     - **EDG Ops handoff**: When a quote is marked `closed_won`, the server can post structured quote data to Operations. This is disabled unless `OPERATIONS_IMPORT_ON_CLOSED_WON=true`. When enabled, it also requires `OPERATIONS_IMPORT_TOKEN` and either `OPERATIONS_IMPORT_URL` or `OPERATIONS_BASE_URL`. Optional timeout override: `OPERATIONS_IMPORT_TIMEOUT_MS`.
