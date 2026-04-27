@@ -83,14 +83,7 @@ OPERATIONS_BASE_URL=
 OPERATIONS_IMPORT_TOKEN=
 OPERATIONS_VERCEL_BYPASS_SECRET=
 OPERATIONS_IMPORT_TIMEOUT_MS=
-QB_CLIENT_ID=
-QB_CLIENT_SECRET=
-QB_REDIRECT_URI=
-QB_ENVIRONMENT=sandbox
 ```
-
-Leave QuickBooks disabled in the first Vercel preview unless Jacob specifically
-needs to test QuickBooks there.
 
 ## Local Readiness Checks
 

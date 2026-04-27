@@ -19,7 +19,6 @@ import { Save, Loader2, FileText, CloudUpload, Copy, History } from "lucide-reac
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { QuoteWithDetails } from "@shared/schema";
-import { QuickBooksSync } from "@/components/quickbooks-sync";
 
 export default function QuoteBuilder() {
   const params = useParams();
@@ -450,7 +449,6 @@ export default function QuoteBuilder() {
         {/* Action Buttons - Show for existing quotes with line items */}
         {!isNewQuote && currentQuote.id && currentQuote.lineItems.length > 0 && (
           <div className="flex justify-end gap-4 mt-8 pb-8">
-            <QuickBooksSync quote={currentQuote} />
             <Button 
               onClick={() => setProposalGeneratorOpen(true)}
               variant="outline"

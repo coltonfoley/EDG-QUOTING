@@ -67,8 +67,8 @@ export const accounts = pgTable("accounts", {
   firstName: text("first_name"), // Individual's first name (optional for company-only accounts)
   lastName: text("last_name"), // Individual's last name (optional for company-only accounts)
   secondaryContacts: jsonb("secondary_contacts"), // Array of additional contact info for multi-person accounts
-  // QuickBooks integration
-  qbCustomerId: text("qb_customer_id"), // QuickBooks customer ID
+  // Legacy accounting integration field retained so drizzle push does not drop production data.
+  qbCustomerId: text("qb_customer_id"),
   // Google Contacts integration
   googleContactId: text("google_contact_id"), // Google People API resource name
   // Lead intake tracking
@@ -109,10 +109,10 @@ export const googleContactsSync = pgTable("google_contacts_sync", {
   index("idx_google_sync_resource_name").on(table.googleResourceName),
 ]);
 
-// QuickBooks integration settings
+// Legacy accounting integration settings retained so drizzle push does not drop production data.
 export const quickbooksSettings = pgTable("quickbooks_settings", {
   id: serial("id").primaryKey(),
-  realmId: text("realm_id").notNull().unique(), // QuickBooks company ID
+  realmId: text("realm_id").notNull().unique(),
   accessToken: text("access_token").notNull(),
   refreshToken: text("refresh_token").notNull(),
   tokenExpiresAt: timestamp("token_expires_at").notNull(),
@@ -163,8 +163,8 @@ export const quotes = pgTable("quotes", {
   esigIncludePricing: boolean("esig_include_pricing").default(true), // show pricing in signed PDF
   esigIncludeImages: boolean("esig_include_images").default(false), // include product renderings in signed PDF
   esigIncludeContract: boolean("esig_include_contract").default(true), // include contract terms in signed PDF
-  // QuickBooks sync fields
-  qbEstimateId: text("qb_estimate_id"), // QuickBooks estimate ID
+  // Legacy accounting sync fields retained so drizzle push does not drop production data.
+  qbEstimateId: text("qb_estimate_id"),
   qbSyncStatus: text("qb_sync_status"), // null, 'pending', 'synced', 'error'
   qbSyncedAt: timestamp("qb_synced_at"),
   qbSyncError: text("qb_sync_error"),
@@ -604,7 +604,6 @@ export type ProductColor = typeof productColors.$inferSelect;
 export type QuoteCoverPhoto = typeof quoteCoverPhotos.$inferSelect;
 export type QuoteProductRendering = typeof quoteProductRenderings.$inferSelect;
 export type IssueReport = typeof issueReports.$inferSelect;
-export type QuickBooksSettings = typeof quickbooksSettings.$inferSelect;
 export type GoogleContactsSync = typeof googleContactsSync.$inferSelect;
 
 export type InsertApiKey = z.infer<typeof insertApiKeySchema>;
