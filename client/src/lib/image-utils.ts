@@ -12,6 +12,17 @@ export function getProxiedImageUrl(imageUrl: string): string {
   if (imageUrl.startsWith('/')) {
     return imageUrl;
   }
+
+  // Vercel Blob public objects already send permissive CORS headers and are
+  // allowed by our CSP, so proxying them only adds a failure point.
+  try {
+    const url = new URL(imageUrl);
+    if (url.hostname.endsWith('.public.blob.vercel-storage.com')) {
+      return imageUrl;
+    }
+  } catch {
+    // not an absolute URL → continue with the normal handling below
+  }
   
   // Don't proxy URLs that are already on our own domain (/quote-images/ endpoints)
   if (imageUrl.includes('/quote-images/')) {
