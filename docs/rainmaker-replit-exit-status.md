@@ -7,7 +7,7 @@ Last updated: 2026-04-27
 - Active Replit fallback: `https://edgquote.replit.app`
 - New Rainmaker production: `https://rainmaker.edgpatioshade.com`
 - Vercel project: `edgpatioshade/rainmaker`
-- Current Vercel production deployment: `rainmaker-8klls3wk3-edgpatioshade.vercel.app`
+- Current Vercel production deployment: `rainmaker-pf21sw5tl-edgpatioshade.vercel.app`
 - Neon production database now used by Vercel Rainmaker: `rainmaker-production`
 - Storage provider now used by migrated quote images: Vercel Blob
 
@@ -42,12 +42,14 @@ Final proof bundle: `output/cutover/20260427-1257/`
 
 - `https://rainmaker.edgpatioshade.com/health` returns 200.
 - `https://edgquote.replit.app/health` returns 200.
-- Vercel alias now points at deployment `dpl_6osv9Lz5ytreFTCCa4dBSBc5HBgk`.
+- Vercel alias now points at deployment `dpl_BwSRc4wDhmYUMHwsbAcqehGaw6pC`.
 - Live Vercel Rainmaker quote list shows the latest Replit quote: `Q-1777294231483`.
 - Live Vercel Rainmaker quote dashboard shows `159` latest quotes, matching Replit.
 - Live Vercel lead inbox shows the merged/new lead state: Christopher + David Chang as new leads, with archived test/overlap leads preserved.
 - Quote image migration copied 275 image rows to Vercel Blob with 0 failures.
 - Blob verification: sample cover photo and sample rendering both returned HTTP 200 from `blob.vercel-storage.com`.
+- Quote `513` proposal modal was verified in Comet on `rainmaker.edgpatioshade.com`: all 4 visual thumbnails rendered, Generate PDF completed, and View PDF opened a 12-page PDF.
+- PDF brand assets were copied to Vercel Blob under `brand-assets/`; `/api/brand-assets/brand-logo.png`, `/api/brand-assets/brand-cover.jpg`, and `/api/brand-assets/brand-back.jpg` return HTTP 200 from the production custom domain.
 - Live website `/api/leads` submitted successfully and created a Rainmaker lead in `rainmaker-production`.
 - Live website lead intake created account `127` with 0 quote rows, and the test lead was archived after proof.
 - Vercel logs showed the exercised Rainmaker APIs returning 200 during browser checks: `/api/user`, `/api/leads`, `/api/quotes`, `/api/quotes/520`, `/api/quotes/520/groups`, `/api/products`, `/api/colors`, and `/api/accounts`.
@@ -57,7 +59,7 @@ Final proof bundle: `output/cutover/20260427-1257/`
 ## Watch Items
 
 - Production `RAINMAKER_API_KEY` is not the same as the local `.env.local` key. Do not overwrite it casually; the live website uses the production key and was verified working.
-- The browser proof is text/tool-output based because macOS `screencapture` could not create display images from this Codex session.
+- Browser proof screenshots are stored under `output/cutover/20260427-1257/screenshots/`.
 - I did not create a temporary quote that would need deletion in production. Creating one is fine, but deleting the test quote/account requires explicit action-time confirmation.
 - Replit remains the rollback source through the first working week.
 - Do not delete Replit data/storage until the team has used `rainmaker.edgpatioshade.com` successfully in real work.

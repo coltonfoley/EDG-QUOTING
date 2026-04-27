@@ -1,4 +1,5 @@
 import type { Express } from "express";
+import { get as getBlob } from "@vercel/blob";
 import { isAuthenticated } from "../replitAuth";
 import {
   ObjectStorageService,
@@ -325,6 +326,27 @@ export function registerImageRoutes(app: Express) {
     "brand-back.jpg": { objectPath: "brand-assets/brand-back.jpg", contentType: "image/jpeg" },
   };
 
+  async function readBlobStream(stream: ReadableStream<Uint8Array>): Promise<Buffer> {
+    const reader = stream.getReader();
+    const chunks: Uint8Array[] = [];
+    let byteLength = 0;
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) {
+          break;
+        }
+        chunks.push(value);
+        byteLength += value.byteLength;
+      }
+    } finally {
+      reader.releaseLock();
+    }
+
+    return Buffer.concat(chunks, byteLength);
+  }
+
   app.get("/api/brand-assets/:filename", async (req, res) => {
     try {
       const { filename } = req.params;
@@ -333,13 +355,26 @@ export function registerImageRoutes(app: Express) {
         return res.status(404).json({ message: "Asset not found" });
       }
 
-      const objectStorageService = new ObjectStorageService();
-      const file = await objectStorageService.searchPublicObject(asset.objectPath);
-      if (!file) {
-        return res.status(404).json({ message: "Asset not found in storage" });
+      let buffer: Buffer;
+
+      if (getObjectStorageProvider() === "vercel-blob") {
+        const blob = await getBlob(asset.objectPath, { access: "public" });
+        if (!blob || blob.statusCode !== 200 || !blob.stream) {
+          return res.status(404).json({ message: "Asset not found in storage" });
+        }
+
+        buffer = await readBlobStream(blob.stream);
+      } else {
+        const objectStorageService = new ObjectStorageService();
+        const file = await objectStorageService.searchPublicObject(asset.objectPath);
+        if (!file) {
+          return res.status(404).json({ message: "Asset not found in storage" });
+        }
+
+        const [downloadedBuffer] = await file.download();
+        buffer = downloadedBuffer;
       }
 
-      const [buffer] = await file.download();
       const base64 = buffer.toString("base64");
       const prefix = asset.contentType === "image/png" ? "data:image/png;base64," : "data:image/jpeg;base64,";
 

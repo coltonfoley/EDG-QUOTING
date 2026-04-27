@@ -18,6 +18,7 @@
     "vercel:bundle-function": "node scripts/bundle-vercel-function.mjs",
     "storage:inventory": "node scripts/storage-inventory.mjs",
     "storage:migrate-to-blob": "node scripts/migrate-quote-images-to-blob.mjs",
+    "storage:migrate-brand-assets-to-blob": "node scripts/migrate-brand-assets-to-blob.mjs",
     "db:ensure-lead-fields": "node scripts/ensure-lead-fields.mjs",
     "db:create-admin": "tsx scripts/create-admin-user.ts",
     "db:push": "drizzle-kit push"
