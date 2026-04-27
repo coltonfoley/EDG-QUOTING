@@ -693,13 +693,18 @@ export const imageProxySchema = z.object({
         if (hostname.endsWith('.replit.dev')) {
           return true;
         }
+
+        // Allow EDG-owned Vercel Blob public storage after the Replit exit.
+        if (hostname.endsWith('.public.blob.vercel-storage.com')) {
+          return true;
+        }
         
         return false;
         
       } catch (error) {
         return false;
       }
-    }, "URL must be from approved Replit storage domains only")
+    }, "URL must be from approved storage domains only")
 });
 
 // Calculate price validation
