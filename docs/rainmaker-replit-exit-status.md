@@ -7,7 +7,7 @@ Last updated: 2026-04-27
 - Active Replit fallback: `https://edgquote.replit.app`
 - New Rainmaker production: `https://rainmaker.edgpatioshade.com`
 - Vercel project: `edgpatioshade/rainmaker`
-- Current Vercel production deployment: `rainmaker-pf21sw5tl-edgpatioshade.vercel.app`
+- Current Vercel production deployment: `rainmaker-p7mfj7arx-edgpatioshade.vercel.app`
 - Neon production database now used by Vercel Rainmaker: `rainmaker-production`
 - Storage provider now used by migrated quote images: Vercel Blob
 
@@ -34,9 +34,11 @@ After the Replit data copy and before overlap lead merge:
 | quote_product_renderings | 266 | 266 |
 | users | 5 | 5 |
 
-After preserving Vercel-only overlap leads and the final live website intake proof, the new DB has 102 accounts. Replit still has 94 accounts. The difference is expected: `rainmaker-production` includes the preserved website/test lead accounts that only existed in Vercel plus one archived cutover proof lead (`127`). Quote, latest quote, line item, product, cover photo, and rendering counts still match Replit.
+After the focused regression cleanup on 2026-04-27, the new DB has 95 accounts. Replit still has 94 accounts. The difference is expected because `rainmaker-production` includes one preserved Vercel-native account/lead record. Quote, latest quote, line item, product, cover photo, and rendering counts match Replit.
 
 Final proof bundle: `output/cutover/20260427-1257/`
+
+Focused regression proof bundle: `output/cutover/20260427-150232-regression/`
 
 ## Verified
 
@@ -58,6 +60,7 @@ Final proof bundle: `output/cutover/20260427-1257/`
 
 ## Watch Items
 
+- Use `npm run deploy:prod` for production deploys. Do not use plain `vercel deploy --prod`; Rainmaker needs the prebuilt bundle flow documented in `docs/rainmaker-production-deploy.md`.
 - Production `RAINMAKER_API_KEY` is not the same as the local `.env.local` key. Do not overwrite it casually; the live website uses the production key and was verified working.
 - Browser proof screenshots are stored under `output/cutover/20260427-1257/screenshots/`.
 - I did not create a temporary quote that would need deletion in production. Creating one is fine, but deleting the test quote/account requires explicit action-time confirmation.
