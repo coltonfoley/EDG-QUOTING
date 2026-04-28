@@ -498,6 +498,7 @@ export class DatabaseStorage implements IStorage {
     this.sessionStore = new PostgresSessionStore({
       conString: process.env.DATABASE_URL,
       createTableIfMissing: false,
+      schemaName: "public",
       tableName: "sessions",
       ttl: 7 * 24 * 60 * 60, // 7 days in seconds
       pruneSessionInterval: 60 * 60, // prune expired sessions every hour
