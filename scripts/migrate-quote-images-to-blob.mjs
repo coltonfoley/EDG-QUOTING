@@ -20,10 +20,12 @@ if (execute && !process.env.BLOB_READ_WRITE_TOKEN) {
 const tables = [
   {
     tableName: "quote_cover_photos",
+    qualifiedTableName: "public.quote_cover_photos",
     destinationPrefix: "rainmaker-migrated/quote-cover-photos",
   },
   {
     tableName: "quote_product_renderings",
+    qualifiedTableName: "public.quote_product_renderings",
     destinationPrefix: "rainmaker-migrated/quote-product-renderings",
   },
 ];
@@ -49,7 +51,7 @@ function needsMigration(storageUrl) {
     && !storageUrl.includes("blob.vercel-storage.com");
 }
 
-async function getRows({ tableName }) {
+async function getRows({ qualifiedTableName }) {
   const where = [
     "storage_url IS NOT NULL",
     "storage_url <> ''",
@@ -64,7 +66,7 @@ async function getRows({ tableName }) {
   const queryLimit = limit > 0 ? `LIMIT ${limit}` : "";
   const { rows } = await pool.query(`
     SELECT id, quote_id, filename, storage_url
-    FROM ${tableName}
+    FROM ${qualifiedTableName}
     WHERE ${where.join(" AND ")}
     ORDER BY id ASC
     ${queryLimit};
@@ -104,7 +106,7 @@ async function migrateRow(config, row) {
   });
 
   await pool.query(
-    `UPDATE ${config.tableName} SET storage_url = $1 WHERE id = $2`,
+    `UPDATE ${config.qualifiedTableName} SET storage_url = $1 WHERE id = $2`,
     [blob.url, row.id],
   );
 
