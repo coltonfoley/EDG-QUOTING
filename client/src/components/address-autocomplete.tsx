@@ -7,6 +7,7 @@ declare global {
     google: any;
     googleMapsLoading?: boolean;
     googleMapsLoaded?: boolean;
+    __rainmakerGoogleMapsInit?: () => void;
   }
 }
 
@@ -30,7 +31,7 @@ interface AddressAutocompleteProps {
 const loadGooglePlacesScript = (): Promise<void> => {
   return new Promise((resolve, reject) => {
     // Already loaded
-    if (window.googleMapsLoaded && window.google?.maps) {
+    if (window.googleMapsLoaded && window.google?.maps?.places?.Autocomplete) {
       resolve();
       return;
     }
@@ -38,7 +39,7 @@ const loadGooglePlacesScript = (): Promise<void> => {
     // Already loading
     if (window.googleMapsLoading) {
       const checkInterval = setInterval(() => {
-        if (window.googleMapsLoaded && window.google?.maps) {
+        if (window.googleMapsLoaded && window.google?.maps?.places?.Autocomplete) {
           clearInterval(checkInterval);
           resolve();
         }
@@ -55,31 +56,23 @@ const loadGooglePlacesScript = (): Promise<void> => {
 
     window.googleMapsLoading = true;
 
-    // Use the new bootstrap loader approach
+    window.__rainmakerGoogleMapsInit = () => {
+      if (window.google?.maps?.places?.Autocomplete) {
+        window.googleMapsLoaded = true;
+        window.googleMapsLoading = false;
+        resolve();
+        return;
+      }
+
+      window.googleMapsLoading = false;
+      reject(new Error("Google Places API loaded but places autocomplete is not available"));
+    };
+
     const script = document.createElement("script");
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&loading=async`;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&callback=__rainmakerGoogleMapsInit`;
     script.async = true;
     script.defer = true;
-    
-    script.onload = () => {
-      // Wait for google.maps to be fully initialized
-      const checkGoogleMaps = () => {
-        if (window.google?.maps?.importLibrary) {
-          window.googleMapsLoaded = true;
-          window.googleMapsLoading = false;
-          console.log("Google Maps API with importLibrary loaded successfully");
-          resolve();
-        } else if (window.google?.maps) {
-          // Old API loaded, try to wait a bit more
-          setTimeout(checkGoogleMaps, 100);
-        } else {
-          window.googleMapsLoading = false;
-          reject(new Error("Google Maps API loaded but google.maps is not available"));
-        }
-      };
-      checkGoogleMaps();
-    };
-    
+
     script.onerror = () => {
       window.googleMapsLoading = false;
       reject(new Error("Failed to load Google Places API"));
@@ -98,8 +91,8 @@ export function AddressAutocomplete({
   const [isLoading, setIsLoading] = useState(false);
   const [isScriptLoaded, setIsScriptLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const autocompleteElementRef = useRef<any>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const autocompleteRef = useRef<any>(null);
 
   useEffect(() => {
     setIsLoading(true);
@@ -118,52 +111,29 @@ export function AddressAutocomplete({
   }, []);
 
   useEffect(() => {
-    if (!isScriptLoaded || !containerRef.current || disabled) return;
+    const input = inputRef.current;
+    if (!isScriptLoaded || !input || disabled) return;
 
-    let cleanup: (() => void) | null = null;
+    let placeChangedListener: any = null;
 
     const initAutocomplete = async () => {
       try {
-        // Verify google.maps is available
         if (!window.google || !window.google.maps) {
           throw new Error("Google Maps API not loaded");
         }
-        
-        // Import the places library
-        const placesLib = await window.google.maps.importLibrary("places");
 
-        // Create the new PlaceAutocompleteElement
-        const placeAutocomplete = new (window.google.maps.places as any).PlaceAutocompleteElement({
-          includedRegionCodes: ["us"]
+        const autocomplete = new window.google.maps.places.Autocomplete(input, {
+          componentRestrictions: { country: "us" },
+          fields: ["address_components", "formatted_address", "place_id"],
+          types: ["address"]
         });
 
-        // Store reference
-        autocompleteElementRef.current = placeAutocomplete;
+        autocompleteRef.current = autocomplete;
 
-        // Add to container
-        if (containerRef.current) {
-          containerRef.current.appendChild(placeAutocomplete);
-        }
-
-        // Listen for place selection with the correct event name
-        const handlePlaceSelect = async (event: any) => {
+        placeChangedListener = autocomplete.addListener("place_changed", () => {
           try {
-            // Handle both possible event structures
-            const placePrediction = event.placePrediction || event.detail?.place || event.detail?.placePrediction;
-            if (!placePrediction) {
-              console.warn("No place prediction found in event:", event);
-              return;
-            }
-
-            // Convert to Place object
-            const place = placePrediction.toPlace ? placePrediction.toPlace() : placePrediction;
-
-            // Fetch the fields we need
-            await place.fetchFields({
-              fields: ["addressComponents", "formattedAddress", "id"]
-            });
-
-            const addressComponents = place.addressComponents;
+            const place = autocomplete.getPlace();
+            const addressComponents = place.address_components;
             if (!addressComponents) return;
 
             const components: AddressComponents = {
@@ -173,7 +143,7 @@ export function AddressAutocomplete({
               state: "",
               zipCode: "",
               country: "",
-              placeId: place.id || ""
+              placeId: place.place_id || ""
             };
 
             let streetNumber = "";
@@ -184,25 +154,25 @@ export function AddressAutocomplete({
               const types = component.types;
 
               if (types.includes("street_number")) {
-                streetNumber = component.longText;
+                streetNumber = component.long_name;
               }
               if (types.includes("route")) {
-                route = component.longText;
+                route = component.long_name;
               }
               if (types.includes("subpremise")) {
-                subpremise = component.longText;
+                subpremise = component.long_name;
               }
               if (types.includes("locality")) {
-                components.city = component.longText;
+                components.city = component.long_name;
               }
               if (types.includes("administrative_area_level_1")) {
-                components.state = component.shortText;
+                components.state = component.short_name;
               }
               if (types.includes("postal_code")) {
-                components.zipCode = component.longText;
+                components.zipCode = component.long_name;
               }
               if (types.includes("country")) {
-                components.country = component.longText;
+                components.country = component.long_name;
               }
             });
 
@@ -215,21 +185,7 @@ export function AddressAutocomplete({
           } catch (err) {
             console.error("Error processing place selection:", err);
           }
-        };
-
-        placeAutocomplete.addEventListener("gmp-select", handlePlaceSelect);
-
-        cleanup = () => {
-          placeAutocomplete.removeEventListener("gmp-select", handlePlaceSelect);
-          if (containerRef.current && autocompleteElementRef.current) {
-            try {
-              containerRef.current.removeChild(autocompleteElementRef.current);
-            } catch (e) {
-              // Element might already be removed
-            }
-          }
-          autocompleteElementRef.current = null;
-        };
+        });
       } catch (error) {
         console.error("Error initializing Google Places Autocomplete:", error);
         console.error("Error details:", error instanceof Error ? error.message : String(error));
@@ -241,7 +197,13 @@ export function AddressAutocomplete({
     initAutocomplete();
 
     return () => {
-      if (cleanup) cleanup();
+      if (placeChangedListener) {
+        placeChangedListener.remove();
+      }
+      if (autocompleteRef.current && window.google?.maps?.event) {
+        window.google.maps.event.clearInstanceListeners(autocompleteRef.current);
+      }
+      autocompleteRef.current = null;
     };
   }, [isScriptLoaded, onAddressSelect, disabled]);
 
@@ -264,26 +226,24 @@ export function AddressAutocomplete({
 
   return (
     <div className="w-full">
-      {!isScriptLoaded ? (
-        <div className="relative">
-          <Input
-            type="text"
-            placeholder="Loading address autocomplete..."
-            disabled
-            data-testid={testId}
-            className="pr-10"
-          />
-          <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
-            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-          </div>
-        </div>
-      ) : (
-        <div 
-          ref={containerRef} 
-          data-testid={testId} 
-          className="w-full [&_input]:w-full [&_input]:px-3 [&_input]:py-2 [&_input]:text-sm [&_input]:rounded-md [&_input]:border [&_input]:border-input [&_input]:bg-background [&_input]:ring-offset-background [&_input]:placeholder:text-muted-foreground [&_input]:focus-visible:outline-none [&_input]:focus-visible:ring-2 [&_input]:focus-visible:ring-ring [&_input]:focus-visible:ring-offset-2"
+      <div className="relative">
+        <Input
+          ref={inputRef}
+          type="text"
+          placeholder={isScriptLoaded ? placeholder : "Loading address autocomplete..."}
+          disabled={disabled || !isScriptLoaded}
+          data-testid={testId}
+          autoComplete="new-password"
+          className="pr-10"
         />
-      )}
+        <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+          {!isScriptLoaded || isLoading ? (
+            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+          ) : (
+            <MapPin className="h-4 w-4 text-muted-foreground" />
+          )}
+        </div>
+      </div>
     </div>
   );
 }
