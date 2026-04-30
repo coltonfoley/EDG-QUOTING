@@ -133,6 +133,7 @@ const buildOperationsPayload = (quote: any) => {
         sku: item.sku,
         description: item.description,
         quantity: parseDecimal(item.quantity, 1),
+        unit: item.unit,
         unitPrice: parseDecimal(item.unitPrice, 0),
         retailPrice: parseDecimal(item.retailPrice, 0),
         markupType: item.markupType,
