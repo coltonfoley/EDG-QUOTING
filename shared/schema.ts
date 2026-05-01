@@ -625,7 +625,7 @@ export type InsertIssueReport = z.infer<typeof insertIssueReportSchema>;
 export type QuoteWithDetails = Quote & {
   account?: Account; // Optional since accountId can be null
   customer?: Account; // Legacy alias for backward compatibility - also optional
-  lineItems: (LineItem & { manufacturer?: string })[];
+  lineItems: (LineItem & { manufacturer?: string; unit?: string })[];
   contractTemplate?: ContractTemplate;
   coverPhoto?: QuoteCoverPhoto; // Cover page image
   productRenderings?: QuoteProductRendering[]; // Visual assets and details

@@ -838,6 +838,7 @@ export class DatabaseStorage implements IStorage {
         position: lineItems.position,
         sku: lineItems.sku,
         productManufacturer: products.manufacturer,
+        productUnit: products.unit,
       })
       .from(lineItems)
       .leftJoin(products, eq(lineItems.productId, products.id))
@@ -866,6 +867,7 @@ export class DatabaseStorage implements IStorage {
       position: item.position,
       sku: item.sku,
       manufacturer: item.productManufacturer || "Uncategorized",
+      unit: item.productUnit || undefined,
     }));
 
     // Get contract template if referenced
@@ -918,6 +920,7 @@ export class DatabaseStorage implements IStorage {
         position: lineItems.position,
         sku: lineItems.sku,
         productManufacturer: products.manufacturer,
+        productUnit: products.unit,
       })
       .from(lineItems)
       .leftJoin(products, eq(lineItems.productId, products.id))
@@ -946,6 +949,7 @@ export class DatabaseStorage implements IStorage {
       position: item.position,
       sku: item.sku,
       manufacturer: item.productManufacturer || "Uncategorized",
+      unit: item.productUnit || undefined,
     }));
 
     // Get contract template if referenced
@@ -1030,6 +1034,7 @@ export class DatabaseStorage implements IStorage {
           position: lineItems.position,
           sku: lineItems.sku,
           productManufacturer: products.manufacturer,
+          productUnit: products.unit,
         })
         .from(lineItems)
         .leftJoin(products, eq(lineItems.productId, products.id))
@@ -1063,6 +1068,7 @@ export class DatabaseStorage implements IStorage {
         position: item.position,
         sku: item.sku,
         manufacturer: item.productManufacturer || "Uncategorized",
+        unit: item.productUnit || undefined,
       };
 
       if (!lineItemsByQuoteId.has(item.quoteId)) {
