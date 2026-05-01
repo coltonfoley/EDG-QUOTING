@@ -95,6 +95,19 @@ const formatJobsiteAddress = (quote: any): string | null => {
   return parts.length > 0 ? parts.join(", ") : null;
 };
 
+const normalizeConfigData = (value: unknown): unknown => {
+  if (typeof value !== "string") return value;
+
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    return value;
+  }
+};
+
 const getOperationsImportUrl = (): string | null => {
   if (process.env.OPERATIONS_IMPORT_URL) return process.env.OPERATIONS_IMPORT_URL;
   if (!process.env.OPERATIONS_BASE_URL) return null;
@@ -143,7 +156,7 @@ const buildOperationsPayload = (quote: any) => {
         isTaxable: item.isTaxable,
         isTariffApplicable: item.isTariffApplicable,
         manufacturer: item.manufacturer,
-        configData: item.configData,
+        configData: normalizeConfigData(item.configData),
         total: calculateLineItemTotal(item, quote.tariffRate),
       })),
     },
