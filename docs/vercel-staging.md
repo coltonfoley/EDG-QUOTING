@@ -16,7 +16,7 @@ As of 2026-04-25:
 - The Neon connection creates `DATABASE_URL` and related encrypted database variables for Preview and Development only.
 - Stable staging subdomain: `https://rainmaker-staging.edgpatioshade.com`.
 - Latest verified staging deployment: `https://rainmaker-lseb4k9bw-edgpatioshade.vercel.app`.
-- Staging health, login, leads, accounts, products, quotes, quote image uploads, Rainmaker-to-Ops closed-won handoff, and large PDF/AI quote import have all passed.
+- Staging health, login, leads, accounts, products, quote image uploads, and large PDF/AI quote import have all passed.
 
 ## Production Cutover
 
@@ -77,12 +77,6 @@ RAINMAKER_API_KEY=
 VITE_GOOGLE_PLACES_API_KEY=
 OPENAI_API_KEY=
 GOOGLE_SERVICE_ACCOUNT_KEY=
-OPERATIONS_IMPORT_ON_CLOSED_WON=false
-OPERATIONS_IMPORT_URL=
-OPERATIONS_BASE_URL=
-OPERATIONS_IMPORT_TOKEN=
-OPERATIONS_VERCEL_BYPASS_SECRET=
-OPERATIONS_IMPORT_TIMEOUT_MS=
 ```
 
 ## Local Readiness Checks
@@ -148,5 +142,5 @@ After the first preview deploy:
 - Staging PDF import is verified with `OPENAI_API_KEY` using browser-side PDF rendering. Server-side PDF text/image conversion still hits Vercel canvas/Chrome limits and should not be the primary cutover path.
 - Browser-direct image upload routes now support Vercel Blob client uploads on staging while preserving the Replit signed-upload path for live Replit.
 - Google Workspace staff OAuth is configured for the Vercel app, while local username/password auth remains available as the bridge.
-- Production Rainmaker-to-Ops handoff is configured to send closed-won quotes to `https://ops.edgpatioshade.com/api/integrations/quotes/import`; Ops supports a protected dry-run smoke path for validating that token/endpoint without writing a dummy job.
+- Direct Rainmaker-to-Ops automation is paused while EDG rethinks the operations process from first principles.
 - Keep the old Replit Rainmaker app live through the confidence window before removing any Replit resources.

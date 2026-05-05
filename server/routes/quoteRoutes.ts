@@ -26,7 +26,6 @@ import multer from "multer";
 import { extractQuoteDataFromImages, extractQuoteDataFromPDF, isOpenAIConfigured } from "../openai";
 import { ObjectStorageService, getObjectStorageProvider } from "../objectStorage";
 import { nanoid } from "nanoid";
-import { sendQuoteToOperations } from "../integrations/operations";
 import { buildAppUrl } from "../config";
 
 const quotesQuerySchema = z.object({
@@ -1191,16 +1190,8 @@ export function registerQuoteRoutes(app: Express) {
       if (!quote) {
         return res.status(404).json({ message: "Quote not found" });
       }
-
-      let operationsImport;
-      if (quoteData.dealStage === 'closed_won' && originalQuote.dealStage !== 'closed_won') {
-        operationsImport = await sendQuoteToOperations(params.data.id);
-        if (!operationsImport.success) {
-          console.error(`Operations import did not complete for quote ${params.data.id}:`, operationsImport);
-        }
-      }
       
-      res.json(operationsImport ? { ...quote, operationsImport } : quote);
+      res.json(quote);
     } catch (error: any) {
       if (error instanceof z.ZodError) {
         console.error("Quote validation errors:", JSON.stringify(error.errors, null, 2));
@@ -1258,17 +1249,9 @@ export function registerQuoteRoutes(app: Express) {
       if (!quote) {
         return res.status(404).json({ message: "Quote not found" });
       }
-
-      let operationsImport;
-      if (deal_stage === 'closed_won') {
-        operationsImport = await sendQuoteToOperations(params.data.id);
-        if (!operationsImport.success) {
-          console.error(`Operations import did not complete for quote ${params.data.id}:`, operationsImport);
-        }
-      }
       
       console.log(`✅ Updated quote ${params.data.id} stage to ${deal_stage}`);
-      res.json(operationsImport ? { ...quote, operationsImport } : quote);
+      res.json(quote);
     } catch (error) {
       console.error("Error updating quote stage:", error);
       res.status(500).json({ message: "Internal server error" });
