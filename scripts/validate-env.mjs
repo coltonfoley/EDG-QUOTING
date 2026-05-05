@@ -141,18 +141,6 @@ warnMissing("RAINMAKER_API_KEY", "Website lead intake and scripts/smoke-lead-int
 warnMissing("OPENAI_API_KEY", "AI assistant, AI product import, and PDF quote extraction will stay unavailable without it.");
 warnMissing("VITE_GOOGLE_PLACES_API_KEY", "Address autocomplete will be limited without it.");
 
-if (value("OPERATIONS_IMPORT_ON_CLOSED_WON", "false") === "true") {
-  requireVars(["OPERATIONS_IMPORT_TOKEN"], "Closed-won quote handoff to Ops needs a shared import token.");
-  requireOneOf(
-    ["OPERATIONS_IMPORT_URL", "OPERATIONS_BASE_URL"],
-    "Closed-won quote handoff needs the Ops import URL or base URL."
-  );
-  warnMissing(
-    "OPERATIONS_VERCEL_BYPASS_SECRET",
-    "Protected Vercel Preview Ops deployments need an automation bypass secret for server-to-server smoke tests."
-  );
-}
-
 console.log(`${projectName} environment check`);
 console.log(
   loadedFiles.length
