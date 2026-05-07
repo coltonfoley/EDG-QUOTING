@@ -37,6 +37,7 @@ export function registerImageRoutes(app: Express) {
       
       const uploadTarget = await objectStorageService.getObjectEntityUploadTarget(customPath, {
         allowedContentTypes: ["image/*"],
+        maximumSizeInBytes: 100 * 1024 * 1024,
       });
       
       console.log(`🔧 Generated upload target for ${imageType}: ${uploadTarget.objectPath}`);

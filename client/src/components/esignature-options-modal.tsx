@@ -10,6 +10,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Upload, X, Image, FileText } from 'lucide-react';
 import { getProxiedImageUrl } from '@/lib/image-utils';
 import { apiRequest, queryClient } from '@/lib/queryClient';
+import { uploadQuoteImage } from '@/lib/quote-image-upload';
 import type { QuoteWithDetails, QuoteProductRendering } from '@shared/schema';
 
 interface ESignatureOptionsModalProps {
@@ -66,9 +67,8 @@ export function ESignatureOptionsModal({ quote, open, onOpenChange, onSuccess }:
 
   const uploadRenderingMutation = useMutation({
     mutationFn: async (file: File) => {
-      const formData = new FormData();
-      formData.append('image', file);
-      return await apiRequest('POST', `/api/quotes/${quote.id}/product-renderings`, formData);
+      const uploadedImage = await uploadQuoteImage(file, 'product-rendering');
+      return await apiRequest('POST', `/api/quotes/${quote.id}/product-rendering`, uploadedImage);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/quotes/${quote.id}/product-renderings`] });

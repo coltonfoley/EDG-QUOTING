@@ -1835,6 +1835,36 @@ export function registerQuoteRoutes(app: Express) {
     }
   });
 
+  app.post("/api/quotes/:quoteId/product-rendering", isAuthenticated, async (req, res) => {
+    try {
+      const params = quoteIdParamSchema.safeParse(req.params);
+      if (!params.success) {
+        return res.status(400).json({ 
+          message: "Invalid request parameters", 
+          errors: params.error.errors 
+        });
+      }
+
+      const hasAccess = await storage.validateQuoteOwnership(params.data.quoteId, req.user?.id);
+      if (!hasAccess) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      const renderingData = createQuoteProductRenderingSchema.parse({ ...req.body, quoteId: params.data.quoteId });
+      const rendering = await storage.createQuoteProductRendering(renderingData);
+      res.status(201).json(rendering);
+    } catch (error) {
+      console.error("Error creating quote visual asset:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          message: "Invalid request data", 
+          errors: error.errors 
+        });
+      }
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
   app.post("/api/quotes/:quoteId/cover-photos", isAuthenticated, upload.single('image'), async (req: any, res) => {
     try {
       const params = quoteIdParamSchema.safeParse(req.params);
