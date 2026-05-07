@@ -21,6 +21,28 @@ import { registerImageRoutes } from "./routes/imageRoutes";
 import { registerAIAssistantRoutes } from "./routes/aiAssistantRoutes";
 import { registerLeadIntakeRoutes } from "./routes/leadIntakeRoutes";
 
+const STORAGE_USAGE_CACHE_MS = 5 * 60 * 1000;
+
+let storageUsageCache: {
+  expiresAt: number;
+  data: {
+    provider: string;
+    usedBytes: number;
+    quotaBytes: number | null;
+    objectCount: number;
+    calculatedAt: string;
+  };
+} | null = null;
+
+function getConfiguredStorageQuotaBytes(): number | null {
+  const quotaGb = Number(process.env.BLOB_STORAGE_QUOTA_GB || "5");
+  if (!Number.isFinite(quotaGb) || quotaGb <= 0) {
+    return null;
+  }
+
+  return Math.round(quotaGb * 1024 * 1024 * 1024);
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
 
@@ -61,6 +83,70 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching users:", error);
       res.status(500).json({ message: "Failed to fetch users" });
+    }
+  });
+
+  app.get('/api/storage/usage', isAuthenticated, async (req: any, res) => {
+    try {
+      const currentUser = await storage.getUser(req.user?.id);
+      if (currentUser?.role !== 'admin') {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+
+      const provider = process.env.OBJECT_STORAGE_PROVIDER || "replit";
+      if (provider !== "vercel-blob") {
+        return res.json({
+          provider,
+          usedBytes: 0,
+          quotaBytes: null,
+          objectCount: 0,
+          calculatedAt: new Date().toISOString(),
+          unavailableReason: "Storage usage is only available for Vercel Blob.",
+        });
+      }
+
+      if (!process.env.BLOB_READ_WRITE_TOKEN) {
+        return res.status(503).json({
+          message: "Storage usage is not configured",
+        });
+      }
+
+      const now = Date.now();
+      if (storageUsageCache && storageUsageCache.expiresAt > now) {
+        return res.json({ ...storageUsageCache.data, cached: true });
+      }
+
+      const { list } = await import("@vercel/blob");
+      let cursor: string | undefined;
+      let usedBytes = 0;
+      let objectCount = 0;
+
+      do {
+        const result = await list({ cursor, limit: 1000 });
+        cursor = result.cursor;
+        for (const blob of result.blobs) {
+          usedBytes += blob.size || 0;
+          objectCount += 1;
+        }
+      } while (cursor);
+
+      const data = {
+        provider,
+        usedBytes,
+        quotaBytes: getConfiguredStorageQuotaBytes(),
+        objectCount,
+        calculatedAt: new Date().toISOString(),
+      };
+
+      storageUsageCache = {
+        expiresAt: now + STORAGE_USAGE_CACHE_MS,
+        data,
+      };
+
+      res.json({ ...data, cached: false });
+    } catch (error) {
+      console.error("Error fetching storage usage:", error);
+      res.status(500).json({ message: "Failed to fetch storage usage" });
     }
   });
 
