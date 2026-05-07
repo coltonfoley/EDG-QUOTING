@@ -27,7 +27,7 @@ cpSync(staticSourceDir, staticOutputDir, { recursive: true });
 mkdirSync(path.join(functionDir, "api"), { recursive: true });
 
 await build({
-  entryPoints: ["api/index.ts"],
+  entryPoints: ["server/vercelHandler.ts"],
   bundle: true,
   platform: "node",
   external: ["./vite", "bufferutil", "pg-native", "utf-8-validate"],
