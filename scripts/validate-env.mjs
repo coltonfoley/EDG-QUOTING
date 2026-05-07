@@ -141,6 +141,11 @@ warnMissing("RAINMAKER_API_KEY", "Website lead intake and scripts/smoke-lead-int
 warnMissing("OPENAI_API_KEY", "AI assistant, AI product import, and PDF quote extraction will stay unavailable without it.");
 warnMissing("VITE_GOOGLE_PLACES_API_KEY", "Address autocomplete will be limited without it.");
 
+const operationsImportConfigured = has("OPERATIONS_IMPORT_TOKEN") && (has("OPERATIONS_IMPORT_URL") || has("OPERATIONS_BASE_URL"));
+if (!operationsImportConfigured) {
+  warnings.push("Rainmaker -> Ops manual handoff is not configured. Set OPERATIONS_BASE_URL or OPERATIONS_IMPORT_URL plus OPERATIONS_IMPORT_TOKEN.");
+}
+
 console.log(`${projectName} environment check`);
 console.log(
   loadedFiles.length

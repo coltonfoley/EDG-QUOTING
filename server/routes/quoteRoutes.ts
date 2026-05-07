@@ -27,6 +27,7 @@ import { extractQuoteDataFromImages, extractQuoteDataFromPDF, isOpenAIConfigured
 import { ObjectStorageService, getObjectStorageProvider } from "../objectStorage";
 import { nanoid } from "nanoid";
 import { buildAppUrl } from "../config";
+import { sendQuoteToOperations } from "../integrations/operations";
 
 const quotesQuerySchema = z.object({
   page: z.coerce.number().int().gte(1).optional(),
@@ -1254,6 +1255,31 @@ export function registerQuoteRoutes(app: Express) {
       res.json(quote);
     } catch (error) {
       console.error("Error updating quote stage:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.post("/api/quotes/:id/send-to-ops", isAuthenticated, async (req, res) => {
+    try {
+      const params = idParamSchema.safeParse(req.params);
+      if (!params.success) {
+        return res.status(400).json({
+          message: "Invalid request parameters",
+          errors: params.error.errors,
+        });
+      }
+
+      const result = await sendQuoteToOperations(params.data.id, {
+        dryRun: req.body?.dryRun === true,
+      });
+
+      if (!result.success) {
+        return res.status(result.status && result.status >= 400 ? result.status : 502).json(result);
+      }
+
+      res.json(result);
+    } catch (error) {
+      console.error("Error sending quote to Ops:", error);
       res.status(500).json({ message: "Internal server error" });
     }
   });

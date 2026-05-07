@@ -8,8 +8,19 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Save, Clock, Camera, Image, Wrench, Building, ChevronDown, ChevronUp, Search, Users } from "lucide-react";
+import { Save, Clock, Camera, Image, Wrench, Building, ChevronDown, ChevronUp, Search, Users, Send, ExternalLink } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
@@ -40,6 +51,38 @@ const quoteFormSchema = insertQuoteSchema.extend({
 
 type QuoteFormData = z.infer<typeof quoteFormSchema>;
 
+type OperationsImportResponse = {
+  success?: boolean;
+  skipped?: boolean;
+  message?: string;
+  opsJobUrl?: string | null;
+  data?: {
+    existing?: boolean;
+    imported?: boolean;
+    job?: {
+      id?: string | number;
+      title?: string | null;
+      projectCode?: string | null;
+      jobNumber?: string | null;
+    } | null;
+    oemImportPacket?: {
+      importMode?: string;
+      summary?: {
+        oemLineCount?: number;
+        oemGroupCount?: number;
+        manualReviewLineCount?: number;
+        sundanceLineCount?: number;
+      };
+    };
+  };
+};
+
+const getOpsJobLabel = (result?: OperationsImportResponse | null): string | null => {
+  const job = result?.data?.job;
+  if (!job) return null;
+  return job.projectCode || job.jobNumber || job.title || (job.id ? `job ${job.id}` : null);
+};
+
 interface QuoteHeaderProps {
   quote?: QuoteWithDetails;
   onSave: (data: QuoteFormData) => void;
@@ -53,6 +96,7 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingChanges = useRef<Record<string, any>>({});
   const [isSaving, setIsSaving] = useState(false);
+  const [opsImportResult, setOpsImportResult] = useState<OperationsImportResponse | null>(null);
 
   const form = useForm<QuoteFormData>({
     resolver: zodResolver(quoteFormSchema),
@@ -133,6 +177,41 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
         title: "Error", 
         description: "Failed to update quote", 
         variant: "destructive" 
+      });
+    },
+  });
+
+  const sendToOpsMutation = useMutation({
+    mutationFn: async () => {
+      if (!quote?.id) throw new Error("No quote ID");
+      flushPendingChanges();
+      const response = await apiRequest("POST", `/api/quotes/${quote.id}/send-to-ops`, {});
+      return response.json() as Promise<OperationsImportResponse>;
+    },
+    onSuccess: (result) => {
+      setOpsImportResult(result);
+      const jobLabel = getOpsJobLabel(result);
+      const packet = result.data?.oemImportPacket;
+      const summary = packet?.summary;
+      const mode = packet?.importMode === "oem_ready" ? "OEM-ready" : packet?.importMode ? packet.importMode.replace(/_/g, " ") : "ready";
+      const oemGroupCount = summary?.oemGroupCount;
+
+      toast({
+        title: result.data?.existing ? "Quote already in Ops" : "Quote sent to Ops",
+        description: result.data?.existing
+          ? jobLabel
+            ? `${jobLabel} is already in Ops. Open the Ops job to review the import packet and procurement next steps.`
+            : "This quote is already in Ops. Open Ops to review the import packet and procurement next steps."
+          : jobLabel
+            ? `${jobLabel} is ${mode}. ${typeof oemGroupCount === "number" ? `${oemGroupCount} OEM group${oemGroupCount === 1 ? "" : "s"} ready for procurement review.` : "Open the Ops job to review procurement next steps."}`
+            : "Ops received the quote and built the import packet.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Could not send to Ops",
+        description: error?.message || "Ops import is unavailable right now.",
+        variant: "destructive",
       });
     },
   });
@@ -280,6 +359,10 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
     onSave(data);
   };
 
+  const opsJobUrl = opsImportResult?.opsJobUrl || null;
+  const opsJobLabel = getOpsJobLabel(opsImportResult);
+  const canSendToOps = Boolean(quote?.id && quote.lineItems?.length);
+
   return (
     <Card className="mb-6">
       <CardHeader className="border-b border-border">
@@ -321,6 +404,58 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
                       ))}
                     </SelectContent>
                   </Select>
+                </div>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        disabled={!canSendToOps || sendToOpsMutation.isPending}
+                        data-testid="button-send-to-ops"
+                        title={!canSendToOps ? "Add at least one line item before sending to Ops" : "Create or open the matching Ops job"}
+                      >
+                        {sendToOpsMutation.isPending ? (
+                          <Clock className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                          <Send className="mr-2 h-4 w-4" />
+                        )}
+                        {sendToOpsMutation.isPending ? "Sending..." : "Send to Ops"}
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Send this quote to Ops?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Ops will create or find the matching job, copy the quote lines, and build the Rainmaker Import Packet.
+                          Purchase orders will not be created automatically.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <div className="rounded-md border bg-muted/40 p-3 text-sm text-muted-foreground">
+                        Use this when the sale is ready for the team to start operational planning. OEM lines will be grouped for procurement review; Sundance or unclear lines will be marked for manual review.
+                      </div>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={() => {
+                            sendToOpsMutation.mutate();
+                          }}
+                          disabled={sendToOpsMutation.isPending}
+                          data-testid="confirm-send-to-ops"
+                        >
+                          Send to Ops
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                  {opsJobUrl && (
+                    <Button type="button" variant="outline" asChild data-testid="link-open-ops-job">
+                      <a href={opsJobUrl} target="_blank" rel="noreferrer">
+                        <ExternalLink className="mr-2 h-4 w-4" />
+                        {opsJobLabel ? "Open Ops Job" : "Open Ops"}
+                      </a>
+                    </Button>
+                  )}
                 </div>
               </>
             )}
