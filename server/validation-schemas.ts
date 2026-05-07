@@ -624,8 +624,8 @@ export const updateUserSchema = createUserSchema.partial().extend({
 
 // File upload validation
 export const uploadUrlSchema = z.object({
-  imageType: z.enum(['portfolio', 'technical', 'company', 'product', 'specification'], {
-    errorMap: () => ({ message: "Image type must be one of: portfolio, technical, company, product, specification" })
+  imageType: z.enum(['portfolio', 'technical', 'company', 'product', 'specification', 'cover-photo', 'product-rendering'], {
+    errorMap: () => ({ message: "Image type must be one of: portfolio, technical, company, product, specification, cover-photo, product-rendering" })
   }),
   filename: z.string()
     .min(1, "Filename is required")

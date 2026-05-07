@@ -18,6 +18,7 @@ import logoPath from '@assets/Logo_Full Color_Black_1758731429139.png';
 import { barlowRegularBase64, barlowSemiBoldBase64 } from '@/lib/fonts';
 import { generateBrandedSequencePDF } from '@/lib/pdf-branded-sequence';
 import { normalizeImageToDataUrl } from '@/lib/pdf-image-pipeline';
+import { uploadQuoteImage } from '@/lib/quote-image-upload';
 
 interface SimpleProposalGeneratorProps {
   quote: QuoteWithDetails;
@@ -111,9 +112,8 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
   // Mutations for uploading images
   const uploadCoverPhotoMutation = useMutation({
     mutationFn: async (file: File) => {
-      const formData = new FormData();
-      formData.append('image', file);
-      return await apiRequest('POST', `/api/quotes/${quote.id}/cover-photos`, formData);
+      const uploadedImage = await uploadQuoteImage(file, 'cover-photo');
+      return await apiRequest('POST', `/api/quotes/${quote.id}/cover-photo`, uploadedImage);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/quotes/${quote.id}/cover-photos`] });
@@ -134,9 +134,8 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
 
   const uploadProductRenderingMutation = useMutation({
     mutationFn: async (file: File) => {
-      const formData = new FormData();
-      formData.append('image', file);
-      return await apiRequest('POST', `/api/quotes/${quote.id}/product-renderings`, formData);
+      const uploadedImage = await uploadQuoteImage(file, 'product-rendering');
+      return await apiRequest('POST', `/api/quotes/${quote.id}/product-rendering`, uploadedImage);
     },
     onSuccess: (_, file) => {
       queryClient.invalidateQueries({ queryKey: [`/api/quotes/${quote.id}/product-renderings`] });
