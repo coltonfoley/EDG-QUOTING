@@ -298,10 +298,33 @@ export function setupAuth(app: Express) {
       if (!(await ensureGoogleStrategy())) {
         return res.redirect("/auth?google_error=not_configured");
       }
-      passport.authenticate(googleStrategyName, {
-        successReturnToOrRedirect: "/",
-        failureRedirect: "/auth?google_error=access_denied",
-      })(req, res, next);
+
+      passport.authenticate(
+        googleStrategyName,
+        (authError: unknown, user: SelectUser | false | null) => {
+          if (authError) {
+            return next(authError);
+          }
+
+          if (!user) {
+            return res.redirect("/auth?google_error=access_denied");
+          }
+
+          req.login(user, (loginError) => {
+            if (loginError) {
+              return next(loginError);
+            }
+
+            req.session.save((sessionError) => {
+              if (sessionError) {
+                return next(sessionError);
+              }
+
+              return res.redirect("/");
+            });
+          });
+        },
+      )(req, res, next);
     } catch (error) {
       next(error);
     }
