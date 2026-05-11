@@ -558,31 +558,15 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
   // Ref to hold the update mutation's mutate function (for use in callbacks defined before mutation)
   const updateLineItemMutateRef = useRef<((params: { id: number; data: any; skipInvalidation?: boolean }) => void) | null>(null);
 
-  // Cancel pending mutations on unmount
+  // Let in-flight save requests finish when the user leaves the page.
   useEffect(() => {
     return () => {
-      // Abort all pending API requests
-      abortController.current.abort();
-      
-      // Cancel all pending mutations using React Query's built-in cancellation
-      try {
-        if (pendingMutations.current.create) {
-          pendingMutations.current.create.abort?.();
-        }
-        if (pendingMutations.current.delete) {
-          pendingMutations.current.delete.abort?.();
-        }
-        if (pendingMutations.current.calculate) {
-          pendingMutations.current.calculate.abort?.();
-        }
-        Object.values(pendingMutations.current.update).forEach(mutation => {
-          if (mutation?.abort) {
-            mutation.abort();
-          }
-        });
-      } catch (error) {
-        // Silently handle any abort errors during cleanup
-      }
+      pendingMutations.current = {
+        create: null,
+        update: {},
+        delete: null,
+        calculate: null,
+      };
     };
   }, []);
 
