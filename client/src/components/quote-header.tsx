@@ -31,6 +31,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { cn } from "@/lib/utils";
 import { debounce } from "lodash";
 import { DEAL_STAGES } from "@shared/dealStageConstants";
+import { omitQuoteSummaryFields } from "@shared/quoteSavePayload";
 import { ClientComboboxWithCreate } from "@/components/client-combobox-with-create";
 import { AddressAutocomplete } from "@/components/address-autocomplete";
 
@@ -85,7 +86,7 @@ const getOpsJobLabel = (result?: OperationsImportResponse | null): string | null
 
 interface QuoteHeaderProps {
   quote?: QuoteWithDetails;
-  onSave: (data: QuoteFormData) => void;
+  onSave: (data: Partial<QuoteFormData>) => void;
   isLoading?: boolean;
 }
 
@@ -400,7 +401,7 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
   }, [quote?.id, flushPendingChanges, form]);
 
   const handleSubmit = (data: QuoteFormData) => {
-    onSave(data);
+    onSave(omitQuoteSummaryFields(data));
   };
 
   const opsJobUrl = opsImportResult?.opsJobUrl || null;
