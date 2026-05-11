@@ -24,13 +24,13 @@ interface QuoteSummaryProps {
 }
 
 export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
-  const [localTaxRate, setLocalTaxRate] = useState<string>("");
-  const [localTariffRate, setLocalTariffRate] = useState<string>("");
-  const [localDiscount, setLocalDiscount] = useState<string>("");
-  const [localShipping, setLocalShipping] = useState<string>("");
+  const [localTaxRate, setLocalTaxRate] = useState<string | null>(null);
+  const [localTariffRate, setLocalTariffRate] = useState<string | null>(null);
+  const [localDiscount, setLocalDiscount] = useState<string | null>(null);
+  const [localShipping, setLocalShipping] = useState<string | null>(null);
   const [localNotes, setLocalNotes] = useState<string>("");
   const [isEditingNotes, setIsEditingNotes] = useState(false);
-  const [localCustomContractTerms, setLocalCustomContractTerms] = useState<string>("");
+  const [localCustomContractTerms, setLocalCustomContractTerms] = useState<string | null>(null);
   const [showSigningLinkDialog, setShowSigningLinkDialog] = useState(false);
   const [signingLink, setSigningLink] = useState<string>("");
   const [personalizedMessage, setPersonalizedMessage] = useState<string>("");
@@ -39,6 +39,13 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
   const [showESignatureOptionsModal, setShowESignatureOptionsModal] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  const normalizeBlankNumber = (value: string) => value.trim() === "" ? "0" : value.trim();
+  const hasNumberChanged = (nextValue: string, currentValue: unknown) => {
+    const currentNumber = Number(currentValue ?? 0);
+    const nextNumber = Number(nextValue);
+    return !Number.isNaN(nextNumber) && nextNumber !== currentNumber;
+  };
 
   // Sync localNotes with quote.notes when not editing
   useEffect(() => {
@@ -451,16 +458,16 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
                     <Textarea
                       id="customContractTerms"
                       rows={6}
-                      value={localCustomContractTerms || (quote.customContractTerms ?? "")}
+                      value={localCustomContractTerms ?? (quote.customContractTerms ?? "")}
                       onChange={(e) => setLocalCustomContractTerms(e.target.value)}
-                      onBlur={(e) => {
-                        if (localCustomContractTerms !== "" && localCustomContractTerms !== (quote.customContractTerms ?? "")) {
+                      onBlur={() => {
+                        if (localCustomContractTerms !== null && localCustomContractTerms !== (quote.customContractTerms ?? "")) {
                           updateContractMutation.mutate({
                             contractTemplateId: null,
                             customContractTerms: localCustomContractTerms
                           });
                         }
-                        setLocalCustomContractTerms("");
+                        setLocalCustomContractTerms(null);
                       }}
                       placeholder="Enter custom contract terms and conditions..."
                       className="mt-1 text-sm"
@@ -477,13 +484,16 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
                   id="taxRate"
                   type="number"
                   step="0.1"
-                  value={localTaxRate || quote.taxRate || ""}
+                  value={localTaxRate ?? quote.taxRate ?? ""}
                   onChange={(e) => setLocalTaxRate(e.target.value)}
-                  onBlur={(e) => {
-                    if (localTaxRate !== "" && localTaxRate !== quote.taxRate) {
-                      onUpdateQuote("taxRate", localTaxRate);
+                  onBlur={() => {
+                    if (localTaxRate !== null) {
+                      const nextTaxRate = normalizeBlankNumber(localTaxRate);
+                      if (hasNumberChanged(nextTaxRate, quote.taxRate)) {
+                        onUpdateQuote("taxRate", nextTaxRate);
+                      }
                     }
-                    setLocalTaxRate("");
+                    setLocalTaxRate(null);
                   }}
                   className="mt-1"
                 />
@@ -494,13 +504,16 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
                   id="tariffRate"
                   type="number"
                   step="0.1"
-                  value={localTariffRate || quote.tariffRate || ""}
+                  value={localTariffRate ?? quote.tariffRate ?? ""}
                   onChange={(e) => setLocalTariffRate(e.target.value)}
-                  onBlur={(e) => {
-                    if (localTariffRate !== "" && localTariffRate !== quote.tariffRate) {
-                      onUpdateQuote("tariffRate", localTariffRate);
+                  onBlur={() => {
+                    if (localTariffRate !== null) {
+                      const nextTariffRate = normalizeBlankNumber(localTariffRate);
+                      if (hasNumberChanged(nextTariffRate, quote.tariffRate)) {
+                        onUpdateQuote("tariffRate", nextTariffRate);
+                      }
                     }
-                    setLocalTariffRate("");
+                    setLocalTariffRate(null);
                   }}
                   className="mt-1"
                   data-testid="input-tariff-rate"
@@ -512,13 +525,16 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
                   id="discount"
                   type="number"
                   step="0.1"
-                  value={localDiscount || quote.discount || ""}
+                  value={localDiscount ?? quote.discount ?? ""}
                   onChange={(e) => setLocalDiscount(e.target.value)}
-                  onBlur={(e) => {
-                    if (localDiscount !== "" && localDiscount !== quote.discount) {
-                      onUpdateQuote("discount", localDiscount);
+                  onBlur={() => {
+                    if (localDiscount !== null) {
+                      const nextDiscount = normalizeBlankNumber(localDiscount);
+                      if (hasNumberChanged(nextDiscount, quote.discount)) {
+                        onUpdateQuote("discount", nextDiscount);
+                      }
                     }
-                    setLocalDiscount("");
+                    setLocalDiscount(null);
                   }}
                   className="mt-1"
                 />
@@ -530,13 +546,16 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
                   type="number"
                   step="0.01"
                   min="0"
-                  value={localShipping || quote.shipping || ""}
+                  value={localShipping ?? quote.shipping ?? ""}
                   onChange={(e) => setLocalShipping(e.target.value)}
-                  onBlur={(e) => {
-                    if (localShipping !== "" && localShipping !== quote.shipping) {
-                      onUpdateQuote("shipping", localShipping);
+                  onBlur={() => {
+                    if (localShipping !== null) {
+                      const nextShipping = normalizeBlankNumber(localShipping);
+                      if (hasNumberChanged(nextShipping, quote.shipping)) {
+                        onUpdateQuote("shipping", nextShipping);
+                      }
                     }
-                    setLocalShipping("");
+                    setLocalShipping(null);
                   }}
                   className="mt-1"
                   data-testid="input-shipping"

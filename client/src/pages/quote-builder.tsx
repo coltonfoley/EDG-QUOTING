@@ -1,4 +1,4 @@
-import { useParams } from "wouter";
+import { useLocation, useParams } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, Suspense } from "react";
 import { AppHeader } from "@/components/app-header";
@@ -22,6 +22,7 @@ import type { QuoteWithDetails } from "@shared/schema";
 
 export default function QuoteBuilder() {
   const params = useParams();
+  const [, setLocation] = useLocation();
   const id = params.id;
   
   const isNewQuote = !id || id === "new";
@@ -33,6 +34,7 @@ export default function QuoteBuilder() {
 
   // State for proposal generator dialog
   const [proposalGeneratorOpen, setProposalGeneratorOpen] = useState(false);
+  const [isPreparingProposal, setIsPreparingProposal] = useState(false);
   const [versionHistoryOpen, setVersionHistoryOpen] = useState(false);
 
   const { data: quote, isLoading, error } = useQuery<QuoteWithDetails>({
@@ -105,8 +107,7 @@ export default function QuoteBuilder() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/quotes"] });
       toast({ title: "Quote created successfully" });
-      // Navigate to the new quote edit page
-      window.history.replaceState(null, "", `/quotes/${data.id}/edit`);
+      setLocation(`/quotes/${data.id}/edit`, { replace: true });
     },
     onError: () => {
       toast({ title: "Error", description: "Failed to create quote", variant: "destructive" });
@@ -163,6 +164,38 @@ export default function QuoteBuilder() {
     updateQuoteMutation.mutate({
       [field]: value,
     });
+  };
+
+  const waitForPendingQuoteSaves = async (timeoutMs = 3000) => {
+    const startedAt = Date.now();
+    while (queryClient.isMutating() > 0 && Date.now() - startedAt < timeoutMs) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+  };
+
+  const openProposalGenerator = async () => {
+    if (!quoteId) return;
+
+    const activeElement = document.activeElement;
+    if (activeElement instanceof HTMLElement) {
+      activeElement.blur();
+    }
+
+    setIsPreparingProposal(true);
+    try {
+      await new Promise(resolve => setTimeout(resolve, 100));
+      await waitForPendingQuoteSaves();
+      await queryClient.fetchQuery({ queryKey: [`/api/quotes/${quoteId}`] });
+      setProposalGeneratorOpen(true);
+    } catch (error: any) {
+      toast({
+        title: "Could not prepare proposal",
+        description: error?.message || "Please try again after the quote finishes saving.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsPreparingProposal(false);
+    }
   };
 
   if (isLoading) {
@@ -450,13 +483,18 @@ export default function QuoteBuilder() {
         {!isNewQuote && currentQuote.id && currentQuote.lineItems.length > 0 && (
           <div className="flex justify-end gap-4 mt-8 pb-8">
             <Button 
-              onClick={() => setProposalGeneratorOpen(true)}
+              onClick={openProposalGenerator}
               variant="outline"
               className="px-6 py-3 text-lg border-edg-black text-edg-black hover:bg-edg-black hover:text-white"
+              disabled={isPreparingProposal}
               data-testid="button-generate-proposal"
             >
-              <FileText className="mr-2 h-5 w-5" />
-              Generate Proposal
+              {isPreparingProposal ? (
+                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+              ) : (
+                <FileText className="mr-2 h-5 w-5" />
+              )}
+              {isPreparingProposal ? "Preparing..." : "Generate Proposal"}
             </Button>
           </div>
         )}

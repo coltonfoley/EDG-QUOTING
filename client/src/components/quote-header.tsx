@@ -95,6 +95,7 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
   
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingChanges = useRef<Record<string, any>>({});
+  const pendingSavePromise = useRef<Promise<any> | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [opsImportResult, setOpsImportResult] = useState<OperationsImportResponse | null>(null);
 
@@ -181,10 +182,20 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
     },
   });
 
+  const waitForOtherSaveMutations = useCallback(async (timeoutMs = 3000) => {
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    const startedAt = Date.now();
+    while (queryClient.isMutating() > 1 && Date.now() - startedAt < timeoutMs) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+  }, [queryClient]);
+
   const sendToOpsMutation = useMutation({
     mutationFn: async () => {
       if (!quote?.id) throw new Error("No quote ID");
-      flushPendingChanges();
+      await flushPendingChanges();
+      await waitForOtherSaveMutations();
       const response = await apiRequest("POST", `/api/quotes/${quote.id}/send-to-ops`, {});
       return response.json() as Promise<OperationsImportResponse>;
     },
@@ -249,9 +260,26 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
     },
   });
 
+  const persistPendingChangesOnUnload = useCallback(() => {
+    if (!quote?.id || Object.keys(pendingChanges.current).length === 0) return;
+
+    const changes = { ...pendingChanges.current };
+    pendingChanges.current = {};
+
+    void fetch(`/api/quotes/${quote.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(changes),
+      credentials: "include",
+      keepalive: true,
+    }).catch(() => {
+      // The normal autosave path handles user-visible errors. This is only a last-chance save.
+    });
+  }, [quote?.id]);
+
   // Flush all pending changes immediately
-  const flushPendingChanges = useCallback(() => {
-    if (!quote?.id) return;
+  const flushPendingChanges = useCallback(async () => {
+    if (!quote?.id) return pendingSavePromise.current ?? Promise.resolve();
     
     // Clear the timer if it exists
     if (debounceTimer.current) {
@@ -264,8 +292,23 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
     if (Object.keys(changes).length > 0) {
       pendingChanges.current = {};
       setIsSaving(true);
-      autosaveMutation.mutate(changes);
+      const savePromise = autosaveMutation
+        .mutateAsync(changes)
+        .catch((error) => {
+          pendingChanges.current = { ...changes, ...pendingChanges.current };
+          throw error;
+        })
+        .finally(() => {
+          if (pendingSavePromise.current === savePromise) {
+            pendingSavePromise.current = null;
+          }
+        });
+
+      pendingSavePromise.current = savePromise;
+      return savePromise;
     }
+
+    return pendingSavePromise.current ?? Promise.resolve();
   }, [quote?.id, autosaveMutation]);
 
   // Debounced autosave function - uses single timer for all fields
@@ -282,14 +325,14 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
     
     // Set new debounced timer (500ms delay)
     debounceTimer.current = setTimeout(() => {
-      flushPendingChanges();
+      void flushPendingChanges().catch(() => undefined);
     }, 500);
   }, [quote?.id, flushPendingChanges]);
 
   // Handle field blur - flush all pending changes immediately
   const handleFieldBlur = useCallback(() => {
     if (!quote?.id) return;
-    flushPendingChanges();
+    void flushPendingChanges().catch(() => undefined);
   }, [quote?.id, flushPendingChanges]);
 
   // Handle field change with autosave
@@ -308,8 +351,9 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
       if (debounceTimer.current) {
         clearTimeout(debounceTimer.current);
       }
+      persistPendingChangesOnUnload();
     };
-  }, []);
+  }, [persistPendingChangesOnUnload]);
 
   const handleJobsiteAddressSelect = (components: {
     streetAddress: string;
@@ -341,7 +385,7 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
         jobsiteCountry: components.country,
         jobsitePlaceId: components.placeId,
       };
-      flushPendingChanges();
+      void flushPendingChanges().catch(() => undefined);
     }
   };
 
@@ -351,7 +395,7 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
     form.setValue("accountId", actualValue);
     if (quote?.id) {
       pendingChanges.current = { ...pendingChanges.current, accountId: actualValue };
-      flushPendingChanges();
+      void flushPendingChanges().catch(() => undefined);
     }
   }, [quote?.id, flushPendingChanges, form]);
 
