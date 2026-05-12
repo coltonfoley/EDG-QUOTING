@@ -117,17 +117,17 @@ function StepIndicator({ currentStep, isComplete }: { currentStep: SigningStep; 
             <div className="flex flex-col items-center">
               <div className={cn(
                 "w-10 h-10 rounded-full flex items-center justify-center transition-all",
-                status === 'complete' && "bg-emerald-500 text-white",
-                status === 'current' && "bg-primary text-white ring-4 ring-primary/20",
-                status === 'upcoming' && "bg-slate-200 text-slate-400 dark:bg-slate-700"
+                status === 'complete' && "bg-edg-teal text-white",
+                status === 'current' && "bg-edg-black text-white ring-4 ring-edg-brand-teal/30",
+                status === 'upcoming' && "bg-edg-light-grey text-edg-grey"
               )}>
                 <Icon className="w-5 h-5" />
               </div>
               <span className={cn(
                 "text-xs mt-1 font-medium",
-                status === 'complete' && "text-emerald-600",
-                status === 'current' && "text-primary",
-                status === 'upcoming' && "text-slate-400"
+                status === 'complete' && "text-edg-teal",
+                status === 'current' && "text-edg-black",
+                status === 'upcoming' && "text-edg-grey"
               )}>
                 {step.label}
               </span>
@@ -135,7 +135,7 @@ function StepIndicator({ currentStep, isComplete }: { currentStep: SigningStep; 
             {index < steps.length - 1 && (
               <div className={cn(
                 "w-8 sm:w-16 h-0.5 mx-2",
-                getStepStatus(steps[index + 1].id) !== 'upcoming' ? "bg-emerald-500" : "bg-slate-200 dark:bg-slate-700"
+                getStepStatus(steps[index + 1].id) !== 'upcoming' ? "bg-edg-teal" : "bg-edg-light-grey"
               )} />
             )}
           </div>
@@ -147,7 +147,7 @@ function StepIndicator({ currentStep, isComplete }: { currentStep: SigningStep; 
 
 function CompanyHeader() {
   return (
-    <div className="bg-slate-900 text-white py-3 px-6 shadow-lg">
+    <div className="bg-edg-black text-edg-white border-b-4 border-edg-brand-teal py-3 px-6 shadow-lg">
       <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
         <div className="flex items-center gap-4">
           <img 
@@ -155,12 +155,13 @@ function CompanyHeader() {
             alt="EDG Patio & Shade" 
             className="h-10 w-auto brightness-0 invert"
           />
-          <div className="hidden sm:block border-l border-slate-700 pl-4">
-            <p className="text-slate-400 text-xs">Secure Proposal Approval</p>
+          <div className="hidden sm:block border-l border-edg-brand-teal/40 pl-4">
+            <p className="text-edg-brand-teal text-xs font-semibold uppercase tracking-wide">Proposal Approval</p>
+            <p className="text-edg-white/70 text-xs">EDG Patio & Shade</p>
           </div>
         </div>
-        <div className="flex items-center gap-2 text-xs text-slate-400">
-          <Shield className="w-3.5 h-3.5 text-emerald-400" />
+        <div className="flex items-center gap-2 text-xs text-edg-white/70">
+          <Shield className="w-3.5 h-3.5 text-edg-brand-teal" />
           <span>Secure review link</span>
         </div>
       </div>
@@ -172,18 +173,18 @@ function QuoteSummaryBar({ quoteData, showPricing }: { quoteData: SigningQuoteDa
   const totals = calculateQuoteTotals(quoteData);
   
   return (
-    <div className="bg-white dark:bg-slate-800 border-b shadow-sm sticky top-0 z-10">
+    <div className="bg-white border-b border-edg-teal/20 shadow-sm sticky top-0 z-10">
       <div className="max-w-7xl mx-auto px-4 py-3">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-primary/10">
-              <FileText className="w-5 h-5 text-primary" />
+            <div className="p-2 rounded-lg bg-edg-light-teal">
+              <FileText className="w-5 h-5 text-edg-teal" />
             </div>
             <div>
-              <h2 className="font-semibold text-lg leading-tight">
+              <h2 className="font-semibold text-lg leading-tight text-edg-black">
                 {quoteData.projectName || `Quote #${quoteData.quoteNumber}`}
               </h2>
-              <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+              <div className="flex flex-wrap items-center gap-2 text-sm text-edg-grey">
                 <span>{quoteData.accountName}</span>
                 {quoteData.jobsiteAddress && (
                   <>
@@ -200,12 +201,12 @@ function QuoteSummaryBar({ quoteData, showPricing }: { quoteData: SigningQuoteDa
           
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-3 text-sm">
-              <Badge variant="secondary" className="flex items-center gap-1">
+              <Badge variant="secondary" className="flex items-center gap-1 bg-edg-light-grey text-edg-black">
                 <Package className="w-3 h-3" />
                 {totals.itemCount} items
               </Badge>
               {showPricing && (
-                <Badge variant="default" className="flex items-center gap-1 bg-primary">
+                <Badge variant="default" className="flex items-center gap-1 bg-edg-teal text-white hover:bg-edg-dark-teal">
                   <DollarSign className="w-3 h-3" />
                   {totals.total.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
                 </Badge>
@@ -471,7 +472,7 @@ export default function PublicSignPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-slate-50 dark:bg-slate-900">
+      <div className="min-h-screen bg-edg-light-grey">
         <CompanyHeader />
         <div className="flex items-center justify-center py-32">
           <LoadingSpinner text="Loading document..." />
@@ -482,7 +483,7 @@ export default function PublicSignPage() {
 
   if (error || !quoteData) {
     return (
-      <div className="min-h-screen bg-slate-50 dark:bg-slate-900">
+      <div className="min-h-screen bg-edg-light-grey">
         <CompanyHeader />
         <div className="flex items-center justify-center py-16 px-4">
           <Card className="max-w-md w-full shadow-lg">
@@ -504,11 +505,11 @@ export default function PublicSignPage() {
               <div className="pt-4 border-t text-center">
                 <p className="text-sm text-muted-foreground mb-2">Need help?</p>
                 <div className="flex flex-col gap-1 text-sm">
-                  <a href={`mailto:${COMPANY_INFO.email}`} className="text-primary hover:underline flex items-center justify-center gap-1">
+                  <a href={`mailto:${COMPANY_INFO.email}`} className="text-edg-teal hover:text-edg-dark-teal hover:underline flex items-center justify-center gap-1">
                     <Mail className="w-3 h-3" />
                     {COMPANY_INFO.email}
                   </a>
-                  <a href={`tel:${COMPANY_INFO.phone}`} className="text-primary hover:underline flex items-center justify-center gap-1">
+                  <a href={`tel:${COMPANY_INFO.phone}`} className="text-edg-teal hover:text-edg-dark-teal hover:underline flex items-center justify-center gap-1">
                     <Phone className="w-3 h-3" />
                     {COMPANY_INFO.phone}
                   </a>
@@ -523,26 +524,26 @@ export default function PublicSignPage() {
 
   if (currentStep === 'complete') {
     return (
-      <div className="min-h-screen bg-slate-50 dark:bg-slate-900">
+      <div className="min-h-screen bg-edg-light-grey">
         <CompanyHeader />
         <div className="max-w-2xl mx-auto px-4 py-8">
           <StepIndicator currentStep="complete" isComplete={true} />
           
-          <Card className="shadow-lg mt-8">
+          <Card className="shadow-lg mt-8 border-edg-teal/20">
             <CardContent className="pt-8 text-center">
-              <div className="mx-auto w-20 h-20 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center mb-6">
-                <CheckCircle className="w-10 h-10 text-emerald-600" />
+              <div className="mx-auto w-20 h-20 rounded-full bg-edg-light-teal flex items-center justify-center mb-6 ring-8 ring-edg-brand-teal/20">
+                <CheckCircle className="w-10 h-10 text-edg-teal" />
               </div>
               
-              <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
+              <h2 className="text-2xl font-bold text-edg-black mb-2">
                 Proposal Approved
               </h2>
-              <p className="text-muted-foreground mb-6">
+              <p className="text-edg-grey mb-6">
                 Your approval has been recorded. EDG will use this signed proposal to move the project forward.
               </p>
 
-              <div className="bg-slate-50 dark:bg-slate-800 rounded-lg p-4 mb-6 text-left">
-                <h3 className="font-medium text-sm text-slate-500 dark:text-slate-400 mb-3">APPROVAL RECEIPT</h3>
+              <div className="bg-edg-light-grey rounded-lg border border-edg-teal/10 p-4 mb-6 text-left">
+                <h3 className="font-semibold text-sm text-edg-teal uppercase tracking-wide mb-3">Approval receipt</h3>
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Proposal</span>
@@ -552,34 +553,34 @@ export default function PublicSignPage() {
                     <span className="text-muted-foreground">From</span>
                     <span className="font-medium">{COMPANY_INFO.name}</span>
                   </div>
-	                  <div className="flex justify-between">
-	                    <span className="text-muted-foreground">Approved On</span>
-	                    <span className="font-medium flex items-center gap-1">
-	                      <Clock className="w-3 h-3" />
-	                      {(signedTimestamp || new Date(quoteData.clientSignedAt!)).toLocaleString()}
-	                    </span>
-	                  </div>
-	                </div>
-	                {quoteData.signatureAuditTrail?.documentFingerprint && (
-	                  <div className="mt-3 rounded-md bg-white dark:bg-slate-900 p-3 text-xs text-muted-foreground">
-	                    Document ID: <span className="font-mono">{quoteData.signatureAuditTrail.documentFingerprint.slice(0, 16)}</span>
-	                  </div>
-	                )}
-	              </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Approved On</span>
+                    <span className="font-medium flex items-center gap-1">
+                      <Clock className="w-3 h-3" />
+                      {(signedTimestamp || new Date(quoteData.clientSignedAt!)).toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+                {quoteData.signatureAuditTrail?.documentFingerprint && (
+                  <div className="mt-3 rounded-md bg-white p-3 text-xs text-edg-grey">
+                    Document ID: <span className="font-mono">{quoteData.signatureAuditTrail.documentFingerprint.slice(0, 16)}</span>
+                  </div>
+                )}
+              </div>
 
               <div className="space-y-3">
-                <Button 
+                <Button
                   onClick={() => downloadPdfMutation.mutate()}
                   disabled={downloadPdfMutation.isPending}
-                  className="w-full"
                   size="lg"
+                  className="w-full bg-edg-teal text-white hover:bg-edg-dark-teal"
                   data-testid="button-download-signed-pdf"
                 >
                   <Download className="w-4 h-4 mr-2" />
                   {downloadPdfMutation.isPending ? 'Generating PDF...' : 'Download Approved Proposal'}
                 </Button>
                 
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-edg-grey">
                   {emailWasSent 
                     ? "A confirmation email has been sent to you with a link to download your signed document."
                     : "We recommend downloading a copy of your signed document for your records."
@@ -588,15 +589,15 @@ export default function PublicSignPage() {
               </div>
 
               <div className="mt-8 pt-6 border-t">
-                <p className="text-sm text-muted-foreground mb-4">
+                <p className="text-sm text-edg-grey mb-4">
                   Thank you for your business!
                 </p>
-                <div className="flex flex-col sm:flex-row items-center justify-center gap-4 text-sm text-muted-foreground">
-                  <a href={`mailto:${COMPANY_INFO.email}`} className="flex items-center gap-1 hover:text-primary">
+                <div className="flex flex-col sm:flex-row items-center justify-center gap-4 text-sm text-edg-grey">
+                  <a href={`mailto:${COMPANY_INFO.email}`} className="flex items-center gap-1 hover:text-edg-teal">
                     <Mail className="w-3 h-3" />
                     {COMPANY_INFO.email}
                   </a>
-                  <a href={`tel:${COMPANY_INFO.phone}`} className="flex items-center gap-1 hover:text-primary">
+                  <a href={`tel:${COMPANY_INFO.phone}`} className="flex items-center gap-1 hover:text-edg-teal">
                     <Phone className="w-3 h-3" />
                     {COMPANY_INFO.phone}
                   </a>
@@ -610,7 +611,7 @@ export default function PublicSignPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-100 dark:bg-slate-900 flex flex-col">
+    <div className="min-h-screen bg-edg-light-grey flex flex-col">
       <CompanyHeader />
       <QuoteSummaryBar quoteData={quoteData} showPricing={showPricing} />
       
@@ -623,30 +624,30 @@ export default function PublicSignPage() {
           <>
             {!isFullscreen && (
               <div className="max-w-7xl mx-auto w-full px-4 pb-4">
-                <div className="rounded-lg border bg-white dark:bg-slate-800 shadow-sm p-5">
+                <div className="rounded-lg border border-edg-teal/20 bg-white shadow-sm p-5">
                   <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                     <div className="space-y-2">
-                      <Badge variant="outline" className="w-fit">Proposal approval</Badge>
-                      <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-slate-950 dark:text-white">
+                      <Badge variant="outline" className="w-fit border-edg-teal/30 bg-edg-light-teal text-edg-dark-teal">Proposal approval</Badge>
+                      <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-edg-black">
                         Review {quoteData.projectName || `Quote #${quoteData.quoteNumber}`}
                       </h1>
-                      <p className="text-sm text-muted-foreground max-w-2xl">
+                      <p className="text-sm text-edg-grey max-w-2xl">
                         Check the scope, pricing, visuals, and terms below. If something needs to change, contact EDG before approving.
                       </p>
                     </div>
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
-                      <div className="rounded-md border bg-slate-50 dark:bg-slate-900 px-3 py-2">
-                        <div className="text-muted-foreground">Customer</div>
+                      <div className="rounded-md border border-edg-teal/10 bg-edg-light-grey px-3 py-2">
+                        <div className="text-edg-grey">Customer</div>
                         <div className="font-medium truncate max-w-[150px]">{quoteData.accountName}</div>
                       </div>
-                      <div className="rounded-md border bg-slate-50 dark:bg-slate-900 px-3 py-2">
-                        <div className="text-muted-foreground">Items</div>
+                      <div className="rounded-md border border-edg-teal/10 bg-edg-light-grey px-3 py-2">
+                        <div className="text-edg-grey">Items</div>
                         <div className="font-medium">{calculateQuoteTotals(quoteData).itemCount}</div>
                       </div>
                       {showPricing && (
-                        <div className="rounded-md border bg-slate-50 dark:bg-slate-900 px-3 py-2 col-span-2 sm:col-span-1">
-                          <div className="text-muted-foreground">Proposal total</div>
-                          <div className="font-semibold text-primary">
+                        <div className="rounded-md border border-edg-teal/10 bg-edg-light-grey px-3 py-2 col-span-2 sm:col-span-1">
+                          <div className="text-edg-grey">Proposal total</div>
+                          <div className="font-semibold text-edg-teal">
                             {calculateQuoteTotals(quoteData).total.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
                           </div>
                         </div>
@@ -657,7 +658,7 @@ export default function PublicSignPage() {
               </div>
             )}
             <div className={cn(
-              "flex-1 bg-slate-200 dark:bg-slate-800 relative",
+              "flex-1 bg-edg-black/10 relative",
               isFullscreen && "fixed inset-0 z-50"
             )}>
               <div className="absolute top-2 right-2 z-10 flex gap-2">
@@ -698,11 +699,11 @@ export default function PublicSignPage() {
             </div>
 
             {!isFullscreen && (
-              <div className="bg-white dark:bg-slate-800 border-t shadow-lg sticky bottom-0">
+              <div className="bg-white border-t border-edg-teal/20 shadow-lg sticky bottom-0">
                 <div className="max-w-7xl mx-auto px-4 py-4">
                   <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-                    <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                      <Shield className="w-4 h-4 text-emerald-500" />
+                    <div className="flex items-center gap-3 text-sm text-edg-grey">
+                      <Shield className="w-4 h-4 text-edg-teal" />
                       <span>Review the proposal, then approve when everything looks right.</span>
                     </div>
                     
@@ -711,6 +712,7 @@ export default function PublicSignPage() {
                         variant="outline"
                         onClick={handleDownloadPreview}
                         disabled={!pdfUrl || isGeneratingPdf}
+                        className="border-edg-teal/30 text-edg-teal hover:bg-edg-light-teal hover:text-edg-dark-teal"
                         data-testid="button-download-preview"
                       >
                         <Download className="w-4 h-4 mr-2" />
@@ -720,7 +722,7 @@ export default function PublicSignPage() {
                         onClick={handleProceedToSign}
                         size="lg"
                         disabled={isGeneratingPdf}
-                        className="flex-1 sm:flex-none min-w-[200px]"
+                        className="flex-1 sm:flex-none min-w-[200px] bg-edg-teal text-white hover:bg-edg-dark-teal"
                         data-testid="button-proceed-to-sign"
                       >
                         Approve & Sign
@@ -738,10 +740,10 @@ export default function PublicSignPage() {
           <div className="flex-1 max-w-4xl mx-auto w-full px-4 py-6">
             <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
               <div className="lg:col-span-2">
-                <Card className="shadow-lg h-full">
+                <Card className="shadow-lg h-full border-edg-teal/20">
                   <CardHeader className="pb-3">
-                    <CardTitle className="flex items-center gap-2 text-lg">
-                      <Eye className="w-5 h-5" />
+                    <CardTitle className="flex items-center gap-2 text-lg text-edg-black">
+                      <Eye className="w-5 h-5 text-edg-teal" />
                       Proposal Preview
                     </CardTitle>
                   </CardHeader>
@@ -754,7 +756,7 @@ export default function PublicSignPage() {
                         title="Proposal Preview"
                       />
                     ) : (
-                      <div className="h-[400px] bg-slate-100 dark:bg-slate-800 rounded-lg flex items-center justify-center">
+                      <div className="h-[400px] bg-edg-light-grey rounded-lg flex items-center justify-center">
                         <LoadingSpinner text="Loading..." />
                       </div>
                     )}
@@ -763,13 +765,13 @@ export default function PublicSignPage() {
               </div>
 
               <div className="lg:col-span-3 space-y-4">
-                <Card className="shadow-lg">
+                <Card className="shadow-lg border-edg-teal/20">
                   <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <PenLine className="w-5 h-5" />
+                    <CardTitle className="flex items-center gap-2 text-edg-black">
+                      <PenLine className="w-5 h-5 text-edg-teal" />
                       Your Approval
                     </CardTitle>
-                    <CardDescription>
+                    <CardDescription className="text-edg-grey">
                       Type your legal name and sign to approve this proposal.
                     </CardDescription>
                   </CardHeader>
@@ -781,7 +783,7 @@ export default function PublicSignPage() {
                   </CardContent>
                 </Card>
 
-                <Card className="shadow-lg border-primary/20">
+                <Card className="shadow-lg border-edg-teal/20">
                   <CardContent className="py-4 space-y-4">
                     <div className="flex items-start gap-3">
                       <Checkbox 
@@ -790,24 +792,25 @@ export default function PublicSignPage() {
                         onCheckedChange={(checked) => setHasAgreed(checked === true)}
                         data-testid="checkbox-agree-terms"
                       />
-                      <Label htmlFor="agree-terms" className="text-sm leading-relaxed cursor-pointer">
+                      <Label htmlFor="agree-terms" className="text-sm leading-relaxed cursor-pointer text-edg-black">
                         I confirm that I have reviewed this proposal and agree to be legally bound by its terms. I understand that my electronic signature carries the same legal weight as a handwritten signature.
                       </Label>
                     </div>
 
                     {signature && hasAgreed && (
-                      <Alert className="bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800">
-                        <CheckCircle className="w-4 h-4 text-emerald-600" />
-                        <AlertDescription className="text-emerald-800 dark:text-emerald-200">
+                      <Alert className="bg-edg-light-teal border-edg-teal/20">
+                        <CheckCircle className="w-4 h-4 text-edg-teal" />
+                        <AlertDescription className="text-edg-dark-teal">
                           Ready to approve. Click "Approve Proposal" to complete.
                         </AlertDescription>
                       </Alert>
                     )}
 
                     <div className="flex gap-3 pt-2">
-                      <Button 
-                        variant="outline" 
+                      <Button
+                        variant="outline"
                         onClick={() => setCurrentStep('review')}
+                        className="border-edg-teal/30 text-edg-teal hover:bg-edg-light-teal hover:text-edg-dark-teal"
                         data-testid="button-back-to-review"
                       >
                         <ArrowLeft className="w-4 h-4 mr-2" />
@@ -816,7 +819,7 @@ export default function PublicSignPage() {
                       <Button
                         onClick={handleSign}
                         disabled={!canSign}
-                        className="flex-1"
+                        className="flex-1 bg-edg-teal text-white hover:bg-edg-dark-teal"
                         size="lg"
                         data-testid="button-submit-signature"
                       >

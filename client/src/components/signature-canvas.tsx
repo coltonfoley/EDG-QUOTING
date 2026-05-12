@@ -40,7 +40,7 @@ export function SignatureCanvas({ onSignatureChange, signerName = '' }: Signatur
     canvas.height = rect.height * dpr;
     ctx.scale(dpr, dpr);
 
-    ctx.strokeStyle = '#1a365d';
+    ctx.strokeStyle = '#087b6b';
     ctx.lineWidth = 2;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
@@ -192,7 +192,7 @@ export function SignatureCanvas({ onSignatureChange, signerName = '' }: Signatur
       if (ctx) {
         ctx.fillStyle = '#fff';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.fillStyle = '#1a365d';
+        ctx.fillStyle = '#087b6b';
         ctx.font = '52px "Dancing Script", cursive';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
@@ -231,11 +231,11 @@ export function SignatureCanvas({ onSignatureChange, signerName = '' }: Signatur
   return (
     <div className="space-y-4">
       <Tabs value={signatureMode} onValueChange={handleModeChange} className="w-full">
-        <TabsList className="grid w-full grid-cols-2 h-12 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl">
+        <TabsList className="grid w-full grid-cols-2 h-12 p-1 bg-edg-light-grey rounded-xl">
           <TabsTrigger 
             value="draw" 
             data-testid="tab-draw-signature"
-            className="flex items-center gap-2 rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700 data-[state=active]:shadow-sm transition-all"
+            className="flex items-center gap-2 rounded-lg text-edg-grey data-[state=active]:bg-edg-teal data-[state=active]:text-white data-[state=active]:shadow-sm transition-all"
           >
             <Pen className="w-4 h-4" />
             <span className="font-medium">Draw</span>
@@ -243,7 +243,7 @@ export function SignatureCanvas({ onSignatureChange, signerName = '' }: Signatur
           <TabsTrigger 
             value="type" 
             data-testid="tab-type-signature"
-            className="flex items-center gap-2 rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700 data-[state=active]:shadow-sm transition-all"
+            className="flex items-center gap-2 rounded-lg text-edg-grey data-[state=active]:bg-edg-teal data-[state=active]:text-white data-[state=active]:shadow-sm transition-all"
           >
             <Type className="w-4 h-4" />
             <span className="font-medium">Type</span>
@@ -252,7 +252,7 @@ export function SignatureCanvas({ onSignatureChange, signerName = '' }: Signatur
 
         <TabsContent value="draw" className="space-y-4 mt-4">
           <div className="relative">
-            <div className="relative bg-gradient-to-b from-slate-50 to-white dark:from-slate-900 dark:to-slate-800 rounded-xl border-2 border-slate-200 dark:border-slate-700 shadow-inner overflow-hidden">
+            <div className="relative bg-gradient-to-b from-edg-light-grey to-white rounded-xl border-2 border-edg-teal/25 shadow-inner overflow-hidden">
               <canvas
                 ref={canvasRef}
                 data-testid="signature-canvas"
@@ -265,23 +265,23 @@ export function SignatureCanvas({ onSignatureChange, signerName = '' }: Signatur
                 onTouchMove={draw}
                 onTouchEnd={stopDrawing}
               />
-              <div className="absolute bottom-6 left-6 right-6 border-b-2 border-dashed border-slate-300 dark:border-slate-600 pointer-events-none" />
-              <div className="absolute bottom-2 left-6 text-xs text-slate-400 dark:text-slate-500 pointer-events-none select-none">
+              <div className="absolute bottom-6 left-6 right-6 border-b-2 border-dashed border-edg-teal/30 pointer-events-none" />
+              <div className="absolute bottom-2 left-6 text-xs text-edg-grey pointer-events-none select-none">
                 Sign above the line
               </div>
               {!hasDrawing && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                  <div className="flex items-center gap-2 text-slate-400 dark:text-slate-500 mb-1">
+                  <div className="flex items-center gap-2 text-edg-grey mb-1">
                     <Pen className="w-5 h-5" />
                     <span className="text-sm font-medium">Sign here</span>
                   </div>
-                  <span className="text-xs text-slate-400 dark:text-slate-500">
+                  <span className="text-xs text-edg-grey">
                     Use your mouse or finger to draw
                   </span>
                 </div>
               )}
               {hasDrawing && (
-                <div className="absolute top-3 right-3 flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 px-2 py-1 rounded-full text-xs font-medium">
+                <div className="absolute top-3 right-3 flex items-center gap-1.5 text-edg-dark-teal bg-edg-light-teal px-2 py-1 rounded-full text-xs font-medium">
                   <Check className="w-3 h-3" />
                   Signed
                 </div>
@@ -295,7 +295,7 @@ export function SignatureCanvas({ onSignatureChange, signerName = '' }: Signatur
                 onClick={clearCanvas}
                 data-testid="button-clear-signature"
                 disabled={!hasDrawing}
-                className="gap-2"
+                className="gap-2 border-edg-teal/30 text-edg-teal hover:bg-edg-light-teal hover:text-edg-dark-teal"
               >
                 <Eraser className="w-4 h-4" />
                 Clear
@@ -303,7 +303,7 @@ export function SignatureCanvas({ onSignatureChange, signerName = '' }: Signatur
             </div>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="signer-name-draw" className="text-sm font-medium text-slate-700 dark:text-slate-300">
+            <Label htmlFor="signer-name-draw" className="text-sm font-medium text-edg-black">
               Your Full Legal Name
             </Label>
             <Input
@@ -319,7 +319,7 @@ export function SignatureCanvas({ onSignatureChange, signerName = '' }: Signatur
 
         <TabsContent value="type" className="space-y-4 mt-4">
           <div className="space-y-2">
-            <Label htmlFor="typed-signature" className="text-sm font-medium text-slate-700 dark:text-slate-300">
+            <Label htmlFor="typed-signature" className="text-sm font-medium text-edg-black">
               Type Your Full Legal Name
             </Label>
             <Input
@@ -332,34 +332,34 @@ export function SignatureCanvas({ onSignatureChange, signerName = '' }: Signatur
             />
           </div>
           <div className={cn(
-            "relative bg-gradient-to-b from-slate-50 to-white dark:from-slate-900 dark:to-slate-800 rounded-xl border-2 shadow-inner overflow-hidden transition-all duration-200",
-            typedName ? "border-slate-200 dark:border-slate-700" : "border-dashed border-slate-300 dark:border-slate-600"
+            "relative bg-gradient-to-b from-edg-light-grey to-white rounded-xl border-2 shadow-inner overflow-hidden transition-all duration-200",
+            typedName ? "border-edg-teal/25" : "border-dashed border-edg-teal/30"
           )}>
             <div className="h-32 flex items-center justify-center px-6">
               {typedName ? (
                 <div 
-                  className="text-4xl sm:text-5xl text-slate-800 dark:text-slate-200 animate-in fade-in-0 duration-300"
+                  className="text-4xl sm:text-5xl text-edg-teal animate-in fade-in-0 duration-300"
                   style={{ fontFamily: "'Dancing Script', cursive" }}
                 >
                   {typedName}
                 </div>
               ) : (
-                <div className="flex flex-col items-center text-slate-400 dark:text-slate-500">
+                <div className="flex flex-col items-center text-edg-grey">
                   <Type className="w-8 h-8 mb-2 opacity-50" />
                   <span className="text-sm">Your signature will appear here</span>
                 </div>
               )}
             </div>
-            <div className="absolute bottom-6 left-6 right-6 border-b-2 border-dashed border-slate-300 dark:border-slate-600 pointer-events-none" />
+            <div className="absolute bottom-6 left-6 right-6 border-b-2 border-dashed border-edg-teal/30 pointer-events-none" />
             {typedName && (
-              <div className="absolute top-3 right-3 flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 px-2 py-1 rounded-full text-xs font-medium">
+              <div className="absolute top-3 right-3 flex items-center gap-1.5 text-edg-dark-teal bg-edg-light-teal px-2 py-1 rounded-full text-xs font-medium">
                 <Check className="w-3 h-3" />
                 Signed
               </div>
             )}
           </div>
-          <p className="text-sm text-slate-500 dark:text-slate-400 flex items-center gap-2">
-            <span className="inline-block w-1 h-1 rounded-full bg-slate-400" />
+          <p className="text-sm text-edg-grey flex items-center gap-2">
+            <span className="inline-block w-1 h-1 rounded-full bg-edg-teal" />
             Your typed name will serve as your legal electronic signature
           </p>
         </TabsContent>
