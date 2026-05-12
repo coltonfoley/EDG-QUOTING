@@ -163,12 +163,14 @@ export function SignatureCanvas({ onSignatureChange, signerName = '' }: Signatur
     if (isBlank && !forceName) return;
     
     const nameToUse = forceName !== undefined ? forceName : typedName;
-    if (!isBlank || hasDrawing) {
+    if ((!isBlank || hasDrawing) && nameToUse.trim()) {
       onSignatureChange({
         type: 'draw',
         imageData,
-        name: nameToUse || 'Drawn Signature'
+        name: nameToUse.trim()
       });
+    } else {
+      onSignatureChange(null);
     }
   };
 
@@ -224,7 +226,7 @@ export function SignatureCanvas({ onSignatureChange, signerName = '' }: Signatur
     }
   };
 
-  const hasSignature = signatureMode === 'draw' ? hasDrawing : typedName.trim().length > 0;
+  const hasSignature = signatureMode === 'draw' ? hasDrawing && typedName.trim().length > 0 : typedName.trim().length > 0;
 
   return (
     <div className="space-y-4">
@@ -302,14 +304,14 @@ export function SignatureCanvas({ onSignatureChange, signerName = '' }: Signatur
           </div>
           <div className="space-y-2">
             <Label htmlFor="signer-name-draw" className="text-sm font-medium text-slate-700 dark:text-slate-300">
-              Your Full Name (for records)
+              Your Full Legal Name
             </Label>
             <Input
               id="signer-name-draw"
               data-testid="input-signer-name-draw"
               value={typedName}
               onChange={(e) => setTypedName(e.target.value)}
-              placeholder="Enter your full name"
+              placeholder="Type your full name to attach it to this signature"
               className="h-11"
             />
           </div>
@@ -318,14 +320,14 @@ export function SignatureCanvas({ onSignatureChange, signerName = '' }: Signatur
         <TabsContent value="type" className="space-y-4 mt-4">
           <div className="space-y-2">
             <Label htmlFor="typed-signature" className="text-sm font-medium text-slate-700 dark:text-slate-300">
-              Type Your Full Name
+              Type Your Full Legal Name
             </Label>
             <Input
               id="typed-signature"
               data-testid="input-typed-signature"
               value={typedName}
               onChange={(e) => handleTypedNameChange(e.target.value)}
-              placeholder="Enter your full name"
+              placeholder="Type your full legal name"
               className="h-12 text-lg"
             />
           </div>

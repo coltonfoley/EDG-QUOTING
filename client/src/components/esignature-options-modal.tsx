@@ -110,8 +110,8 @@ export function ESignatureOptionsModal({ quote, open, onOpenChange, onSuccess }:
     },
     onSuccess: (data) => {
       toast({
-        title: "Signing Link Generated",
-        description: "E-signature link has been created successfully",
+        title: "Approval Link Prepared",
+        description: "Customer approval link is ready",
       });
       onSuccess(data.signingToken);
       onOpenChange(false);
@@ -119,7 +119,7 @@ export function ESignatureOptionsModal({ quote, open, onOpenChange, onSuccess }:
     onError: (error: any) => {
       toast({
         title: "Error",
-        description: error.message || "Failed to generate signing link",
+        description: error.message || "Failed to prepare approval link",
         variant: "destructive"
       });
     },
@@ -210,18 +210,18 @@ export function ESignatureOptionsModal({ quote, open, onOpenChange, onSuccess }:
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileText className="w-5 h-5" />
-            E-Signature Options
+            Proposal Approval Options
           </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">PDF Options</CardTitle>
+              <CardTitle className="text-lg">Customer Proposal Package</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center justify-between">
-                <Label htmlFor="show-pricing">Include Pricing</Label>
+                <Label htmlFor="show-pricing">Show Pricing</Label>
                 <Switch 
                   id="show-pricing" 
                   checked={showPricing} 
@@ -232,7 +232,7 @@ export function ESignatureOptionsModal({ quote, open, onOpenChange, onSuccess }:
 
               <div className="flex items-center justify-between">
                 <div className="flex flex-col">
-                  <Label htmlFor="include-contract">Include Notes & Terms</Label>
+                  <Label htmlFor="include-contract">Include Terms</Label>
                   {!hasContractData && (
                     <span className="text-xs text-gray-500 mt-1">No notes or contract terms available for this quote</span>
                   )}
@@ -247,7 +247,7 @@ export function ESignatureOptionsModal({ quote, open, onOpenChange, onSuccess }:
               </div>
 
               <div className="flex items-center justify-between">
-                <Label htmlFor="include-images">Include Product Renderings</Label>
+                <Label htmlFor="include-images">Include Visuals</Label>
                 <Switch 
                   id="include-images" 
                   checked={includeImages} 
@@ -274,7 +274,7 @@ export function ESignatureOptionsModal({ quote, open, onOpenChange, onSuccess }:
                     onClick={() => renderingsRef.current?.click()}
                   >
                     <Upload className="w-8 h-8 mx-auto mb-2 text-gray-400" />
-                    <p className="text-sm text-gray-600">Click to upload visual assets (renderings, photos, details)</p>
+                    <p className="text-sm text-gray-600">Click to upload proposal visuals (renderings, photos, details)</p>
                     <p className="text-xs text-gray-500">PNG, JPG up to 100MB each (max 5 images)</p>
                   </div>
                 ) : (
@@ -342,7 +342,7 @@ export function ESignatureOptionsModal({ quote, open, onOpenChange, onSuccess }:
               disabled={generateSigningLinkMutation.isPending || isUploading}
               data-testid="button-generate-signing-link"
             >
-              {generateSigningLinkMutation.isPending ? 'Generating...' : 'Generate Signing Link'}
+              {generateSigningLinkMutation.isPending ? 'Generating...' : 'Prepare Approval Link'}
             </Button>
           </div>
         </div>

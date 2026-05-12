@@ -7,6 +7,7 @@ import { eq, sql } from "drizzle-orm";
 import { isAuthenticated } from "../replitAuth";
 import fs from "fs";
 import path from "path";
+import crypto from "crypto";
 import {
   insertQuoteSchema,
   updateQuoteSchema,
@@ -141,6 +142,140 @@ function formatJobsiteAddress(quote: any): string | null {
   }
   
   return parts.length > 0 ? parts.join(', ') : null;
+}
+
+function parseMoney(value: unknown): number {
+  const parsed = typeof value === "string" ? Number(value.replace(/[^0-9.-]/g, "")) : Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function calculatePublicLineTotal(item: any, quote: any): number {
+  const quantity = Math.max(0, parseMoney(item.quantity));
+  const unitPrice = Math.max(0, parseMoney(item.unitPrice));
+  const discountValue = Math.max(0, parseMoney(item.discountValue));
+  const markupValue = Math.max(0, parseMoney(item.markupValue));
+  const tariffRate = item.isTariffApplicable ? Math.max(0, parseMoney(quote.tariffRate)) : 0;
+
+  let lineTotal = quantity * unitPrice;
+  if ((item.discountType || "percentage") === "dollar") {
+    lineTotal = Math.max(0, lineTotal - discountValue);
+  } else if (discountValue > 0) {
+    lineTotal = Math.max(0, lineTotal - (lineTotal * Math.min(discountValue, 100) / 100));
+  }
+
+  if (tariffRate > 0) {
+    lineTotal += lineTotal * Math.min(tariffRate, 100) / 100;
+  }
+
+  if ((item.markupType || "percentage") === "dollar") {
+    lineTotal += markupValue;
+  } else if (markupValue > 0) {
+    lineTotal += lineTotal * markupValue / 100;
+  }
+
+  return Math.round(lineTotal * 100) / 100;
+}
+
+function buildPublicSigningQuote(quote: any) {
+  const publicLineItems = (quote.lineItems || []).map((item: any) => {
+    const quantity = Math.max(0, parseMoney(item.quantity));
+    const lineTotal = calculatePublicLineTotal(item, quote);
+    const publicUnitPrice = quantity > 0 ? lineTotal / quantity : lineTotal;
+
+    return {
+      id: item.id,
+      quoteId: item.quoteId,
+      productId: item.productId,
+      description: item.description,
+      quantity: item.quantity,
+      unitPrice: publicUnitPrice.toFixed(2),
+      markupType: "percentage",
+      markupValue: "0",
+      discountType: "percentage",
+      discountValue: "0",
+      isTaxable: item.isTaxable,
+      groupId: item.groupId,
+      position: item.position,
+      sku: item.sku,
+      manufacturer: item.manufacturer,
+    };
+  });
+
+  const publicQuote = {
+    id: quote.id,
+    quoteNumber: quote.quoteNumber,
+    projectName: quote.projectName,
+    jobsiteAddress: formatJobsiteAddress(quote),
+    jobsiteStreetAddress: quote.jobsiteStreetAddress,
+    jobsiteAddressLine2: quote.jobsiteAddressLine2,
+    jobsiteCity: quote.jobsiteCity,
+    jobsiteState: quote.jobsiteState,
+    jobsiteZipCode: quote.jobsiteZipCode,
+    jobsiteCountry: quote.jobsiteCountry,
+    accountName: quote.account?.name || quote.customer?.name || "Client",
+    account: quote.account ? {
+      name: quote.account.name,
+      company: quote.account.company,
+      email: quote.account.email,
+      phone: quote.account.phone,
+      firstName: quote.account.firstName,
+      lastName: quote.account.lastName,
+    } : undefined,
+    customer: quote.account ? {
+      name: quote.account.name,
+      company: quote.account.company,
+      email: quote.account.email,
+      phone: quote.account.phone,
+      firstName: quote.account.firstName,
+      lastName: quote.account.lastName,
+    } : undefined,
+    lineItems: publicLineItems,
+    taxRate: quote.taxRate,
+    discount: quote.discount,
+    shipping: quote.shipping,
+    isShippingTaxable: quote.isShippingTaxable,
+    contractTemplate: quote.esigIncludeContract ? quote.contractTemplate : undefined,
+    customContractTerms: quote.esigIncludeContract ? quote.customContractTerms : null,
+    notes: quote.esigIncludeContract ? quote.notes : null,
+    clientSignatureData: quote.clientSignatureData,
+    clientSignedAt: quote.clientSignedAt,
+    clientSignedIp: quote.clientSignedIp,
+    companySignatureData: quote.companySignatureData,
+    companySignedAt: quote.companySignedAt,
+    companySignedIp: quote.companySignedIp,
+    signedDocumentSnapshot: quote.signedDocumentSnapshot,
+    signatureAuditTrail: quote.signatureAuditTrail,
+    esigIncludePricing: quote.esigIncludePricing ?? true,
+    esigIncludeImages: quote.esigIncludeImages ?? false,
+    esigIncludeContract: quote.esigIncludeContract ?? true,
+  };
+
+  return quote.signedDocumentSnapshot
+    ? {
+        ...(quote.signedDocumentSnapshot as object),
+        clientSignatureData: quote.clientSignatureData,
+        clientSignedAt: quote.clientSignedAt,
+        clientSignedIp: quote.clientSignedIp,
+        companySignatureData: quote.companySignatureData,
+        companySignedAt: quote.companySignedAt,
+        companySignedIp: quote.companySignedIp,
+        signatureAuditTrail: quote.signatureAuditTrail,
+      }
+    : publicQuote;
+}
+
+function createDocumentFingerprint(snapshot: unknown): string {
+  return crypto
+    .createHash("sha256")
+    .update(JSON.stringify(snapshot))
+    .digest("hex");
+}
+
+function getClientIp(req: any): string {
+  const forwardedFor = req.headers["x-forwarded-for"];
+  return Array.isArray(forwardedFor)
+    ? forwardedFor[0]
+    : String(forwardedFor || req.socket.remoteAddress || "unknown").split(",")[0].trim();
 }
 
 interface RateLimitEntry {
@@ -1597,9 +1732,93 @@ export function registerQuoteRoutes(app: Express) {
         return res.status(404).json({ message: "Invalid or expired signing link" });
       }
 
-      res.json(quote);
+      if (!quote.enableESignature) {
+        return res.status(403).json({ message: "E-signature not enabled for this quote" });
+      }
+
+      res.json(buildPublicSigningQuote(quote));
     } catch (error) {
       console.error("Error getting full quote data:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.post("/api/quotes/:id/company-signature", isAuthenticated, async (req, res) => {
+    try {
+      const params = idParamSchema.safeParse(req.params);
+      if (!params.success) {
+        return res.status(400).json({
+          message: "Invalid request parameters",
+          errors: params.error.errors
+        });
+      }
+
+      const bodyValidation = submitSignatureSchema.safeParse({
+        ...req.body,
+        signerType: "company"
+      });
+      if (!bodyValidation.success) {
+        return res.status(400).json({
+          message: "Invalid signature data",
+          errors: bodyValidation.error.errors
+        });
+      }
+
+      const quote = await storage.getQuoteWithDetails(params.data.id);
+      if (!quote) {
+        return res.status(404).json({ message: "Quote not found" });
+      }
+
+      if (!quote.enableESignature || !quote.signingToken) {
+        return res.status(400).json({ message: "E-signature must be enabled first" });
+      }
+
+      if (quote.companySignedAt) {
+        return res.status(409).json({ message: "Company signature has already been recorded" });
+      }
+
+      const signedAt = new Date();
+      const existingAudit = quote.signatureAuditTrail as any;
+      const snapshot = quote.signedDocumentSnapshot || buildPublicSigningQuote({
+        ...quote,
+        companySignatureData: bodyValidation.data.signatureData,
+        companySignedAt: signedAt,
+        companySignedIp: getClientIp(req),
+      });
+      const documentFingerprint = existingAudit?.documentFingerprint || createDocumentFingerprint(snapshot);
+      const user = (req as any).user;
+      const auditEntry = {
+        event: "company_signed",
+        signerType: "company",
+        signerName: bodyValidation.data.signatureData.name,
+        signerEmail: user?.email || null,
+        signedAt: signedAt.toISOString(),
+        ipAddress: getClientIp(req),
+        userAgent: req.get("user-agent") || null,
+        quoteId: quote.id,
+        quoteNumber: quote.quoteNumber,
+        documentFingerprint,
+      };
+
+      await storage.updateQuote(quote.id, {
+        companySignatureData: bodyValidation.data.signatureData,
+        companySignedAt: signedAt,
+        companySignedIp: getClientIp(req),
+        signatureAuditTrail: {
+          documentFingerprint,
+          entries: [
+            ...(existingAudit?.entries || []),
+            auditEntry,
+          ],
+        },
+      });
+
+      res.json({
+        success: true,
+        message: "Company signature captured successfully"
+      });
+    } catch (error) {
+      console.error("Error submitting company signature:", error);
       res.status(500).json({ message: "Internal server error" });
     }
   });
@@ -1624,6 +1843,10 @@ export function registerQuoteRoutes(app: Express) {
 
       const { signatureData, signerType } = bodyValidation.data;
 
+      if (signerType !== 'client') {
+        return res.status(403).json({ message: "Company signatures must be submitted from the staff quote screen" });
+      }
+
       const quote = await storage.getQuoteBySigningToken(params.data.token);
       if (!quote) {
         return res.status(404).json({ message: "Invalid or expired signing link" });
@@ -1633,20 +1856,47 @@ export function registerQuoteRoutes(app: Express) {
         return res.status(403).json({ message: "E-signature not enabled for this quote" });
       }
 
-      const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
-
-      const updateData: any = {};
-      if (signerType === 'client') {
-        updateData.clientSignatureData = signatureData;
-        updateData.clientSignedAt = new Date();
-        updateData.clientSignedIp = clientIp;
-      } else {
-        updateData.companySignatureData = signatureData;
-        updateData.companySignedAt = new Date();
-        updateData.companySignedIp = clientIp;
+      if (quote.clientSignedAt) {
+        return res.status(409).json({ message: "Client signature has already been recorded" });
       }
 
-      await storage.updateQuote(quote.id, updateData);
+      const clientIp = getClientIp(req);
+      const signedAt = new Date();
+      const snapshot = buildPublicSigningQuote({
+        ...quote,
+        clientSignatureData: signatureData,
+        clientSignedAt: signedAt,
+        clientSignedIp: clientIp,
+      });
+      const documentFingerprint = createDocumentFingerprint(snapshot);
+      const auditEntry = {
+        event: "client_signed",
+        signerType: "client",
+        signerName: signatureData.name,
+        signerEmail: quote.account?.email || null,
+        signedAt: signedAt.toISOString(),
+        ipAddress: clientIp,
+        userAgent: req.get("user-agent") || null,
+        quoteId: quote.id,
+        quoteNumber: quote.quoteNumber,
+        signingTokenLast6: params.data.token.slice(-6),
+        consentText: "I confirm that I have reviewed this proposal and agree to be legally bound by its terms. I understand that my electronic signature carries the same legal weight as a handwritten signature.",
+        documentFingerprint,
+      };
+
+      await storage.updateQuote(quote.id, {
+        clientSignatureData: signatureData,
+        clientSignedAt: signedAt,
+        clientSignedIp: clientIp,
+        signedDocumentSnapshot: snapshot,
+        signatureAuditTrail: {
+          documentFingerprint,
+          entries: [
+            ...((quote.signatureAuditTrail as any)?.entries || []),
+            auditEntry,
+          ],
+        },
+      });
 
       // Send confirmation email to client after they sign
       let emailSent = false;
