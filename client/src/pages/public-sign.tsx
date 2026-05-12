@@ -45,6 +45,15 @@ interface SigningQuoteData {
   customContractTerms: string | null;
   clientSignedAt: string | null;
   companySignedAt: string | null;
+  signedDocumentSnapshot?: any;
+  signatureAuditTrail?: {
+    documentFingerprint?: string;
+    entries?: Array<{
+      signerName?: string;
+      signedAt?: string;
+      documentFingerprint?: string;
+    }>;
+  } | null;
   esigIncludePricing?: boolean;
   esigIncludeImages?: boolean;
   esigIncludeContract?: boolean;
@@ -147,12 +156,12 @@ function CompanyHeader() {
             className="h-10 w-auto brightness-0 invert"
           />
           <div className="hidden sm:block border-l border-slate-700 pl-4">
-            <p className="text-slate-400 text-xs">Secure Document Signing</p>
+            <p className="text-slate-400 text-xs">Secure Proposal Approval</p>
           </div>
         </div>
         <div className="flex items-center gap-2 text-xs text-slate-400">
           <Shield className="w-3.5 h-3.5 text-emerald-400" />
-          <span>256-bit SSL Encrypted</span>
+          <span>Secure review link</span>
         </div>
       </div>
     </div>
@@ -526,32 +535,37 @@ export default function PublicSignPage() {
               </div>
               
               <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
-                Document Signed Successfully
+                Proposal Approved
               </h2>
               <p className="text-muted-foreground mb-6">
-                Your signature has been recorded and the document is now legally binding.
+                Your approval has been recorded. EDG will use this signed proposal to move the project forward.
               </p>
 
               <div className="bg-slate-50 dark:bg-slate-800 rounded-lg p-4 mb-6 text-left">
-                <h3 className="font-medium text-sm text-slate-500 dark:text-slate-400 mb-3">SIGNATURE DETAILS</h3>
+                <h3 className="font-medium text-sm text-slate-500 dark:text-slate-400 mb-3">APPROVAL RECEIPT</h3>
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">Document</span>
+                    <span className="text-muted-foreground">Proposal</span>
                     <span className="font-medium">{quoteData.projectName || `Quote #${quoteData.quoteNumber}`}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">From</span>
                     <span className="font-medium">{COMPANY_INFO.name}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Signed On</span>
-                    <span className="font-medium flex items-center gap-1">
-                      <Clock className="w-3 h-3" />
-                      {(signedTimestamp || new Date(quoteData.clientSignedAt!)).toLocaleString()}
-                    </span>
-                  </div>
-                </div>
-              </div>
+	                  <div className="flex justify-between">
+	                    <span className="text-muted-foreground">Approved On</span>
+	                    <span className="font-medium flex items-center gap-1">
+	                      <Clock className="w-3 h-3" />
+	                      {(signedTimestamp || new Date(quoteData.clientSignedAt!)).toLocaleString()}
+	                    </span>
+	                  </div>
+	                </div>
+	                {quoteData.signatureAuditTrail?.documentFingerprint && (
+	                  <div className="mt-3 rounded-md bg-white dark:bg-slate-900 p-3 text-xs text-muted-foreground">
+	                    Document ID: <span className="font-mono">{quoteData.signatureAuditTrail.documentFingerprint.slice(0, 16)}</span>
+	                  </div>
+	                )}
+	              </div>
 
               <div className="space-y-3">
                 <Button 
@@ -562,7 +576,7 @@ export default function PublicSignPage() {
                   data-testid="button-download-signed-pdf"
                 >
                   <Download className="w-4 h-4 mr-2" />
-                  {downloadPdfMutation.isPending ? 'Generating PDF...' : 'Download Signed Document'}
+                  {downloadPdfMutation.isPending ? 'Generating PDF...' : 'Download Approved Proposal'}
                 </Button>
                 
                 <p className="text-xs text-muted-foreground">
@@ -607,6 +621,41 @@ export default function PublicSignPage() {
 
         {currentStep === 'review' && (
           <>
+            {!isFullscreen && (
+              <div className="max-w-7xl mx-auto w-full px-4 pb-4">
+                <div className="rounded-lg border bg-white dark:bg-slate-800 shadow-sm p-5">
+                  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                    <div className="space-y-2">
+                      <Badge variant="outline" className="w-fit">Proposal approval</Badge>
+                      <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-slate-950 dark:text-white">
+                        Review {quoteData.projectName || `Quote #${quoteData.quoteNumber}`}
+                      </h1>
+                      <p className="text-sm text-muted-foreground max-w-2xl">
+                        Check the scope, pricing, visuals, and terms below. If something needs to change, contact EDG before approving.
+                      </p>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
+                      <div className="rounded-md border bg-slate-50 dark:bg-slate-900 px-3 py-2">
+                        <div className="text-muted-foreground">Customer</div>
+                        <div className="font-medium truncate max-w-[150px]">{quoteData.accountName}</div>
+                      </div>
+                      <div className="rounded-md border bg-slate-50 dark:bg-slate-900 px-3 py-2">
+                        <div className="text-muted-foreground">Items</div>
+                        <div className="font-medium">{calculateQuoteTotals(quoteData).itemCount}</div>
+                      </div>
+                      {showPricing && (
+                        <div className="rounded-md border bg-slate-50 dark:bg-slate-900 px-3 py-2 col-span-2 sm:col-span-1">
+                          <div className="text-muted-foreground">Proposal total</div>
+                          <div className="font-semibold text-primary">
+                            {calculateQuoteTotals(quoteData).total.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
             <div className={cn(
               "flex-1 bg-slate-200 dark:bg-slate-800 relative",
               isFullscreen && "fixed inset-0 z-50"
@@ -635,7 +684,7 @@ export default function PublicSignPage() {
                     isFullscreen ? "h-full" : "h-[calc(100vh-280px)] min-h-[500px]"
                   )}
                   data-testid="pdf-preview"
-                  title="Document Preview"
+                  title="Proposal Preview"
                 />
               ) : (
                 <div className="flex items-center justify-center h-full min-h-[70vh]">
@@ -654,7 +703,7 @@ export default function PublicSignPage() {
                   <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
                     <div className="flex items-center gap-3 text-sm text-muted-foreground">
                       <Shield className="w-4 h-4 text-emerald-500" />
-                      <span>Your signature is legally binding and encrypted</span>
+                      <span>Review the proposal, then approve when everything looks right.</span>
                     </div>
                     
                     <div className="flex items-center gap-3 w-full sm:w-auto">
@@ -674,7 +723,7 @@ export default function PublicSignPage() {
                         className="flex-1 sm:flex-none min-w-[200px]"
                         data-testid="button-proceed-to-sign"
                       >
-                        Continue to Sign
+                        Approve & Sign
                         <ArrowRight className="w-4 h-4 ml-2" />
                       </Button>
                     </div>
@@ -693,7 +742,7 @@ export default function PublicSignPage() {
                   <CardHeader className="pb-3">
                     <CardTitle className="flex items-center gap-2 text-lg">
                       <Eye className="w-5 h-5" />
-                      Document Preview
+                      Proposal Preview
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="p-2">
@@ -702,7 +751,7 @@ export default function PublicSignPage() {
                         src={pdfUrl}
                         className="w-full h-[400px] border rounded-lg"
                         data-testid="pdf-preview-sign"
-                        title="Document Preview"
+                        title="Proposal Preview"
                       />
                     ) : (
                       <div className="h-[400px] bg-slate-100 dark:bg-slate-800 rounded-lg flex items-center justify-center">
@@ -718,10 +767,10 @@ export default function PublicSignPage() {
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                       <PenLine className="w-5 h-5" />
-                      Your Signature
+                      Your Approval
                     </CardTitle>
                     <CardDescription>
-                      Draw or type your signature below
+                      Type your legal name and sign to approve this proposal.
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
@@ -742,7 +791,7 @@ export default function PublicSignPage() {
                         data-testid="checkbox-agree-terms"
                       />
                       <Label htmlFor="agree-terms" className="text-sm leading-relaxed cursor-pointer">
-                        I confirm that I have reviewed this document and agree to be legally bound by its terms. I understand that my electronic signature carries the same legal weight as a handwritten signature.
+                        I confirm that I have reviewed this proposal and agree to be legally bound by its terms. I understand that my electronic signature carries the same legal weight as a handwritten signature.
                       </Label>
                     </div>
 
@@ -750,7 +799,7 @@ export default function PublicSignPage() {
                       <Alert className="bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800">
                         <CheckCircle className="w-4 h-4 text-emerald-600" />
                         <AlertDescription className="text-emerald-800 dark:text-emerald-200">
-                          Ready to submit! Click "Sign Document" to complete.
+                          Ready to approve. Click "Approve Proposal" to complete.
                         </AlertDescription>
                       </Alert>
                     )}
@@ -779,7 +828,7 @@ export default function PublicSignPage() {
                         ) : (
                           <>
                             <CheckCircle className="w-4 h-4 mr-2" />
-                            Sign Document
+                            Approve Proposal
                           </>
                         )}
                       </Button>

@@ -229,19 +229,15 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
   // Company signature mutation
   const companySignMutation = useMutation({
     mutationFn: async (signatureData: SignatureData) => {
-      if (!quote.signingToken) {
-        throw new Error("Signing token not available");
-      }
-      const response = await apiRequest('POST', `/api/signatures/${quote.signingToken}/sign`, { 
-        signatureData,
-        signerType: 'company'
+      const response = await apiRequest('POST', `/api/quotes/${quote.id}/company-signature`, {
+        signatureData
       });
       return response;
     },
     onSuccess: () => {
       toast({
-        title: 'Success',
-        description: 'Quote signed as company successfully!',
+        title: 'Company signature recorded',
+        description: 'This proposal is now signed on behalf of EDG.',
         variant: 'default'
       });
       setShowCompanySignDialog(false);
@@ -351,6 +347,7 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
     quote.isShippingTaxable ?? true,
     quote.tariffRate ?? 0
   );
+  const signatureAudit = quote.signatureAuditTrail as { documentFingerprint?: string; entries?: Array<{ signerName?: string; signedAt?: string }> } | null;
 
   return (
     <>
@@ -651,16 +648,16 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
         {/* E-Signature Settings */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Client Signature</CardTitle>
+            <CardTitle className="text-base">Proposal Approval</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
                 <Label htmlFor="enable-esignature" className="text-sm font-medium">
-                  Enable E-Signature
+                  Enable customer approval
                 </Label>
                 <p className="text-xs text-muted-foreground">
-                  Allow clients to sign digitally
+                  Prepare a secure review-and-sign link for this proposal
                 </p>
               </div>
               <Switch
@@ -674,13 +671,20 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
 
             {quote.enableESignature && (
               <>
+                <div className="rounded-lg border bg-muted/40 p-3 text-xs text-muted-foreground space-y-1">
+                  <div className="font-medium text-foreground">Approval workflow</div>
+                  <div>Prepare link, send to customer, customer approves, EDG signs, ready for Ops.</div>
+                  {signatureAudit?.documentFingerprint && (
+                    <div className="pt-1 font-mono">Document ID: {signatureAudit.documentFingerprint.slice(0, 16)}</div>
+                  )}
+                </div>
                 {/* Signature Status Display */}
                 {quote.clientSignedAt && quote.companySignedAt ? (
                   <>
                     <Alert className="border-green-600/30 bg-green-600/10">
                       <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
                       <AlertDescription className="text-green-900 dark:text-green-100">
-                        <strong>Fully Signed</strong>
+                        <strong>Fully approved</strong>
                         <span className="block mt-1 text-sm">
                           Client: {new Date(quote.clientSignedAt).toLocaleString()}
                         </span>
@@ -705,9 +709,9 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
                     <Alert className="border-blue-600/30 bg-blue-600/10">
                       <CheckCircle className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                       <AlertDescription className="text-blue-900 dark:text-blue-100">
-                        <strong>Client Signed</strong>
+                        <strong>Customer approved</strong>
                         <span className="block mt-1 text-sm">
-                          Signed on {new Date(quote.clientSignedAt).toLocaleString()}
+                          Approved on {new Date(quote.clientSignedAt).toLocaleString()}
                         </span>
                       </AlertDescription>
                     </Alert>
@@ -726,12 +730,12 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
                   <Alert className="border-purple-600/30 bg-purple-600/10">
                     <CheckCircle className="h-4 w-4 text-purple-600 dark:text-purple-400" />
                     <AlertDescription className="text-purple-900 dark:text-purple-100">
-                      <strong>Company Signed</strong>
+                      <strong>EDG signed</strong>
                       <span className="block mt-1 text-sm">
                         Signed on {new Date(quote.companySignedAt).toLocaleString()}
                       </span>
                       <span className="block text-sm text-purple-700 dark:text-purple-300">
-                        Waiting for client signature
+                        Waiting for customer approval
                       </span>
                     </AlertDescription>
                   </Alert>
@@ -739,14 +743,14 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
                   <Alert className="border-yellow-600/30 bg-yellow-600/10">
                     <Clock className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
                     <AlertDescription className="text-yellow-900 dark:text-yellow-100">
-                      <strong>Pending Signature</strong>
+                      <strong>Waiting for customer</strong>
                       {quote.signatureEmailSentAt ? (
                         <span className="block mt-1 text-sm">
                           Email sent on {new Date(quote.signatureEmailSentAt).toLocaleString()}
                         </span>
                       ) : (
                         <span className="block mt-1 text-sm">
-                          Signing link ready - email not yet sent
+                          Approval link ready - email not yet sent
                         </span>
                       )}
                     </AlertDescription>
@@ -760,7 +764,7 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
                   data-testid="button-send-for-signature"
                 >
                   <Link2 className="mr-2 h-4 w-4" />
-                  {quote.signingToken ? 'View Signing Link' : 'Generate Signing Link'}
+                  {quote.signingToken ? 'View Approval Link' : 'Prepare Approval Link'}
                 </Button>
 
                 {quote.signingToken && !quote.companySignedAt && (
@@ -771,7 +775,7 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
                     data-testid="button-sign-as-company"
                   >
                     <PenTool className="mr-2 h-4 w-4" />
-                    Sign as Company
+                    Add EDG Signature
                   </Button>
                 )}
               </>
@@ -813,9 +817,9 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
       <Dialog open={showSigningLinkDialog} onOpenChange={setShowSigningLinkDialog}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>Send Quote for Signature</DialogTitle>
+            <DialogTitle>Send Proposal for Approval</DialogTitle>
             <DialogDescription>
-              Share this link with your client or send it directly via email
+              Share this secure approval link with the customer or send it directly by email.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -833,7 +837,7 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
             )}
             
             <div className="space-y-2">
-              <Label>Signing Link</Label>
+              <Label>Approval Link</Label>
               <div className="flex gap-2">
                 <Input
                   value={signingLink}
@@ -873,7 +877,7 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
                     </Label>
                     <Textarea
                       id="personalized-message"
-                      placeholder="Hi! Thank you for choosing us for your project. Please review the attached quote at your convenience..."
+                      placeholder="Hi! Please review the proposal and approve it when everything looks right. Call us with any questions."
                       value={personalizedMessage}
                       onChange={(e) => setPersonalizedMessage(e.target.value)}
                       rows={3}
@@ -921,15 +925,15 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
       }}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Sign Quote as Company</DialogTitle>
+            <DialogTitle>Add EDG Signature</DialogTitle>
             <DialogDescription>
-              Add your company signature to finalize the quote
+              Add an EDG signature after the proposal is ready to finalize.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <Alert>
               <AlertDescription>
-                Draw or type your signature below to sign this quote on behalf of the company
+                Draw or type your signature below to sign this proposal on behalf of EDG Patio & Shade.
               </AlertDescription>
             </Alert>
             

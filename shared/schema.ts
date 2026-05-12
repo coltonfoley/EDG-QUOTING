@@ -156,6 +156,8 @@ export const quotes = pgTable("quotes", {
   companySignatureData: jsonb("company_signature_data"), // { type: 'draw'|'type', imageData: string, name: string }
   companySignedAt: timestamp("company_signed_at"),
   companySignedIp: text("company_signed_ip"),
+  signedDocumentSnapshot: jsonb("signed_document_snapshot"), // locked client-facing proposal data captured when the client signs
+  signatureAuditTrail: jsonb("signature_audit_trail"), // signing certificate data: consent, signer, IP, browser, and document fingerprint
   // E-Signature email tracking
   signatureEmailSentAt: timestamp("signature_email_sent_at"), // when the signing link was emailed to client
   signatureEmailMessage: text("signature_email_message"), // optional personalized message included in email
@@ -480,6 +482,8 @@ export const insertQuoteSchema = createInsertSchema(quotes).omit({
   companySignatureData: z.any().optional().nullable(),
   companySignedAt: z.union([z.date(), z.null()]).optional(),
   companySignedIp: z.string().optional().nullable(),
+  signedDocumentSnapshot: z.any().optional().nullable(),
+  signatureAuditTrail: z.any().optional().nullable(),
 });
 
 
