@@ -2299,7 +2299,7 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
               data-testid="button-configure-product"
             >
               <Settings className="mr-2 h-4 w-4" />
-              Configure Product
+              Sundance Builder
             </Button>
             <Button
               onClick={() => setShowNewItemForm(true)}

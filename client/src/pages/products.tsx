@@ -496,35 +496,10 @@ export default function Products() {
                     )}
                   />
                   
-                  {/* Product Type Selection */}
-                  <FormField
-                    control={form.control}
-                    name="productType"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Product Type</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value || "simple"}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="simple">Simple Product</SelectItem>
-                            <SelectItem value="configurable">Configurable Product (Dimensional Pricing)</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  {/* Conditional message for configurable products */}
                   {form.watch("productType") === "configurable" && (
                     <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
                       <p className="text-sm text-blue-800">
-                        <strong>Configurable Product:</strong> This product will use dimensional pricing tables (length × width) instead of a fixed unit price. 
-                        You can set up pricing tables after creating the product.
+                        <strong>Sundance Builder item:</strong> This product is managed through the Sundance Builder on quotes. New catalog items should stay as simple products unless the Sundance workflow is being expanded intentionally.
                       </p>
                     </div>
                   )}
