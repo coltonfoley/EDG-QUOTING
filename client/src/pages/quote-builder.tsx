@@ -280,6 +280,8 @@ export default function QuoteBuilder() {
     companySignatureData: null,
     companySignedAt: null,
     companySignedIp: null,
+    signedDocumentSnapshot: null,
+    signatureAuditTrail: null,
     signatureEmailSentAt: null,
     signatureEmailMessage: null,
     esigIncludePricing: true,
