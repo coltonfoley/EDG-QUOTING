@@ -74,6 +74,7 @@ function StorageUsageIndicator({ isAdmin }: { isAdmin: boolean }) {
 export function AppHeader() {
   const [location] = useLocation();
   const { user, logoutMutation } = useAuth();
+  const showBanner = location === "/";
 
   const handleLogout = () => {
     logoutMutation.mutate();
@@ -81,12 +82,14 @@ export function AppHeader() {
   
   return (
     <>
-      <div className="bg-black text-edg-brand-teal px-4 py-2">
-        <div className="max-w-7xl mx-auto flex items-center justify-center gap-2 text-sm font-medium">
-          <CloudRain className="h-4 w-4" />
-          <span>Turn quotes into contracts - Make it rain! 💧</span>
+      {showBanner && (
+        <div className="bg-black text-edg-brand-teal px-4 py-2">
+          <div className="max-w-7xl mx-auto flex items-center justify-center gap-2 text-sm font-medium">
+            <CloudRain className="h-4 w-4" />
+            <span>Turn quotes into contracts.</span>
+          </div>
         </div>
-      </div>
+      )}
       <header className="bg-card shadow-sm border-b border-border">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">

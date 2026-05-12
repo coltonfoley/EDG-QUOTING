@@ -2058,11 +2058,16 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
   return (
     <div className="mb-6">
       <div className="border-b border-border bg-card px-4 py-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-foreground">
-            Line Items
-          </h2>
-          <div className="flex space-x-2">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-foreground">
+              Line Items
+            </h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Build the quote from catalog products first, then use custom items for anything special.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2 lg:justify-end">
             <Button
               variant="outline"
               size="sm"
@@ -2170,7 +2175,7 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
                   disabled={isUnsavedQuote}
                 >
                   <Package className="mr-2 h-4 w-4" />
-                  From Catalog
+                  Add From Catalog
                 </Button>
               </DialogTrigger>
               <DialogContent className="max-w-4xl max-h-[80vh] overflow-hidden">
@@ -2183,7 +2188,7 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
                 
                 <div className="flex flex-col h-full max-h-[70vh]">
                   {/* Search and Filter Controls */}
-                  <div className="flex gap-4 mb-4 p-1">
+                  <div className="flex flex-col gap-3 mb-4 p-1 sm:flex-row">
                     <div className="flex-1 relative">
                       <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
                       <Input
@@ -2196,7 +2201,7 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
                     </div>
                     
                     <Select value={selectedManufacturer} onValueChange={setSelectedManufacturer}>
-                      <SelectTrigger className="w-48" data-testid="select-manufacturer-filter">
+                      <SelectTrigger className="w-full sm:w-48" data-testid="select-manufacturer-filter">
                         <SelectValue>
                           <div className="flex items-center gap-2">
                             <Filter className="h-4 w-4" />
@@ -2298,11 +2303,11 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
             </Button>
             <Button
               onClick={() => setShowNewItemForm(true)}
-              className="bg-blue-600 hover:bg-blue-700 text-white text-sm"
+              className="bg-edg-black hover:bg-edg-grey text-white text-sm"
               disabled={isUnsavedQuote}
             >
               <Plus className="mr-2 h-4 w-4" />
-              Add Item
+              Custom Item
             </Button>
           </div>
         </div>

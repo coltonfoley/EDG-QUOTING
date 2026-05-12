@@ -285,10 +285,21 @@ export default function Leads() {
                       </p>
                     </div>
 
-                    <div className="flex flex-wrap items-start gap-2 lg:justify-end">
+                    <div className="flex flex-col items-stretch gap-2 lg:items-end">
+                      <Link href={`/accounts/${lead.id}`}>
+                        <Button
+                          size="sm"
+                          className="bg-edg-black text-edg-white hover:bg-edg-grey"
+                          data-testid={`button-start-follow-up-${lead.id}`}
+                        >
+                          Start Follow-Up
+                          <ChevronRight className="ml-1 h-4 w-4" />
+                        </Button>
+                      </Link>
+                      <div className="flex flex-wrap items-center gap-1.5 lg:justify-end">
                       {lead.leadStatus !== "contacted" && (
                         <Button
-                          variant="outline"
+                          variant="ghost"
                           size="sm"
                           onClick={() => updateLeadStatusMutation.mutate({ id: lead.id, status: "contacted" })}
                           disabled={updateLeadStatusMutation.isPending}
@@ -300,7 +311,7 @@ export default function Leads() {
                       )}
                       {lead.leadStatus !== "qualified" && (
                         <Button
-                          variant="outline"
+                          variant="ghost"
                           size="sm"
                           onClick={() => updateLeadStatusMutation.mutate({ id: lead.id, status: "qualified" })}
                           disabled={updateLeadStatusMutation.isPending}
@@ -312,7 +323,7 @@ export default function Leads() {
                       )}
                       {lead.leadStatus !== "unresponsive" && (
                         <Button
-                          variant="outline"
+                          variant="ghost"
                           size="sm"
                           onClick={() => updateLeadStatusMutation.mutate({ id: lead.id, status: "unresponsive" })}
                           disabled={updateLeadStatusMutation.isPending}
@@ -322,12 +333,6 @@ export default function Leads() {
                           No Reply
                         </Button>
                       )}
-                      <Link href={`/accounts/${lead.id}`}>
-                        <Button variant="ghost" size="sm" data-testid={`button-open-client-${lead.id}`}>
-                          Open
-                          <ChevronRight className="ml-1 h-4 w-4" />
-                        </Button>
-                      </Link>
                       {lead.leadStatus !== "archived" && (
                         <Button
                           variant="ghost"
@@ -340,6 +345,7 @@ export default function Leads() {
                           <Archive className="h-4 w-4" />
                         </Button>
                       )}
+                      </div>
                     </div>
                   </div>
                 ))}
