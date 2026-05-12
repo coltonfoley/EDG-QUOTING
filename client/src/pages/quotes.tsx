@@ -179,17 +179,6 @@ export default function Quotes() {
             <p className="text-edg-grey mt-2">Manage your patio & shade project estimates</p>
           </div>
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center space-y-3 sm:space-y-0 sm:space-x-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-edg-grey h-4 w-4" />
-              <Input
-                placeholder="Search quotes, accounts, projects..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 w-full sm:w-80"
-              />
-            </div>
-
-
             <Button 
               variant="outline" 
               onClick={() => setImportDialogOpen(true)}
@@ -251,14 +240,19 @@ export default function Quotes() {
         <Card>
           <CardHeader>
             <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center space-y-3 sm:space-y-0">
-              <CardTitle>Recent Quotes</CardTitle>
+              <div>
+                <CardTitle>Quote List</CardTitle>
+                <p className="text-sm text-edg-grey mt-1">
+                  Search by quote number, client, project, email, or jobsite.
+                </p>
+              </div>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-edg-grey h-4 w-4" />
                 <Input
-                  placeholder="Search quotes..."
+                  placeholder="Search quotes, accounts, projects..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 w-full sm:w-64"
+                  className="pl-10 w-full sm:w-80"
                 />
               </div>
             </div>

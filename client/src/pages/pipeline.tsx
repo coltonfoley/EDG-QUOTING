@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect, useCallback, memo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { Link } from "wouter";
 import { AppHeader } from "@/components/app-header";
 import { PipelineCard } from "@/components/pipeline-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -161,6 +162,7 @@ export default function Pipeline() {
   const [filterRep, setFilterRep] = useState("all");
   const [filterDateRange, setFilterDateRange] = useState("all");
   const [filterAccountType, setFilterAccountType] = useState("all");
+  const [viewMode, setViewMode] = useState<"board" | "list">("board");
   const [activeId, setActiveId] = useState<string | null>(null);
   const [lostReasonDialog, setLostReasonDialog] = useState<{
     open: boolean;
@@ -453,10 +455,30 @@ export default function Pipeline() {
       
       <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
-        <div className="mb-8 flex justify-between items-center">
+        <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-center">
           <div>
             <h2 className="text-3xl font-bold text-edg-black">Sales Pipeline</h2>
             <p className="text-edg-grey mt-2">Track and manage your sales opportunities</p>
+          </div>
+          <div className="flex rounded-md border bg-white p-1">
+            <Button
+              type="button"
+              size="sm"
+              variant={viewMode === "board" ? "default" : "ghost"}
+              onClick={() => setViewMode("board")}
+              data-testid="button-pipeline-board-view"
+            >
+              Board
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={viewMode === "list" ? "default" : "ghost"}
+              onClick={() => setViewMode("list")}
+              data-testid="button-pipeline-list-view"
+            >
+              List
+            </Button>
           </div>
         </div>
 
@@ -576,40 +598,110 @@ export default function Pipeline() {
           </CardContent>
         </Card>
 
-        {/* Pipeline Board */}
-        <Card className="overflow-hidden">
-          <CardContent className="p-0">
-            <ScrollArea className="w-full">
-              <div className="p-4">
-                <DndContext
-                  sensors={sensors}
-                  collisionDetection={closestCorners}
-                  onDragStart={handleDragStart}
-                  onDragOver={handleDragOver}
-                  onDragEnd={handleDragEnd}
-                >
-                  <div className="flex gap-4 h-[600px]">
-                    {DEAL_STAGES.map((stage) => (
-                      <SortableColumn
-                        key={stage.id}
-                        stage={stage}
-                        quotes={quotesByStage[stage.id] || []}
-                        activeId={activeId}
-                      />
-                    ))}
-                  </div>
-                  
-                  <DragOverlay>
-                    {activeQuote ? (
-                      <PipelineCard quote={activeQuote} isDragging />
-                    ) : null}
-                  </DragOverlay>
-                </DndContext>
-              </div>
-              <ScrollBar orientation="horizontal" />
-            </ScrollArea>
-          </CardContent>
-        </Card>
+        {/* Pipeline Board/List */}
+        {viewMode === "board" ? (
+          <Card className="overflow-hidden">
+            <CardContent className="p-0">
+              <ScrollArea className="w-full">
+                <div className="p-4">
+                  <DndContext
+                    sensors={sensors}
+                    collisionDetection={closestCorners}
+                    onDragStart={handleDragStart}
+                    onDragOver={handleDragOver}
+                    onDragEnd={handleDragEnd}
+                  >
+                    <div className="flex gap-4 h-[600px]">
+                      {DEAL_STAGES.map((stage) => (
+                        <SortableColumn
+                          key={stage.id}
+                          stage={stage}
+                          quotes={quotesByStage[stage.id] || []}
+                          activeId={activeId}
+                        />
+                      ))}
+                    </div>
+                    
+                    <DragOverlay>
+                      {activeQuote ? (
+                        <PipelineCard quote={activeQuote} isDragging />
+                      ) : null}
+                    </DragOverlay>
+                  </DndContext>
+                </div>
+                <ScrollBar orientation="horizontal" />
+              </ScrollArea>
+            </CardContent>
+          </Card>
+        ) : (
+          <Card>
+            <CardHeader>
+              <CardTitle>Pipeline List</CardTitle>
+              <p className="text-sm text-edg-grey">
+                A scan-friendly view for laptops, tablets, and quick follow-up reviews.
+              </p>
+            </CardHeader>
+            <CardContent className="p-0">
+              {filteredQuotes.length === 0 ? (
+                <div className="px-6 py-12 text-center text-sm text-muted-foreground">
+                  No deals match the current filters.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-border">
+                    <thead className="bg-muted/50">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-edg-grey">Client</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-edg-grey">Project</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-edg-grey">Stage</th>
+                        <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-edg-grey">Value</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-edg-grey">Updated</th>
+                        <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-edg-grey">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border bg-card">
+                      {filteredQuotes.map((quote) => {
+                        const account = quote.account || quote.customer;
+                        const stage = getDealStageById(quote.dealStage || "new_lead");
+                        const updatedAt = quote.updatedAt || quote.createdAt;
+                        return (
+                          <tr key={quote.id} className="hover:bg-muted/30">
+                            <td className="px-6 py-4 text-sm">
+                              <div className="font-medium text-edg-black">
+                                {account?.company || account?.name || "Unassigned"}
+                              </div>
+                              <div className="text-xs text-edg-grey">{quote.quoteNumber}</div>
+                            </td>
+                            <td className="px-6 py-4 text-sm text-edg-black">
+                              {quote.projectName || "Untitled project"}
+                            </td>
+                            <td className="px-6 py-4 text-sm">
+                              <Badge className={stage?.color}>{stage?.label || "New Lead"}</Badge>
+                            </td>
+                            <td className="px-6 py-4 text-right text-sm font-medium text-edg-black">
+                              {formatCurrency(calculateLineItemsValue(quote.lineItems))}
+                            </td>
+                            <td className="px-6 py-4 text-sm text-edg-grey">
+                              {updatedAt ? format(new Date(updatedAt), "MMM d, yyyy") : "Unknown"}
+                            </td>
+                            <td className="px-6 py-4 text-right">
+                              <Link href={`/quotes/${quote.id}/edit`}>
+                                <Button variant="ghost" size="sm" className="text-edg-teal hover:text-edg-dark-teal">
+                                  Open
+                                  <ChevronRight className="ml-1 h-4 w-4" />
+                                </Button>
+                              </Link>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
       </div>
 
 

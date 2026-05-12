@@ -355,11 +355,11 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
   return (
     <>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      {/* Additional Options */}
+      {/* Quote details and terms */}
       <div className="lg:col-span-2">
         <Card>
           <CardHeader>
-            <CardTitle>Additional Options</CardTitle>
+            <CardTitle>Quote Details & Terms</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
@@ -582,11 +582,11 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
         </Card>
       </div>
 
-      {/* Totals and Actions */}
+      {/* Totals and sales actions */}
       <div className="space-y-6">
         <Card>
           <CardHeader>
-            <CardTitle>Quote Summary</CardTitle>
+            <CardTitle>Quote Totals</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="flex justify-between items-center text-sm">
@@ -651,7 +651,7 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
         {/* E-Signature Settings */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Electronic Signature</CardTitle>
+            <CardTitle className="text-base">Client Signature</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-center justify-between">
@@ -779,27 +779,34 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
           </CardContent>
         </Card>
 
-        {/* Action Buttons */}
-        <div className="space-y-3">
-          <Button
-            onClick={() => downloadBomPdfMutation.mutate()}
-            disabled={downloadBomPdfMutation.isPending || quote.lineItems.length === 0}
-            variant="outline"
-            className="w-full"
-            data-testid="button-download-bom"
-          >
-            <Package className="mr-2 h-4 w-4" />
-            {downloadBomPdfMutation.isPending ? 'Generating BOM...' : 'Download BOM'}
-          </Button>
+        {/* Ops and admin tools */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Ops & Admin Tools</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <Button
+              onClick={() => downloadBomPdfMutation.mutate()}
+              disabled={downloadBomPdfMutation.isPending || quote.lineItems.length === 0}
+              variant="outline"
+              className="w-full"
+              data-testid="button-download-bom"
+            >
+              <Package className="mr-2 h-4 w-4" />
+              {downloadBomPdfMutation.isPending ? 'Generating BOM...' : 'Download BOM'}
+            </Button>
 
-          <Button
-            variant="outline"
-            className="w-full border-edg-teal text-edg-teal hover:bg-edg-light-teal hover:bg-opacity-10"
-          >
-            <Bookmark className="mr-2 h-4 w-4" />
-            Save as Template
-          </Button>
-        </div>
+            <Button
+              variant="outline"
+              className="w-full border-edg-teal text-edg-teal hover:bg-edg-light-teal hover:bg-opacity-10"
+              disabled
+              title="Template saving is not connected yet."
+            >
+              <Bookmark className="mr-2 h-4 w-4" />
+              Save as Template
+            </Button>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Signing Link Dialog */}

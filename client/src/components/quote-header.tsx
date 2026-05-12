@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Save, Clock, Camera, Image, Wrench, Building, ChevronDown, ChevronUp, Search, Users, Send, ExternalLink } from "lucide-react";
+import { Save, Clock, Camera, Image, Wrench, Building, ChevronDown, ChevronUp, Search, Users, Send, ExternalLink, CheckCircle2, AlertCircle, Circle } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   AlertDialog,
@@ -90,6 +90,8 @@ interface QuoteHeaderProps {
   isLoading?: boolean;
 }
 
+type SaveStatus = "new" | "saved" | "pending" | "saving" | "error";
+
 export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -98,6 +100,7 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
   const pendingChanges = useRef<Record<string, any>>({});
   const pendingSavePromise = useRef<Promise<any> | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>(quote?.id ? "saved" : "new");
   const [opsImportResult, setOpsImportResult] = useState<OperationsImportResponse | null>(null);
 
   const form = useForm<QuoteFormData>({
@@ -145,6 +148,9 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
         shipping: quote.shipping || "0",
         accountId: quote.accountId ?? null,
       });
+      setSaveStatus("saved");
+    } else {
+      setSaveStatus("new");
     }
   }, [quote?.id, form]);
   
@@ -250,6 +256,7 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
       queryClient.invalidateQueries({ queryKey: [`/api/quotes/${quote?.id}`] });
       queryClient.invalidateQueries({ queryKey: ["/api/quotes"] });
       setIsSaving(false);
+      setSaveStatus("saved");
     },
     onError: (error: Error) => {
       toast({ 
@@ -258,6 +265,7 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
         variant: "destructive" 
       });
       setIsSaving(false);
+      setSaveStatus("error");
     },
   });
 
@@ -293,6 +301,7 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
     if (Object.keys(changes).length > 0) {
       pendingChanges.current = {};
       setIsSaving(true);
+      setSaveStatus("saving");
       const savePromise = autosaveMutation
         .mutateAsync(changes)
         .catch((error) => {
@@ -318,6 +327,7 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
     
     // Store the pending change
     pendingChanges.current[field] = value;
+    setSaveStatus("pending");
     
     // Clear existing timer
     if (debounceTimer.current) {
@@ -386,6 +396,7 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
         jobsiteCountry: components.country,
         jobsitePlaceId: components.placeId,
       };
+      setSaveStatus("pending");
       void flushPendingChanges().catch(() => undefined);
     }
   };
@@ -396,6 +407,7 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
     form.setValue("accountId", actualValue);
     if (quote?.id) {
       pendingChanges.current = { ...pendingChanges.current, accountId: actualValue };
+      setSaveStatus("pending");
       void flushPendingChanges().catch(() => undefined);
     }
   }, [quote?.id, flushPendingChanges, form]);
@@ -407,6 +419,39 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
   const opsJobUrl = opsImportResult?.opsJobUrl || null;
   const opsJobLabel = getOpsJobLabel(opsImportResult);
   const canSendToOps = Boolean(quote?.id && quote.lineItems?.length);
+  const hasLineItems = Boolean(quote?.lineItems?.length);
+  const hasProjectName = Boolean((form.watch("projectName") as string | undefined)?.trim());
+  const proposalShared = Boolean(quote?.signingToken || quote?.signatureEmailSentAt || quote?.clientSignedAt || quote?.companySignedAt);
+  const signatureComplete = Boolean(quote?.clientSignedAt || quote?.companySignedAt);
+  const workflowSteps = [
+    { label: "Details", complete: hasProjectName },
+    { label: "Line Items", complete: hasLineItems },
+    { label: "Review", complete: hasProjectName && hasLineItems },
+    { label: "Proposal", complete: proposalShared },
+    { label: "Signature", complete: signatureComplete },
+    { label: "Ops", complete: Boolean(opsJobUrl) },
+  ];
+  const nextWorkflowStep = !quote?.id
+    ? "Create the quote, then add products or custom line items."
+    : !hasProjectName
+      ? "Add a clear project name so the quote is easy to find later."
+      : !hasLineItems
+        ? "Add line items from the catalog or as custom items."
+        : !proposalShared
+          ? "Review totals, generate the proposal, then prepare the signature link."
+          : !signatureComplete
+            ? "Follow up on signatures, then send the job to Ops when ready."
+          : opsJobUrl
+            ? "Ops has a job link ready for review."
+            : "When the sale is ready, send it to Ops for planning.";
+  const saveStatusConfig = {
+    new: { label: "Not created yet", icon: Circle, className: "text-muted-foreground" },
+    saved: { label: "Saved", icon: CheckCircle2, className: "text-emerald-700" },
+    pending: { label: "Unsaved changes", icon: Clock, className: "text-amber-700" },
+    saving: { label: "Saving...", icon: Clock, className: "text-blue-700" },
+    error: { label: "Save needs attention", icon: AlertCircle, className: "text-red-700" },
+  }[saveStatus];
+  const SaveStatusIcon = saveStatusConfig.icon;
 
   return (
     <Card className="mb-6">
@@ -425,12 +470,10 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
           <div className="mt-4 lg:mt-0 flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3">
             {quote && (
               <>
-                {(isSaving || autosaveMutation.isPending) && (
-                  <span className="text-sm text-muted-foreground flex items-center">
-                    <Clock className="mr-1 h-3 w-3 animate-spin" />
-                    Saving...
-                  </span>
-                )}
+                <div className={cn("flex items-center gap-1.5 text-sm font-medium", saveStatusConfig.className)}>
+                  <SaveStatusIcon className={cn("h-4 w-4", saveStatus === "saving" && "animate-spin")} />
+                  {saveStatusConfig.label}
+                </div>
                 <div className="flex items-center space-x-2">
                   <span className="text-sm font-medium text-foreground">Pipeline Stage:</span>
                   <Select
@@ -525,8 +568,33 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
               }}
             >
               <Save className="mr-2 h-4 w-4" />
-              {isLoading ? "Saving..." : "Save Quote"}
+              {isLoading ? "Saving..." : quote ? "Save Now" : "Create Quote"}
             </Button>
+          </div>
+        </div>
+        <div className="mt-5 rounded-md border bg-muted/30 p-4">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <p className="text-sm font-medium text-foreground">Quote workflow</p>
+              <p className="mt-1 text-sm text-muted-foreground">{nextWorkflowStep}</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {workflowSteps.map((step) => (
+                <Badge
+                  key={step.label}
+                  variant={step.complete ? "default" : "outline"}
+                  className={cn(
+                    "gap-1.5",
+                    step.complete
+                      ? "bg-edg-teal text-white hover:bg-edg-teal"
+                      : "bg-background text-muted-foreground"
+                  )}
+                >
+                  {step.complete ? <CheckCircle2 className="h-3 w-3" /> : <Circle className="h-3 w-3" />}
+                  {step.label}
+                </Badge>
+              ))}
+            </div>
           </div>
         </div>
       </CardHeader>
