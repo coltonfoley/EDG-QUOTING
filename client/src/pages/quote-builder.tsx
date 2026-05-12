@@ -15,7 +15,7 @@ import { LoadingSpinner } from "@/components/loading-spinner";
 import { lazyWithReload } from "@/lib/lazy-with-reload";
 
 const SimpleProposalGenerator = lazyWithReload(() => import("@/components/simple-proposal-generator").then(m => ({ default: m.SimpleProposalGenerator })), "simple-proposal-generator");
-import { Save, Loader2, FileText, CloudUpload, Copy, History } from "lucide-react";
+import { Loader2, Copy, History } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { QuoteWithDetails } from "@shared/schema";
@@ -477,27 +477,9 @@ export default function QuoteBuilder() {
         <QuoteSummary
           quote={currentQuote}
           onUpdateQuote={handleUpdateQuote}
+          onGenerateProposal={!isNewQuote && currentQuote.id ? openProposalGenerator : undefined}
+          isPreparingProposal={isPreparingProposal}
         />
-
-        {/* Action Buttons - Show for existing quotes with line items */}
-        {!isNewQuote && currentQuote.id && currentQuote.lineItems.length > 0 && (
-          <div className="flex justify-end gap-4 mt-8 pb-8">
-            <Button 
-              onClick={openProposalGenerator}
-              variant="outline"
-              className="px-6 py-3 text-lg border-edg-black text-edg-black hover:bg-edg-black hover:text-white"
-              disabled={isPreparingProposal}
-              data-testid="button-generate-proposal"
-            >
-              {isPreparingProposal ? (
-                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-              ) : (
-                <FileText className="mr-2 h-5 w-5" />
-              )}
-              {isPreparingProposal ? "Preparing..." : "Generate Proposal"}
-            </Button>
-          </div>
-        )}
 
         {/* Simple Proposal Generator Dialog */}
         {!isNewQuote && currentQuote.id && proposalGeneratorOpen && (

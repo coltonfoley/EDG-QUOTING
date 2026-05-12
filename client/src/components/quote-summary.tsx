@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
-import { FileText, Bookmark, Plus, Eye, Send, Mail, CheckCircle, AlertCircle, Clock, Link2, Copy, Download, PenTool, Package } from "lucide-react";
+import { FileText, Plus, Eye, Send, Mail, CheckCircle, AlertCircle, Clock, Link2, Copy, Download, PenTool, Package, Loader2 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { formatCurrency, calculateQuoteTotals, type QuoteTotalsLineItem } from "@/lib/utils";
@@ -21,9 +21,11 @@ import { ESignatureOptionsModal } from "@/components/esignature-options-modal";
 interface QuoteSummaryProps {
   quote: QuoteWithDetails;
   onUpdateQuote: (field: string, value: any) => void;
+  onGenerateProposal?: () => void;
+  isPreparingProposal?: boolean;
 }
 
-export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
+export function QuoteSummary({ quote, onUpdateQuote, onGenerateProposal, isPreparingProposal = false }: QuoteSummaryProps) {
   const [localTaxRate, setLocalTaxRate] = useState<string | null>(null);
   const [localTariffRate, setLocalTariffRate] = useState<string | null>(null);
   const [localDiscount, setLocalDiscount] = useState<string | null>(null);
@@ -789,26 +791,35 @@ export function QuoteSummary({ quote, onUpdateQuote }: QuoteSummaryProps) {
             <CardTitle className="text-base">Ops & Admin Tools</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <Button
-              onClick={() => downloadBomPdfMutation.mutate()}
-              disabled={downloadBomPdfMutation.isPending || quote.lineItems.length === 0}
-              variant="outline"
-              className="w-full"
-              data-testid="button-download-bom"
-            >
-              <Package className="mr-2 h-4 w-4" />
-              {downloadBomPdfMutation.isPending ? 'Generating BOM...' : 'Download BOM'}
-            </Button>
+            <div className={onGenerateProposal ? "grid grid-cols-1 gap-3 sm:grid-cols-2" : ""}>
+              <Button
+                onClick={() => downloadBomPdfMutation.mutate()}
+                disabled={downloadBomPdfMutation.isPending || quote.lineItems.length === 0}
+                variant="outline"
+                className="w-full"
+                data-testid="button-download-bom"
+              >
+                <Package className="mr-2 h-4 w-4" />
+                {downloadBomPdfMutation.isPending ? 'Generating BOM...' : 'Download BOM'}
+              </Button>
 
-            <Button
-              variant="outline"
-              className="w-full border-edg-teal text-edg-teal hover:bg-edg-light-teal hover:bg-opacity-10"
-              disabled
-              title="Template saving is not connected yet."
-            >
-              <Bookmark className="mr-2 h-4 w-4" />
-              Save as Template
-            </Button>
+              {onGenerateProposal && (
+                <Button
+                  onClick={onGenerateProposal}
+                  disabled={isPreparingProposal || quote.lineItems.length === 0}
+                  variant="outline"
+                  className="w-full border-edg-black text-edg-black hover:bg-edg-black hover:text-white"
+                  data-testid="button-generate-proposal"
+                >
+                  {isPreparingProposal ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <FileText className="mr-2 h-4 w-4" />
+                  )}
+                  {isPreparingProposal ? "Preparing..." : "Generate Proposal"}
+                </Button>
+              )}
+            </div>
           </CardContent>
         </Card>
       </div>
