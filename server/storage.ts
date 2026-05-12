@@ -1,5 +1,5 @@
 import { accounts, customers, quotes, lineItems, groups, products, users, apiKeys, contractTemplates, pricingTables, productAccessories, colors, productColors, quoteCoverPhotos, quoteProductRenderings, issueReports, type Account, type Customer, type Quote, type LineItem, type Group, type Product, type User, type ApiKey, type ContractTemplate, type PricingTable, type ProductAccessory, type Color, type ProductColor, type QuoteCoverPhoto, type QuoteProductRendering, type IssueReport, type InsertAccount, type InsertCustomer, type InsertQuote, type InsertLineItem, type InsertGroup, type InsertProduct, type InsertUser, type InsertApiKey, type InsertContractTemplate, type InsertPricingTable, type InsertProductAccessory, type InsertColor, type InsertProductColor, type InsertQuoteCoverPhoto, type InsertQuoteProductRendering, type InsertIssueReport, type QuoteWithDetails, type ProductWithDetails } from "@shared/schema";
-import { db } from "./db";
+import { db, ensureSignatureAuditColumns } from "./db";
 import { eq, desc, asc, inArray, sql, and, ne, or, ilike } from "drizzle-orm";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
@@ -811,11 +811,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getQuote(id: number): Promise<Quote | undefined> {
+    await ensureSignatureAuditColumns();
     const [quote] = await db.select().from(quotes).where(eq(quotes.id, id));
     return quote || undefined;
   }
 
   async getQuoteWithDetails(id: number): Promise<QuoteWithDetails | undefined> {
+    await ensureSignatureAuditColumns();
     const [quote] = await db.select().from(quotes).where(eq(quotes.id, id));
     if (!quote) return undefined;
 
@@ -896,6 +898,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getQuoteBySigningToken(token: string): Promise<QuoteWithDetails | undefined> {
+    await ensureSignatureAuditColumns();
     const [quote] = await db.select().from(quotes).where(eq(quotes.signingToken, token));
     if (!quote) return undefined;
 
@@ -976,6 +979,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAllQuotes(options?: { page?: number; pageSize?: number }): Promise<QuoteWithDetails[]> {
+    await ensureSignatureAuditColumns();
     // Only get latest versions by default to avoid showing old quote revisions
     const baseQuery = db
       .select()
@@ -1103,6 +1107,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createQuote(insertQuote: InsertQuote): Promise<Quote> {
+    await ensureSignatureAuditColumns();
     // Generate quote number if not provided
     if (!insertQuote.quoteNumber) {
       const year = new Date().getFullYear();
@@ -1189,6 +1194,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateQuote(id: number, quoteData: Partial<InsertQuote>): Promise<Quote | undefined> {
+    await ensureSignatureAuditColumns();
     // Get existing quote data to merge images properly
     const [existingQuote] = await db
       .select()

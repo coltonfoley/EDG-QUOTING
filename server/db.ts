@@ -18,3 +18,16 @@ pool.on('error', (err) => {
 });
 
 export const db = drizzle({ client: pool, schema });
+
+let signatureAuditColumnsReady: Promise<void> | null = null;
+
+export async function ensureSignatureAuditColumns(): Promise<void> {
+  if (!signatureAuditColumnsReady) {
+    signatureAuditColumnsReady = pool.query(`
+      ALTER TABLE "quotes" ADD COLUMN IF NOT EXISTS "signed_document_snapshot" jsonb;
+      ALTER TABLE "quotes" ADD COLUMN IF NOT EXISTS "signature_audit_trail" jsonb;
+    `).then(() => undefined);
+  }
+
+  await signatureAuditColumnsReady;
+}
