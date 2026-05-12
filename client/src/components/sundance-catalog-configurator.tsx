@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Loader2 } from 'lucide-react';
+import { Check, ClipboardList, Loader2, Minus, PackageCheck, Palette, Plus, Search, X } from 'lucide-react';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import { formatCurrency } from '@/lib/utils';
@@ -86,6 +87,7 @@ export function SundanceCatalogConfigurator({
   const [quantities, setQuantities] = useState<ProductQuantity>({});
   const [selectedColors, setSelectedColors] = useState<ProductColorSelection>({});
   const [categoryColors, setCategoryColors] = useState<CategoryColorSelection>({});
+  const [searchTerm, setSearchTerm] = useState('');
 
   const { data: products, isLoading } = useQuery<Product[]>({
     queryKey: ['/api/products', 'Sundance'],
@@ -111,7 +113,14 @@ export function SundanceCatalogConfigurator({
   });
 
   const insertMutation = useMutation({
-    mutationFn: async (configData: { items: { productId: number; quantity: number }[] }) => {
+    mutationFn: async (configData: {
+      items: {
+        productId: number;
+        quantity: number;
+        productSnapshot: Record<string, unknown>;
+        configData?: Record<string, unknown>;
+      }[];
+    }) => {
       const response = await apiRequest('POST', `/api/quotes/${quoteId}/configure-product`, configData);
       return response.json();
     },
@@ -133,34 +142,62 @@ export function SundanceCatalogConfigurator({
     },
   });
 
-  // Categorize products and maintain specified order
-  const categorizedProducts: CategoryProducts = products?.reduce((acc, product) => {
-    const category = product.category || 'Other';
-    if (!acc[category]) {
-      acc[category] = [];
-    }
-    acc[category].push(product);
-    return acc;
-  }, {} as CategoryProducts) || {};
+  const categorizedProducts = useMemo<CategoryProducts>(() => {
+    const grouped = (products || []).reduce((acc, product) => {
+      const category = product.category || 'Other';
+      if (!acc[category]) {
+        acc[category] = [];
+      }
+      acc[category].push(product);
+      return acc;
+    }, {} as CategoryProducts);
 
-  // Sort products within each category according to PRODUCT_ORDER
-  // Uses product ID as secondary sort key for stability
-  Object.keys(categorizedProducts).forEach(category => {
-    if (PRODUCT_ORDER[category]) {
-      categorizedProducts[category].sort((a, b) => {
-        const orderA = getProductSortOrder(a, category);
-        const orderB = getProductSortOrder(b, category);
-        if (orderA !== orderB) return orderA - orderB;
-        return a.id - b.id; // Stable fallback for items with same order
+    Object.keys(grouped).forEach(category => {
+      grouped[category].sort((a, b) => {
+        if (PRODUCT_ORDER[category]) {
+          const orderA = getProductSortOrder(a, category);
+          const orderB = getProductSortOrder(b, category);
+          if (orderA !== orderB) return orderA - orderB;
+        }
+        return a.id - b.id;
       });
-    }
-  });
+    });
 
-  // Get ordered categories (matching PDF order, then any additional categories)
-  const orderedCategories = [
+    return grouped;
+  }, [products]);
+
+  const orderedCategories = useMemo(() => [
     ...CATEGORY_ORDER.filter(cat => categorizedProducts[cat]),
-    ...Object.keys(categorizedProducts).filter(cat => !CATEGORY_ORDER.includes(cat))
-  ];
+    ...Object.keys(categorizedProducts).filter(cat => !CATEGORY_ORDER.includes(cat)),
+  ], [categorizedProducts]);
+
+  const filteredCategorizedProducts = useMemo<CategoryProducts>(() => {
+    const normalizedSearch = searchTerm.trim().toLowerCase();
+    if (!normalizedSearch) {
+      return categorizedProducts;
+    }
+
+    return orderedCategories.reduce((acc, category) => {
+      const matchingProducts = (categorizedProducts[category] || []).filter(product => {
+        return [
+          product.name,
+          product.description || '',
+          product.category || '',
+        ].some(value => value.toLowerCase().includes(normalizedSearch));
+      });
+
+      if (matchingProducts.length > 0) {
+        acc[category] = matchingProducts;
+      }
+
+      return acc;
+    }, {} as CategoryProducts);
+  }, [categorizedProducts, orderedCategories, searchTerm]);
+
+  const visibleCategories = useMemo(
+    () => orderedCategories.filter(category => (filteredCategorizedProducts[category] || []).length > 0),
+    [filteredCategorizedProducts, orderedCategories]
+  );
 
   const handleQuantityChange = (productId: number, value: string) => {
     const numValue = parseInt(value) || 0;
@@ -170,6 +207,16 @@ export function SundanceCatalogConfigurator({
       ...prev,
       [productId]: numValue,
     }));
+  };
+
+  const handleQuantityStep = (productId: number, direction: 1 | -1) => {
+    setQuantities(prev => {
+      const nextValue = Math.max(0, (prev[productId] || 0) + direction);
+      return {
+        ...prev,
+        [productId]: nextValue,
+      };
+    });
   };
 
   const handleCategoryColorChange = (category: string, colorId: number | null) => {
@@ -230,6 +277,32 @@ export function SundanceCatalogConfigurator({
     return [];
   };
 
+  const selectedItems = useMemo(() => Object.entries(quantities)
+    .filter(([_, qty]) => qty > 0)
+    .map(([productId, quantity]) => {
+      const product = products?.find(p => p.id === parseInt(productId));
+      return product ? { product, quantity } : null;
+    })
+    .filter(Boolean) as { product: Product; quantity: number }[], [products, quantities]);
+
+  const subtotal = useMemo(() => selectedItems.reduce((total, { product, quantity }) => {
+    return total + (parseFloat(product.retailPrice) * quantity);
+  }, 0), [selectedItems]);
+
+  const selectedCount = selectedItems.length;
+  const selectedUnitCount = useMemo(
+    () => selectedItems.reduce((total, item) => total + item.quantity, 0),
+    [selectedItems]
+  );
+  const productCount = products?.length || 0;
+
+  const getSelectedColorDetails = (product: Product) => {
+    const category = product.category || 'Other';
+    return getEffectiveColors(product.id, category)
+      .map(colorId => productColorsMap?.[product.id]?.find(pc => pc.colorId === colorId)?.color)
+      .filter(Boolean) as Color[];
+  };
+
   const handleInsert = () => {
     const items = Object.entries(quantities)
       .filter(([_, qty]) => qty > 0)
@@ -276,16 +349,6 @@ export function SundanceCatalogConfigurator({
     insertMutation.mutate({ items });
   };
 
-  const calculateSubtotal = () => {
-    if (!products) return 0;
-    
-    return Object.entries(quantities).reduce((total, [productId, qty]) => {
-      const product = products.find(p => p.id === parseInt(productId));
-      if (!product || qty === 0) return total;
-      return total + (parseFloat(product.retailPrice) * qty);
-    }, 0);
-  };
-
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -294,47 +357,129 @@ export function SundanceCatalogConfigurator({
     );
   }
 
-  const subtotal = calculateSubtotal();
-  const selectedCount = Object.values(quantities).filter(q => q > 0).length;
-
-  const selectedItems = Object.entries(quantities)
-    .filter(([_, qty]) => qty > 0)
-    .map(([productId, quantity]) => {
-      const product = products!.find(p => p.id === parseInt(productId));
-      return product ? { product, quantity } : null;
-    })
-    .filter(Boolean) as { product: Product; quantity: number }[];
-
   return (
-    <div className="flex gap-6" style={{ height: 'calc(80vh - 200px)' }}>
-      {/* Left Column - Product Catalog */}
-      <div className="flex-1 flex flex-col min-w-0">
-        <div className="mb-4 p-4 bg-muted rounded-lg flex-shrink-0">
-          <h3 className="font-semibold text-lg">Sundance Louvered Roof</h3>
-          <p className="text-sm text-muted-foreground">Cover any space with a Sundance Louvered Roof to enjoy more time outside</p>
+    <div className="flex min-h-0 flex-1 flex-col gap-4" style={{ height: 'min(72vh, 760px)' }}>
+      <div className="grid gap-4 rounded-lg border bg-slate-950 p-4 text-white shadow-sm md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <PackageCheck className="h-5 w-5 text-edg-teal" />
+            <h3 className="text-lg font-semibold tracking-normal">Sundance Louvered Roof</h3>
+            <Badge className="bg-edg-teal text-white hover:bg-edg-teal">Approved catalog</Badge>
+          </div>
+          <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-300">
+            Choose parts, apply color defaults, and review the package before it becomes quote line items.
+          </p>
         </div>
+        <div className="grid grid-cols-3 gap-2 text-center">
+          <div className="rounded-md border border-white/10 bg-white/10 px-3 py-2">
+            <div className="text-lg font-semibold">{productCount}</div>
+            <div className="text-xs text-slate-300">Catalog items</div>
+          </div>
+          <div className="rounded-md border border-white/10 bg-white/10 px-3 py-2">
+            <div className="text-lg font-semibold">{selectedCount}</div>
+            <div className="text-xs text-slate-300">Selected lines</div>
+          </div>
+          <div className="rounded-md border border-white/10 bg-white/10 px-3 py-2">
+            <div className="text-lg font-semibold">{selectedUnitCount}</div>
+            <div className="text-xs text-slate-300">Total units</div>
+          </div>
+        </div>
+      </div>
 
-        <ScrollArea className="flex-1 min-h-0">
-          <div className="space-y-6 pb-4 pr-2">
-            {orderedCategories.map((category) => {
-              const categoryProducts = categorizedProducts[category];
-              const categoryAvailableColors = getCategoryColors(category);
-              const hasCategoryColors = categoryAvailableColors.length > 0;
-              
-              return (
-                <div key={category} className="space-y-3">
-                  <div className="bg-gray-100 dark:bg-gray-800 px-3 py-2 rounded">
-                    <div className="flex items-center justify-between gap-4">
-                      <h4 className="font-semibold text-sm">
-                        {category}
-                      </h4>
+      <div className="flex min-h-0 flex-1 flex-col gap-4 xl:flex-row">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border bg-background">
+          <div className="space-y-3 border-b bg-muted/30 p-3">
+            <div className="flex flex-col gap-3 md:flex-row md:items-center">
+              <div className="relative flex-1">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={searchTerm}
+                  onChange={(event) => setSearchTerm(event.target.value)}
+                  placeholder="Search Sundance parts, categories, or descriptions"
+                  className="h-10 pl-9"
+                  data-testid="input-sundance-search"
+                />
+              </div>
+              {searchTerm && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSearchTerm('')}
+                  data-testid="button-clear-sundance-search"
+                >
+                  <X className="mr-2 h-4 w-4" />
+                  Clear
+                </Button>
+              )}
+            </div>
+
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {orderedCategories.map((category) => {
+                const productTotal = categorizedProducts[category]?.length || 0;
+                const visibleTotal = filteredCategorizedProducts[category]?.length || 0;
+                const isHiddenBySearch = searchTerm && visibleTotal === 0;
+
+                return (
+                  <button
+                    key={category}
+                    type="button"
+                    disabled={!!isHiddenBySearch}
+                    onClick={() => document.getElementById(`sundance-category-${category}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                    className={`whitespace-nowrap rounded-md border px-3 py-2 text-xs font-medium transition ${
+                      isHiddenBySearch
+                        ? 'cursor-not-allowed border-transparent bg-muted/40 text-muted-foreground/50'
+                        : 'border-border bg-background text-foreground hover:border-edg-teal hover:text-edg-teal'
+                    }`}
+                  >
+                    {category}
+                    <span className="ml-2 text-muted-foreground">{searchTerm ? visibleTotal : productTotal}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="hidden grid-cols-[minmax(0,1fr)_150px_100px_112px] gap-4 border-b bg-muted/20 px-4 py-2 text-xs font-semibold uppercase tracking-normal text-muted-foreground md:grid">
+            <div>Part</div>
+            <div className="text-center">Qty</div>
+            <div className="text-right">Unit</div>
+            <div className="text-right">Line total</div>
+          </div>
+
+          <ScrollArea className="min-h-0 flex-1">
+            <div className="space-y-5 p-4">
+              {visibleCategories.length === 0 ? (
+                <div className="flex min-h-60 flex-col items-center justify-center rounded-lg border border-dashed text-center">
+                  <Search className="mb-3 h-6 w-6 text-muted-foreground" />
+                  <p className="text-sm font-medium">No Sundance parts found</p>
+                  <p className="mt-1 text-xs text-muted-foreground">Try a different part name or category.</p>
+                </div>
+              ) : visibleCategories.map((category) => {
+                const categoryProducts = filteredCategorizedProducts[category];
+                const categoryAvailableColors = getCategoryColors(category);
+                const hasCategoryColors = categoryAvailableColors.length > 0;
+
+                return (
+                  <section key={category} id={`sundance-category-${category}`} className="scroll-mt-4 space-y-3">
+                  <div className="rounded-md border bg-muted/30 px-3 py-3">
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                      <div>
+                        <h4 className="text-sm font-semibold">{category}</h4>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {categoryProducts.length} {categoryProducts.length === 1 ? 'part' : 'parts'}
+                        </p>
+                      </div>
                       {hasCategoryColors && (
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-muted-foreground">Category Color:</span>
-                          <div className="flex gap-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <div className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
+                            <Palette className="h-3.5 w-3.5" />
+                            Category color
+                          </div>
+                          <div className="flex flex-wrap gap-1">
                             <button
+                              type="button"
                               onClick={() => handleCategoryColorChange(category, null)}
-                              className={`w-6 h-6 rounded-full border-2 transition-all flex items-center justify-center ${
+                              className={`flex h-7 w-7 items-center justify-center rounded-full border-2 transition-all ${
                                 !categoryColors[category]
                                   ? 'border-blue-500 bg-white dark:bg-gray-700'
                                   : 'border-gray-300 hover:border-gray-400 bg-white dark:bg-gray-700'
@@ -342,13 +487,14 @@ export function SundanceCatalogConfigurator({
                               title="No category color"
                               data-testid={`category-color-none-${category}`}
                             >
-                              <span className="text-xs text-gray-400">∅</span>
+                              <X className="h-3 w-3 text-gray-400" />
                             </button>
                             {categoryAvailableColors.map((pc) => (
                               <button
                                 key={pc.color.id}
+                                type="button"
                                 onClick={() => handleCategoryColorChange(category, pc.color.id)}
-                                className={`w-6 h-6 rounded-full border-2 transition-all ${
+                                className={`flex h-7 w-7 items-center justify-center rounded-full border-2 transition-all ${
                                   categoryColors[category] === pc.color.id
                                     ? 'border-blue-500 scale-110 shadow-md'
                                     : 'border-gray-300 hover:border-gray-400'
@@ -358,7 +504,7 @@ export function SundanceCatalogConfigurator({
                                 data-testid={`category-color-${category}-${pc.color.id}`}
                               >
                                 {categoryColors[category] === pc.color.id && (
-                                  <span className="text-white text-xs font-bold">✓</span>
+                                  <Check className="h-3 w-3 text-white drop-shadow" />
                                 )}
                               </button>
                             ))}
@@ -375,157 +521,203 @@ export function SundanceCatalogConfigurator({
                       const hasIndividualOverride = selectedColors[product.id]?.length > 0;
                       
                       return (
-                      <div 
-                        key={product.id} 
-                        className="grid grid-cols-[1fr_100px_120px_120px] gap-4 items-center p-3 rounded hover:bg-muted/50 transition-colors"
-                        data-testid={`product-${product.id}`}
-                      >
-                        <div className="min-w-0">
-                          <div className="font-medium text-sm truncate" title={product.name}>
-                            {product.name}
+                        <div
+                          key={product.id}
+                          className={`grid gap-3 rounded-md border px-3 py-3 transition-colors md:grid-cols-[minmax(0,1fr)_150px_100px_112px] md:items-center ${
+                            (quantities[product.id] || 0) > 0
+                              ? 'border-edg-teal/40 bg-edg-teal/5'
+                              : 'border-transparent hover:border-border hover:bg-muted/40'
+                          }`}
+                          data-testid={`product-${product.id}`}
+                        >
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <div className="truncate text-sm font-medium" title={product.name}>
+                                {product.name}
+                              </div>
+                              {(quantities[product.id] || 0) > 0 && (
+                                <Badge variant="secondary" className="h-5 text-[11px]">Added</Badge>
+                              )}
+                            </div>
+                            {product.description && (
+                              <div className="mt-1 truncate text-xs text-muted-foreground" title={product.description}>
+                                {product.description}
+                              </div>
+                            )}
+                            {hasColors && (
+                              <div className="mt-2 flex flex-wrap items-center gap-1">
+                                {hasIndividualOverride && (
+                                  <Badge variant="outline" className="mr-1 h-5 text-[10px]">Custom color</Badge>
+                                )}
+                                {!hasIndividualOverride && effectiveColors.length > 0 && (
+                                  <Badge variant="outline" className="mr-1 h-5 text-[10px]">Category color</Badge>
+                                )}
+                                {productColors.map((pc) => {
+                                  const isSelected = selectedColors[product.id]?.includes(pc.color.id);
+                                  const isEffective = effectiveColors.includes(pc.color.id);
+
+                                  return (
+                                    <button
+                                      key={pc.color.id}
+                                      type="button"
+                                      onClick={() => handleColorToggle(product.id, pc.color.id)}
+                                      className={`flex h-6 w-6 items-center justify-center rounded-full border-2 transition-all ${
+                                        isSelected
+                                          ? 'border-blue-500 scale-110 shadow-md'
+                                          : isEffective && !hasIndividualOverride
+                                          ? 'border-green-400 scale-105'
+                                          : 'border-gray-300 hover:border-gray-400'
+                                      }`}
+                                      style={{ backgroundColor: pc.color.hexCode }}
+                                      title={`${pc.color.name}${isEffective && !isSelected ? ' (from category)' : ''}`}
+                                      data-testid={`color-${product.id}-${pc.color.id}`}
+                                    >
+                                      {isSelected && (
+                                        <Check className="h-3 w-3 text-white drop-shadow" />
+                                      )}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            )}
                           </div>
-                          {product.description && (
-                            <div className="text-xs text-muted-foreground truncate" title={product.description}>
-                              {product.description}
-                            </div>
-                          )}
-                          {hasColors && (
-                            <div className="flex gap-1 mt-2 flex-wrap items-center">
-                              {hasIndividualOverride && (
-                                <span className="text-xs text-blue-600 dark:text-blue-400 mr-1" title="Individual color override">
-                                  ⚡
-                                </span>
-                              )}
-                              {!hasIndividualOverride && effectiveColors.length > 0 && (
-                                <span className="text-xs text-muted-foreground mr-1" title="Using category color">
-                                  ↓
-                                </span>
-                              )}
-                              {productColors.map((pc) => {
-                                const isSelected = selectedColors[product.id]?.includes(pc.color.id);
-                                const isEffective = effectiveColors.includes(pc.color.id);
-                                
-                                return (
-                                  <button
-                                    key={pc.color.id}
-                                    onClick={() => handleColorToggle(product.id, pc.color.id)}
-                                    className={`w-6 h-6 rounded-full border-2 transition-all ${
-                                      isSelected
-                                        ? 'border-blue-500 scale-110 shadow-md'
-                                        : isEffective && !hasIndividualOverride
-                                        ? 'border-green-400 scale-105'
-                                        : 'border-gray-300 hover:border-gray-400'
-                                    }`}
-                                    style={{ backgroundColor: pc.color.hexCode }}
-                                    title={`${pc.color.name}${isEffective && !isSelected ? ' (from category)' : ''}`}
-                                    data-testid={`color-${product.id}-${pc.color.id}`}
-                                  >
-                                    {isSelected && (
-                                      <span className="text-white text-xs font-bold">✓</span>
-                                    )}
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          )}
+                        <div className="flex items-center justify-between gap-3 md:justify-center">
+                          <span className="text-xs font-medium text-muted-foreground md:hidden">Qty</span>
+                          <div className="flex h-9 w-36 items-center overflow-hidden rounded-md border bg-background">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              aria-label={`Decrease quantity for ${product.name}`}
+                              onClick={() => handleQuantityStep(product.id, -1)}
+                              className="h-9 w-9 shrink-0 rounded-none"
+                              data-testid={`button-decrement-${product.id}`}
+                            >
+                              <Minus className="h-4 w-4" />
+                            </Button>
+                            <Input
+                              type="number"
+                              min="0"
+                              value={quantities[product.id] || 0}
+                              onChange={(e) => handleQuantityChange(product.id, e.target.value)}
+                              className="h-9 w-14 shrink-0 border-0 px-1 text-center shadow-none focus-visible:ring-0"
+                              data-testid={`input-quantity-${product.id}`}
+                            />
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              aria-label={`Increase quantity for ${product.name}`}
+                              onClick={() => handleQuantityStep(product.id, 1)}
+                              className="h-9 w-9 shrink-0 rounded-none"
+                              data-testid={`button-increment-${product.id}`}
+                            >
+                              <Plus className="h-4 w-4" />
+                            </Button>
+                          </div>
                         </div>
-                        <div className="text-right">
-                          <Input
-                            type="number"
-                            min="0"
-                            value={quantities[product.id] || 0}
-                            onChange={(e) => handleQuantityChange(product.id, e.target.value)}
-                            className="h-9 text-center"
-                            data-testid={`input-quantity-${product.id}`}
-                          />
+                        <div className="flex items-center justify-between text-sm md:block md:text-right" data-testid={`text-unit-price-${product.id}`}>
+                          <span className="text-xs font-medium text-muted-foreground md:hidden">Unit</span>
+                          <span className="font-medium">{formatCurrency(parseFloat(product.retailPrice))}</span>
                         </div>
-                        <div className="text-right text-sm font-medium" data-testid={`text-unit-price-${product.id}`}>
-                          {formatCurrency(parseFloat(product.retailPrice))}
+                        <div className="flex items-center justify-between text-sm md:block md:text-right" data-testid={`text-total-${product.id}`}>
+                          <span className="text-xs font-medium text-muted-foreground md:hidden">Line total</span>
+                          <span className="font-semibold">{formatCurrency((quantities[product.id] || 0) * parseFloat(product.retailPrice))}</span>
                         </div>
-                        <div className="text-right text-sm font-semibold" data-testid={`text-total-${product.id}`}>
-                          {formatCurrency((quantities[product.id] || 0) * parseFloat(product.retailPrice))}
                         </div>
-                      </div>
-                    );
+                      );
                     })}
                   </div>
-                </div>
+                </section>
               );
             })}
           </div>
         </ScrollArea>
       </div>
 
-      {/* Right Column - Selection Summary */}
-      <div className="w-80 flex flex-col flex-shrink-0 border-l pl-6">
-        <div className="mb-4">
-          <h3 className="font-semibold text-lg">Selection Summary</h3>
+      <aside className="flex min-h-0 w-full flex-col rounded-lg border bg-background xl:w-80 xl:flex-shrink-0">
+        <div className="border-b p-4">
+          <div className="flex items-center gap-2">
+            <ClipboardList className="h-5 w-5 text-edg-teal" />
+            <h3 className="text-base font-semibold">Package Review</h3>
+          </div>
           <p className="text-sm text-muted-foreground">
-            {selectedCount} {selectedCount === 1 ? 'item' : 'items'} selected
+            {selectedCount} {selectedCount === 1 ? 'line' : 'lines'} selected
           </p>
         </div>
 
-        <ScrollArea className="flex-1 -mr-6 pr-6">
+        <ScrollArea className="min-h-0 flex-1">
           {selectedItems.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">
-              <p className="text-sm">No items selected</p>
-              <p className="text-xs mt-1">Add products from the catalog</p>
+            <div className="flex min-h-64 flex-col items-center justify-center px-6 text-center text-muted-foreground">
+              <PackageCheck className="mb-3 h-8 w-8" />
+              <p className="text-sm font-medium text-foreground">No Sundance parts selected</p>
+              <p className="mt-1 text-xs leading-5">Add quantities on the left and this panel becomes the final review before insert.</p>
             </div>
           ) : (
-            <div className="space-y-3">
-              {selectedItems.map(({ product, quantity }) => (
-                <div 
-                  key={product.id} 
-                  className="p-3 border rounded-lg space-y-2"
-                  data-testid={`summary-item-${product.id}`}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0 flex-1">
-                      <div className="font-medium text-sm" title={product.name}>
-                        {product.name}
-                      </div>
-                      {product.category && (
-                        <div className="text-xs text-muted-foreground">
-                          {product.category}
+            <div className="space-y-3 p-4">
+              {selectedItems.map(({ product, quantity }) => {
+                const colorDetails = getSelectedColorDetails(product);
+
+                return (
+                  <div
+                    key={product.id}
+                    className="space-y-2 rounded-md border p-3"
+                    data-testid={`summary-item-${product.id}`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="font-medium text-sm" title={product.name}>
+                          {product.name}
                         </div>
-                      )}
+                        {product.category && (
+                          <div className="text-xs text-muted-foreground">
+                            {product.category}
+                          </div>
+                        )}
+                      </div>
+                      <div className="text-right text-sm font-semibold whitespace-nowrap">
+                        {formatCurrency(quantity * parseFloat(product.retailPrice))}
+                      </div>
                     </div>
-                    <div className="text-right text-sm font-semibold whitespace-nowrap">
-                      {formatCurrency(quantity * parseFloat(product.retailPrice))}
+                    {colorDetails.length > 0 && (
+                      <div className="flex flex-wrap gap-1">
+                        {colorDetails.map((color) => (
+                          <span key={color.id} className="inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[11px] text-muted-foreground">
+                            <span className="h-2.5 w-2.5 rounded-full border" style={{ backgroundColor: color.hexCode }} />
+                            {color.name}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <Input
+                        type="number"
+                        min="0"
+                        value={quantity}
+                        onChange={(e) => handleQuantityChange(product.id, e.target.value)}
+                        className="h-8 text-center w-20"
+                        data-testid={`summary-input-quantity-${product.id}`}
+                      />
+                      <span>at {formatCurrency(parseFloat(product.retailPrice))} each</span>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Input
-                      type="number"
-                      min="0"
-                      value={quantity}
-                      onChange={(e) => handleQuantityChange(product.id, e.target.value)}
-                      className="h-8 text-center w-20"
-                      data-testid={`summary-input-quantity-${product.id}`}
-                    />
-                    <span className="text-xs text-muted-foreground">×</span>
-                    <span className="text-xs text-muted-foreground">
-                      {formatCurrency(parseFloat(product.retailPrice))}
-                    </span>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </ScrollArea>
 
-        <div className="mt-4 pt-4 border-t space-y-4">
+        <div className="space-y-4 border-t p-4">
           <div className="flex justify-between items-center">
-            <span className="font-semibold">Subtotal</span>
+            <span className="font-semibold">Sundance subtotal</span>
             <span className="text-lg font-bold" data-testid="text-configurator-subtotal">
               {formatCurrency(subtotal)}
             </span>
           </div>
-          <div className="flex gap-2">
+          <div className="grid grid-cols-2 gap-2">
             <Button 
               variant="outline" 
               onClick={onCancel}
-              className="flex-1"
               data-testid="button-cancel-config"
             >
               Cancel
@@ -533,7 +725,6 @@ export function SundanceCatalogConfigurator({
             <Button 
               onClick={handleInsert}
               disabled={insertMutation.isPending || selectedCount === 0}
-              className="flex-1"
               data-testid="button-insert-config"
             >
               {insertMutation.isPending ? (
@@ -542,11 +733,12 @@ export function SundanceCatalogConfigurator({
                   Inserting...
                 </>
               ) : (
-                'Insert Configuration'
+                'Insert Package'
               )}
             </Button>
           </div>
         </div>
+      </aside>
       </div>
     </div>
   );
