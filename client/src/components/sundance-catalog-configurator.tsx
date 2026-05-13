@@ -75,37 +75,17 @@ function getProductSortOrder(product: Product, category: string): number {
   const categoryOrder = PRODUCT_ORDER[category];
   if (!categoryOrder) return -1; // No ordering defined for this category
   
-  // Product names ARE the SKUs, so do exact match (case-insensitive)
+  const productSku = getProductSku(product);
   const index = categoryOrder.findIndex(sku => 
-    sku.toLowerCase() === product.name.toLowerCase()
+    sku.toLowerCase() === productSku.toLowerCase()
   );
   
   return index >= 0 ? index : categoryOrder.length; // Unlisted items go after listed ones
 }
 
-const MANUAL_SUNDANCE_PRODUCTS: Product[] = [
-  {
-    id: -2026051101,
-    name: 'timotionmotorcoverblk',
-    description: 'TiMOTION Motor Cover - Black',
-    manufacturer: 'Sundance',
-    category: 'Motors',
-    productType: 'simple',
-    retailPrice: '64.00',
-    defaultDiscountType: 'percentage',
-    defaultDiscountValue: '0',
-    unit: 'each',
-    configFields: null,
-    minLength: null,
-    maxLength: null,
-    minWidth: null,
-    maxWidth: null,
-    primaryImage: null,
-    galleryImages: null,
-    specificationSheets: null,
-    createdAt: new Date('2026-05-11T00:00:00.000Z'),
-  },
-];
+function getProductSku(product: Product): string {
+  return product.sku?.trim() || product.name;
+}
 
 export function SundanceCatalogConfigurator({ 
   quoteId, 
@@ -127,11 +107,7 @@ export function SundanceCatalogConfigurator({
   });
 
   const sundanceProducts = useMemo<Product[]>(() => {
-    const liveProducts = products || [];
-    const liveKeys = new Set(liveProducts.map((product) => product.name.toLowerCase()));
-    const missingManualProducts = MANUAL_SUNDANCE_PRODUCTS.filter((product) => !liveKeys.has(product.name.toLowerCase()));
-
-    return [...liveProducts, ...missingManualProducts];
+    return products || [];
   }, [products]);
 
   // Fetch all product colors for Sundance products using batch endpoint
@@ -152,7 +128,7 @@ export function SundanceCatalogConfigurator({
   const insertMutation = useMutation({
     mutationFn: async (configData: {
       items: {
-        productId: number | null;
+        productId: number;
         quantity: number;
         productSnapshot: Record<string, unknown>;
         configData?: Record<string, unknown>;
@@ -354,12 +330,12 @@ export function SundanceCatalogConfigurator({
         }).filter(Boolean);
 
         return {
-          productId: parsedProductId > 0 ? parsedProductId : null,
+          productId: parsedProductId,
           quantity,
           // Include full product snapshot for historical accuracy
           productSnapshot: {
             name: product!.name,
-            sku: product!.name,
+            sku: getProductSku(product!),
             description: product!.description,
             category: product!.category,
             manufacturer: product!.manufacturer,
@@ -553,6 +529,7 @@ export function SundanceCatalogConfigurator({
                   </div>
                   <div className="space-y-2">
                     {categoryProducts.map((product) => {
+                      const productSku = getProductSku(product);
                       const productColors = productColorsMap?.[product.id] || [];
                       const hasColors = productColors.length > 0;
                       const effectiveColors = getEffectiveColors(product.id, category);
@@ -573,6 +550,9 @@ export function SundanceCatalogConfigurator({
                               <div className="truncate text-sm font-medium" title={product.name}>
                                 {product.name}
                               </div>
+                              <Badge variant="outline" className="h-5 text-[10px]">
+                                {productSku}
+                              </Badge>
                               {(quantities[product.id] || 0) > 0 && (
                                 <Badge variant="secondary" className="h-5 text-[11px]">Added</Badge>
                               )}

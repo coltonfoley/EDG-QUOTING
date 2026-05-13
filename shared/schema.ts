@@ -235,6 +235,7 @@ export const contractTemplates = pgTable("contract_templates", {
 export const products = pgTable("products", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
+  sku: text("sku"),
   description: text("description"),
   manufacturer: text("manufacturer").notNull(),
   category: text("category"), // e.g., "Extrusions", "Gutters", "Louvers"
@@ -258,6 +259,7 @@ export const products = pgTable("products", {
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => [
   index("idx_products_manufacturer").on(table.manufacturer),
+  index("idx_products_sku").on(table.sku),
   index("idx_products_product_type").on(table.productType),
   index("idx_products_category").on(table.category),
   index("idx_products_manufacturer_category").on(table.manufacturer, table.category),
@@ -491,6 +493,7 @@ export const insertProductSchema = createInsertSchema(products).omit({
   id: true,
   createdAt: true,
 }).extend({
+  sku: z.string().max(100, "SKU is too long").optional().nullable(),
   manufacturer: z.string().min(1, "Manufacturer is required"),
   category: z.string().optional().nullable(),
   retailPrice: z.union([z.string(), z.number()]).transform(val => typeof val === 'string' ? val : val.toString()),

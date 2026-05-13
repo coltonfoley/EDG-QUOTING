@@ -477,6 +477,7 @@ export const reorderGroupsSchema = z.object({
 // Enhanced Product validation - Phase B: manufacturer is required
 export const insertProductSchema = z.object({
   name: z.string().min(1, "Product name is required").max(500, "Product name is too long"),
+  sku: z.string().max(100, "SKU is too long").optional().nullable(),
   description: z.string().max(5000, "Description is too long").optional(),
   manufacturer: z.string().min(1, "Manufacturer is required").max(100, "Manufacturer name is too long"),
   category: z.string().max(100, "Category name is too long").optional(),
@@ -792,6 +793,7 @@ export const bulkUpdateProductsSchema = z.object({
       return num;
     })),
   updates: z.object({
+    sku: z.string().max(100, "SKU is too long").optional().nullable(),
     defaultDiscountType: z.enum(['percentage', 'dollar']).optional(),
     defaultDiscountValue: z.union([z.string(), z.number()])
       .transform(val => typeof val === 'string' ? val : val.toString())

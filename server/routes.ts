@@ -316,6 +316,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const skuRegex = /\(([A-Z0-9][A-Z0-9\-]+)\)\s*$/i;
       for (const p of allProducts) {
         productLookupByName.set(p.name.toLowerCase().trim(), p);
+        if (p.sku) {
+          productLookupBySku.set(p.sku.toUpperCase().trim(), p);
+        }
         const skuMatch = p.name.match(skuRegex);
         if (skuMatch) {
           productLookupBySku.set(skuMatch[1].toUpperCase(), p);
@@ -336,13 +339,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           let existingProduct = productLookupByName.get(name.toLowerCase().trim());
           if (!existingProduct && sku) {
-            existingProduct = productLookupBySku.get(sku.toUpperCase());
+            existingProduct = productLookupBySku.get(sku.toUpperCase().trim());
           }
 
           if (existingProduct) {
             const updateData: any = {
               retailPrice: retailPrice.toString(),
             };
+            if (sku !== undefined) {
+              updateData.sku = sku ? sku.trim() : null;
+            }
             if (hasCostData) {
               updateData.defaultDiscountType = 'dollar';
               updateData.defaultDiscountValue = manufacturerDiscount.toString();
@@ -366,6 +372,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           } else {
             const productData = {
               name: name.trim(),
+              sku: sku ? sku.trim() : null,
               description: description || '',
               manufacturer: manufacturer || 'Imported',
               category: category || null,
@@ -378,7 +385,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const newProduct = await storage.createProduct(productData);
             productLookupByName.set(name.toLowerCase().trim(), newProduct);
             if (sku) {
-              productLookupBySku.set(sku.toUpperCase(), newProduct);
+              productLookupBySku.set(sku.toUpperCase().trim(), newProduct);
             }
             created++;
           }
