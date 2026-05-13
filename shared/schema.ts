@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, decimal, timestamp, boolean, varchar, jsonb, index, type AnyPgColumn } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, decimal, timestamp, boolean, varchar, jsonb, index, uniqueIndex, type AnyPgColumn } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { sql } from "drizzle-orm";
@@ -235,6 +235,7 @@ export const contractTemplates = pgTable("contract_templates", {
 export const products = pgTable("products", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
+  sku: text("sku"),
   description: text("description"),
   manufacturer: text("manufacturer").notNull(),
   category: text("category"), // e.g., "Extrusions", "Gutters", "Louvers"
@@ -258,9 +259,22 @@ export const products = pgTable("products", {
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => [
   index("idx_products_manufacturer").on(table.manufacturer),
+  index("idx_products_sku").on(table.sku),
   index("idx_products_product_type").on(table.productType),
   index("idx_products_category").on(table.category),
   index("idx_products_manufacturer_category").on(table.manufacturer, table.category),
+]);
+
+// Admin-managed pricing defaults for specific catalogs or product groups.
+export const pricingDefaults = pgTable("pricing_defaults", {
+  id: serial("id").primaryKey(),
+  scope: text("scope").notNull(),
+  markupType: text("markup_type").notNull().default("percentage"),
+  markupValue: decimal("markup_value", { precision: 10, scale: 2 }).notNull().default("100"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  uniqueIndex("idx_pricing_defaults_scope").on(table.scope),
 ]);
 
 // Dimensional pricing tables for configurable products
@@ -491,6 +505,7 @@ export const insertProductSchema = createInsertSchema(products).omit({
   id: true,
   createdAt: true,
 }).extend({
+  sku: z.string().max(100, "SKU is too long").optional().nullable(),
   manufacturer: z.string().min(1, "Manufacturer is required"),
   category: z.string().optional().nullable(),
   retailPrice: z.union([z.string(), z.number()]).transform(val => typeof val === 'string' ? val : val.toString()),
@@ -503,6 +518,16 @@ export const insertProductSchema = createInsertSchema(products).omit({
   primaryImage: z.string().url().optional(),
   galleryImages: z.array(productImageSchema).optional(),
   specificationSheets: z.array(productImageSchema).optional(),
+});
+
+export const insertPricingDefaultSchema = createInsertSchema(pricingDefaults).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  scope: z.string().min(1, "Scope is required"),
+  markupType: z.enum(["percentage"]),
+  markupValue: z.union([z.string(), z.number()]).transform(val => typeof val === 'string' ? val : val.toString()),
 });
 
 export const insertPricingTableSchema = createInsertSchema(pricingTables).omit({
@@ -601,6 +626,7 @@ export type Product = typeof products.$inferSelect;
 export type LineItem = typeof lineItems.$inferSelect;
 export type Group = typeof groups.$inferSelect;
 export type ContractTemplate = typeof contractTemplates.$inferSelect;
+export type PricingDefault = typeof pricingDefaults.$inferSelect;
 export type PricingTable = typeof pricingTables.$inferSelect;
 export type ProductAccessory = typeof productAccessories.$inferSelect;
 export type Color = typeof colors.$inferSelect;
@@ -618,6 +644,7 @@ export type InsertProduct = z.infer<typeof insertProductSchema>;
 export type InsertLineItem = z.infer<typeof insertLineItemSchema>;
 export type InsertGroup = z.infer<typeof insertGroupSchema>;
 export type InsertContractTemplate = z.infer<typeof insertContractTemplateSchema>;
+export type InsertPricingDefault = z.infer<typeof insertPricingDefaultSchema>;
 export type InsertPricingTable = z.infer<typeof insertPricingTableSchema>;
 export type InsertProductAccessory = z.infer<typeof insertProductAccessorySchema>;
 export type InsertColor = z.infer<typeof insertColorSchema>;

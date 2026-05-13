@@ -45,6 +45,13 @@ interface LineItemsTableProps {
   tariffRate: string | number;
 }
 
+type PricingDefaultResponse = {
+  scope: string;
+  markupType: "percentage";
+  markupValue: string;
+  updatedAt: string | null;
+};
+
 interface SortableLineItemRowProps {
   item: LineItem;
   rowIndex: number;
@@ -674,6 +681,14 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
 
   const { data: products } = useQuery<Product[]>({
     queryKey: ["/api/products"],
+  });
+
+  const { data: sundancePricingDefault } = useQuery<PricingDefaultResponse>({
+    queryKey: ["/api/pricing-defaults/sundance"],
+    queryFn: async ({ signal }) => {
+      const response = await apiRequest("GET", "/api/pricing-defaults/sundance", undefined, { signal });
+      return response.json();
+    },
   });
 
   const productIdsWithColors = useMemo(() => {
@@ -1460,11 +1475,11 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
       
       if (selectedConfigurableProduct) {
         setCalculatedPrice(data.price);
-        setNewItem({
-          ...newItem,
+        setNewItem((currentItem) => ({
+          ...currentItem,
           description: selectedConfigurableProduct.name,
           unitPrice: data.price.toString(),
-        });
+        }));
       }
     },
     onError: (error: any) => {
@@ -1660,7 +1675,17 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
   };
 
   const handleProductSelect = (product: Product) => {
+    const isSundanceProduct = product.manufacturer?.trim().toLowerCase() === "sundance";
+    const defaultMarkupValue = isSundanceProduct
+      ? (sundancePricingDefault?.markupValue ? parseFloat(sundancePricingDefault.markupValue).toString() : "100")
+      : "0";
+
     if (product.productType === "configurable") {
+      setNewItem((currentItem) => ({
+        ...currentItem,
+        markupType: "percentage",
+        markupValue: defaultMarkupValue,
+      }));
       setSelectedConfigurableProduct(product);
       setShowProductDialog(false);
       setShowDimensionDialog(true);
@@ -1677,16 +1702,16 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
         calculatedUnitPrice = Math.max(0, retail - discountValue).toFixed(2);
       }
       
-      setNewItem({
-        ...newItem,
+      setNewItem((currentItem) => ({
+        ...currentItem,
         description: product.name,
         retailPrice: product.retailPrice?.toString() || "",
         unitPrice: calculatedUnitPrice,
         discountType: "percentage", // Reset - discount already applied to unitPrice
         discountValue: "0", // Reset - unitPrice is the final cost after discount
         markupType: "percentage",
-        markupValue: "0",
-      });
+        markupValue: defaultMarkupValue,
+      }));
       setShowProductDialog(false);
       setShowNewItemForm(true);
     }
@@ -2034,6 +2059,7 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
     return products.filter(product => {
       const matchesSearch = searchTerm === "" || 
         product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (product.sku || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
         (product.description || "").toLowerCase().includes(searchTerm.toLowerCase());
       
       const productManufacturer = product.manufacturer || "Unknown";
@@ -2253,8 +2279,15 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
                                 className="p-3 border border-border rounded hover:bg-primary/10 hover:border-blue-300 cursor-pointer transition-colors"
                                 data-testid={`product-card-${product.id}`}
                               >
-                                <div className="font-medium text-sm text-foreground mb-1">
-                                  {product.name}
+                                <div className="mb-1 flex flex-wrap items-center gap-2">
+                                  <span className="font-medium text-sm text-foreground">
+                                    {product.name}
+                                  </span>
+                                  {product.sku && (
+                                    <Badge variant="outline" className="text-[10px]">
+                                      {product.sku}
+                                    </Badge>
+                                  )}
                                 </div>
                                 {product.description && (
                                   <div className="text-xs text-muted-foreground mb-2 line-clamp-2">

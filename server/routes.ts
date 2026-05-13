@@ -43,6 +43,31 @@ function getConfiguredStorageQuotaBytes(): number | null {
   return Math.round(quotaGb * 1024 * 1024 * 1024);
 }
 
+const updateSundancePricingDefaultSchema = z.object({
+  markupType: z.literal("percentage").optional(),
+  markupValue: z.union([z.string(), z.number()])
+    .transform((value) => {
+      const numericValue = typeof value === "number" ? value : Number(value);
+      return numericValue;
+    })
+    .refine((value) => Number.isFinite(value), "Markup value must be a valid number")
+    .refine((value) => value >= 0 && value <= 1000, "Markup value must be between 0 and 1000"),
+});
+
+function serializeSundancePricingDefault(pricingDefault?: {
+  scope?: string | null;
+  markupType?: string | null;
+  markupValue?: string | number | null;
+  updatedAt?: Date | string | null;
+}) {
+  return {
+    scope: "sundance",
+    markupType: pricingDefault?.markupType || "percentage",
+    markupValue: pricingDefault?.markupValue?.toString() || "100",
+    updatedAt: pricingDefault?.updatedAt || null,
+  };
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
 
@@ -65,6 +90,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching user:", error);
       res.status(500).json({ message: "Failed to fetch user" });
+    }
+  });
+
+  app.get('/api/pricing-defaults/sundance', isAuthenticated, async (_req, res) => {
+    try {
+      const pricingDefault = await storage.getPricingDefault("sundance");
+      res.json(serializeSundancePricingDefault(pricingDefault));
+    } catch (error) {
+      console.error("Error fetching Sundance pricing default:", error);
+      res.status(500).json({ message: "Failed to fetch Sundance pricing default" });
+    }
+  });
+
+  app.put('/api/pricing-defaults/sundance', isAuthenticated, async (req: any, res) => {
+    try {
+      const currentUser = await storage.getUser(req.user?.id);
+      if (currentUser?.role !== 'admin') {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+
+      const validatedData = updateSundancePricingDefaultSchema.safeParse(req.body);
+      if (!validatedData.success) {
+        return res.status(400).json({
+          message: "Invalid request data",
+          errors: validatedData.error.errors,
+        });
+      }
+
+      const pricingDefault = await storage.upsertPricingDefault("sundance", {
+        markupType: "percentage",
+        markupValue: validatedData.data.markupValue.toString(),
+      });
+
+      res.json(serializeSundancePricingDefault(pricingDefault));
+    } catch (error) {
+      console.error("Error updating Sundance pricing default:", error);
+      res.status(500).json({ message: "Failed to update Sundance pricing default" });
     }
   });
 
@@ -316,6 +378,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const skuRegex = /\(([A-Z0-9][A-Z0-9\-]+)\)\s*$/i;
       for (const p of allProducts) {
         productLookupByName.set(p.name.toLowerCase().trim(), p);
+        if (p.sku) {
+          productLookupBySku.set(p.sku.toUpperCase().trim(), p);
+        }
         const skuMatch = p.name.match(skuRegex);
         if (skuMatch) {
           productLookupBySku.set(skuMatch[1].toUpperCase(), p);
@@ -336,13 +401,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           let existingProduct = productLookupByName.get(name.toLowerCase().trim());
           if (!existingProduct && sku) {
-            existingProduct = productLookupBySku.get(sku.toUpperCase());
+            existingProduct = productLookupBySku.get(sku.toUpperCase().trim());
           }
 
           if (existingProduct) {
             const updateData: any = {
               retailPrice: retailPrice.toString(),
             };
+            if (sku !== undefined) {
+              updateData.sku = sku ? sku.trim() : null;
+            }
             if (hasCostData) {
               updateData.defaultDiscountType = 'dollar';
               updateData.defaultDiscountValue = manufacturerDiscount.toString();
@@ -366,6 +434,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           } else {
             const productData = {
               name: name.trim(),
+              sku: sku ? sku.trim() : null,
               description: description || '',
               manufacturer: manufacturer || 'Imported',
               category: category || null,
@@ -378,7 +447,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const newProduct = await storage.createProduct(productData);
             productLookupByName.set(name.toLowerCase().trim(), newProduct);
             if (sku) {
-              productLookupBySku.set(sku.toUpperCase(), newProduct);
+              productLookupBySku.set(sku.toUpperCase().trim(), newProduct);
             }
             created++;
           }

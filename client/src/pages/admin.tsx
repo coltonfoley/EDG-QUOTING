@@ -775,6 +775,7 @@ function ProductBulkEditor() {
       
       const matchesSearch = searchTerm === "" || 
         product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (product.sku || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
         (product.description || "").toLowerCase().includes(searchTerm.toLowerCase());
 
       const discountVal = parseFloat(product.defaultDiscountValue?.toString() || "0");
@@ -953,7 +954,7 @@ function ProductBulkEditor() {
             id="search-products"
             data-testid="input-search-products"
             type="text"
-            placeholder="Search by name or description..."
+            placeholder="Search by name, SKU, or description..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
@@ -982,8 +983,9 @@ function ProductBulkEditor() {
                       title={`Select all ${filteredProducts.length} filtered products`}
                     />
                   </TableHead>
-                  <TableHead>Product Name</TableHead>
-                  <TableHead data-testid="header-manufacturer">Manufacturer</TableHead>
+	                  <TableHead>Product Name</TableHead>
+	                  <TableHead>SKU</TableHead>
+	                  <TableHead data-testid="header-manufacturer">Manufacturer</TableHead>
                   <TableHead>Unit</TableHead>
                   <TableHead className="text-right">Retail Price</TableHead>
                   <TableHead className="text-center">Discount</TableHead>
@@ -1003,8 +1005,15 @@ function ProductBulkEditor() {
                           className="rounded border-gray-300"
                         />
                       </TableCell>
-                      <TableCell className="font-medium" data-testid={`text-product-name-${product.id}`}>{product.name}</TableCell>
-                      <TableCell data-testid={`text-manufacturer-${product.id}`}>{product.manufacturer || "Unspecified"}</TableCell>
+	                      <TableCell className="font-medium" data-testid={`text-product-name-${product.id}`}>{product.name}</TableCell>
+	                      <TableCell>
+	                        {product.sku ? (
+	                          <Badge variant="outline" data-testid={`text-product-sku-${product.id}`}>{product.sku}</Badge>
+	                        ) : (
+	                          <span className="text-sm text-gray-400">None</span>
+	                        )}
+	                      </TableCell>
+	                      <TableCell data-testid={`text-manufacturer-${product.id}`}>{product.manufacturer || "Unspecified"}</TableCell>
                       <TableCell>{product.unit}</TableCell>
                       <TableCell className="text-right text-gray-500">
                         ${info.retail.toFixed(2)}
