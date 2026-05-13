@@ -76,7 +76,7 @@ function drawTableHeader(pdf: jsPDF, y: number, margin: number, colWidths: Recor
   colX += colWidths.sku;
   pdf.text('Qty', colX, y + 3);
   colX += colWidths.qty;
-  pdf.text('Unit Price', colX, y + 3);
+  pdf.text('Customer Unit', colX, y + 3);
   colX += colWidths.unitPrice;
   pdf.text('Total', colX, y + 3);
   

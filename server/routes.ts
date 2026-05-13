@@ -20,6 +20,7 @@ import { registerProductRoutes } from "./routes/productRoutes";
 import { registerImageRoutes } from "./routes/imageRoutes";
 import { registerAIAssistantRoutes } from "./routes/aiAssistantRoutes";
 import { registerLeadIntakeRoutes } from "./routes/leadIntakeRoutes";
+import { deriveProductCostFields } from "@shared/pricing";
 
 const STORAGE_USAGE_CACHE_MS = 5 * 60 * 1000;
 
@@ -396,8 +397,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             continue;
           }
 
-          const hasCostData = cost > 0 && cost < retailPrice;
-          const manufacturerDiscount = hasCostData ? (retailPrice - cost) : 0;
+          const normalizedCost = cost > 0 ? cost : retailPrice;
+          const pricingFields = deriveProductCostFields(retailPrice, normalizedCost);
 
           let existingProduct = productLookupByName.get(name.toLowerCase().trim());
           if (!existingProduct && sku) {
@@ -407,15 +408,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (existingProduct) {
             const updateData: any = {
               retailPrice: retailPrice.toString(),
+              costPrice: pricingFields.costPrice,
+              defaultDiscountType: pricingFields.defaultDiscountType,
+              defaultDiscountValue: pricingFields.defaultDiscountValue,
             };
             if (sku !== undefined) {
               updateData.sku = sku ? sku.trim() : null;
             }
-            if (hasCostData) {
-              updateData.defaultDiscountType = 'dollar';
-              updateData.defaultDiscountValue = manufacturerDiscount.toString();
-            }
-            
             if (manufacturer !== undefined) {
               updateData.manufacturer = manufacturer;
             }
@@ -439,8 +438,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
               manufacturer: manufacturer || 'Imported',
               category: category || null,
               retailPrice: retailPrice.toString(),
-              defaultDiscountType: 'dollar' as const,
-              defaultDiscountValue: hasCostData ? manufacturerDiscount.toString() : '0',
+              costPrice: pricingFields.costPrice,
+              defaultDiscountType: pricingFields.defaultDiscountType,
+              defaultDiscountValue: pricingFields.defaultDiscountValue,
               unit: unit || 'each',
             };
             

@@ -27,15 +27,15 @@ interface PreviewProduct {
   retailPrice: number;
   cost: number;
   manufacturerDiscount: number;
-  margin: number;
+	  supplierDiscountPercent: number;
 }
 
 const PRODUCT_FIELDS = [
   { value: 'name', label: 'Product Name' },
   { value: 'manufacturer', label: 'Manufacturer' },
   { value: 'category', label: 'Category' },
-  { value: 'retailPrice', label: 'Retail/Dealer Price' },
-  { value: 'cost', label: 'Your Cost' },
+	  { value: 'retailPrice', label: 'Manufacturer MSRP' },
+	  { value: 'cost', label: 'EDG Cost' },
   { value: 'unit', label: 'Unit' },
   { value: 'description', label: 'Description' },
   { value: 'skip', label: 'Skip this column' },
@@ -162,7 +162,7 @@ export function CSVProductImporter() {
       validationErrors.push("Product Name is required - please map a column to Product Name");
     }
     if (!retailPriceMapping) {
-      validationErrors.push("Retail/Dealer Price is required - please map a column to Retail/Dealer Price");
+	      validationErrors.push("Manufacturer MSRP is required - please map a column to Manufacturer MSRP");
     }
 
     if (validationErrors.length > 0) {
@@ -189,7 +189,7 @@ export function CSVProductImporter() {
       }
 
       const retailPrice = parsePrice(retailPriceStr);
-      const cost = costMapping ? parsePrice(costStr) : 0;
+	      const cost = costMapping ? parsePrice(costStr) : retailPrice;
 
       // Skip rows with no valid retail price
       if (retailPrice === null || retailPrice <= 0) {
@@ -197,11 +197,11 @@ export function CSVProductImporter() {
         return;
       }
 
-      // If cost is not mapped or invalid, default to 0
-      const actualCost = cost !== null && cost >= 0 ? cost : 0;
+	      // If cost is not mapped or invalid, default EDG cost to MSRP.
+	      const actualCost = cost !== null && cost >= 0 ? cost : retailPrice;
 
       const manufacturerDiscount = retailPrice - actualCost;
-      const margin = retailPrice > 0 ? ((manufacturerDiscount / retailPrice) * 100) : 0;
+	      const supplierDiscountPercent = retailPrice > 0 ? ((manufacturerDiscount / retailPrice) * 100) : 0;
 
       preview.push({
         name,
@@ -212,7 +212,7 @@ export function CSVProductImporter() {
         retailPrice,
         cost: actualCost,
         manufacturerDiscount,
-        margin,
+	        supplierDiscountPercent,
       });
     });
 
@@ -289,8 +289,8 @@ export function CSVProductImporter() {
   const downloadSampleCSV = async () => {
     const XLSX = await import("xlsx");
     const sampleData = [
-      { 'Product Name': 'Example Product 1', 'Category': 'Materials', 'Dealer Price': '100.00', 'Your Cost': '70.00', 'Unit': 'each' },
-      { 'Product Name': 'Example Product 2', 'Category': 'Labor', 'Dealer Price': '150.00', 'Your Cost': '100.00', 'Unit': 'hour' },
+	      { 'Product Name': 'Example Product 1', 'Category': 'Materials', 'Manufacturer MSRP': '100.00', 'EDG Cost': '70.00', 'Unit': 'each' },
+	      { 'Product Name': 'Example Product 2', 'Category': 'Labor', 'Manufacturer MSRP': '150.00', 'EDG Cost': '100.00', 'Unit': 'hour' },
     ];
     
     const ws = XLSX.utils.json_to_sheet(sampleData);
@@ -443,10 +443,10 @@ export function CSVProductImporter() {
                     <th className="text-left py-2 px-2">Manufacturer</th>
                     <th className="text-left py-2 px-2">Category</th>
                     <th className="text-left py-2 px-2">Unit</th>
-                    <th className="text-right py-2 px-2">Retail Price</th>
-                    <th className="text-right py-2 px-2">Your Cost</th>
-                    <th className="text-right py-2 px-2">Discount</th>
-                    <th className="text-right py-2 px-2">Margin %</th>
+	                    <th className="text-right py-2 px-2">Manufacturer MSRP</th>
+	                    <th className="text-right py-2 px-2">EDG Cost</th>
+	                    <th className="text-right py-2 px-2">Supplier Discount</th>
+	                    <th className="text-right py-2 px-2">Discount %</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -459,7 +459,7 @@ export function CSVProductImporter() {
                       <td className="py-1 px-2 text-right">${product.retailPrice.toFixed(2)}</td>
                       <td className="py-1 px-2 text-right text-green-600">${product.cost.toFixed(2)}</td>
                       <td className="py-1 px-2 text-right text-blue-600">${product.manufacturerDiscount.toFixed(2)}</td>
-                      <td className="py-1 px-2 text-right text-purple-600">{product.margin.toFixed(1)}%</td>
+	                      <td className="py-1 px-2 text-right text-purple-600">{product.supplierDiscountPercent.toFixed(1)}%</td>
                     </tr>
                   ))}
                 </tbody>

@@ -9,6 +9,7 @@ import { apiRequest, queryClient } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import { formatCurrency } from '@/lib/utils';
 import type { Product, Color, ProductColor } from '@shared/schema';
+import { calculateCustomerLineTotal, calculateCustomerUnitPrice, getProductPricingBreakdown } from '@shared/pricing';
 
 interface SundanceCatalogConfiguratorProps {
   quoteId: number;
@@ -31,6 +32,13 @@ interface ProductColorSelection {
 interface CategoryColorSelection {
   [category: string]: number | null; // Selected color ID for category
 }
+
+type PricingDefaultResponse = {
+  scope: string;
+  markupType: 'percentage';
+  markupValue: string;
+  updatedAt: string | null;
+};
 
 // Category order matching the PDF
 const CATEGORY_ORDER = [
@@ -109,6 +117,19 @@ export function SundanceCatalogConfigurator({
   const sundanceProducts = useMemo<Product[]>(() => {
     return products || [];
   }, [products]);
+
+  const { data: sundancePricingDefault } = useQuery<PricingDefaultResponse>({
+    queryKey: ['/api/pricing-defaults/sundance'],
+    queryFn: async () => {
+      const response = await apiRequest('GET', '/api/pricing-defaults/sundance');
+      return response.json();
+    },
+  });
+
+  const sundanceMarkupValue = useMemo(
+    () => parseFloat(sundancePricingDefault?.markupValue || '100') || 0,
+    [sundancePricingDefault?.markupValue]
+  );
 
   // Fetch all product colors for Sundance products using batch endpoint
   const { data: productColorsMap } = useQuery<Record<number, (ProductColor & { color: Color })[]>>({
@@ -298,9 +319,18 @@ export function SundanceCatalogConfigurator({
     })
     .filter(Boolean) as { product: Product; quantity: number }[], [sundanceProducts, quantities]);
 
-  const subtotal = useMemo(() => selectedItems.reduce((total, { product, quantity }) => {
-    return total + (parseFloat(product.retailPrice) * quantity);
+  const edgCostSubtotal = useMemo(() => selectedItems.reduce((total, { product, quantity }) => {
+    return total + (getProductPricingBreakdown(product).edgCost * quantity);
   }, 0), [selectedItems]);
+
+  const customerSubtotal = useMemo(() => selectedItems.reduce((total, { product, quantity }) => {
+    return total + calculateCustomerLineTotal(
+      quantity,
+      getProductPricingBreakdown(product).edgCost,
+      'percentage',
+      sundanceMarkupValue
+    );
+  }, 0), [selectedItems, sundanceMarkupValue]);
 
   const selectedCount = selectedItems.length;
   const selectedUnitCount = useMemo(
@@ -340,6 +370,7 @@ export function SundanceCatalogConfigurator({
             category: product!.category,
             manufacturer: product!.manufacturer,
             retailPrice: product!.retailPrice,
+            costPrice: getProductPricingBreakdown(product!).edgCost.toFixed(2),
             unit: product!.unit,
             defaultDiscountType: product!.defaultDiscountType,
             defaultDiscountValue: product!.defaultDiscountValue,
@@ -456,8 +487,8 @@ export function SundanceCatalogConfigurator({
           <div className="hidden grid-cols-[minmax(0,1fr)_150px_100px_112px] gap-4 border-b bg-muted/20 px-4 py-2 text-xs font-semibold uppercase tracking-normal text-muted-foreground md:grid">
             <div>Part</div>
             <div className="text-center">Qty</div>
-            <div className="text-right">Unit</div>
-            <div className="text-right">Line total</div>
+            <div className="text-right">EDG Cost</div>
+            <div className="text-right">Customer total</div>
           </div>
 
           <ScrollArea className="min-h-0 flex-1">
@@ -635,12 +666,17 @@ export function SundanceCatalogConfigurator({
                           </div>
                         </div>
                         <div className="flex items-center justify-between text-sm md:block md:text-right" data-testid={`text-unit-price-${product.id}`}>
-                          <span className="text-xs font-medium text-muted-foreground md:hidden">Unit</span>
-                          <span className="font-medium">{formatCurrency(parseFloat(product.retailPrice))}</span>
+                          <span className="text-xs font-medium text-muted-foreground md:hidden">EDG Cost</span>
+                          <span className="font-medium">{formatCurrency(getProductPricingBreakdown(product).edgCost)}</span>
                         </div>
                         <div className="flex items-center justify-between text-sm md:block md:text-right" data-testid={`text-total-${product.id}`}>
-                          <span className="text-xs font-medium text-muted-foreground md:hidden">Line total</span>
-                          <span className="font-semibold">{formatCurrency((quantities[product.id] || 0) * parseFloat(product.retailPrice))}</span>
+                          <span className="text-xs font-medium text-muted-foreground md:hidden">Customer total</span>
+                          <span className="font-semibold">{formatCurrency(calculateCustomerLineTotal(
+                            quantities[product.id] || 0,
+                            getProductPricingBreakdown(product).edgCost,
+                            'percentage',
+                            sundanceMarkupValue
+                          ))}</span>
                         </div>
                         </div>
                       );
@@ -694,7 +730,12 @@ export function SundanceCatalogConfigurator({
                         )}
                       </div>
                       <div className="text-right text-sm font-semibold whitespace-nowrap">
-                        {formatCurrency(quantity * parseFloat(product.retailPrice))}
+                        {formatCurrency(calculateCustomerLineTotal(
+                          quantity,
+                          getProductPricingBreakdown(product).edgCost,
+                          'percentage',
+                          sundanceMarkupValue
+                        ))}
                       </div>
                     </div>
                     {colorDetails.length > 0 && (
@@ -716,7 +757,9 @@ export function SundanceCatalogConfigurator({
                         className="h-8 text-center w-20"
                         data-testid={`summary-input-quantity-${product.id}`}
                       />
-                      <span>at {formatCurrency(parseFloat(product.retailPrice))} each</span>
+                      <span>
+                        EDG cost {formatCurrency(getProductPricingBreakdown(product).edgCost)} each • customer unit {formatCurrency(calculateCustomerUnitPrice(getProductPricingBreakdown(product).edgCost, 'percentage', sundanceMarkupValue))}
+                      </span>
                     </div>
                   </div>
                 );
@@ -726,11 +769,17 @@ export function SundanceCatalogConfigurator({
         </ScrollArea>
 
         <div className="space-y-4 border-t p-4">
-          <div className="flex justify-between items-center">
-            <span className="font-semibold">Sundance subtotal</span>
-            <span className="text-lg font-bold" data-testid="text-configurator-subtotal">
-              {formatCurrency(subtotal)}
-            </span>
+          <div className="space-y-2">
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-muted-foreground">EDG cost subtotal</span>
+              <span className="font-medium">{formatCurrency(edgCostSubtotal)}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="font-semibold">Estimated customer subtotal</span>
+              <span className="text-lg font-bold" data-testid="text-configurator-subtotal">
+                {formatCurrency(customerSubtotal)}
+              </span>
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-2">
             <Button 

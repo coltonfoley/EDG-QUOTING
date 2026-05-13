@@ -204,8 +204,8 @@ async function executeToolCall(name: string, args: any): Promise<string> {
           return `No products found matching "${args.query}".`;
         }
 
-        return `Found ${matches.length} product(s):\n` + matches.map(p => 
-          `- ${p.name} (${p.manufacturer}): $${p.retailPrice} per ${p.unit || 'each'}${p.category ? `, category: ${p.category}` : ''}`
+        return `Found ${matches.length} product(s):\n` + matches.map(p =>
+          `- ${p.name} (${p.manufacturer}): MSRP $${p.retailPrice} per ${p.unit || 'each'}${p.category ? `, category: ${p.category}` : ''}`
         ).join('\n');
       }
 
@@ -290,8 +290,8 @@ async function executeToolCall(name: string, args: any): Promise<string> {
         if (quote.lineItems && quote.lineItems.length > 0) {
           details += `\nLine Items:\n`;
           quote.lineItems.slice(0, 15).forEach((item: any) => {
-            const itemTotal = parseFloat(String(item.quantity || 0)) * parseFloat(String(item.unitPrice || 0));
-            details += `  - ${item.description}: ${item.quantity} x $${item.unitPrice} = $${itemTotal.toFixed(2)}\n`;
+	          const itemCostTotal = parseFloat(String(item.quantity || 0)) * parseFloat(String(item.unitPrice || 0));
+	          details += `  - ${item.description}: ${item.quantity} x EDG cost $${item.unitPrice} = $${itemCostTotal.toFixed(2)} before markup\n`;
           });
           if (quote.lineItems.length > 15) {
             details += `  ... and ${quote.lineItems.length - 15} more items\n`;
@@ -391,8 +391,8 @@ async function executeToolCall(name: string, args: any): Promise<string> {
           return `No products found from manufacturer "${args.manufacturer}".`;
         }
 
-        return `Found ${matches.length} product(s) from "${args.manufacturer}":\n` + matches.map(p => 
-          `- ${p.name}: $${p.retailPrice} per ${p.unit || 'each'}${p.category ? `, category: ${p.category}` : ''}`
+        return `Found ${matches.length} product(s) from "${args.manufacturer}":\n` + matches.map(p =>
+          `- ${p.name}: MSRP $${p.retailPrice} per ${p.unit || 'each'}${p.category ? `, category: ${p.category}` : ''}`
         ).join('\n');
       }
 

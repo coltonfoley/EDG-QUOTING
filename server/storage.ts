@@ -5,8 +5,42 @@ import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 import connectPg from "connect-pg-simple";
 import session from "express-session";
+import { calculateCostFromMsrpAndDiscount, deriveProductCostFields } from "@shared/pricing";
 
 const scryptAsync = promisify(scrypt);
+
+function normalizeProductPricingPayload<T extends Record<string, any>>(
+  payload: T,
+  existingProduct?: Product
+): T {
+  const normalized = { ...payload };
+  const hasRetail = normalized.retailPrice !== undefined;
+  const hasCost = normalized.costPrice !== undefined || normalized.cost !== undefined;
+  const hasDiscount = normalized.defaultDiscountType !== undefined || normalized.defaultDiscountValue !== undefined;
+
+  if (hasRetail || hasCost || hasDiscount) {
+    const retailPrice = normalized.retailPrice ?? existingProduct?.retailPrice ?? "0";
+
+    if (hasCost) {
+      const costPrice = normalized.costPrice ?? normalized.cost;
+      const fields = deriveProductCostFields(retailPrice, costPrice);
+      normalized.costPrice = fields.costPrice;
+      normalized.defaultDiscountType = fields.defaultDiscountType;
+      normalized.defaultDiscountValue = fields.defaultDiscountValue;
+    } else {
+      const defaultDiscountType = normalized.defaultDiscountType ?? existingProduct?.defaultDiscountType ?? "dollar";
+      const defaultDiscountValue = normalized.defaultDiscountValue ?? existingProduct?.defaultDiscountValue ?? "0";
+      normalized.costPrice = calculateCostFromMsrpAndDiscount(
+        retailPrice,
+        defaultDiscountType,
+        defaultDiscountValue
+      ).toFixed(2);
+    }
+  }
+
+  delete normalized.cost;
+  return normalized as T;
+}
 
 async function hashPassword(password: string) {
   const salt = randomBytes(16).toString("hex");
@@ -1667,7 +1701,7 @@ export class DatabaseStorage implements IStorage {
     // Strip any validation metadata field if present
     const { _categoryValidation, ...cleanProduct } = insertProduct as any;
     
-    const productData = { ...cleanProduct };
+    const productData = normalizeProductPricingPayload({ ...cleanProduct });
     
     // Ensure manufacturer field is present
     if (!productData.manufacturer) {
@@ -1686,7 +1720,8 @@ export class DatabaseStorage implements IStorage {
     // Strip any validation metadata field if present
     const { _categoryValidation, ...cleanProductData } = productData as any;
     
-    const updateData = { ...cleanProductData };
+    const existingProduct = await this.getProduct(id);
+    const updateData = normalizeProductPricingPayload({ ...cleanProductData }, existingProduct);
     
     const [updated] = await db
       .update(products)
@@ -1707,8 +1742,37 @@ export class DatabaseStorage implements IStorage {
     // Strip any validation metadata field if present
     const { _categoryValidation, ...cleanUpdates } = updates as any;
     
+    if (
+      cleanUpdates.costPrice !== undefined ||
+      cleanUpdates.cost !== undefined ||
+      cleanUpdates.retailPrice !== undefined ||
+      cleanUpdates.defaultDiscountType !== undefined ||
+      cleanUpdates.defaultDiscountValue !== undefined
+    ) {
+      const currentProducts = await db
+        .select()
+        .from(products)
+        .where(inArray(products.id, productIds));
+
+      const updated = await db.transaction(async (tx) => {
+        const results = [];
+        for (const product of currentProducts) {
+          const updateData = normalizeProductPricingPayload({ ...cleanUpdates }, product);
+          const [result] = await tx
+            .update(products)
+            .set(updateData)
+            .where(eq(products.id, product.id))
+            .returning();
+          if (result) results.push(result);
+        }
+        return results;
+      });
+
+      return updated.length;
+    }
+
     const updateData = { ...cleanUpdates };
-    
+
     const result = await db
       .update(products)
       .set(updateData)

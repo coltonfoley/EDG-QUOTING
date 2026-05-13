@@ -21,6 +21,7 @@ import { formatCurrency } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
+import { deriveProductCostFields, getProductPricingBreakdown } from "@shared/pricing";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertProductSchema, type Product, type Color } from "@shared/schema";
@@ -28,7 +29,6 @@ import { z } from "zod";
 import { Checkbox } from "@/components/ui/checkbox";
 
 const productFormSchema = insertProductSchema.extend({
-  cost: z.string().optional(), // Frontend-only field for cost input
   selectedColorIds: z.array(z.number()).optional(), // Frontend-only field for color selection
 });
 type ProductFormData = z.infer<typeof productFormSchema>;
@@ -52,9 +52,9 @@ const DEFAULT_PRODUCT_VALUES: ProductFormData = {
   category: "",
   productType: "simple",
   retailPrice: "0",
+  costPrice: "",
   defaultDiscountType: "dollar",
   defaultDiscountValue: "0",
-  cost: "0",
   unit: "each",
   selectedColorIds: [],
 };
@@ -227,18 +227,17 @@ export default function Products() {
 
 
   const handleSubmit = async (formData: ProductFormData) => {
-    // Calculate manufacturer discount from retail - cost
-    const retail = parseFloat(formData.retailPrice || "0");
-    const cost = parseFloat(formData.cost || "0");
-    const manufacturerDiscount = Math.max(0, retail - cost);
+    const { supplierDiscountAmount: _supplierDiscountAmount, supplierDiscountPercent: _supplierDiscountPercent, ...pricingFields } = deriveProductCostFields(
+      formData.retailPrice,
+      formData.costPrice ?? formData.retailPrice
+    );
     
     // Prepare data with calculated discount, omitting frontend-only fields
-    const { cost: _, selectedColorIds, sku, ...productData } = formData;
+    const { selectedColorIds, sku, ...productData } = formData;
     const data = {
       ...productData,
       sku: sku?.trim() || null,
-      defaultDiscountType: "dollar" as const,
-      defaultDiscountValue: manufacturerDiscount.toFixed(2),
+      ...pricingFields,
     };
     
     if (editingProduct) {
@@ -294,15 +293,7 @@ export default function Products() {
   const handleEdit = (product: Product) => {
     setEditingProduct(product);
     
-    // Calculate cost from retail - discount for display
-    const retail = parseFloat(product.retailPrice || "0");
-    const discountValue = parseFloat(product.defaultDiscountValue || "0");
-    let cost = 0;
-    if (product.defaultDiscountType === "percentage") {
-      cost = retail * (1 - discountValue / 100);
-    } else {
-      cost = Math.max(0, retail - discountValue);
-    }
+    const pricing = getProductPricingBreakdown(product);
     
     form.reset({
       name: product.name,
@@ -312,9 +303,9 @@ export default function Products() {
       category: product.category || "",
       productType: product.productType || "simple",
       retailPrice: product.retailPrice,
+      costPrice: pricing.edgCost.toFixed(2),
       defaultDiscountType: product.defaultDiscountType,
       defaultDiscountValue: product.defaultDiscountValue,
-      cost: cost.toFixed(2),
       unit: product.unit || "each",
       minLength: product.minLength,
       maxLength: product.maxLength,
@@ -713,7 +704,7 @@ export default function Products() {
                     <div className="space-y-4">
                       <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
                         <p className="text-sm text-blue-800">
-                          <strong>Pricing:</strong> Enter the Retail Price (MSRP) and Your Cost. The system will calculate the manufacturer discount automatically.
+                          <strong>Pricing:</strong> Enter the Manufacturer MSRP and EDG Cost. Rainmaker saves both, then calculates the supplier discount for compatibility.
                         </p>
                       </div>
                       
@@ -723,7 +714,7 @@ export default function Products() {
                           name="retailPrice"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Retail Price (MSRP)</FormLabel>
+                              <FormLabel>Manufacturer MSRP</FormLabel>
                               <FormControl>
                                 <Input 
                                   type="number" 
@@ -734,7 +725,7 @@ export default function Products() {
                                   data-testid="input-retail-price"
                                 />
                               </FormControl>
-                              <p className="text-xs text-gray-500">Manufacturer's suggested retail price</p>
+                              <p className="text-xs text-gray-500">Supplier list price before EDG's discount</p>
                               <FormMessage />
                             </FormItem>
                           )}
@@ -742,24 +733,24 @@ export default function Products() {
                         
                         <FormField
                           control={form.control}
-                          name="cost"
+                          name="costPrice"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Your Cost</FormLabel>
+                              <FormLabel>EDG Cost</FormLabel>
                               <FormControl>
                                 <Input 
                                   type="number" 
                                   step="0.01" 
                                   {...field} 
                                   value={field.value || ""} 
-                                  placeholder="What you pay" 
+                                  placeholder="What EDG pays"
                                   data-testid="input-cost"
                                 />
                               </FormControl>
                               <p className="text-xs text-gray-500">
-                                {form.watch("retailPrice") && form.watch("cost") 
-                                  ? `Discount: $${Math.max(0, parseFloat(form.watch("retailPrice") || "0") - parseFloat(form.watch("cost") || "0")).toFixed(2)}` 
-                                  : "Your actual cost for this product"}
+                                {form.watch("retailPrice") && form.watch("costPrice")
+                                  ? `Supplier discount: $${Math.max(0, parseFloat(form.watch("retailPrice") || "0") - parseFloat(form.watch("costPrice") || "0")).toFixed(2)}`
+                                  : "Internal EDG cost for this product"}
                               </p>
                               <FormMessage />
                             </FormItem>
@@ -1137,24 +1128,23 @@ export default function Products() {
                           <p className="text-sm text-accent-grey mb-3">{product.description}</p>
                         )}
                         <div className="space-y-2">
-                          <div className="flex justify-between text-sm">
-                            <span className="text-edg-grey">Unit Price:</span>
-                            <span className="font-medium">
-                              {product.productType === "configurable" ? (
-                                <span className="text-gray-500">Dimensional Pricing</span>
-                              ) : (() => {
-                                const retail = parseFloat(product.retailPrice?.toString() || "0");
-                                const discountValue = parseFloat(product.defaultDiscountValue?.toString() || "0");
-                                let cost = 0;
-                                if (product.defaultDiscountType === "percentage") {
-                                  cost = retail * (1 - discountValue / 100);
-                                } else {
-                                  cost = Math.max(0, retail - discountValue);
-                                }
-                                return `${formatCurrency(cost)} per ${product.unit}`;
-                              })()}
-                            </span>
-                          </div>
+	                          <div className="flex justify-between text-sm">
+	                            <span className="text-edg-grey">EDG Cost:</span>
+	                            <span className="font-medium">
+	                              {product.productType === "configurable" ? (
+	                                <span className="text-gray-500">Dimensional Pricing</span>
+	                              ) : (() => {
+	                                const pricing = getProductPricingBreakdown(product);
+	                                return `${formatCurrency(pricing.edgCost)} per ${product.unit}`;
+	                              })()}
+	                            </span>
+	                          </div>
+	                          {product.productType !== "configurable" && (
+	                            <div className="flex justify-between text-sm">
+	                              <span className="text-edg-grey">Manufacturer MSRP:</span>
+	                              <span className="font-medium">{formatCurrency(getProductPricingBreakdown(product).manufacturerMsrp)}</span>
+	                            </div>
+	                          )}
                         </div>
                       </CardContent>
                     </Card>
@@ -1251,8 +1241,9 @@ function ProductTable({ products, onEdit, onDelete, onManagePricing, canManage }
 	              <TableHead>Manufacturer</TableHead>
 	              <TableHead>Category</TableHead>
 	              <TableHead>Type</TableHead>
-              <TableHead>Unit</TableHead>
-              <TableHead className="text-right">Unit Price</TableHead>
+	              <TableHead>Unit</TableHead>
+	              <TableHead className="text-right">Manufacturer MSRP</TableHead>
+	              <TableHead className="text-right">EDG Cost</TableHead>
               {canManage && <TableHead className="w-[130px]">Actions</TableHead>}
             </TableRow>
           </TableHeader>
@@ -1335,20 +1326,17 @@ function ProductTable({ products, onEdit, onDelete, onManagePricing, canManage }
 	                  </Badge>
                 </TableCell>
                 <TableCell className="text-sm text-gray-600">{product.unit}</TableCell>
-                <TableCell className="text-right font-medium">
-                  {product.productType === "configurable" ? (
-                    <span className="text-sm text-gray-500">Dimensional</span>
-                  ) : (() => {
-                    const retail = parseFloat(product.retailPrice?.toString() || "0");
-                    const discountValue = parseFloat(product.defaultDiscountValue?.toString() || "0");
-                    let cost = 0;
-                    if (product.defaultDiscountType === "percentage") {
-                      cost = retail * (1 - discountValue / 100);
-                    } else {
-                      cost = Math.max(0, retail - discountValue);
-                    }
-                    return formatCurrency(cost);
-                  })()}
+	                <TableCell className="text-right text-gray-600">
+		                  {product.productType === "configurable" ? (
+		                    <span className="text-sm text-gray-500">Dimensional</span>
+		                  ) : formatCurrency(getProductPricingBreakdown(product).manufacturerMsrp)}
+	                </TableCell>
+	                <TableCell className="text-right font-medium">
+	                  {product.productType === "configurable" ? (
+	                    <span className="text-sm text-gray-500">Dimensional</span>
+	                  ) : (() => {
+	                    return formatCurrency(getProductPricingBreakdown(product).edgCost);
+	                  })()}
                 </TableCell>
                 {canManage && (
                   <TableCell>

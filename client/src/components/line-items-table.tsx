@@ -12,6 +12,7 @@ import { formatCurrency, calculateLineItemTotal, calculateLineItemMargin, applyD
 import { apiRequest, NavigationAbortError } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { LineItem, Product, Color, ProductColor } from "@shared/schema";
+import { getProductPricingBreakdown } from "@shared/pricing";
 import { 
   DndContext, 
   DragEndEvent, 
@@ -335,21 +336,21 @@ const SortableLineItemRow = memo(function SortableLineItemRow({
                   <Info className="h-3 w-3 text-blue-500 cursor-help" />
                 </TooltipTrigger>
                 <TooltipContent className="bg-popover text-popover-foreground p-2 text-xs max-w-xs">
-                  <div className="font-semibold mb-1">Cost Calculation:</div>
-                  <div>Retail Price: {formatCurrency(parseFloat(item.retailPrice.toString()))}</div>
+                  <div className="font-semibold mb-1">Internal Price Breakdown:</div>
+                  <div>Manufacturer MSRP: {formatCurrency(parseFloat(item.retailPrice.toString()))}</div>
                   <div>
-                    Manufacturer Discount: {(() => {
+                    Supplier Discount: {(() => {
                       const retail = parseFloat(item.retailPrice.toString());
                       const cost = parseFloat(getCurrentValue(item.id, 'unitPrice'));
                       const discountAmount = retail - cost;
                       const discountPercent = retail > 0 ? (discountAmount / retail * 100).toFixed(1) : 0;
                       return discountAmount > 0 
                         ? `${formatCurrency(discountAmount)} (${discountPercent}%)`
-                        : 'No manufacturer discount';
+                        : 'No supplier discount';
                     })()}
                   </div>
                   <div className="border-t border-border mt-1 pt-1">
-                    Your Cost: {formatCurrency(parseFloat(getCurrentValue(item.id, 'unitPrice')))}
+                    EDG Cost: {formatCurrency(parseFloat(getCurrentValue(item.id, 'unitPrice')))}
                   </div>
                 </TooltipContent>
               </Tooltip>
@@ -361,7 +362,7 @@ const SortableLineItemRow = memo(function SortableLineItemRow({
         )}
       </td>
 
-      {/* Markup% - Hidden on small screens */}
+      {/* Markup - Hidden on small screens */}
       <td className="border-r border-border px-3 py-1 text-center hidden lg:table-cell">
         <div className="flex items-center space-x-1">
           <Input
@@ -415,7 +416,7 @@ const SortableLineItemRow = memo(function SortableLineItemRow({
         )}
       </td>
 
-      {/* Price - Always visible */}
+      {/* Customer unit price - Always visible */}
       <td className="border-r border-border px-3 py-1 text-center text-sm" data-testid={`text-price-${item.id}`}>
         {formatCurrency(price)}
       </td>
@@ -776,11 +777,11 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
     } else if (field === "unitPrice") {
       const num = parseFloat(sanitizeNumberString(value));
       if (!value && value !== "0") {
-        validationError = "Unit price is required";
+        validationError = "EDG cost is required";
       } else if (isNaN(num) || num < 0) {
-        validationError = "Unit price must be a valid positive number";
+        validationError = "EDG cost must be a valid positive number";
       } else if (num > 10000000) {
-        validationError = "Unit price must be less than $10,000,000";
+        validationError = "EDG cost must be less than $10,000,000";
       }
     } else if (field === "markupValue") {
       const num = parseFloat(sanitizeNumberString(value));
@@ -907,7 +908,7 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
         updateData.quantity = quantityParsed;
       }
       
-      // Unit Price
+      // EDG Cost
       const priceSanitized = sanitizeNumberString(rowValues.unitPrice);
       const priceParsed = parseFloat(priceSanitized);
       if (!isNaN(priceParsed)) {
@@ -1638,7 +1639,7 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
     
     const unitPrice = parseFloat(newItem.unitPrice);
     if (isNaN(unitPrice) || unitPrice < 0) {
-      errors.unitPrice = "Unit price must be a valid positive number";
+      errors.unitPrice = "EDG cost must be a valid positive number";
     }
     
     const markupValue = parseFloat(newItem.markupValue || "0");
@@ -1690,25 +1691,16 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
       setShowProductDialog(false);
       setShowDimensionDialog(true);
     } else {
-      // Calculate cost from retail price minus manufacturer discount
-      const retail = parseFloat(product.retailPrice?.toString() || "0");
-      const discountValue = parseFloat(product.defaultDiscountValue?.toString() || "0");
-      
-      let calculatedUnitPrice = "0";
-      if (product.defaultDiscountType === "percentage") {
-        calculatedUnitPrice = (retail * (1 - discountValue / 100)).toFixed(2);
-      } else {
-        // Dollar discount
-        calculatedUnitPrice = Math.max(0, retail - discountValue).toFixed(2);
-      }
+      const pricing = getProductPricingBreakdown(product);
+      const calculatedUnitPrice = pricing.edgCost.toFixed(2);
       
       setNewItem((currentItem) => ({
         ...currentItem,
         description: product.name,
         retailPrice: product.retailPrice?.toString() || "",
         unitPrice: calculatedUnitPrice,
-        discountType: "percentage", // Reset - discount already applied to unitPrice
-        discountValue: "0", // Reset - unitPrice is the final cost after discount
+        discountType: "percentage", // Reset - supplier discount is already included in EDG cost
+        discountValue: "0", // Reset - unitPrice stores the EDG cost basis
         markupType: "percentage",
         markupValue: defaultMarkupValue,
       }));
@@ -2164,7 +2156,7 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
                   </div>
                   <p className="text-sm text-muted-foreground">
                     {bulkMarginType === 'percentage' 
-                      ? 'Enter a percentage markup (e.g., 25 for 25% margin on cost)'
+                      ? 'Enter a percentage markup (e.g., 25 for 25% markup on EDG cost)'
                       : 'Enter a fixed dollar amount to add to each item\'s cost'}
                   </p>
                   <div className="flex justify-end gap-2 pt-2">
@@ -2295,18 +2287,9 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
                                   </div>
                                 )}
                                 <div className="flex justify-between items-center">
+                                  <div className="text-xs text-muted-foreground">EDG Cost</div>
                                   <div className="text-sm font-medium text-green-600">
-                                    {(() => {
-                                      const retail = parseFloat(product.retailPrice?.toString() || "0");
-                                      const discountValue = parseFloat(product.defaultDiscountValue?.toString() || "0");
-                                      let cost = 0;
-                                      if (product.defaultDiscountType === "percentage") {
-                                        cost = retail * (1 - discountValue / 100);
-                                      } else {
-                                        cost = Math.max(0, retail - discountValue);
-                                      }
-                                      return formatCurrency(cost);
-                                    })()}
+                                    {formatCurrency(getProductPricingBreakdown(product).edgCost)}
                                   </div>
                                   {product.productType === "configurable" && (
                                     <Badge variant="secondary" className="text-xs">
@@ -2383,10 +2366,10 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
                     Cost
                   </th>
                   <th className="border-r border-border px-3 py-2 text-center text-sm font-medium text-foreground hidden lg:table-cell">
-                    Markup%
+                    Markup
                   </th>
                   <th className="border-r border-border px-3 py-2 text-center text-sm font-medium text-foreground">
-                    Price
+                    Customer Unit
                   </th>
                   <th className="border-r border-border px-3 py-2 text-center text-sm font-medium text-foreground hidden md:table-cell">
                     Margin$
@@ -2562,7 +2545,7 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
               )}
             </div>
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1">Unit Price</label>
+              <label className="block text-sm font-medium text-foreground mb-1">EDG Cost</label>
               <Input
                 value={newItem.unitPrice}
                 onChange={(e) => setNewItem({ ...newItem, unitPrice: e.target.value })}
@@ -2609,7 +2592,7 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
               )}
             </div>
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1">Total</label>
+              <label className="block text-sm font-medium text-foreground mb-1">Line Total</label>
               <div className="bg-muted border border-border rounded px-3 py-2 text-sm text-foreground">
                 {formatCurrency(
                   calculateLineItemTotal(

@@ -14,6 +14,7 @@ import {
   bulkUpdateSchema
 } from "../validation-schemas";
 import { nanoid } from "nanoid";
+import { calculateCustomerLineTotal, resolveProductCost } from "@shared/pricing";
 
 /**
  * Server-side calculation verification utility
@@ -23,13 +24,13 @@ import { nanoid } from "nanoid";
  * 
  * Calculation Order (must match client-side):
  * 1. Calculate base total: quantity × unitPrice
- * 2. Apply manufacturer discount to base total
+ * 2. Apply saved line discount to base total
  * 3. Apply tariff to increase cost (if applicable)
  * 4. Apply markup to the tariff-adjusted amount
  * 
  * Validation Rules:
  * - Quantity: 0.01 to 999,999
- * - Unit Price: 0 to 10,000,000
+ * - Unit Price / EDG cost basis: 0 to 10,000,000
  * - Markup: 0 to 1000 (percentage or fixed)
  * - Discount: 0 to 100% or 0 to base total (fixed)
  * - Tariff: 0 to 100%
@@ -37,11 +38,11 @@ import { nanoid } from "nanoid";
  * - Tolerance for comparison: ±$0.01 (for floating-point precision)
  * 
  * @param quantity - Number of items
- * @param unitPrice - Price per item
+ * @param unitPrice - EDG cost basis per item
  * @param markupType - "percentage" or "dollar"
  * @param markupValue - Markup amount
- * @param discountType - Manufacturer discount type
- * @param discountValue - Manufacturer discount amount
+ * @param discountType - Saved line discount type
+ * @param discountValue - Saved line discount amount
  * @param tariffRate - Tariff percentage to increase cost
  * @param isTariffApplicable - Whether tariff should be applied
  * @param expectedTotal - Client-calculated total to verify
@@ -583,9 +584,14 @@ export function registerLineItemRoutes(app: Express) {
         ? (sundancePricingDefault?.markupValue?.toString() || "100")
         : "0";
       
-      // Calculate total from snapshots
+      // Calculate estimated customer total from snapshots for the saved group metadata.
       const total = items.reduce((sum, item) => {
-        return sum + (parseFloat(item.productSnapshot.retailPrice) * item.quantity);
+        return sum + calculateCustomerLineTotal(
+          item.quantity,
+          resolveProductCost(item.productSnapshot),
+          defaultMarkupType,
+          defaultMarkupValue
+        );
       }, 0);
 
       // Get existing groups to determine position
@@ -621,15 +627,8 @@ export function registerLineItemRoutes(app: Express) {
       for (const item of items) {
         const snapshot = item.productSnapshot;
 
-        // Calculate our actual cost by applying the manufacturer discount to retail price
-        // This matches the "From Catalog" pattern where discount is baked into unitPrice
-        let unitPrice = parseFloat(snapshot.retailPrice);
-        if (snapshot.defaultDiscountType === 'percentage') {
-          const discountPercent = parseFloat(snapshot.defaultDiscountValue) / 100;
-          unitPrice = unitPrice * (1 - discountPercent);
-        } else if (snapshot.defaultDiscountType === 'dollar') {
-          unitPrice = unitPrice - parseFloat(snapshot.defaultDiscountValue);
-        }
+        // Quote lines store the historical EDG cost basis in unitPrice.
+        const unitPrice = resolveProductCost(snapshot);
 
         await storage.createLineItem({
           quoteId,
@@ -639,7 +638,7 @@ export function registerLineItemRoutes(app: Express) {
           quantity: item.quantity.toString(),
           retailPrice: snapshot.retailPrice,
           unitPrice: unitPrice.toFixed(2),
-          // Manufacturer discount is already applied to unitPrice. Sundance then gets the saved margin.
+          // Supplier discount is already included in unitPrice. Sundance then gets the saved margin.
           markupType: defaultMarkupType,
           markupValue: defaultMarkupValue,
           discountType: "percentage",
