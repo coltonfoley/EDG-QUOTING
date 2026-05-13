@@ -1647,7 +1647,7 @@ export class DatabaseStorage implements IStorage {
     return await db
       .select()
       .from(products)
-      .orderBy(products.manufacturer, products.name);
+      .orderBy(products.manufacturer, products.category, products.sku, products.name);
   }
 
   async getProduct(id: number): Promise<Product | undefined> {

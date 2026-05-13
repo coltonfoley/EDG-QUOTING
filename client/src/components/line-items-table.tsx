@@ -2034,6 +2034,7 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
     return products.filter(product => {
       const matchesSearch = searchTerm === "" || 
         product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (product.sku || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
         (product.description || "").toLowerCase().includes(searchTerm.toLowerCase());
       
       const productManufacturer = product.manufacturer || "Unknown";
@@ -2253,8 +2254,15 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
                                 className="p-3 border border-border rounded hover:bg-primary/10 hover:border-blue-300 cursor-pointer transition-colors"
                                 data-testid={`product-card-${product.id}`}
                               >
-                                <div className="font-medium text-sm text-foreground mb-1">
-                                  {product.name}
+                                <div className="mb-1 flex flex-wrap items-center gap-2">
+                                  <span className="font-medium text-sm text-foreground">
+                                    {product.name}
+                                  </span>
+                                  {product.sku && (
+                                    <Badge variant="outline" className="text-[10px]">
+                                      {product.sku}
+                                    </Badge>
+                                  )}
                                 </div>
                                 {product.description && (
                                   <div className="text-xs text-muted-foreground mb-2 line-clamp-2">

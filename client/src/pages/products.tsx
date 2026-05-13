@@ -12,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Package, Edit, Trash2, Search, Grid, List, Filter, X, Settings, Camera, FileText, Image, Loader2, Palette } from "lucide-react";
+import { Plus, Package, PackageCheck, Edit, Trash2, Search, Grid, List, Filter, X, Settings, Camera, FileText, Image, Loader2, Palette } from "lucide-react";
 import { DimensionalPricingManager } from "@/components/dimensional-pricing-manager";
 import { LoadingSpinner } from "@/components/loading-spinner";
 import { formatCurrency } from "@/lib/utils";
@@ -32,9 +32,25 @@ type ProductFormData = z.infer<typeof productFormSchema>;
 
 const PRODUCT_PAGE_SIZE = 200;
 
+const DEFAULT_PRODUCT_VALUES: ProductFormData = {
+  name: "",
+  sku: "",
+  description: "",
+  manufacturer: "",
+  category: "",
+  productType: "simple",
+  retailPrice: "0",
+  defaultDiscountType: "dollar",
+  defaultDiscountValue: "0",
+  cost: "0",
+  unit: "each",
+  selectedColorIds: [],
+};
+
 export default function Products() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [catalogView, setCatalogView] = useState<"all" | "sundance">("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedManufacturer, setSelectedManufacturer] = useState<string>("all");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
@@ -48,12 +64,19 @@ export default function Products() {
   const queryClient = useQueryClient();
 
   const { data: products, isLoading } = useQuery<Product[]>({
-    queryKey: ["/api/products", { limit: PRODUCT_PAGE_SIZE, offset: page * PRODUCT_PAGE_SIZE }],
+    queryKey: ["/api/products", {
+      limit: catalogView === "sundance" ? 10000 : PRODUCT_PAGE_SIZE,
+      offset: catalogView === "sundance" ? 0 : page * PRODUCT_PAGE_SIZE,
+      manufacturer: catalogView === "sundance" ? "Sundance" : undefined,
+    }],
     queryFn: async () => {
       const params = new URLSearchParams({
-        limit: String(PRODUCT_PAGE_SIZE),
-        offset: String(page * PRODUCT_PAGE_SIZE),
+        limit: String(catalogView === "sundance" ? 10000 : PRODUCT_PAGE_SIZE),
+        offset: String(catalogView === "sundance" ? 0 : page * PRODUCT_PAGE_SIZE),
       });
+      if (catalogView === "sundance") {
+        params.set("manufacturer", "Sundance");
+      }
       const response = await fetch(`/api/products?${params}`);
       if (!response.ok) {
         throw new Error("Failed to fetch products");
@@ -81,20 +104,27 @@ export default function Products() {
 
   const form = useForm<ProductFormData>({
     resolver: zodResolver(productFormSchema),
-    defaultValues: {
-      name: "",
-      description: "",
-      manufacturer: "",
-      category: "",
-      productType: "simple",
-      retailPrice: "0",
-      defaultDiscountType: "dollar",
-      defaultDiscountValue: "0",
-      cost: "0",
-      unit: "each",
-      selectedColorIds: [],
-    },
+    defaultValues: DEFAULT_PRODUCT_VALUES,
   });
+
+  useEffect(() => {
+    setPage(0);
+    setSelectedManufacturer("all");
+    setSelectedCategory("all");
+    setSearchTerm("");
+  }, [catalogView]);
+
+  const openCreateProductDialog = () => {
+    setEditingProduct(null);
+    form.reset({
+      ...DEFAULT_PRODUCT_VALUES,
+      ...(catalogView === "sundance" ? {
+        manufacturer: "Sundance",
+        category: "Motors",
+      } : {}),
+    });
+    setIsDialogOpen(true);
+  };
 
   const createProductMutation = useMutation({
     mutationFn: async (data: ProductFormData) => {
@@ -152,9 +182,10 @@ export default function Products() {
     const manufacturerDiscount = Math.max(0, retail - cost);
     
     // Prepare data with calculated discount, omitting frontend-only fields
-    const { cost: _, selectedColorIds, ...productData } = formData;
+    const { cost: _, selectedColorIds, sku, ...productData } = formData;
     const data = {
       ...productData,
+      sku: sku?.trim() || null,
       defaultDiscountType: "dollar" as const,
       defaultDiscountValue: manufacturerDiscount.toFixed(2),
     };
@@ -224,6 +255,7 @@ export default function Products() {
     
     form.reset({
       name: product.name,
+      sku: product.sku || "",
       description: product.description || "",
       manufacturer: product.manufacturer || "",
       category: product.category || "",
@@ -291,6 +323,7 @@ export default function Products() {
     return products.filter(product => {
       const matchesSearch = searchTerm === "" || 
         product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (product.sku || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
         (product.description || "").toLowerCase().includes(searchTerm.toLowerCase());
       
       const matchesManufacturer = selectedManufacturer === "all" || 
@@ -403,23 +436,48 @@ export default function Products() {
       <AppHeader />
       
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="mb-6">
+          <Tabs value={catalogView} onValueChange={(value) => setCatalogView(value as "all" | "sundance")}>
+            <TabsList className="grid w-full max-w-md grid-cols-2">
+              <TabsTrigger value="all">All Products</TabsTrigger>
+              <TabsTrigger value="sundance">Sundance Catalog</TabsTrigger>
+            </TabsList>
+          </Tabs>
+          {catalogView === "sundance" && (
+            <Card className="mt-4 border-edg-teal/30 bg-edg-teal/5">
+              <CardContent className="flex flex-col gap-3 p-4 md:flex-row md:items-start">
+                <PackageCheck className="mt-0.5 h-5 w-5 shrink-0 text-edg-teal" />
+                <div>
+                  <h3 className="text-sm font-semibold text-edg-black">Builder source of truth</h3>
+                  <p className="mt-1 text-sm text-edg-grey">
+                    These are the approved Sundance parts the quote builder reads from. If a part is not here, it should not appear in the Sundance Builder.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+
         <div className="flex justify-between items-center mb-6">
           <div>
-            <h2 className="text-3xl font-bold text-edg-black">Product Catalog</h2>
-            <p className="text-edg-grey mt-2">Manage reusable products and services • {filteredProducts.length} products</p>
+            <h2 className="text-3xl font-bold text-edg-black">
+              {catalogView === "sundance" ? "Sundance Catalog" : "Product Catalog"}
+            </h2>
+            <p className="text-edg-grey mt-2">
+              {catalogView === "sundance"
+                ? `Manage the approved parts used by the Sundance Builder • ${filteredProducts.length} parts`
+                : `Manage reusable products and services • ${filteredProducts.length} products`}
+            </p>
           </div>
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
               <Button 
                 className="bg-edg-black hover:bg-edg-grey text-edg-white"
-                onClick={() => {
-                  setEditingProduct(null);
-                  form.reset();
-                }}
+                onClick={openCreateProductDialog}
                 data-testid="button-new-product"
               >
                 <Plus className="mr-2 h-4 w-4" />
-                New Product
+                {catalogView === "sundance" ? "New Sundance Part" : "New Product"}
               </Button>
             </DialogTrigger>
             <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
@@ -440,9 +498,9 @@ export default function Products() {
                     
                     <TabsContent value="basic" className="space-y-4 mt-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="name"
+	                    <FormField
+	                      control={form.control}
+	                      name="name"
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Product Name</FormLabel>
@@ -452,9 +510,23 @@ export default function Products() {
                           <FormMessage />
                         </FormItem>
                       )}
-                    />
-                    <FormField
-                      control={form.control}
+	                    />
+	                    <FormField
+	                      control={form.control}
+	                      name="sku"
+	                      render={({ field }) => (
+	                        <FormItem>
+	                          <FormLabel>SKU / Product Code</FormLabel>
+	                          <FormControl>
+	                            <Input {...field} value={field.value || ""} placeholder="e.g. timotionmotorcoverblk" data-testid="input-sku" />
+	                          </FormControl>
+	                          <p className="text-xs text-gray-500">This is the short code the Sundance Builder and Ops handoff should use.</p>
+	                          <FormMessage />
+	                        </FormItem>
+	                      )}
+	                    />
+	                    <FormField
+	                      control={form.control}
                       name="manufacturer"
                       render={({ field }) => (
                         <FormItem>
@@ -499,7 +571,7 @@ export default function Products() {
                   {form.watch("productType") === "configurable" && (
                     <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
                       <p className="text-sm text-blue-800">
-                        <strong>Sundance Builder item:</strong> This product is managed through the Sundance Builder on quotes. New catalog items should stay as simple products unless the Sundance workflow is being expanded intentionally.
+                        <strong>Dimensional pricing item:</strong> Use this only when the product price depends on length and width tables. Sundance parts should usually stay as simple catalog items.
                       </p>
                     </div>
                   )}
@@ -769,16 +841,22 @@ export default function Products() {
           <Card>
             <CardContent className="p-12 text-center">
               <Package className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No products yet</h3>
-              <p className="text-gray-500 mb-6">Create your first product to start building a reusable catalog.</p>
-              <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button className="bg-edg-black hover:bg-edg-grey text-edg-white" data-testid="button-create-first-product">
-                    <Plus className="mr-2 h-4 w-4" />
-                    Create First Product
-                  </Button>
-                </DialogTrigger>
-              </Dialog>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">
+                {catalogView === "sundance" ? "No Sundance parts yet" : "No products yet"}
+              </h3>
+              <p className="text-gray-500 mb-6">
+                {catalogView === "sundance"
+                  ? "Create the first approved part for the Sundance Builder."
+                  : "Create your first product to start building a reusable catalog."}
+              </p>
+              <Button
+                className="bg-edg-black hover:bg-edg-grey text-edg-white"
+                onClick={openCreateProductDialog}
+                data-testid="button-create-first-product"
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                {catalogView === "sundance" ? "Create Sundance Part" : "Create First Product"}
+              </Button>
             </CardContent>
           </Card>
         ) : filteredProducts.length === 0 ? (
@@ -866,14 +944,19 @@ export default function Products() {
                         )}
                       </div>
                       
-                      <CardHeader className="pb-3">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <CardTitle className="text-lg">{product.name}</CardTitle>
-                            <Badge variant={product.productType === "configurable" ? "default" : "secondary"} className="mt-1">
-                              {product.productType === "configurable" ? "Configurable" : "Simple"}
-                            </Badge>
-                          </div>
+	                      <CardHeader className="pb-3">
+	                        <div className="flex justify-between items-start">
+	                          <div>
+	                            <CardTitle className="text-lg">{product.name}</CardTitle>
+	                            <div className="mt-2 flex flex-wrap gap-2">
+	                              {product.sku && (
+	                                <Badge variant="outline">{product.sku}</Badge>
+	                              )}
+	                              <Badge variant={product.productType === "configurable" ? "default" : "secondary"}>
+	                                {product.productType === "configurable" ? "Dimensional" : "Simple"}
+	                              </Badge>
+	                            </div>
+	                          </div>
                           <div className="flex space-x-1">
                             <Button
                               variant="ghost"
@@ -1003,12 +1086,13 @@ function ProductTable({ products, onEdit, onDelete, onManagePricing }: ProductTa
       <CardContent className="p-0">
         <Table>
           <TableHeader>
-            <TableRow>
-              <TableHead className="w-[80px]">Image</TableHead>
-              <TableHead className="w-[280px]">Product Name</TableHead>
-              <TableHead>Manufacturer</TableHead>
-              <TableHead>Category</TableHead>
-              <TableHead>Type</TableHead>
+	            <TableRow>
+	              <TableHead className="w-[80px]">Image</TableHead>
+	              <TableHead className="w-[280px]">Product Name</TableHead>
+	              <TableHead>SKU</TableHead>
+	              <TableHead>Manufacturer</TableHead>
+	              <TableHead>Category</TableHead>
+	              <TableHead>Type</TableHead>
               <TableHead>Unit</TableHead>
               <TableHead className="text-right">Unit Price</TableHead>
               <TableHead className="w-[130px]">Actions</TableHead>
@@ -1069,9 +1153,16 @@ function ProductTable({ products, onEdit, onDelete, onManagePricing }: ProductTa
                       </div>
                     )}
                   </div>
-                </TableCell>
-                <TableCell>
-                  <Badge variant="outline" data-testid={`text-manufacturer-${product.id}`}>{product.manufacturer || "Unknown"}</Badge>
+	                </TableCell>
+	                <TableCell>
+	                  {product.sku ? (
+	                    <Badge variant="outline" data-testid={`text-sku-${product.id}`}>{product.sku}</Badge>
+	                  ) : (
+	                    <span className="text-sm text-gray-400">None</span>
+	                  )}
+	                </TableCell>
+	                <TableCell>
+	                  <Badge variant="outline" data-testid={`text-manufacturer-${product.id}`}>{product.manufacturer || "Unknown"}</Badge>
                 </TableCell>
                 <TableCell>
                   {product.category ? (
@@ -1080,10 +1171,10 @@ function ProductTable({ products, onEdit, onDelete, onManagePricing }: ProductTa
                     <span className="text-sm text-gray-400">Uncategorized</span>
                   )}
                 </TableCell>
-                <TableCell>
-                  <Badge variant={product.productType === "configurable" ? "default" : "secondary"}>
-                    {product.productType === "configurable" ? "Configurable" : "Simple"}
-                  </Badge>
+	                <TableCell>
+	                  <Badge variant={product.productType === "configurable" ? "default" : "secondary"}>
+	                    {product.productType === "configurable" ? "Dimensional" : "Simple"}
+	                  </Badge>
                 </TableCell>
                 <TableCell className="text-sm text-gray-600">{product.unit}</TableCell>
                 <TableCell className="text-right font-medium">
