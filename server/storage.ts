@@ -1,5 +1,5 @@
-import { accounts, customers, quotes, lineItems, groups, products, users, apiKeys, contractTemplates, pricingTables, productAccessories, colors, productColors, quoteCoverPhotos, quoteProductRenderings, issueReports, type Account, type Customer, type Quote, type LineItem, type Group, type Product, type User, type ApiKey, type ContractTemplate, type PricingTable, type ProductAccessory, type Color, type ProductColor, type QuoteCoverPhoto, type QuoteProductRendering, type IssueReport, type InsertAccount, type InsertCustomer, type InsertQuote, type InsertLineItem, type InsertGroup, type InsertProduct, type InsertUser, type InsertApiKey, type InsertContractTemplate, type InsertPricingTable, type InsertProductAccessory, type InsertColor, type InsertProductColor, type InsertQuoteCoverPhoto, type InsertQuoteProductRendering, type InsertIssueReport, type QuoteWithDetails, type ProductWithDetails } from "@shared/schema";
-import { db, ensureSignatureAuditColumns } from "./db";
+import { accounts, customers, quotes, lineItems, groups, products, pricingDefaults, users, apiKeys, contractTemplates, pricingTables, productAccessories, colors, productColors, quoteCoverPhotos, quoteProductRenderings, issueReports, type Account, type Customer, type Quote, type LineItem, type Group, type Product, type PricingDefault, type User, type ApiKey, type ContractTemplate, type PricingTable, type ProductAccessory, type Color, type ProductColor, type QuoteCoverPhoto, type QuoteProductRendering, type IssueReport, type InsertAccount, type InsertCustomer, type InsertQuote, type InsertLineItem, type InsertGroup, type InsertProduct, type InsertUser, type InsertApiKey, type InsertContractTemplate, type InsertPricingTable, type InsertProductAccessory, type InsertColor, type InsertProductColor, type InsertQuoteCoverPhoto, type InsertQuoteProductRendering, type InsertIssueReport, type QuoteWithDetails, type ProductWithDetails } from "@shared/schema";
+import { db, ensurePricingDefaultsTable, ensureSignatureAuditColumns } from "./db";
 import { eq, desc, asc, inArray, sql, and, ne, or, ilike } from "drizzle-orm";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
@@ -90,6 +90,10 @@ export interface IStorage {
   updateProduct(id: number, product: Partial<InsertProduct>): Promise<Product | undefined>;
   deleteProduct(id: number): Promise<boolean>;
   bulkUpdateProducts(productIds: number[], updates: Partial<InsertProduct>): Promise<number>;
+
+  // Pricing default methods
+  getPricingDefault(scope: string): Promise<PricingDefault | undefined>;
+  upsertPricingDefault(scope: string, pricingDefault: { markupType: "percentage"; markupValue: string }): Promise<PricingDefault>;
 
   // Pricing table methods
   getPricingTablesByProductId(productId: number): Promise<PricingTable[]>;
@@ -1705,6 +1709,41 @@ export class DatabaseStorage implements IStorage {
       .where(inArray(products.id, productIds))
       .returning();
     return result.length;
+  }
+
+  async getPricingDefault(scope: string): Promise<PricingDefault | undefined> {
+    await ensurePricingDefaultsTable();
+    const [pricingDefault] = await db
+      .select()
+      .from(pricingDefaults)
+      .where(eq(pricingDefaults.scope, scope))
+      .limit(1);
+    return pricingDefault || undefined;
+  }
+
+  async upsertPricingDefault(
+    scope: string,
+    pricingDefault: { markupType: "percentage"; markupValue: string }
+  ): Promise<PricingDefault> {
+    await ensurePricingDefaultsTable();
+    const [saved] = await db
+      .insert(pricingDefaults)
+      .values({
+        scope,
+        markupType: pricingDefault.markupType,
+        markupValue: pricingDefault.markupValue,
+      })
+      .onConflictDoUpdate({
+        target: pricingDefaults.scope,
+        set: {
+          markupType: pricingDefault.markupType,
+          markupValue: pricingDefault.markupValue,
+          updatedAt: new Date(),
+        },
+      })
+      .returning();
+
+    return saved;
   }
 
   // User authentication methods

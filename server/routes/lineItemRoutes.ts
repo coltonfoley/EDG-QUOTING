@@ -572,6 +572,16 @@ export function registerLineItemRoutes(app: Express) {
 
       // Get manufacturer from first product snapshot
       const manufacturer = items[0].productSnapshot.manufacturer;
+      const isSundanceConfiguration = typeof manufacturer === "string" && manufacturer.trim().toLowerCase() === "sundance";
+      const sundancePricingDefault = isSundanceConfiguration
+        ? await storage.getPricingDefault("sundance")
+        : undefined;
+      const defaultMarkupType = isSundanceConfiguration
+        ? (sundancePricingDefault?.markupType || "percentage")
+        : "percentage";
+      const defaultMarkupValue = isSundanceConfiguration
+        ? (sundancePricingDefault?.markupValue?.toString() || "100")
+        : "0";
       
       // Calculate total from snapshots
       const total = items.reduce((sum, item) => {
@@ -629,10 +639,9 @@ export function registerLineItemRoutes(app: Express) {
           quantity: item.quantity.toString(),
           retailPrice: snapshot.retailPrice,
           unitPrice: unitPrice.toFixed(2),
-          // Set markup and discount to 0 since manufacturer discount is already applied to unitPrice
-          // This matches the "From Catalog" pattern
-          markupType: "percentage",
-          markupValue: "0",
+          // Manufacturer discount is already applied to unitPrice. Sundance then gets the saved margin.
+          markupType: defaultMarkupType,
+          markupValue: defaultMarkupValue,
           discountType: "percentage",
           discountValue: "0",
           isTaxable: true,

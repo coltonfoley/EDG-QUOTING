@@ -12,12 +12,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Package, PackageCheck, Edit, Trash2, Search, Grid, List, Filter, X, Settings, Camera, FileText, Image, Loader2, Palette } from "lucide-react";
+import { Plus, Package, PackageCheck, Edit, Trash2, Search, Grid, List, Filter, X, Settings, Camera, FileText, Image, Loader2, Palette, Percent, Save } from "lucide-react";
 import { DimensionalPricingManager } from "@/components/dimensional-pricing-manager";
 import { LoadingSpinner } from "@/components/loading-spinner";
 import { formatCurrency } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertProductSchema, type Product, type ProductWithDetails, type Color } from "@shared/schema";
@@ -29,6 +30,13 @@ const productFormSchema = insertProductSchema.extend({
   selectedColorIds: z.array(z.number()).optional(), // Frontend-only field for color selection
 });
 type ProductFormData = z.infer<typeof productFormSchema>;
+
+type PricingDefaultResponse = {
+  scope: string;
+  markupType: "percentage";
+  markupValue: string;
+  updatedAt: string | null;
+};
 
 const PRODUCT_PAGE_SIZE = 200;
 
@@ -58,10 +66,13 @@ export default function Products() {
   const [showPricingManager, setShowPricingManager] = useState(false);
   const [managingPricingProduct, setManagingPricingProduct] = useState<Product | null>(null);
   const [page, setPage] = useState(0);
+  const [sundanceMarginValue, setSundanceMarginValue] = useState("100");
   
   
   const { toast } = useToast();
+  const { user } = useAuth();
   const queryClient = useQueryClient();
+  const isAdmin = user?.role === "admin";
 
   const { data: products, isLoading } = useQuery<Product[]>({
     queryKey: ["/api/products", {
@@ -89,6 +100,15 @@ export default function Products() {
     queryKey: ["/api/colors"],
   });
 
+  const { data: sundancePricingDefault, isLoading: isSundancePricingDefaultLoading } = useQuery<PricingDefaultResponse>({
+    queryKey: ["/api/pricing-defaults/sundance"],
+    queryFn: async () => {
+      const response = await apiRequest("GET", "/api/pricing-defaults/sundance");
+      return response.json();
+    },
+    enabled: catalogView === "sundance",
+  });
+
   const { data: productColors } = useQuery<Array<{ id: number; productId: number; colorId: number; color: Color }>>({
     queryKey: ["/api/products", editingProduct?.id, "colors"],
     queryFn: async () => {
@@ -106,6 +126,12 @@ export default function Products() {
     resolver: zodResolver(productFormSchema),
     defaultValues: DEFAULT_PRODUCT_VALUES,
   });
+
+  useEffect(() => {
+    if (sundancePricingDefault?.markupValue) {
+      setSundanceMarginValue(parseFloat(sundancePricingDefault.markupValue).toString());
+    }
+  }, [sundancePricingDefault?.markupValue]);
 
   useEffect(() => {
     setPage(0);
@@ -171,6 +197,28 @@ export default function Products() {
     },
     onError: () => {
       toast({ title: "Error", description: "Failed to delete product", variant: "destructive" });
+    },
+  });
+
+  const updateSundanceMarginMutation = useMutation({
+    mutationFn: async (markupValue: string) => {
+      const response = await apiRequest("PUT", "/api/pricing-defaults/sundance", {
+        markupType: "percentage",
+        markupValue,
+      });
+      return response.json();
+    },
+    onSuccess: (updatedPricingDefault: PricingDefaultResponse) => {
+      queryClient.setQueryData(["/api/pricing-defaults/sundance"], updatedPricingDefault);
+      setSundanceMarginValue(parseFloat(updatedPricingDefault.markupValue).toString());
+      toast({ title: "Sundance standard margin saved" });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error?.message || "Failed to save Sundance standard margin",
+        variant: "destructive",
+      });
     },
   });
 
@@ -291,6 +339,20 @@ export default function Products() {
   const handleManagePricing = (product: Product) => {
     setManagingPricingProduct(product);
     setShowPricingManager(true);
+  };
+
+  const handleSaveSundanceMargin = () => {
+    const numericValue = Number(sundanceMarginValue);
+    if (!Number.isFinite(numericValue) || numericValue < 0 || numericValue > 1000) {
+      toast({
+        title: "Invalid margin",
+        description: "Enter a percentage from 0 to 1000.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    updateSundanceMarginMutation.mutate(numericValue.toString());
   };
 
   // Get unique manufacturers and categories, and filter/search products
@@ -444,17 +506,71 @@ export default function Products() {
             </TabsList>
           </Tabs>
           {catalogView === "sundance" && (
-            <Card className="mt-4 border-edg-teal/30 bg-edg-teal/5">
-              <CardContent className="flex flex-col gap-3 p-4 md:flex-row md:items-start">
-                <PackageCheck className="mt-0.5 h-5 w-5 shrink-0 text-edg-teal" />
-                <div>
-                  <h3 className="text-sm font-semibold text-edg-black">Builder source of truth</h3>
-                  <p className="mt-1 text-sm text-edg-grey">
-                    These are the approved Sundance parts the quote builder reads from. If a part is not here, it should not appear in the Sundance Builder.
+            <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_380px]">
+              <Card className="border-edg-teal/30 bg-edg-teal/5">
+                <CardContent className="flex flex-col gap-3 p-4 md:flex-row md:items-start">
+                  <PackageCheck className="mt-0.5 h-5 w-5 shrink-0 text-edg-teal" />
+                  <div>
+                    <h3 className="text-sm font-semibold text-edg-black">Builder source of truth</h3>
+                    <p className="mt-1 text-sm text-edg-grey">
+                      These are the approved Sundance parts the quote builder reads from. If a part is not here, it should not appear in the Sundance Builder.
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="border-slate-200 bg-white">
+                <CardContent className="p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start gap-3">
+                      <Percent className="mt-0.5 h-5 w-5 shrink-0 text-edg-teal" />
+                      <div>
+                        <h3 className="text-sm font-semibold text-edg-black">Standard Margin</h3>
+                        <p className="mt-1 text-sm text-edg-grey">Standard margin (markup on cost)</p>
+                      </div>
+                    </div>
+                    {!isAdmin && <Badge variant="outline">View only</Badge>}
+                  </div>
+
+                  <div className="mt-4 flex items-end gap-2">
+                    <div className="min-w-0 flex-1">
+                      <label className="mb-1 block text-xs font-medium text-gray-600" htmlFor="sundance-standard-margin">
+                        Markup %
+                      </label>
+                      <Input
+                        id="sundance-standard-margin"
+                        type="number"
+                        min="0"
+                        max="1000"
+                        step="0.01"
+                        value={sundanceMarginValue}
+                        onChange={(event) => setSundanceMarginValue(event.target.value)}
+                        disabled={!isAdmin || isSundancePricingDefaultLoading || updateSundanceMarginMutation.isPending}
+                        data-testid="input-sundance-standard-margin"
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={handleSaveSundanceMargin}
+                      disabled={!isAdmin || isSundancePricingDefaultLoading || updateSundanceMarginMutation.isPending}
+                      data-testid="button-save-sundance-standard-margin"
+                    >
+                      {updateSundanceMarginMutation.isPending ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Save className="h-4 w-4" />
+                      )}
+                      <span className="ml-2">Save</span>
+                    </Button>
+                  </div>
+
+                  <p className="mt-2 text-xs text-edg-grey">
+                    Applies to new Sundance quote lines only.
                   </p>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            </div>
           )}
         </div>
 
