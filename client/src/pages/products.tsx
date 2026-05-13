@@ -12,16 +12,18 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Package, PackageCheck, Edit, Trash2, Search, Grid, List, Filter, X, Settings, Camera, FileText, Image, Loader2, Palette, Percent, Save } from "lucide-react";
+import { Plus, Package, PackageCheck, Edit, Trash2, Search, Grid, List, Filter, X, Settings, FileText, Image, Loader2, Palette, Percent, Save, FileSpreadsheet, Sparkles } from "lucide-react";
 import { DimensionalPricingManager } from "@/components/dimensional-pricing-manager";
-import { LoadingSpinner } from "@/components/loading-spinner";
+import { AIProductImporter } from "@/components/ai-product-importer";
+import { CSVProductImporter } from "@/components/csv-product-importer";
+import { ProductBulkEditor } from "@/components/product-bulk-editor";
 import { formatCurrency } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { insertProductSchema, type Product, type ProductWithDetails, type Color } from "@shared/schema";
+import { insertProductSchema, type Product, type Color } from "@shared/schema";
 import { z } from "zod";
 import { Checkbox } from "@/components/ui/checkbox";
 
@@ -37,6 +39,8 @@ type PricingDefaultResponse = {
   markupValue: string;
   updatedAt: string | null;
 };
+
+type ProductSection = "catalog" | "sundance" | "import" | "bulk";
 
 const PRODUCT_PAGE_SIZE = 200;
 
@@ -58,7 +62,7 @@ const DEFAULT_PRODUCT_VALUES: ProductFormData = {
 export default function Products() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
-  const [catalogView, setCatalogView] = useState<"all" | "sundance">("all");
+  const [productSection, setProductSection] = useState<ProductSection>("catalog");
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedManufacturer, setSelectedManufacturer] = useState<string>("all");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
@@ -73,19 +77,21 @@ export default function Products() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const isAdmin = user?.role === "admin";
+  const isCatalogSection = productSection === "catalog" || productSection === "sundance";
+  const isSundanceSection = productSection === "sundance";
 
   const { data: products, isLoading } = useQuery<Product[]>({
     queryKey: ["/api/products", {
-      limit: catalogView === "sundance" ? 10000 : PRODUCT_PAGE_SIZE,
-      offset: catalogView === "sundance" ? 0 : page * PRODUCT_PAGE_SIZE,
-      manufacturer: catalogView === "sundance" ? "Sundance" : undefined,
+      limit: isSundanceSection ? 10000 : PRODUCT_PAGE_SIZE,
+      offset: isSundanceSection ? 0 : page * PRODUCT_PAGE_SIZE,
+      manufacturer: isSundanceSection ? "Sundance" : undefined,
     }],
     queryFn: async () => {
       const params = new URLSearchParams({
-        limit: String(catalogView === "sundance" ? 10000 : PRODUCT_PAGE_SIZE),
-        offset: String(catalogView === "sundance" ? 0 : page * PRODUCT_PAGE_SIZE),
+        limit: String(isSundanceSection ? 10000 : PRODUCT_PAGE_SIZE),
+        offset: String(isSundanceSection ? 0 : page * PRODUCT_PAGE_SIZE),
       });
-      if (catalogView === "sundance") {
+      if (isSundanceSection) {
         params.set("manufacturer", "Sundance");
       }
       const response = await fetch(`/api/products?${params}`);
@@ -93,7 +99,8 @@ export default function Products() {
         throw new Error("Failed to fetch products");
       }
       return response.json();
-    }
+    },
+    enabled: isCatalogSection,
   });
 
   const { data: allColors } = useQuery<Color[]>({
@@ -106,7 +113,7 @@ export default function Products() {
       const response = await apiRequest("GET", "/api/pricing-defaults/sundance");
       return response.json();
     },
-    enabled: catalogView === "sundance",
+    enabled: isSundanceSection,
   });
 
   const { data: productColors } = useQuery<Array<{ id: number; productId: number; colorId: number; color: Color }>>({
@@ -138,13 +145,13 @@ export default function Products() {
     setSelectedManufacturer("all");
     setSelectedCategory("all");
     setSearchTerm("");
-  }, [catalogView]);
+  }, [productSection]);
 
   const openCreateProductDialog = () => {
     setEditingProduct(null);
     form.reset({
       ...DEFAULT_PRODUCT_VALUES,
-      ...(catalogView === "sundance" ? {
+      ...(isSundanceSection ? {
         manufacturer: "Sundance",
         category: "Motors",
       } : {}),
@@ -409,7 +416,7 @@ export default function Products() {
     }, {} as Record<string, Product[]>);
   }, [filteredProducts]);
 
-  if (isLoading) {
+  if (isCatalogSection && isLoading) {
     return (
       <div className="min-h-screen bg-gray-50">
         <AppHeader />
@@ -499,21 +506,23 @@ export default function Products() {
       
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-6">
-          <Tabs value={catalogView} onValueChange={(value) => setCatalogView(value as "all" | "sundance")}>
-            <TabsList className="grid w-full max-w-md grid-cols-2">
-              <TabsTrigger value="all">All Products</TabsTrigger>
-              <TabsTrigger value="sundance">Sundance Catalog</TabsTrigger>
+          <Tabs value={productSection} onValueChange={(value) => setProductSection(value as ProductSection)}>
+            <TabsList className={`grid w-full ${isAdmin ? "max-w-3xl grid-cols-4" : "max-w-md grid-cols-2"}`}>
+              <TabsTrigger value="catalog">Catalog</TabsTrigger>
+              <TabsTrigger value="sundance">Sundance</TabsTrigger>
+              {isAdmin && <TabsTrigger value="import">Import</TabsTrigger>}
+              {isAdmin && <TabsTrigger value="bulk">Bulk Edit</TabsTrigger>}
             </TabsList>
           </Tabs>
-          {catalogView === "sundance" && (
+          {isSundanceSection && (
             <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_380px]">
               <Card className="border-edg-teal/30 bg-edg-teal/5">
                 <CardContent className="flex flex-col gap-3 p-4 md:flex-row md:items-start">
                   <PackageCheck className="mt-0.5 h-5 w-5 shrink-0 text-edg-teal" />
                   <div>
-                    <h3 className="text-sm font-semibold text-edg-black">Builder source of truth</h3>
+                    <h3 className="text-sm font-semibold text-edg-black">Sundance products are regular catalog products</h3>
                     <p className="mt-1 text-sm text-edg-grey">
-                      These are the approved Sundance parts the quote builder reads from. If a part is not here, it should not appear in the Sundance Builder.
+                      This view shows products where Manufacturer is Sundance. The Sundance Builder reads from this same catalog.
                     </p>
                   </div>
                 </CardContent>
@@ -574,17 +583,28 @@ export default function Products() {
           )}
         </div>
 
+        {productSection === "import" ? (
+          <ProductImportWorkspace />
+        ) : productSection === "bulk" ? (
+          <Card>
+            <CardContent className="p-6">
+              <ProductBulkEditor />
+            </CardContent>
+          </Card>
+        ) : (
+          <>
         <div className="flex justify-between items-center mb-6">
           <div>
             <h2 className="text-3xl font-bold text-edg-black">
-              {catalogView === "sundance" ? "Sundance Catalog" : "Product Catalog"}
+              {isSundanceSection ? "Sundance Products" : "Product Catalog"}
             </h2>
             <p className="text-edg-grey mt-2">
-              {catalogView === "sundance"
+              {isSundanceSection
                 ? `Manage the approved parts used by the Sundance Builder • ${filteredProducts.length} parts`
                 : `Manage reusable products and services • ${filteredProducts.length} products`}
             </p>
           </div>
+          {isAdmin && (
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
               <Button 
@@ -593,7 +613,7 @@ export default function Products() {
                 data-testid="button-new-product"
               >
                 <Plus className="mr-2 h-4 w-4" />
-                {catalogView === "sundance" ? "New Sundance Part" : "New Product"}
+                {isSundanceSection ? "New Sundance Part" : "New Product"}
               </Button>
             </DialogTrigger>
             <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
@@ -862,6 +882,7 @@ export default function Products() {
               </Form>
             </DialogContent>
           </Dialog>
+          )}
         </div>
 
         {/* Search and Filters */}
@@ -958,21 +979,25 @@ export default function Products() {
             <CardContent className="p-12 text-center">
               <Package className="mx-auto h-12 w-12 text-gray-400 mb-4" />
               <h3 className="text-lg font-medium text-gray-900 mb-2">
-                {catalogView === "sundance" ? "No Sundance parts yet" : "No products yet"}
+                {isSundanceSection ? "No Sundance parts yet" : "No products yet"}
               </h3>
               <p className="text-gray-500 mb-6">
-                {catalogView === "sundance"
-                  ? "Create the first approved part for the Sundance Builder."
-                  : "Create your first product to start building a reusable catalog."}
+                {isAdmin
+                  ? isSundanceSection
+                    ? "Create the first approved part for the Sundance Builder."
+                    : "Create your first product to start building a reusable catalog."
+                  : "Ask an admin to add products to the catalog."}
               </p>
-              <Button
-                className="bg-edg-black hover:bg-edg-grey text-edg-white"
-                onClick={openCreateProductDialog}
-                data-testid="button-create-first-product"
-              >
-                <Plus className="mr-2 h-4 w-4" />
-                {catalogView === "sundance" ? "Create Sundance Part" : "Create First Product"}
-              </Button>
+              {isAdmin && (
+                <Button
+                  className="bg-edg-black hover:bg-edg-grey text-edg-white"
+                  onClick={openCreateProductDialog}
+                  data-testid="button-create-first-product"
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  {isSundanceSection ? "Create Sundance Part" : "Create First Product"}
+                </Button>
+              )}
             </CardContent>
           </Card>
         ) : filteredProducts.length === 0 ? (
@@ -1000,6 +1025,7 @@ export default function Products() {
             onEdit={handleEdit} 
             onDelete={handleDelete}
             onManagePricing={handleManagePricing}
+            canManage={isAdmin}
           />
         ) : (
           <div className="space-y-8">
@@ -1073,39 +1099,41 @@ export default function Products() {
 	                              </Badge>
 	                            </div>
 	                          </div>
-                          <div className="flex space-x-1">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleEdit(product)}
-                              className="text-edg-teal hover:text-edg-dark-teal"
-                              title="Edit Product"
-                              data-testid={`button-edit-${product.id}`}
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            {product.productType === "configurable" && (
+                          {isAdmin && (
+                            <div className="flex space-x-1">
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => handleManagePricing(product)}
-                                className="text-blue-600 hover:text-blue-800"
-                                title="Manage Pricing Tables"
+                                onClick={() => handleEdit(product)}
+                                className="text-edg-teal hover:text-edg-dark-teal"
+                                title="Edit Product"
+                                data-testid={`button-edit-${product.id}`}
                               >
-                                <Settings className="h-4 w-4" />
+                                <Edit className="h-4 w-4" />
                               </Button>
-                            )}
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleDelete(product.id)}
-                              className="text-red-600 hover:text-red-800"
-                              title="Delete Product"
-                              data-testid={`button-delete-${product.id}`}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
+                              {product.productType === "configurable" && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleManagePricing(product)}
+                                  className="text-blue-600 hover:text-blue-800"
+                                  title="Manage Pricing Tables"
+                                >
+                                  <Settings className="h-4 w-4" />
+                                </Button>
+                              )}
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleDelete(product.id)}
+                                className="text-red-600 hover:text-red-800"
+                                title="Delete Product"
+                                data-testid={`button-delete-${product.id}`}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          )}
                         </div>
                       </CardHeader>
                       <CardContent>
@@ -1167,6 +1195,8 @@ export default function Products() {
             </div>
           </div>
         )}
+          </>
+        )}
       </div>
 
       {/* Dimensional Pricing Manager Dialog */}
@@ -1194,9 +1224,43 @@ interface ProductTableProps {
   onEdit: (product: Product) => void;
   onDelete: (id: number) => void;
   onManagePricing: (product: Product) => void;
+  canManage: boolean;
 }
 
-function ProductTable({ products, onEdit, onDelete, onManagePricing }: ProductTableProps) {
+function ProductImportWorkspace() {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Package className="h-5 w-5" />
+          Product Import
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <Tabs defaultValue="ai" className="w-full">
+          <TabsList className="mb-4">
+            <TabsTrigger value="ai" className="gap-2">
+              <Sparkles className="h-4 w-4" />
+              AI Import
+            </TabsTrigger>
+            <TabsTrigger value="manual" className="gap-2">
+              <FileSpreadsheet className="h-4 w-4" />
+              Manual CSV Import
+            </TabsTrigger>
+          </TabsList>
+          <TabsContent value="ai">
+            <AIProductImporter />
+          </TabsContent>
+          <TabsContent value="manual">
+            <CSVProductImporter />
+          </TabsContent>
+        </Tabs>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ProductTable({ products, onEdit, onDelete, onManagePricing, canManage }: ProductTableProps) {
   return (
     <Card>
       <CardContent className="p-0">
@@ -1211,7 +1275,7 @@ function ProductTable({ products, onEdit, onDelete, onManagePricing }: ProductTa
 	              <TableHead>Type</TableHead>
               <TableHead>Unit</TableHead>
               <TableHead className="text-right">Unit Price</TableHead>
-              <TableHead className="w-[130px]">Actions</TableHead>
+              {canManage && <TableHead className="w-[130px]">Actions</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -1308,41 +1372,43 @@ function ProductTable({ products, onEdit, onDelete, onManagePricing }: ProductTa
                     return formatCurrency(cost);
                   })()}
                 </TableCell>
-                <TableCell>
-                  <div className="flex gap-1">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => onEdit(product)}
-                      className="text-edg-teal hover:text-edg-dark-teal h-8 w-8 p-0"
-                      title="Edit Product"
-                      data-testid={`button-edit-table-${product.id}`}
-                    >
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                    {product.productType === "configurable" && (
+                {canManage && (
+                  <TableCell>
+                    <div className="flex gap-1">
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => onManagePricing(product)}
-                        className="text-blue-600 hover:text-blue-800 h-8 w-8 p-0"
-                        title="Manage Pricing Tables"
+                        onClick={() => onEdit(product)}
+                        className="text-edg-teal hover:text-edg-dark-teal h-8 w-8 p-0"
+                        title="Edit Product"
+                        data-testid={`button-edit-table-${product.id}`}
                       >
-                        <Settings className="h-4 w-4" />
+                        <Edit className="h-4 w-4" />
                       </Button>
-                    )}
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => onDelete(product.id)}
-                      className="text-red-600 hover:text-red-800 h-8 w-8 p-0"
-                      title="Delete Product"
-                      data-testid={`button-delete-table-${product.id}`}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </TableCell>
+                      {product.productType === "configurable" && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => onManagePricing(product)}
+                          className="text-blue-600 hover:text-blue-800 h-8 w-8 p-0"
+                          title="Manage Pricing Tables"
+                        >
+                          <Settings className="h-4 w-4" />
+                        </Button>
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => onDelete(product.id)}
+                        className="text-red-600 hover:text-red-800 h-8 w-8 p-0"
+                        title="Delete Product"
+                        data-testid={`button-delete-table-${product.id}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </TableCell>
+                )}
               </TableRow>
               );
             })}
