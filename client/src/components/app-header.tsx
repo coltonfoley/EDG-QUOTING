@@ -1,4 +1,4 @@
-import { Bell, LogOut, CloudRain, KeyRound, Database } from "lucide-react";
+import { Bell, LogOut, CloudRain, KeyRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { 
@@ -12,64 +12,6 @@ import {
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { useQuery } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
-
-type StorageUsage = {
-  usedBytes: number;
-  quotaBytes: number | null;
-  objectCount: number;
-  calculatedAt: string;
-  cached?: boolean;
-  unavailableReason?: string;
-};
-
-function formatStorage(bytes: number): string {
-  if (!Number.isFinite(bytes) || bytes <= 0) {
-    return "0 GB";
-  }
-
-  return `${(bytes / 1024 / 1024 / 1024).toFixed(1)} GB`;
-}
-
-function StorageUsageIndicator({ isAdmin }: { isAdmin: boolean }) {
-  const { data, isError } = useQuery<StorageUsage>({
-    queryKey: ["/api/storage/usage"],
-    queryFn: async ({ signal }) => {
-      const response = await apiRequest("GET", "/api/storage/usage", undefined, { signal });
-      return response.json();
-    },
-    enabled: isAdmin,
-    staleTime: 5 * 60 * 1000,
-    refetchOnWindowFocus: false,
-    retry: false,
-  });
-
-  if (!isAdmin || isError || !data || data.unavailableReason) {
-    return null;
-  }
-
-  const label = data.quotaBytes
-    ? `${formatStorage(data.usedBytes)} / ${formatStorage(data.quotaBytes)}`
-    : formatStorage(data.usedBytes);
-  const usedPercent = data.quotaBytes
-    ? Math.min(100, Math.round((data.usedBytes / data.quotaBytes) * 100))
-    : null;
-  const refreshedAt = new Date(data.calculatedAt).toLocaleTimeString([], {
-    hour: "numeric",
-    minute: "2-digit",
-  });
-
-  return (
-    <div
-      className="hidden lg:flex items-center gap-1.5 text-xs text-muted-foreground"
-      title={`Storage: ${label}${usedPercent !== null ? ` (${usedPercent}%)` : ""}. Checked ${refreshedAt}.`}
-    >
-      <Database className="h-3.5 w-3.5" />
-      <span>{label}</span>
-    </div>
-  );
-}
 
 export function AppHeader() {
   const [location] = useLocation();
@@ -181,7 +123,6 @@ export function AppHeader() {
             </nav>
           </div>
           <div className="flex items-center space-x-4">
-            <StorageUsageIndicator isAdmin={user?.role === 'admin'} />
             <ThemeToggle />
             <Button variant="ghost" size="icon" className="text-edg-grey hover:text-edg-black">
               <Bell className="h-5 w-5" />
