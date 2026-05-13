@@ -15,12 +15,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import type { Product } from "@shared/schema";
+import { getProductPricingBreakdown } from "@shared/pricing";
 
 const PRODUCTS_PER_PAGE = 50;
 
 const bulkUpdateSchema = z.object({
   manufacturer: z.string().optional(),
   retailPrice: z.string().optional(),
+  costPrice: z.string().optional(),
   defaultDiscountType: z.enum(["percentage", "dollar"]).optional(),
   defaultDiscountValue: z.string().optional(),
   unit: z.string().optional(),
@@ -55,24 +57,18 @@ export function ProductBulkEditor() {
   }, [products]);
 
   const getDiscountInfo = (product: Product) => {
-    const retail = parseFloat(product.retailPrice?.toString() || "0");
-    const discountVal = parseFloat(product.defaultDiscountValue?.toString() || "0") || 0;
-    const discountType = product.defaultDiscountType || "percentage";
-    const hasDiscount = discountVal > 0;
+    const pricing = getProductPricingBreakdown(product);
+    const hasDiscount = pricing.supplierDiscountAmount > 0;
+    const discountLabel = hasDiscount
+      ? `$${pricing.supplierDiscountAmount.toFixed(2)} (${pricing.supplierDiscountPercent.toFixed(1)}%)`
+      : "";
 
-    let yourCost = retail;
-    let discountLabel = "";
-    if (hasDiscount) {
-      if (discountType === "percentage") {
-        yourCost = retail * (1 - discountVal / 100);
-        discountLabel = `${discountVal}%`;
-      } else {
-        yourCost = Math.max(0, retail - discountVal);
-        discountLabel = `$${discountVal.toFixed(2)}`;
-      }
-    }
-
-    return { hasDiscount, yourCost, discountLabel, retail };
+    return {
+      hasDiscount,
+      edgCost: pricing.edgCost,
+      discountLabel,
+      manufacturerMsrp: pricing.manufacturerMsrp,
+    };
   };
 
   const manufacturerFilteredProducts = useMemo(() => {
@@ -81,7 +77,7 @@ export function ProductBulkEditor() {
   }, [products, selectedManufacturer]);
 
   const productStats = useMemo(() => {
-    const withDiscount = manufacturerFilteredProducts.filter(p => parseFloat(p.defaultDiscountValue?.toString() || "0") > 0).length;
+    const withDiscount = manufacturerFilteredProducts.filter(p => getProductPricingBreakdown(p).supplierDiscountAmount > 0).length;
     return {
       total: manufacturerFilteredProducts.length,
       withDiscount,
@@ -97,7 +93,7 @@ export function ProductBulkEditor() {
         product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (product.sku || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
         (product.description || "").toLowerCase().includes(searchTerm.toLowerCase());
-      const discountVal = parseFloat(product.defaultDiscountValue?.toString() || "0");
+      const discountVal = getProductPricingBreakdown(product).supplierDiscountAmount;
       const matchesDiscount = discountFilter === "all" ||
         (discountFilter === "with" && discountVal > 0) ||
         (discountFilter === "without" && discountVal === 0);
@@ -121,6 +117,7 @@ export function ProductBulkEditor() {
     defaultValues: {
       manufacturer: "",
       retailPrice: "",
+      costPrice: "",
       defaultDiscountType: undefined,
       defaultDiscountValue: "",
       unit: "",
@@ -230,7 +227,7 @@ export function ProductBulkEditor() {
         >
           <div className="flex items-center gap-2">
             <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-            <span className="text-sm font-medium text-emerald-700">Discount Set</span>
+            <span className="text-sm font-medium text-emerald-700">Supplier Discount Set</span>
           </div>
           <p className="text-2xl font-bold mt-1 text-emerald-700">{productStats.withDiscount}</p>
         </button>
@@ -241,7 +238,7 @@ export function ProductBulkEditor() {
         >
           <div className="flex items-center gap-2">
             <AlertTriangle className="h-4 w-4 text-amber-600" />
-            <span className="text-sm font-medium text-amber-700">No Discount</span>
+            <span className="text-sm font-medium text-amber-700">No Supplier Discount</span>
           </div>
           <p className="text-2xl font-bold mt-1 text-amber-700">{productStats.withoutDiscount}</p>
         </button>
@@ -303,9 +300,9 @@ export function ProductBulkEditor() {
                   <TableHead>SKU</TableHead>
                   <TableHead data-testid="header-manufacturer">Manufacturer</TableHead>
                   <TableHead>Unit</TableHead>
-                  <TableHead className="text-right">Retail Price</TableHead>
-                  <TableHead className="text-center">Discount</TableHead>
-                  <TableHead className="text-right">Your Cost</TableHead>
+                  <TableHead className="text-right">Manufacturer MSRP</TableHead>
+                  <TableHead className="text-center">Supplier Discount</TableHead>
+                  <TableHead className="text-right">EDG Cost</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -332,7 +329,7 @@ export function ProductBulkEditor() {
                       <TableCell data-testid={`text-manufacturer-${product.id}`}>{product.manufacturer || "Unspecified"}</TableCell>
                       <TableCell>{product.unit}</TableCell>
                       <TableCell className="text-right text-gray-500">
-                        ${info.retail.toFixed(2)}
+                        ${info.manufacturerMsrp.toFixed(2)}
                       </TableCell>
                       <TableCell className="text-center">
                         {info.hasDiscount ? (
@@ -347,9 +344,9 @@ export function ProductBulkEditor() {
                       </TableCell>
                       <TableCell className="text-right font-semibold">
                         {info.hasDiscount ? (
-                          <span className="text-emerald-700">${info.yourCost.toFixed(2)}</span>
+                          <span className="text-emerald-700">${info.edgCost.toFixed(2)}</span>
                         ) : (
-                          <span className="text-amber-600">${info.retail.toFixed(2)}</span>
+                          <span className="text-amber-600">${info.edgCost.toFixed(2)}</span>
                         )}
                       </TableCell>
                     </TableRow>
@@ -422,11 +419,26 @@ export function ProductBulkEditor() {
                 name="retailPrice"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Retail Price (MSRP)</FormLabel>
+                    <FormLabel>Manufacturer MSRP</FormLabel>
                     <FormControl>
                       <Input {...field} type="number" step="0.01" placeholder="Leave blank to keep current" />
                     </FormControl>
-                    <p className="text-xs text-gray-500">Optional manufacturer's suggested retail price</p>
+                    <p className="text-xs text-gray-500">Optional supplier list price before EDG discount</p>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={bulkUpdateForm.control}
+                name="costPrice"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>EDG Cost</FormLabel>
+                    <FormControl>
+                      <Input {...field} type="number" step="0.01" placeholder="Leave blank to keep current" />
+                    </FormControl>
+                    <p className="text-xs text-gray-500">Internal cost basis for future quote lines</p>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -438,7 +450,7 @@ export function ProductBulkEditor() {
                   name="defaultDiscountType"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Manufacturer Discount Type</FormLabel>
+                      <FormLabel>Supplier Discount Type</FormLabel>
                       <Select onValueChange={field.onChange} value={field.value}>
                         <FormControl>
                           <SelectTrigger>
@@ -460,11 +472,11 @@ export function ProductBulkEditor() {
                   name="defaultDiscountValue"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Manufacturer Discount Value</FormLabel>
+                      <FormLabel>Supplier Discount Value</FormLabel>
                       <FormControl>
                         <Input {...field} placeholder="e.g., 20" />
                       </FormControl>
-                      <p className="text-xs text-gray-500">Discount off retail price</p>
+                      <p className="text-xs text-gray-500">Advanced: discount off Manufacturer MSRP</p>
                       <FormMessage />
                     </FormItem>
                   )}

@@ -602,7 +602,7 @@ export function QuoteSummary({ quote, onUpdateQuote, onGenerateProposal, isPrepa
             </div>
             {totals.totalManufacturerDiscount > 0 && (
               <div className="flex justify-between items-center text-sm">
-                <span className="text-muted-foreground">Manufacturer Discount:</span>
+	                <span className="text-muted-foreground">Line Supplier Discount:</span>
                 <span className="font-medium text-blue-600">
                   -{formatCurrency(totals.totalManufacturerDiscount)}
                 </span>

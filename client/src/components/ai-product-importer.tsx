@@ -331,7 +331,7 @@ export function AIProductImporter() {
         unit: p.unit || 'each',
         description: p.description || undefined,
         retailPrice: p.price,
-        cost: p.cost ?? 0,
+	        cost: p.cost && p.cost > 0 ? p.cost : p.price,
       }));
 
     if (products.length === 0) {
@@ -442,7 +442,7 @@ export function AIProductImporter() {
               <AlertCircle className="h-4 w-4 text-blue-600" />
               <AlertDescription className="text-blue-800">
                 We found <strong>multiple price columns</strong> in <strong>{file?.name}</strong>.
-                Please select which column to use as the retail price and which as your cost.
+	                Please select which column to use as the Manufacturer MSRP and which as EDG Cost.
               </AlertDescription>
             </Alert>
 
@@ -452,8 +452,8 @@ export function AIProductImporter() {
                   <tr className="border-b">
                     <th className="text-left py-2 px-3 font-medium">Column</th>
                     <th className="text-left py-2 px-3 font-medium">Sample Values</th>
-                    <th className="text-center py-2 px-3 font-medium">Use as Retail Price</th>
-                    <th className="text-center py-2 px-3 font-medium">Use as Your Cost</th>
+	                    <th className="text-center py-2 px-3 font-medium">Use as Manufacturer MSRP</th>
+	                    <th className="text-center py-2 px-3 font-medium">Use as EDG Cost</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -500,7 +500,7 @@ export function AIProductImporter() {
 
             {selectedRetailCol !== null && selectedCostCol !== null && (
               <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-sm text-emerald-800">
-                <strong>Retail Price:</strong> {columnAnalysis.detectedColumns.find(c => c.index === selectedRetailCol)?.header} | <strong>Your Cost:</strong> {columnAnalysis.detectedColumns.find(c => c.index === selectedCostCol)?.header}
+	                <strong>Manufacturer MSRP:</strong> {columnAnalysis.detectedColumns.find(c => c.index === selectedRetailCol)?.header} | <strong>EDG Cost:</strong> {columnAnalysis.detectedColumns.find(c => c.index === selectedCostCol)?.header}
               </div>
             )}
 
@@ -619,8 +619,8 @@ export function AIProductImporter() {
                     <th className="text-left py-2 px-2">Name</th>
                     <th className="text-left py-2 px-2">Manufacturer</th>
                     <th className="text-left py-2 px-2">Category</th>
-                    <th className="text-right py-2 px-2">Retail Price</th>
-                    <th className="text-right py-2 px-2">Cost</th>
+	                    <th className="text-right py-2 px-2">Manufacturer MSRP</th>
+	                    <th className="text-right py-2 px-2">EDG Cost</th>
                     <th className="text-center py-2 px-2">Confidence</th>
                     <th className="text-center py-2 px-2 w-8"></th>
                   </tr>
@@ -700,14 +700,14 @@ export function AIProductImporter() {
                               autoFocus
                               type="number"
                               step="0.01"
-                              defaultValue={product.cost ?? 0}
+	                              defaultValue={product.cost && product.cost > 0 ? product.cost : product.price}
                               className="h-7 text-sm text-right w-24 ml-auto"
                               onBlur={(e) => { handleCellEdit(index, 'cost', e.target.value); setEditingCell(null); }}
                               onKeyDown={(e) => { if (e.key === 'Enter') { handleCellEdit(index, 'cost', (e.target as HTMLInputElement).value); setEditingCell(null); } }}
                             />
                           ) : (
                             <span className="cursor-pointer hover:underline" onClick={() => setEditingCell({ row: index, field: 'cost' })}>
-                              ${(product.cost ?? 0).toFixed(2)}
+	                              ${(product.cost && product.cost > 0 ? product.cost : product.price).toFixed(2)}
                             </span>
                           )}
                         </td>

@@ -458,7 +458,7 @@ export function PricingTableUploader({ productId, onUploadComplete }: PricingTab
                 <div className="space-y-2">
                   <h3 className="text-lg font-medium">Choose a file to upload</h3>
                   <p className="text-sm text-gray-500">
-                    Excel (.xlsx, .xls) or CSV files with LengthMin, LengthMax, WidthMin, WidthMax, RetailPrice columns
+                    Excel (.xlsx, .xls) or CSV files with LengthMin, LengthMax, WidthMin, WidthMax, and RetailPrice columns
                   </p>
                 </div>
               </>
@@ -498,10 +498,10 @@ export function PricingTableUploader({ productId, onUploadComplete }: PricingTab
             <Alert>
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>
-                <strong>Expected format:</strong> Your file should have columns: "LengthMin", "LengthMax", "WidthMin", "WidthMax", and "RetailPrice". 
+                <strong>Expected format:</strong> Your file should have columns: "LengthMin", "LengthMax", "WidthMin", "WidthMax", and "RetailPrice" for Manufacturer MSRP.
                 Each row represents a size band (e.g., Length 12.0-12.5 × Width 8.0-8.5 = $2,500).
                 <br />
-                <strong>Retail Pricing:</strong> Upload retail/manufacturer prices - cost prices will be calculated automatically using the product's discount settings.
+                <strong>Manufacturer MSRP:</strong> Upload supplier list prices - EDG costs will be calculated automatically using the product's supplier discount settings.
                 <br />
                 <strong>N/A values:</strong> Use "N/A" or leave empty for non-manufacturable size combinations - these will be skipped automatically.
                 <br /><br />
@@ -515,9 +515,9 @@ export function PricingTableUploader({ productId, onUploadComplete }: PricingTab
             <Alert className="border-blue-200 bg-blue-50">
               <Calculator className="h-4 w-4 text-blue-600" />
               <AlertDescription className="text-blue-800">
-                <strong>Automatic Cost Calculation:</strong> {product.defaultDiscountType === 'percentage' 
-                  ? `${product.defaultDiscountValue}% discount will be applied to retail prices to calculate cost prices`
-                  : `$${product.defaultDiscountValue} will be subtracted from retail prices to calculate cost prices`
+                <strong>Automatic EDG Cost Calculation:</strong> {product.defaultDiscountType === 'percentage'
+                  ? `${product.defaultDiscountValue}% supplier discount will be applied to Manufacturer MSRP values`
+                  : `$${product.defaultDiscountValue} will be subtracted from Manufacturer MSRP values`
                 }.
               </AlertDescription>
             </Alert>
@@ -575,21 +575,21 @@ export function PricingTableUploader({ productId, onUploadComplete }: PricingTab
                       <tr className="border-b">
                         <th className="text-left py-2">Length Range (ft)</th>
                         <th className="text-left py-2">Width Range (ft)</th>
-                        <th className="text-left py-2">Retail Price</th>
-                        <th className="text-left py-2">Cost Price</th>
-                        <th className="text-left py-2">Margin</th>
+	                        <th className="text-left py-2">Manufacturer MSRP</th>
+	                        <th className="text-left py-2">EDG Cost</th>
+	                        <th className="text-left py-2">Discount %</th>
                       </tr>
                     </thead>
                     <tbody>
                       {preview.map((item, index) => {
-                        const margin = ((item.retailPrice - item.basePrice) / item.retailPrice * 100).toFixed(1);
+	                        const discountPercent = ((item.retailPrice - item.basePrice) / item.retailPrice * 100).toFixed(1);
                         return (
                           <tr key={index} className="border-b">
                             <td className="py-1">{item.lengthMin} - {item.lengthMax}</td>
                             <td className="py-1">{item.widthMin} - {item.widthMax}</td>
                             <td className="py-1">${item.retailPrice.toLocaleString()}</td>
                             <td className="py-1 text-green-600">${item.basePrice.toLocaleString()}</td>
-                            <td className="py-1 text-blue-600">{margin}%</td>
+	                            <td className="py-1 text-blue-600">{discountPercent}%</td>
                           </tr>
                         );
                       })}

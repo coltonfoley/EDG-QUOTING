@@ -189,6 +189,7 @@ export function registerProductRoutes(app: Express) {
       if (body.manufacturer !== undefined) updateFields.manufacturer = body.manufacturer;
       if (body.productType !== undefined) updateFields.productType = body.productType;
       if (body.retailPrice !== undefined) updateFields.retailPrice = body.retailPrice;
+      if (body.costPrice !== undefined) updateFields.costPrice = body.costPrice;
       if (body.defaultDiscountType !== undefined) updateFields.defaultDiscountType = body.defaultDiscountType;
       if (body.defaultDiscountValue !== undefined) updateFields.defaultDiscountValue = body.defaultDiscountValue;
       if (body.unit !== undefined) updateFields.unit = body.unit;

@@ -490,6 +490,13 @@ export const insertProductSchema = z.object({
       const num = parseFloat(val);
       return !isNaN(num) && num >= 0 && num <= 10000000;
     }, "Retail price must be between 0 and 10,000,000"),
+  costPrice: z.union([z.string(), z.number()])
+    .transform(val => typeof val === 'string' ? val : val.toString())
+    .refine(val => {
+      const num = parseFloat(val);
+      return !isNaN(num) && num >= 0 && num <= 10000000;
+    }, "EDG cost must be between 0 and 10,000,000")
+    .optional(),
   defaultDiscountType: z.enum(['percentage', 'dollar'], {
     errorMap: () => ({ message: "Discount type must be either 'percentage' or 'dollar'" })
   }).optional(),
@@ -794,15 +801,30 @@ export const bulkUpdateProductsSchema = z.object({
     })),
   updates: z.object({
     sku: z.string().max(100, "SKU is too long").optional().nullable(),
+    retailPrice: z.union([z.string(), z.number()])
+      .transform(val => typeof val === 'string' ? val : val.toString())
+      .refine(val => {
+        const num = parseFloat(val);
+        return !isNaN(num) && num >= 0 && num <= 10000000;
+      }, "Retail price must be between 0 and 10,000,000")
+      .optional(),
+    costPrice: z.union([z.string(), z.number()])
+      .transform(val => typeof val === 'string' ? val : val.toString())
+      .refine(val => {
+        const num = parseFloat(val);
+        return !isNaN(num) && num >= 0 && num <= 10000000;
+      }, "EDG cost must be between 0 and 10,000,000")
+      .optional(),
     defaultDiscountType: z.enum(['percentage', 'dollar']).optional(),
     defaultDiscountValue: z.union([z.string(), z.number()])
       .transform(val => typeof val === 'string' ? val : val.toString())
       .refine(val => {
         const num = parseFloat(val);
-        return !isNaN(num) && num >= 0 && num <= 100;
-      }, "Default discount value must be between 0 and 100")
+        return !isNaN(num) && num >= 0 && num <= 10000000;
+      }, "Default discount value must be between 0 and 10,000,000")
       .optional(),
-    manufacturer: z.string().min(1, "Manufacturer is required").max(100, "Manufacturer name is too long").optional()
+    manufacturer: z.string().min(1, "Manufacturer is required").max(100, "Manufacturer name is too long").optional(),
+    unit: z.string().max(50, "Unit name is too long").optional()
   }).refine(val => Object.keys(val).length > 0, "At least one field must be provided for update")
 });
 

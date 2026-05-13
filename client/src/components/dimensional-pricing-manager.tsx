@@ -201,11 +201,11 @@ export function DimensionalPricingManager({ productId, productName }: Dimensiona
         <div>
           <h3 className="text-lg font-semibold">Dimensional Pricing Table</h3>
           <p className="text-sm text-gray-600">
-            Configure retail and cost pricing for {productName} based on length and width dimensions
+            Configure Manufacturer MSRP and EDG Cost for {productName} based on length and width dimensions
           </p>
           {product && (
             <p className="text-xs text-blue-600 mt-1">
-              Default discount: {product.defaultDiscountType === 'percentage' ? `${product.defaultDiscountValue}%` : `$${product.defaultDiscountValue}`} off retail
+	              Supplier discount: {product.defaultDiscountType === 'percentage' ? `${product.defaultDiscountValue}%` : `$${product.defaultDiscountValue}`} off Manufacturer MSRP
             </p>
           )}
         </div>
@@ -218,7 +218,7 @@ export function DimensionalPricingManager({ productId, productName }: Dimensiona
                 data-testid="button-recalculate-costs"
               >
                 <RefreshCw className="mr-2 h-4 w-4" />
-                Recalculate Costs
+                Recalculate EDG Costs
                 {product && (
                   <span className="ml-2 text-xs bg-orange-100 text-orange-800 px-2 py-1 rounded">
                     {product.defaultDiscountType === 'percentage' ? `${product.defaultDiscountValue}%` : `$${product.defaultDiscountValue}`}
@@ -228,21 +228,21 @@ export function DimensionalPricingManager({ productId, productName }: Dimensiona
             </AlertDialogTrigger>
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle>Recalculate All Cost Prices?</AlertDialogTitle>
+		                <AlertDialogTitle>Recalculate All EDG Costs?</AlertDialogTitle>
                 <AlertDialogDescription className="space-y-2">
                   <p>
-                    This will update all cost prices in the pricing table based on the current discount settings.
+	                    This will update all EDG costs in the pricing table based on the current supplier discount settings.
                   </p>
                   {product && (
                     <div className="p-3 bg-orange-50 rounded-lg border border-orange-200">
                       <div className="flex items-center space-x-2 text-sm">
                         <TrendingDown className="h-4 w-4 text-orange-600" />
                         <span className="font-medium text-orange-900">
-                          Current discount: {product.defaultDiscountType === 'percentage' ? `${product.defaultDiscountValue}%` : `$${product.defaultDiscountValue}`} off retail
+	                          Current supplier discount: {product.defaultDiscountType === 'percentage' ? `${product.defaultDiscountValue}%` : `$${product.defaultDiscountValue}`} off Manufacturer MSRP
                         </span>
                       </div>
                       <p className="text-xs text-orange-700 mt-1">
-                        All cost prices will be recalculated using this discount rate
+	                        All EDG costs will be recalculated using this discount rate
                       </p>
                     </div>
                   )}
@@ -389,7 +389,7 @@ export function DimensionalPricingManager({ productId, productName }: Dimensiona
                     name="retailPrice"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Retail Price ($)</FormLabel>
+	                        <FormLabel>Manufacturer MSRP ($)</FormLabel>
                         <FormControl>
                           <Input 
                             type="number" 
@@ -399,7 +399,7 @@ export function DimensionalPricingManager({ productId, productName }: Dimensiona
                             data-testid="input-retail-price" 
                           />
                         </FormControl>
-                        <p className="text-xs text-gray-500">Manufacturer's suggested retail price</p>
+	                        <p className="text-xs text-gray-500">Supplier list price for this size band</p>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -409,11 +409,11 @@ export function DimensionalPricingManager({ productId, productName }: Dimensiona
                       <div className="flex items-center space-x-2 text-sm">
                         <TrendingDown className="h-4 w-4 text-blue-600" />
                         <span className="font-medium text-blue-900">
-                          Discount: {product.defaultDiscountType === 'percentage' ? `${product.defaultDiscountValue}%` : `$${product.defaultDiscountValue}`}
+	                          Supplier discount: {product.defaultDiscountType === 'percentage' ? `${product.defaultDiscountValue}%` : `$${product.defaultDiscountValue}`}
                         </span>
                       </div>
                       <p className="text-xs text-blue-700 mt-1">
-                        Your cost will be calculated automatically based on the product discount
+	                        EDG Cost will be calculated automatically from the product supplier discount
                       </p>
                     </div>
                   )}
@@ -422,7 +422,7 @@ export function DimensionalPricingManager({ productId, productName }: Dimensiona
                     name="basePrice"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Cost Price ($)</FormLabel>
+	                        <FormLabel>EDG Cost ($)</FormLabel>
                         <FormControl>
                           <Input 
                             type="number" 
@@ -435,7 +435,7 @@ export function DimensionalPricingManager({ productId, productName }: Dimensiona
                           />
                         </FormControl>
                         <p className="text-xs text-gray-500">
-                          {!editingEntry ? "Automatically calculated from retail price" : "Your discounted cost price"}
+	                          {!editingEntry ? "Automatically calculated from Manufacturer MSRP" : "EDG cost after supplier discount"}
                         </p>
                         <FormMessage />
                       </FormItem>
@@ -483,9 +483,9 @@ export function DimensionalPricingManager({ productId, productName }: Dimensiona
                 <TableHead>Length Range (ft)</TableHead>
                 <TableHead>Width Range (ft)</TableHead>
                 <TableHead>Size Band</TableHead>
-                <TableHead>Retail Price</TableHead>
+	                <TableHead>Manufacturer MSRP</TableHead>
                 <TableHead>Discount</TableHead>
-                <TableHead>Cost Price</TableHead>
+	                <TableHead>EDG Cost</TableHead>
                 <TableHead className="w-20">Actions</TableHead>
               </TableRow>
             </TableHeader>
