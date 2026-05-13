@@ -45,6 +45,13 @@ interface LineItemsTableProps {
   tariffRate: string | number;
 }
 
+type PricingDefaultResponse = {
+  scope: string;
+  markupType: "percentage";
+  markupValue: string;
+  updatedAt: string | null;
+};
+
 interface SortableLineItemRowProps {
   item: LineItem;
   rowIndex: number;
@@ -674,6 +681,14 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
 
   const { data: products } = useQuery<Product[]>({
     queryKey: ["/api/products"],
+  });
+
+  const { data: sundancePricingDefault } = useQuery<PricingDefaultResponse>({
+    queryKey: ["/api/pricing-defaults/sundance"],
+    queryFn: async ({ signal }) => {
+      const response = await apiRequest("GET", "/api/pricing-defaults/sundance", undefined, { signal });
+      return response.json();
+    },
   });
 
   const productIdsWithColors = useMemo(() => {
@@ -1460,11 +1475,11 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
       
       if (selectedConfigurableProduct) {
         setCalculatedPrice(data.price);
-        setNewItem({
-          ...newItem,
+        setNewItem((currentItem) => ({
+          ...currentItem,
           description: selectedConfigurableProduct.name,
           unitPrice: data.price.toString(),
-        });
+        }));
       }
     },
     onError: (error: any) => {
@@ -1660,7 +1675,17 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
   };
 
   const handleProductSelect = (product: Product) => {
+    const isSundanceProduct = product.manufacturer?.trim().toLowerCase() === "sundance";
+    const defaultMarkupValue = isSundanceProduct
+      ? (sundancePricingDefault?.markupValue ? parseFloat(sundancePricingDefault.markupValue).toString() : "100")
+      : "0";
+
     if (product.productType === "configurable") {
+      setNewItem((currentItem) => ({
+        ...currentItem,
+        markupType: "percentage",
+        markupValue: defaultMarkupValue,
+      }));
       setSelectedConfigurableProduct(product);
       setShowProductDialog(false);
       setShowDimensionDialog(true);
@@ -1677,16 +1702,16 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
         calculatedUnitPrice = Math.max(0, retail - discountValue).toFixed(2);
       }
       
-      setNewItem({
-        ...newItem,
+      setNewItem((currentItem) => ({
+        ...currentItem,
         description: product.name,
         retailPrice: product.retailPrice?.toString() || "",
         unitPrice: calculatedUnitPrice,
         discountType: "percentage", // Reset - discount already applied to unitPrice
         discountValue: "0", // Reset - unitPrice is the final cost after discount
         markupType: "percentage",
-        markupValue: "0",
-      });
+        markupValue: defaultMarkupValue,
+      }));
       setShowProductDialog(false);
       setShowNewItemForm(true);
     }
