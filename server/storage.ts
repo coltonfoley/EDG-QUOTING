@@ -13,7 +13,7 @@ function normalizeProductPricingPayload<T extends Record<string, any>>(
   payload: T,
   existingProduct?: Product
 ): T {
-  const normalized = { ...payload };
+  const normalized: Record<string, any> = { ...payload };
   const hasRetail = normalized.retailPrice !== undefined;
   const hasCost = normalized.costPrice !== undefined || normalized.cost !== undefined;
   const hasDiscount = normalized.defaultDiscountType !== undefined || normalized.defaultDiscountValue !== undefined;
