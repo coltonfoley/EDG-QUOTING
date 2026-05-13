@@ -33,6 +33,20 @@ function stripValidationMetadata(obj: any): any {
   return obj;
 }
 
+async function requireAdmin(req: any, res: any, next: any) {
+  try {
+    const currentUser = await storage.getUser(req.user?.id);
+    if (currentUser?.role !== "admin") {
+      return res.status(403).json({ message: "Admin access required" });
+    }
+
+    next();
+  } catch (error) {
+    console.error("Error checking admin access:", error);
+    res.status(500).json({ message: "Failed to verify admin access" });
+  }
+}
+
 /**
  * Helper function to build manufacturer filtering
  * Phase B: Only manufacturer field is supported
@@ -139,7 +153,7 @@ export function registerProductRoutes(app: Express) {
     }
   });
 
-  app.post("/api/products", isAuthenticated, async (req, res) => {
+  app.post("/api/products", isAuthenticated, requireAdmin, async (req, res) => {
     try {
       const productData = insertProductSchema.parse(req.body);
       const cleanProductData = stripValidationMetadata(productData);
@@ -155,7 +169,7 @@ export function registerProductRoutes(app: Express) {
     }
   });
 
-  app.put("/api/products/:id", isAuthenticated, async (req, res) => {
+  app.put("/api/products/:id", isAuthenticated, requireAdmin, async (req, res) => {
     try {
       const params = idParamSchema.safeParse(req.params);
       if (!params.success) {
@@ -204,7 +218,7 @@ export function registerProductRoutes(app: Express) {
     }
   });
 
-  app.delete("/api/products/:id", isAuthenticated, async (req, res) => {
+  app.delete("/api/products/:id", isAuthenticated, requireAdmin, async (req, res) => {
     try {
       const params = idParamSchema.safeParse(req.params);
       if (!params.success) {
@@ -265,7 +279,7 @@ export function registerProductRoutes(app: Express) {
     }
   });
 
-  app.post("/api/products/:productId/pricing-tables", isAuthenticated, async (req, res) => {
+  app.post("/api/products/:productId/pricing-tables", isAuthenticated, requireAdmin, async (req, res) => {
     try {
       const params = productIdParamSchema.safeParse(req.params);
       if (!params.success) {
@@ -286,7 +300,7 @@ export function registerProductRoutes(app: Express) {
     }
   });
 
-  app.put("/api/pricing-tables/:id", isAuthenticated, async (req, res) => {
+  app.put("/api/pricing-tables/:id", isAuthenticated, requireAdmin, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const pricingData = insertPricingTableSchema.partial().parse(req.body);
@@ -303,7 +317,7 @@ export function registerProductRoutes(app: Express) {
     }
   });
 
-  app.delete("/api/pricing-tables/:id", isAuthenticated, async (req, res) => {
+  app.delete("/api/pricing-tables/:id", isAuthenticated, requireAdmin, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const deleted = await storage.deletePricingTable(id);
@@ -327,7 +341,7 @@ export function registerProductRoutes(app: Express) {
     }
   });
 
-  app.post("/api/products/:productId/accessories", isAuthenticated, async (req, res) => {
+  app.post("/api/products/:productId/accessories", isAuthenticated, requireAdmin, async (req, res) => {
     try {
       const productId = parseInt(req.params.productId);
       const accessoryData = insertProductAccessorySchema.parse({ ...req.body, baseProductId: productId });
@@ -341,7 +355,7 @@ export function registerProductRoutes(app: Express) {
     }
   });
 
-  app.put("/api/product-accessories/:id", isAuthenticated, async (req, res) => {
+  app.put("/api/product-accessories/:id", isAuthenticated, requireAdmin, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const accessoryData = insertProductAccessorySchema.partial().parse(req.body);
@@ -358,7 +372,7 @@ export function registerProductRoutes(app: Express) {
     }
   });
 
-  app.delete("/api/product-accessories/:id", isAuthenticated, async (req, res) => {
+  app.delete("/api/product-accessories/:id", isAuthenticated, requireAdmin, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const deleted = await storage.deleteProductAccessory(id);
@@ -381,7 +395,7 @@ export function registerProductRoutes(app: Express) {
     }
   });
 
-  app.post("/api/colors", isAuthenticated, async (req, res) => {
+  app.post("/api/colors", isAuthenticated, requireAdmin, async (req, res) => {
     try {
       const colorData = insertColorSchema.parse(req.body);
       const color = await storage.createColor(colorData);
@@ -394,7 +408,7 @@ export function registerProductRoutes(app: Express) {
     }
   });
 
-  app.put("/api/colors/:id", isAuthenticated, async (req, res) => {
+  app.put("/api/colors/:id", isAuthenticated, requireAdmin, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const colorData = insertColorSchema.partial().parse(req.body);
@@ -411,7 +425,7 @@ export function registerProductRoutes(app: Express) {
     }
   });
 
-  app.delete("/api/colors/:id", isAuthenticated, async (req, res) => {
+  app.delete("/api/colors/:id", isAuthenticated, requireAdmin, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const deleted = await storage.deleteColor(id);
@@ -449,7 +463,7 @@ export function registerProductRoutes(app: Express) {
     }
   });
 
-  app.post("/api/products/:productId/colors", isAuthenticated, async (req, res) => {
+  app.post("/api/products/:productId/colors", isAuthenticated, requireAdmin, async (req, res) => {
     try {
       const productId = parseInt(req.params.productId);
       const productColorData = insertProductColorSchema.parse({ ...req.body, productId });
@@ -463,7 +477,7 @@ export function registerProductRoutes(app: Express) {
     }
   });
 
-  app.delete("/api/product-colors/:id", isAuthenticated, async (req, res) => {
+  app.delete("/api/product-colors/:id", isAuthenticated, requireAdmin, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const deleted = await storage.deleteProductColor(id);
@@ -508,7 +522,7 @@ export function registerProductRoutes(app: Express) {
   });
 
   // Recalculate pricing tables when discount changes
-  app.post("/api/products/:productId/recalculate-pricing", isAuthenticated, async (req, res) => {
+  app.post("/api/products/:productId/recalculate-pricing", isAuthenticated, requireAdmin, async (req, res) => {
     try {
       const productId = parseInt(req.params.productId);
       
@@ -529,7 +543,7 @@ export function registerProductRoutes(app: Express) {
   });
 
   // Bulk upload pricing table data
-  app.post("/api/products/:productId/pricing-tables/bulk-upload", isAuthenticated, async (req, res) => {
+  app.post("/api/products/:productId/pricing-tables/bulk-upload", isAuthenticated, requireAdmin, async (req, res) => {
     try {
       const params = productIdParamSchema.safeParse(req.params);
       if (!params.success) {
