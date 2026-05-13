@@ -42,7 +42,7 @@ type PricingDefaultResponse = {
 
 type ProductSection = "catalog" | "sundance" | "import" | "bulk";
 
-const PRODUCT_PAGE_SIZE = 200;
+const PRODUCT_CATALOG_LIMIT = 10000;
 
 const DEFAULT_PRODUCT_VALUES: ProductFormData = {
   name: "",
@@ -69,7 +69,6 @@ export default function Products() {
   const [viewMode, setViewMode] = useState<"grid" | "table">("table");
   const [showPricingManager, setShowPricingManager] = useState(false);
   const [managingPricingProduct, setManagingPricingProduct] = useState<Product | null>(null);
-  const [page, setPage] = useState(0);
   const [sundanceMarginValue, setSundanceMarginValue] = useState("100");
   
   
@@ -82,14 +81,12 @@ export default function Products() {
 
   const { data: products, isLoading } = useQuery<Product[]>({
     queryKey: ["/api/products", {
-      limit: isSundanceSection ? 10000 : PRODUCT_PAGE_SIZE,
-      offset: isSundanceSection ? 0 : page * PRODUCT_PAGE_SIZE,
+      limit: PRODUCT_CATALOG_LIMIT,
       manufacturer: isSundanceSection ? "Sundance" : undefined,
     }],
     queryFn: async () => {
       const params = new URLSearchParams({
-        limit: String(isSundanceSection ? 10000 : PRODUCT_PAGE_SIZE),
-        offset: String(isSundanceSection ? 0 : page * PRODUCT_PAGE_SIZE),
+        limit: String(PRODUCT_CATALOG_LIMIT),
       });
       if (isSundanceSection) {
         params.set("manufacturer", "Sundance");
@@ -141,7 +138,6 @@ export default function Products() {
   }, [sundancePricingDefault?.markupValue]);
 
   useEffect(() => {
-    setPage(0);
     setSelectedManufacturer("all");
     setSelectedCategory("all");
     setSearchTerm("");
@@ -1171,28 +1167,10 @@ export default function Products() {
         )}
 
         {products && (
-          <div className="flex items-center justify-between mt-4">
+          <div className="mt-4">
             <span className="text-sm text-muted-foreground">
-              Page {page + 1} — showing {products.length} products
+              Showing {filteredProducts.length} of {products.length} loaded products
             </span>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={page === 0}
-                onClick={() => setPage(p => Math.max(0, p - 1))}
-              >
-                Previous
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={products.length < PRODUCT_PAGE_SIZE}
-                onClick={() => setPage(p => p + 1)}
-              >
-                Next
-              </Button>
-            </div>
           </div>
         )}
           </>
