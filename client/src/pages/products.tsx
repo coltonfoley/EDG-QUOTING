@@ -16,7 +16,6 @@ import { Plus, Package, PackageCheck, Edit, Trash2, Search, Grid, List, Filter, 
 import { DimensionalPricingManager } from "@/components/dimensional-pricing-manager";
 import { AIProductImporter } from "@/components/ai-product-importer";
 import { CSVProductImporter } from "@/components/csv-product-importer";
-import { ProductBulkEditor } from "@/components/product-bulk-editor";
 import { formatCurrency } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -40,9 +39,22 @@ type PricingDefaultResponse = {
   updatedAt: string | null;
 };
 
-type ProductSection = "catalog" | "sundance" | "import" | "bulk";
+type ProductSection = "products" | "import";
+type PricingFilter = "all" | "needs-cost";
+
+const bulkUpdateSchema = z.object({
+  manufacturer: z.string().optional(),
+  retailPrice: z.string().optional(),
+  costPrice: z.string().optional(),
+  defaultDiscountType: z.enum(["percentage", "dollar"]).optional(),
+  defaultDiscountValue: z.string().optional(),
+  unit: z.string().optional(),
+});
+
+type BulkUpdateData = z.infer<typeof bulkUpdateSchema>;
 
 const PRODUCT_CATALOG_LIMIT = 10000;
+const BULK_PRODUCT_LIMIT = 500;
 
 const DEFAULT_PRODUCT_VALUES: ProductFormData = {
   name: "",
@@ -62,42 +74,41 @@ const DEFAULT_PRODUCT_VALUES: ProductFormData = {
 export default function Products() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
-  const [productSection, setProductSection] = useState<ProductSection>("catalog");
+  const [productSection, setProductSection] = useState<ProductSection>("products");
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedManufacturer, setSelectedManufacturer] = useState<string>("all");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
+  const [pricingFilter, setPricingFilter] = useState<PricingFilter>("all");
   const [viewMode, setViewMode] = useState<"grid" | "table">("table");
   const [showPricingManager, setShowPricingManager] = useState(false);
   const [managingPricingProduct, setManagingPricingProduct] = useState<Product | null>(null);
   const [sundanceMarginValue, setSundanceMarginValue] = useState("100");
+  const [selectedProductIds, setSelectedProductIds] = useState<number[]>([]);
+  const [showBulkEditForm, setShowBulkEditForm] = useState(false);
   
   
   const { toast } = useToast();
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const isAdmin = user?.role === "admin";
-  const isCatalogSection = productSection === "catalog" || productSection === "sundance";
-  const isSundanceSection = productSection === "sundance";
+  const isProductsSection = productSection === "products";
+  const isSundanceSection = isProductsSection && selectedManufacturer === "Sundance";
 
   const { data: products, isLoading } = useQuery<Product[]>({
     queryKey: ["/api/products", {
       limit: PRODUCT_CATALOG_LIMIT,
-      manufacturer: isSundanceSection ? "Sundance" : undefined,
     }],
     queryFn: async () => {
       const params = new URLSearchParams({
         limit: String(PRODUCT_CATALOG_LIMIT),
       });
-      if (isSundanceSection) {
-        params.set("manufacturer", "Sundance");
-      }
       const response = await fetch(`/api/products?${params}`);
       if (!response.ok) {
         throw new Error("Failed to fetch products");
       }
       return response.json();
     },
-    enabled: isCatalogSection,
+    enabled: isProductsSection,
   });
 
   const { data: allColors } = useQuery<Color[]>({
@@ -131,6 +142,18 @@ export default function Products() {
     defaultValues: DEFAULT_PRODUCT_VALUES,
   });
 
+  const bulkUpdateForm = useForm<BulkUpdateData>({
+    resolver: zodResolver(bulkUpdateSchema),
+    defaultValues: {
+      manufacturer: "",
+      retailPrice: "",
+      costPrice: "",
+      defaultDiscountType: undefined,
+      defaultDiscountValue: "",
+      unit: "",
+    },
+  });
+
   useEffect(() => {
     if (sundancePricingDefault?.markupValue) {
       setSundanceMarginValue(parseFloat(sundancePricingDefault.markupValue).toString());
@@ -141,6 +164,8 @@ export default function Products() {
     setSelectedManufacturer("all");
     setSelectedCategory("all");
     setSearchTerm("");
+    setPricingFilter("all");
+    setSelectedProductIds([]);
   }, [productSection]);
 
   const openCreateProductDialog = () => {
@@ -220,6 +245,45 @@ export default function Products() {
       toast({
         title: "Error",
         description: error?.message || "Failed to save Sundance standard margin",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const bulkUpdateMutation = useMutation({
+    mutationFn: async (data: BulkUpdateData) => {
+      const updates = Object.fromEntries(
+        Object.entries(data).filter(([, value]) => value !== undefined && value !== "")
+      );
+
+      if (Object.keys(updates).length === 0) {
+        throw new Error("Enter at least one field to update.");
+      }
+
+      const response = await apiRequest("POST", "/api/admin/bulk-update-products", {
+        productIds: selectedProductIds,
+        updates,
+      });
+      return response.json();
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "Products updated",
+        description: `Updated ${data.updatedCount} product${data.updatedCount === 1 ? "" : "s"}.`,
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/products"] });
+      setSelectedProductIds([]);
+      setShowBulkEditForm(false);
+      bulkUpdateForm.reset();
+    },
+    onError: (error: any) => {
+      const errorMessage = error?.errors
+        ? error.errors.map((e: any) => e.message).join(", ")
+        : error?.message || "Failed to update products";
+
+      toast({
+        title: "Bulk update failed",
+        description: errorMessage,
         variant: "destructive",
       });
     },
@@ -349,6 +413,39 @@ export default function Products() {
     updateSundanceMarginMutation.mutate(numericValue.toString());
   };
 
+  const handleBulkUpdate = (data: BulkUpdateData) => {
+    if (selectedProductIds.length === 0) {
+      toast({
+        title: "No products selected",
+        description: "Select products from the table first.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    bulkUpdateMutation.mutate(data);
+  };
+
+  const handleSelectProduct = (productId: number, checked: boolean) => {
+    setSelectedProductIds((currentIds) => {
+      if (checked) {
+        if (currentIds.includes(productId)) {
+          return currentIds;
+        }
+        if (currentIds.length >= BULK_PRODUCT_LIMIT) {
+          toast({
+            title: "Selection limit reached",
+            description: "Bulk editing is limited to 500 products at a time.",
+          });
+          return currentIds;
+        }
+        return [...currentIds, productId];
+      }
+
+      return currentIds.filter((id) => id !== productId);
+    });
+  };
+
   // Get unique manufacturers and categories, and filter/search products
   const manufacturers = useMemo(() => {
     if (!products) return [];
@@ -385,12 +482,43 @@ export default function Products() {
       const matchesManufacturer = selectedManufacturer === "all" || 
         (product.manufacturer || "Unknown") === selectedManufacturer;
       
-      const matchesCategory = selectedCategory === "all" || 
+      const matchesCategory = selectedCategory === "all" ||
         (product.category || "Uncategorized") === selectedCategory;
-      
-      return matchesSearch && matchesManufacturer && matchesCategory;
+
+      const pricing = getProductPricingBreakdown(product);
+      const matchesPricing = pricingFilter === "all" ||
+        (pricingFilter === "needs-cost" && product.productType !== "configurable" && pricing.edgCost <= 0);
+
+      return matchesSearch && matchesManufacturer && matchesCategory && matchesPricing;
     });
-  }, [products, searchTerm, selectedManufacturer, selectedCategory]);
+  }, [products, searchTerm, selectedManufacturer, selectedCategory, pricingFilter]);
+
+  const filteredProductIds = useMemo(() => filteredProducts.map((product) => product.id), [filteredProducts]);
+  const filteredProductIdSet = useMemo(() => new Set(filteredProductIds), [filteredProductIds]);
+  const selectedVisibleProductCount = selectedProductIds.filter((id) => filteredProductIdSet.has(id)).length;
+  const allVisibleProductsSelected = filteredProductIds.length > 0 && selectedVisibleProductCount === filteredProductIds.length;
+
+  useEffect(() => {
+    setSelectedProductIds((currentIds) => currentIds.filter((id) => filteredProductIdSet.has(id)));
+  }, [filteredProductIdSet]);
+
+  const handleSelectAllVisibleProducts = (checked: boolean) => {
+    setSelectedProductIds((currentIds) => {
+      const filteredIds = new Set(filteredProductIds);
+      if (!checked) {
+        return currentIds.filter((id) => !filteredIds.has(id));
+      }
+
+      const nextIds = Array.from(new Set([...currentIds, ...filteredProductIds])).slice(0, BULK_PRODUCT_LIMIT);
+      if (filteredProductIds.length > BULK_PRODUCT_LIMIT) {
+        toast({
+          title: "Selected first 500 products",
+          description: "Bulk editing is limited to 500 products at a time.",
+        });
+      }
+      return nextIds;
+    });
+  };
 
   const groupedProducts = useMemo(() => {
     return filteredProducts.reduce((groups, product) => {
@@ -403,7 +531,7 @@ export default function Products() {
     }, {} as Record<string, Product[]>);
   }, [filteredProducts]);
 
-  if (isCatalogSection && isLoading) {
+  if (isProductsSection && isLoading) {
     return (
       <div className="min-h-screen bg-gray-50">
         <AppHeader />
@@ -494,22 +622,20 @@ export default function Products() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-6">
           <Tabs value={productSection} onValueChange={(value) => setProductSection(value as ProductSection)}>
-            <TabsList className={`grid w-full ${isAdmin ? "max-w-3xl grid-cols-4" : "max-w-md grid-cols-2"}`}>
-              <TabsTrigger value="catalog">Catalog</TabsTrigger>
-              <TabsTrigger value="sundance">Sundance</TabsTrigger>
+            <TabsList className={`grid w-full ${isAdmin ? "max-w-md grid-cols-2" : "max-w-xs grid-cols-1"}`}>
+              <TabsTrigger value="products">Products</TabsTrigger>
               {isAdmin && <TabsTrigger value="import">Import</TabsTrigger>}
-              {isAdmin && <TabsTrigger value="bulk">Bulk Edit</TabsTrigger>}
             </TabsList>
           </Tabs>
-          {isSundanceSection && (
+          {isProductsSection && isSundanceSection && (
             <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_380px]">
               <Card className="border-edg-teal/30 bg-edg-teal/5">
                 <CardContent className="flex flex-col gap-3 p-4 md:flex-row md:items-start">
                   <PackageCheck className="mt-0.5 h-5 w-5 shrink-0 text-edg-teal" />
                   <div>
-                    <h3 className="text-sm font-semibold text-edg-black">Sundance products are regular catalog products</h3>
+                    <h3 className="text-sm font-semibold text-edg-black">Sundance Builder Parts</h3>
                     <p className="mt-1 text-sm text-edg-grey">
-                      This view shows products where Manufacturer is Sundance. The Sundance Builder reads from this same catalog.
+                      This is the Products list filtered to Manufacturer: Sundance. The Sundance Builder uses these same products.
                     </p>
                   </div>
                 </CardContent>
@@ -572,22 +698,16 @@ export default function Products() {
 
         {productSection === "import" ? (
           <ProductImportWorkspace />
-        ) : productSection === "bulk" ? (
-          <Card>
-            <CardContent className="p-6">
-              <ProductBulkEditor />
-            </CardContent>
-          </Card>
         ) : (
           <>
         <div className="flex justify-between items-center mb-6">
           <div>
             <h2 className="text-3xl font-bold text-edg-black">
-              {isSundanceSection ? "Sundance Products" : "Product Catalog"}
+              {isSundanceSection ? "Sundance Builder Parts" : "Products"}
             </h2>
             <p className="text-edg-grey mt-2">
               {isSundanceSection
-                ? `Manage the approved parts used by the Sundance Builder • ${filteredProducts.length} parts`
+                ? `Filtered from Products by Manufacturer: Sundance • ${filteredProducts.length} parts`
                 : `Manage reusable products and services • ${filteredProducts.length} products`}
             </p>
           </div>
@@ -694,7 +814,7 @@ export default function Products() {
                   {form.watch("productType") === "configurable" && (
                     <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
                       <p className="text-sm text-blue-800">
-                        <strong>Dimensional pricing item:</strong> Use this only when the product price depends on length and width tables. Sundance parts should usually stay as simple catalog items.
+                        <strong>Dimensional pricing item:</strong> Use this only when the product price depends on length and width tables. Sundance parts should usually stay as simple products.
                       </p>
                     </div>
                   )}
@@ -872,6 +992,42 @@ export default function Products() {
           )}
         </div>
 
+        <div className="mb-4 flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant={selectedManufacturer === "all" && pricingFilter === "all" ? "default" : "outline"}
+            size="sm"
+            onClick={() => {
+              setSelectedManufacturer("all");
+              setPricingFilter("all");
+            }}
+            data-testid="button-filter-all-products"
+          >
+            All Products
+          </Button>
+          <Button
+            type="button"
+            variant={selectedManufacturer === "Sundance" && pricingFilter === "all" ? "default" : "outline"}
+            size="sm"
+            onClick={() => {
+              setSelectedManufacturer("Sundance");
+              setPricingFilter("all");
+            }}
+            data-testid="button-filter-sundance-products"
+          >
+            Sundance Builder Parts
+          </Button>
+          <Button
+            type="button"
+            variant={pricingFilter === "needs-cost" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setPricingFilter(pricingFilter === "needs-cost" ? "all" : "needs-cost")}
+            data-testid="button-filter-needs-cost"
+          >
+            Needs Cost
+          </Button>
+        </div>
+
         {/* Search and Filters */}
         <div className="flex flex-col sm:flex-row gap-4 mb-6">
           <div className="relative flex-1">
@@ -938,7 +1094,7 @@ export default function Products() {
         </div>
 
         {/* Active Filters */}
-        {(searchTerm || selectedManufacturer !== "all" || selectedCategory !== "all") && (
+        {(searchTerm || selectedManufacturer !== "all" || selectedCategory !== "all" || pricingFilter !== "all") && (
           <div className="flex gap-2 mb-4">
             {searchTerm && (
               <Badge variant="secondary" className="flex items-center gap-1" data-testid="filter-search-active">
@@ -958,6 +1114,45 @@ export default function Products() {
                 <X className="h-3 w-3 cursor-pointer" onClick={() => setSelectedCategory("all")} />
               </Badge>
             )}
+            {pricingFilter !== "all" && (
+              <Badge variant="secondary" className="flex items-center gap-1" data-testid="filter-pricing-active">
+                Needs Cost
+                <X className="h-3 w-3 cursor-pointer" onClick={() => setPricingFilter("all")} />
+              </Badge>
+            )}
+          </div>
+        )}
+
+        {isAdmin && selectedProductIds.length > 0 && (
+          <div className="mb-4 flex flex-col gap-3 rounded-md border border-edg-teal/30 bg-edg-teal/5 p-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-medium text-edg-black">
+                {selectedProductIds.length} product{selectedProductIds.length === 1 ? "" : "s"} selected
+              </p>
+              <p className="text-xs text-edg-grey">
+                Bulk edit updates only the products you checked in this Products list.
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setSelectedProductIds([])}
+              >
+                Clear
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                className="bg-edg-teal hover:bg-edg-teal/90 text-white"
+                onClick={() => setShowBulkEditForm(true)}
+                data-testid="button-open-bulk-edit"
+              >
+                <Settings className="mr-2 h-4 w-4" />
+                Edit Selected
+              </Button>
+            </div>
           </div>
         )}
 
@@ -972,8 +1167,8 @@ export default function Products() {
                 {isAdmin
                   ? isSundanceSection
                     ? "Create the first approved part for the Sundance Builder."
-                    : "Create your first product to start building a reusable catalog."
-                  : "Ask an admin to add products to the catalog."}
+                    : "Create your first product to start building the Products list."
+                  : "Ask an admin to add products."}
               </p>
               {isAdmin && (
                 <Button
@@ -996,10 +1191,11 @@ export default function Products() {
               <Button
                 variant="outline"
                 onClick={() => {
-                  setSearchTerm("");
-                  setSelectedManufacturer("all");
-                  setSelectedCategory("all");
-                }}
+	                  setSearchTerm("");
+	                  setSelectedManufacturer("all");
+	                  setSelectedCategory("all");
+                  setPricingFilter("all");
+	                }}
                 data-testid="button-clear-filters"
               >
                 Clear Filters
@@ -1010,10 +1206,15 @@ export default function Products() {
           <ProductTable 
             products={filteredProducts} 
             onEdit={handleEdit} 
-            onDelete={handleDelete}
-            onManagePricing={handleManagePricing}
-            canManage={isAdmin}
-          />
+	            onDelete={handleDelete}
+	            onManagePricing={handleManagePricing}
+	            canManage={isAdmin}
+            selectedProductIds={selectedProductIds}
+            onSelectProduct={handleSelectProduct}
+            onSelectAll={handleSelectAllVisibleProducts}
+            allVisibleSelected={allVisibleProductsSelected}
+            someVisibleSelected={selectedVisibleProductCount > 0 && !allVisibleProductsSelected}
+	          />
         ) : (
           <div className="space-y-8">
             {Object.entries(groupedProducts).map(([manufacturer, manufacturerProducts]) => (
@@ -1167,6 +1368,137 @@ export default function Products() {
         )}
       </div>
 
+      <Dialog open={showBulkEditForm} onOpenChange={setShowBulkEditForm}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Bulk Edit Selected Products</DialogTitle>
+            <p className="text-sm text-gray-600">
+              Update {selectedProductIds.length} selected product{selectedProductIds.length === 1 ? "" : "s"}. Leave fields blank to keep current values.
+            </p>
+          </DialogHeader>
+          <Form {...bulkUpdateForm}>
+            <form onSubmit={bulkUpdateForm.handleSubmit(handleBulkUpdate)} className="space-y-4">
+              <FormField
+                control={bulkUpdateForm.control}
+                name="manufacturer"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Manufacturer</FormLabel>
+                    <FormControl>
+                      <Input {...field} placeholder="Leave blank to keep current" data-testid="input-bulk-manufacturer" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <FormField
+                  control={bulkUpdateForm.control}
+                  name="retailPrice"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Manufacturer MSRP</FormLabel>
+                      <FormControl>
+                        <Input {...field} type="number" step="0.01" placeholder="No change" data-testid="input-bulk-msrp" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={bulkUpdateForm.control}
+                  name="costPrice"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>EDG Cost</FormLabel>
+                      <FormControl>
+                        <Input {...field} type="number" step="0.01" placeholder="No change" data-testid="input-bulk-cost" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <FormField
+                  control={bulkUpdateForm.control}
+                  name="defaultDiscountType"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Supplier Discount Type</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-bulk-discount-type">
+                            <SelectValue placeholder="No change" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="percentage">Percentage</SelectItem>
+                          <SelectItem value="dollar">Dollar Amount</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={bulkUpdateForm.control}
+                  name="defaultDiscountValue"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Supplier Discount Value</FormLabel>
+                      <FormControl>
+                        <Input {...field} placeholder="No change" data-testid="input-bulk-discount-value" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <FormField
+                control={bulkUpdateForm.control}
+                name="unit"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Unit</FormLabel>
+                    <FormControl>
+                      <Input {...field} placeholder="No change" data-testid="input-bulk-unit" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="flex justify-end gap-2 pt-4">
+                <Button type="button" variant="outline" onClick={() => setShowBulkEditForm(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={bulkUpdateMutation.isPending}
+                  className="bg-edg-teal hover:bg-edg-teal/90 text-white"
+                  data-testid="button-submit-bulk-edit"
+                >
+                  {bulkUpdateMutation.isPending ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Updating...
+                    </>
+                  ) : (
+                    "Update Selected"
+                  )}
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
       {/* Dimensional Pricing Manager Dialog */}
       <Dialog open={showPricingManager} onOpenChange={setShowPricingManager}>
         <DialogContent className="max-w-5xl max-h-[80vh] overflow-y-auto">
@@ -1193,6 +1525,11 @@ interface ProductTableProps {
   onDelete: (id: number) => void;
   onManagePricing: (product: Product) => void;
   canManage: boolean;
+  selectedProductIds: number[];
+  onSelectProduct: (productId: number, checked: boolean) => void;
+  onSelectAll: (checked: boolean) => void;
+  allVisibleSelected: boolean;
+  someVisibleSelected: boolean;
 }
 
 function ProductImportWorkspace() {
@@ -1228,13 +1565,34 @@ function ProductImportWorkspace() {
   );
 }
 
-function ProductTable({ products, onEdit, onDelete, onManagePricing, canManage }: ProductTableProps) {
+function ProductTable({
+  products,
+  onEdit,
+  onDelete,
+  onManagePricing,
+  canManage,
+  selectedProductIds,
+  onSelectProduct,
+  onSelectAll,
+  allVisibleSelected,
+  someVisibleSelected,
+}: ProductTableProps) {
   return (
     <Card>
       <CardContent className="p-0">
         <Table>
           <TableHeader>
 	            <TableRow>
+              {canManage && (
+                <TableHead className="w-12">
+                  <Checkbox
+                    checked={allVisibleSelected ? true : someVisibleSelected ? "indeterminate" : false}
+                    onCheckedChange={(checked) => onSelectAll(checked === true)}
+                    aria-label="Select all visible products"
+                    data-testid="checkbox-select-all-products"
+                  />
+                </TableHead>
+              )}
 	              <TableHead className="w-[80px]">Image</TableHead>
 	              <TableHead className="w-[280px]">Product Name</TableHead>
 	              <TableHead>SKU</TableHead>
@@ -1247,8 +1605,8 @@ function ProductTable({ products, onEdit, onDelete, onManagePricing, canManage }
               {canManage && <TableHead className="w-[130px]">Actions</TableHead>}
             </TableRow>
           </TableHeader>
-          <TableBody>
-            {products.map((product) => {
+	          <TableBody>
+	            {products.map((product) => {
               // Get primary image or first gallery image
               const galleryImages = product.galleryImages as any[] | null;
               const specificationSheets = product.specificationSheets as any[] | null;
@@ -1257,9 +1615,19 @@ function ProductTable({ products, onEdit, onDelete, onManagePricing, canManage }
                   ? (galleryImages[0] as any)?.url 
                   : null);
               
-              return (
-              <TableRow key={product.id} className="hover:bg-gray-50">
-                <TableCell>
+	              return (
+	              <TableRow key={product.id} className="hover:bg-gray-50">
+                {canManage && (
+                  <TableCell>
+                    <Checkbox
+                      checked={selectedProductIds.includes(product.id)}
+                      onCheckedChange={(checked) => onSelectProduct(product.id, checked === true)}
+                      aria-label={`Select ${product.name}`}
+                      data-testid={`checkbox-select-product-${product.id}`}
+                    />
+                  </TableCell>
+                )}
+	                <TableCell>
                   <div className="relative w-12 h-12 rounded-md overflow-hidden bg-gray-100 flex-shrink-0">
                     {primaryImageUrl ? (
                       <img
