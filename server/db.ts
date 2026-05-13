@@ -20,6 +20,7 @@ pool.on('error', (err) => {
 export const db = drizzle({ client: pool, schema });
 
 let signatureAuditColumnsReady: Promise<void> | null = null;
+let productCatalogColumnsReady: Promise<void> | null = null;
 let pricingDefaultsTableReady: Promise<void> | null = null;
 
 export async function ensureSignatureAuditColumns(): Promise<void> {
@@ -31,6 +32,22 @@ export async function ensureSignatureAuditColumns(): Promise<void> {
   }
 
   await signatureAuditColumnsReady;
+}
+
+export async function ensureProductCatalogColumns(): Promise<void> {
+  if (!productCatalogColumnsReady) {
+    productCatalogColumnsReady = pool.query(`
+      ALTER TABLE "products" ADD COLUMN IF NOT EXISTS "sku" text;
+
+      CREATE INDEX IF NOT EXISTS "idx_products_sku"
+        ON "products" ("sku");
+    `).then(() => undefined).catch((error) => {
+      productCatalogColumnsReady = null;
+      throw error;
+    });
+  }
+
+  await productCatalogColumnsReady;
 }
 
 export async function ensurePricingDefaultsTable(): Promise<void> {

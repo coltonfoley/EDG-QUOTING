@@ -1,5 +1,5 @@
 import { accounts, customers, quotes, lineItems, groups, products, pricingDefaults, users, apiKeys, contractTemplates, pricingTables, productAccessories, colors, productColors, quoteCoverPhotos, quoteProductRenderings, issueReports, type Account, type Customer, type Quote, type LineItem, type Group, type Product, type PricingDefault, type User, type ApiKey, type ContractTemplate, type PricingTable, type ProductAccessory, type Color, type ProductColor, type QuoteCoverPhoto, type QuoteProductRendering, type IssueReport, type InsertAccount, type InsertCustomer, type InsertQuote, type InsertLineItem, type InsertGroup, type InsertProduct, type InsertUser, type InsertApiKey, type InsertContractTemplate, type InsertPricingTable, type InsertProductAccessory, type InsertColor, type InsertProductColor, type InsertQuoteCoverPhoto, type InsertQuoteProductRendering, type InsertIssueReport, type QuoteWithDetails, type ProductWithDetails } from "@shared/schema";
-import { db, ensurePricingDefaultsTable, ensureSignatureAuditColumns } from "./db";
+import { db, ensurePricingDefaultsTable, ensureProductCatalogColumns, ensureSignatureAuditColumns } from "./db";
 import { eq, desc, asc, inArray, sql, and, ne, or, ilike } from "drizzle-orm";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
@@ -1647,6 +1647,7 @@ export class DatabaseStorage implements IStorage {
 
   // Product methods
   async getAllProducts(): Promise<Product[]> {
+    await ensureProductCatalogColumns();
     // Order by manufacturer field
     return await db
       .select()
@@ -1655,12 +1656,14 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getProduct(id: number): Promise<Product | undefined> {
+    await ensureProductCatalogColumns();
     // Return product data
     const [product] = await db.select().from(products).where(eq(products.id, id));
     return product || undefined;
   }
 
   async createProduct(insertProduct: InsertProduct): Promise<Product> {
+    await ensureProductCatalogColumns();
     // Strip any validation metadata field if present
     const { _categoryValidation, ...cleanProduct } = insertProduct as any;
     
@@ -1679,6 +1682,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateProduct(id: number, productData: Partial<InsertProduct>): Promise<Product | undefined> {
+    await ensureProductCatalogColumns();
     // Strip any validation metadata field if present
     const { _categoryValidation, ...cleanProductData } = productData as any;
     
@@ -1693,11 +1697,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteProduct(id: number): Promise<boolean> {
+    await ensureProductCatalogColumns();
     const result = await db.delete(products).where(eq(products.id, id));
     return (result.rowCount || 0) > 0;
   }
 
   async bulkUpdateProducts(productIds: number[], updates: Partial<InsertProduct>): Promise<number> {
+    await ensureProductCatalogColumns();
     // Strip any validation metadata field if present
     const { _categoryValidation, ...cleanUpdates } = updates as any;
     

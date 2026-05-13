@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { storage } from "../storage";
 import { z } from "zod";
-import { db } from "../db";
+import { db, ensureProductCatalogColumns } from "../db";
 import { products, insertColorSchema, insertProductColorSchema } from "@shared/schema";
 import { ilike, and } from "drizzle-orm";
 import { isAuthenticated } from "../replitAuth";
@@ -48,6 +48,16 @@ function buildManufacturerFilter(manufacturerQuery?: string) {
 }
 
 export function registerProductRoutes(app: Express) {
+  app.use("/api/products", isAuthenticated, async (_req, res, next) => {
+    try {
+      await ensureProductCatalogColumns();
+      next();
+    } catch (error) {
+      console.error("Error preparing product catalog columns:", error);
+      res.status(500).json({ message: "Product catalog is temporarily unavailable" });
+    }
+  });
+
   // Product catalog routes (protected)
   // Get list of manufacturers
   app.get("/api/products/manufacturers", isAuthenticated, async (req, res) => {
