@@ -48,6 +48,11 @@ const CATEGORY_ORDER = [
 // Product order within categories (by product name/SKU)
 // Products not listed will appear at the end sorted by ID for stability
 const PRODUCT_ORDER: Record<string, string[]> = {
+  'Motors': [
+    'motor1perbay',
+    'motorbrksd',
+    'timotionmotorcoverblk',
+  ],
   'Louvers': [
     'lvr8',       // Louvers - 8'
     'lvr10',      // Louvers - 10'
@@ -78,6 +83,30 @@ function getProductSortOrder(product: Product, category: string): number {
   return index >= 0 ? index : categoryOrder.length; // Unlisted items go after listed ones
 }
 
+const MANUAL_SUNDANCE_PRODUCTS: Product[] = [
+  {
+    id: -2026051101,
+    name: 'timotionmotorcoverblk',
+    description: 'TiMOTION Motor Cover - Black',
+    manufacturer: 'Sundance',
+    category: 'Motors',
+    productType: 'simple',
+    retailPrice: '64.00',
+    defaultDiscountType: 'percentage',
+    defaultDiscountValue: '0',
+    unit: 'each',
+    configFields: null,
+    minLength: null,
+    maxLength: null,
+    minWidth: null,
+    maxWidth: null,
+    primaryImage: null,
+    galleryImages: null,
+    specificationSheets: null,
+    createdAt: new Date('2026-05-11T00:00:00.000Z'),
+  },
+];
+
 export function SundanceCatalogConfigurator({ 
   quoteId, 
   onInsert, 
@@ -97,6 +126,14 @@ export function SundanceCatalogConfigurator({
     },
   });
 
+  const sundanceProducts = useMemo<Product[]>(() => {
+    const liveProducts = products || [];
+    const liveKeys = new Set(liveProducts.map((product) => product.name.toLowerCase()));
+    const missingManualProducts = MANUAL_SUNDANCE_PRODUCTS.filter((product) => !liveKeys.has(product.name.toLowerCase()));
+
+    return [...liveProducts, ...missingManualProducts];
+  }, [products]);
+
   // Fetch all product colors for Sundance products using batch endpoint
   const { data: productColorsMap } = useQuery<Record<number, (ProductColor & { color: Color })[]>>({
     queryKey: ['/api/product-colors', 'Sundance'],
@@ -115,7 +152,7 @@ export function SundanceCatalogConfigurator({
   const insertMutation = useMutation({
     mutationFn: async (configData: {
       items: {
-        productId: number;
+        productId: number | null;
         quantity: number;
         productSnapshot: Record<string, unknown>;
         configData?: Record<string, unknown>;
@@ -143,7 +180,7 @@ export function SundanceCatalogConfigurator({
   });
 
   const categorizedProducts = useMemo<CategoryProducts>(() => {
-    const grouped = (products || []).reduce((acc, product) => {
+    const grouped = sundanceProducts.reduce((acc, product) => {
       const category = product.category || 'Other';
       if (!acc[category]) {
         acc[category] = [];
@@ -164,7 +201,7 @@ export function SundanceCatalogConfigurator({
     });
 
     return grouped;
-  }, [products]);
+  }, [sundanceProducts]);
 
   const orderedCategories = useMemo(() => [
     ...CATEGORY_ORDER.filter(cat => categorizedProducts[cat]),
@@ -280,10 +317,10 @@ export function SundanceCatalogConfigurator({
   const selectedItems = useMemo(() => Object.entries(quantities)
     .filter(([_, qty]) => qty > 0)
     .map(([productId, quantity]) => {
-      const product = products?.find(p => p.id === parseInt(productId));
+      const product = sundanceProducts.find(p => p.id === parseInt(productId));
       return product ? { product, quantity } : null;
     })
-    .filter(Boolean) as { product: Product; quantity: number }[], [products, quantities]);
+    .filter(Boolean) as { product: Product; quantity: number }[], [sundanceProducts, quantities]);
 
   const subtotal = useMemo(() => selectedItems.reduce((total, { product, quantity }) => {
     return total + (parseFloat(product.retailPrice) * quantity);
@@ -294,7 +331,7 @@ export function SundanceCatalogConfigurator({
     () => selectedItems.reduce((total, item) => total + item.quantity, 0),
     [selectedItems]
   );
-  const productCount = products?.length || 0;
+  const catalogProductCount = sundanceProducts.length;
 
   const getSelectedColorDetails = (product: Product) => {
     const category = product.category || 'Other';
@@ -307,16 +344,17 @@ export function SundanceCatalogConfigurator({
     const items = Object.entries(quantities)
       .filter(([_, qty]) => qty > 0)
       .map(([productId, quantity]) => {
-        const product = products!.find(p => p.id === parseInt(productId));
+        const parsedProductId = parseInt(productId);
+        const product = sundanceProducts.find(p => p.id === parsedProductId);
         const category = product?.category || 'Other';
-        const effectiveColors = getEffectiveColors(parseInt(productId), category);
+        const effectiveColors = getEffectiveColors(parsedProductId, category);
         const colorDetails = effectiveColors.map(colorId => {
-          const productColorEntry = productColorsMap?.[parseInt(productId)]?.find(pc => pc.colorId === colorId);
+          const productColorEntry = productColorsMap?.[parsedProductId]?.find(pc => pc.colorId === colorId);
           return productColorEntry?.color;
         }).filter(Boolean);
 
         return {
-          productId: parseInt(productId),
+          productId: parsedProductId > 0 ? parsedProductId : null,
           quantity,
           // Include full product snapshot for historical accuracy
           productSnapshot: {
@@ -372,7 +410,7 @@ export function SundanceCatalogConfigurator({
         </div>
         <div className="grid grid-cols-3 gap-2 text-center">
           <div className="rounded-md border border-white/10 bg-white/10 px-3 py-2">
-            <div className="text-lg font-semibold">{productCount}</div>
+            <div className="text-lg font-semibold">{catalogProductCount}</div>
             <div className="text-xs text-slate-300">Catalog items</div>
           </div>
           <div className="rounded-md border border-white/10 bg-white/10 px-3 py-2">

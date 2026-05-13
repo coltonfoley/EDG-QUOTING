@@ -546,7 +546,7 @@ export function registerLineItemRoutes(app: Express) {
       const { quoteId } = params.data;
       const { items } = req.body as { 
         items: { 
-          productId: number; 
+          productId: number | null;
           quantity: number;
           productSnapshot: any;
           configData?: any;
