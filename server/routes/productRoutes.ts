@@ -79,12 +79,14 @@ export function registerProductRoutes(app: Express) {
             .select()
             .from(products)
             .where(and(...filters))
+            .orderBy(products.manufacturer, products.category, products.sku, products.name)
             .limit(limit)
             .offset(offset);
         } else {
           productList = await db
             .select()
             .from(products)
+            .orderBy(products.manufacturer, products.category, products.sku, products.name)
             .limit(limit)
             .offset(offset);
         }
@@ -92,6 +94,7 @@ export function registerProductRoutes(app: Express) {
         productList = await db
           .select()
           .from(products)
+          .orderBy(products.manufacturer, products.category, products.sku, products.name)
           .limit(limit)
           .offset(offset);
       }
@@ -156,6 +159,7 @@ export function registerProductRoutes(app: Express) {
       const body = req.body;
       
       if (body.name !== undefined) updateFields.name = body.name;
+      if (body.sku !== undefined) updateFields.sku = body.sku;
       if (body.description !== undefined) updateFields.description = body.description;
       if (body.category !== undefined) updateFields.category = body.category;
       if (body.manufacturer !== undefined) updateFields.manufacturer = body.manufacturer;

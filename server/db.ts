@@ -20,6 +20,7 @@ pool.on('error', (err) => {
 export const db = drizzle({ client: pool, schema });
 
 let signatureAuditColumnsReady: Promise<void> | null = null;
+let pricingDefaultsTableReady: Promise<void> | null = null;
 
 export async function ensureSignatureAuditColumns(): Promise<void> {
   if (!signatureAuditColumnsReady) {
@@ -30,4 +31,31 @@ export async function ensureSignatureAuditColumns(): Promise<void> {
   }
 
   await signatureAuditColumnsReady;
+}
+
+export async function ensurePricingDefaultsTable(): Promise<void> {
+  if (!pricingDefaultsTableReady) {
+    pricingDefaultsTableReady = pool.query(`
+      CREATE TABLE IF NOT EXISTS "pricing_defaults" (
+        "id" serial PRIMARY KEY NOT NULL,
+        "scope" text NOT NULL,
+        "markup_type" text DEFAULT 'percentage' NOT NULL,
+        "markup_value" numeric(10, 2) DEFAULT '100' NOT NULL,
+        "created_at" timestamp DEFAULT now(),
+        "updated_at" timestamp DEFAULT now()
+      );
+
+      CREATE UNIQUE INDEX IF NOT EXISTS "idx_pricing_defaults_scope"
+        ON "pricing_defaults" ("scope");
+
+      INSERT INTO "pricing_defaults" ("scope", "markup_type", "markup_value")
+      VALUES ('sundance', 'percentage', '100')
+      ON CONFLICT ("scope") DO NOTHING;
+    `).then(() => undefined).catch((error) => {
+      pricingDefaultsTableReady = null;
+      throw error;
+    });
+  }
+
+  await pricingDefaultsTableReady;
 }
