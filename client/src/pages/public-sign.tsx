@@ -239,7 +239,14 @@ export default function PublicSignPage() {
         credentials: 'include'
       });
       if (!res.ok) {
-        throw new Error('Failed to fetch quote data');
+        let message = 'This signing link may have expired or been revoked. Please contact the sender for a new link.';
+        try {
+          const body = await res.json();
+          message = body.message || message;
+        } catch {
+          // Keep the default message when the server does not return JSON.
+        }
+        throw new Error(message);
       }
       return res.json();
     },
@@ -482,6 +489,10 @@ export default function PublicSignPage() {
   }
 
   if (error || !quoteData) {
+    const errorMessage = error instanceof Error
+      ? error.message
+      : 'This signing link may have expired or been revoked. Please contact the sender for a new link.';
+
     return (
       <div className="min-h-screen bg-edg-light-grey">
         <CompanyHeader />
@@ -499,7 +510,7 @@ export default function PublicSignPage() {
             <CardContent className="space-y-4">
               <Alert variant="destructive">
                 <AlertDescription>
-                  This signing link may have expired or been revoked. Please contact the sender for a new link.
+                  {errorMessage}
                 </AlertDescription>
               </Alert>
               <div className="pt-4 border-t text-center">

@@ -15,9 +15,20 @@ import { LoadingSpinner } from "@/components/loading-spinner";
 import { lazyWithReload } from "@/lib/lazy-with-reload";
 
 const SimpleProposalGenerator = lazyWithReload(() => import("@/components/simple-proposal-generator").then(m => ({ default: m.SimpleProposalGenerator })), "simple-proposal-generator");
-import { Loader2, Copy, History } from "lucide-react";
+import { Archive, CheckCircle2, Loader2, Copy, History } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import type { QuoteWithDetails } from "@shared/schema";
 
 export default function QuoteBuilder() {
@@ -68,6 +79,31 @@ export default function QuoteBuilder() {
     },
     onError: () => {
       toast({ title: "Error", description: "Failed to create new version", variant: "destructive" });
+    },
+  });
+
+  const useVersionMutation = useMutation({
+    mutationFn: async (versionId: number) => {
+      const response = await apiRequest("POST", `/api/quotes/${versionId}/use-version`);
+      return response.json() as Promise<QuoteWithDetails>;
+    },
+    onSuccess: (updatedVersion) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/quotes"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/quotes/${quoteId}/versions`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/quotes/${updatedVersion.id}/versions`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/quotes/${quoteId}`] });
+      queryClient.setQueryData([`/api/quotes/${updatedVersion.id}`], updatedVersion);
+      toast({
+        title: "Current version updated",
+        description: `${updatedVersion.quoteNumber} is now the version shown on the main quote list.`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Could not update current version",
+        description: error?.message || "Please try again.",
+        variant: "destructive",
+      });
     },
   });
 
@@ -360,6 +396,7 @@ export default function QuoteBuilder() {
     },
     lineItems: [],
   };
+  const isArchivedVersion = currentQuote.isLatestVersion === false;
 
   return (
     <div className="min-h-screen bg-background">
@@ -376,14 +413,20 @@ export default function QuoteBuilder() {
         {!isNewQuote && quote && (
           <Card className="mb-6">
             <CardContent className="p-4">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                 <div className="flex items-center gap-3">
                   <Badge variant="secondary" className="text-sm px-3 py-1" data-testid="badge-version">
                     Version {currentQuote.versionNumber}
                   </Badge>
-                  {!currentQuote.isLatestVersion && (
-                    <Badge variant="destructive" className="text-sm" data-testid="badge-old-version">
-                      Old Version
+                  {currentQuote.isLatestVersion ? (
+                    <Badge className="text-sm bg-emerald-100 text-emerald-800 hover:bg-emerald-100" data-testid="badge-current-version">
+                      <CheckCircle2 className="mr-1 h-3 w-3" />
+                      Current Version
+                    </Badge>
+                  ) : (
+                    <Badge variant="secondary" className="text-sm bg-slate-100 text-slate-700 hover:bg-slate-100" data-testid="badge-archived-version">
+                      <Archive className="mr-1 h-3 w-3" />
+                      Archived
                     </Badge>
                   )}
                   {versions && versions.length > 1 && (
@@ -398,20 +441,61 @@ export default function QuoteBuilder() {
                     </Button>
                   )}
                 </div>
-                <Button
-                  onClick={() => createVersionMutation.mutate()}
-                  disabled={createVersionMutation.isPending}
-                  variant="outline"
-                  data-testid="button-create-version"
-                >
-                  {createVersionMutation.isPending ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <Copy className="mr-2 h-4 w-4" />
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                  {isArchivedVersion && (
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="default"
+                          className="bg-edg-black text-edg-white hover:bg-edg-grey"
+                          disabled={useVersionMutation.isPending}
+                          data-testid="button-use-this-version"
+                        >
+                          {useVersionMutation.isPending ? (
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          ) : (
+                            <CheckCircle2 className="mr-2 h-4 w-4" />
+                          )}
+                          Use This Version
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Use this quote version?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            This will move {currentQuote.quoteNumber} back to the main quote list and archive the other versions for this project. No quote data will be deleted.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction onClick={() => useVersionMutation.mutate(currentQuote.id)}>
+                            Use This Version
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
                   )}
-                  Create New Version
-                </Button>
+                  <Button
+                    onClick={() => createVersionMutation.mutate()}
+                    disabled={createVersionMutation.isPending}
+                    variant="outline"
+                    data-testid="button-create-version"
+                  >
+                    {createVersionMutation.isPending ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Copy className="mr-2 h-4 w-4" />
+                    )}
+                    Create New Version
+                  </Button>
+                </div>
               </div>
+              {isArchivedVersion && (
+                <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900" data-testid="archived-version-warning">
+                  This version is archived for history. Make it current before sending it to a customer or Ops.
+                </div>
+              )}
             </CardContent>
           </Card>
         )}
@@ -424,18 +508,27 @@ export default function QuoteBuilder() {
             </DialogHeader>
             <div className="space-y-3 mt-4">
               {versions && versions.length > 0 ? (
-                versions.map((version) => (
+                versions.map((version) => {
+                  const versionIsCurrent = version.isLatestVersion;
+                  const versionHasSignatureActivity = Boolean(version.clientSignedAt || version.companySignedAt || version.signatureEmailSentAt);
+
+                  return (
                   <Card key={version.id} className={version.id === quoteId ? "border-blue-500 border-2" : ""}>
                     <CardContent className="p-4">
                       <div className="flex items-center justify-between">
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-2">
                             <h3 className="font-semibold">{version.quoteNumber}</h3>
-                            {version.isLatestVersion && (
-                              <Badge variant="default" className="text-xs">Latest</Badge>
+                            {versionIsCurrent ? (
+                              <Badge className="text-xs bg-emerald-100 text-emerald-800 hover:bg-emerald-100">Current</Badge>
+                            ) : (
+                              <Badge variant="secondary" className="text-xs bg-slate-100 text-slate-700 hover:bg-slate-100">Archived</Badge>
                             )}
                             {version.id === quoteId && (
-                              <Badge variant="outline" className="text-xs">Current</Badge>
+                              <Badge variant="outline" className="text-xs">Open</Badge>
+                            )}
+                            {versionHasSignatureActivity && (
+                              <Badge variant="outline" className="text-xs">Signature Activity</Badge>
                             )}
                           </div>
                           <p className="text-sm text-muted-foreground">
@@ -445,22 +538,55 @@ export default function QuoteBuilder() {
                             Project: {version.projectName || "Untitled"}
                           </p>
                         </div>
-                        {version.id !== quoteId && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              window.location.href = `/quotes/${version.id}/edit`;
-                            }}
-                            data-testid={`button-view-version-${version.id}`}
-                          >
-                            View
-                          </Button>
-                        )}
+                        <div className="flex flex-col gap-2 sm:flex-row">
+                          {!versionIsCurrent && (
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button
+                                  variant="default"
+                                  size="sm"
+                                  className="bg-edg-black text-edg-white hover:bg-edg-grey"
+                                  disabled={useVersionMutation.isPending}
+                                  data-testid={`button-use-version-${version.id}`}
+                                >
+                                  Use This Version
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Use {version.quoteNumber}?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    This will make this quote the current version and archive the others. No quote data will be deleted.
+                                    {versionHasSignatureActivity ? " This version has signature history, and that record will stay attached to it." : ""}
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction onClick={() => useVersionMutation.mutate(version.id)}>
+                                    Use This Version
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          )}
+                          {version.id !== quoteId && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                window.location.href = `/quotes/${version.id}/edit`;
+                              }}
+                              data-testid={`button-view-version-${version.id}`}
+                            >
+                              View
+                            </Button>
+                          )}
+                        </div>
                       </div>
                     </CardContent>
                   </Card>
-                ))
+                  );
+                })
               ) : (
                 <p className="text-center text-muted-foreground py-8">No version history available</p>
               )}
