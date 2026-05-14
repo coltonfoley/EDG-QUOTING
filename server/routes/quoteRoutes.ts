@@ -264,6 +264,17 @@ function buildPublicSigningQuote(quote: any) {
     : publicQuote;
 }
 
+function isArchivedQuoteVersion(quote: { isLatestVersion?: boolean | null }): boolean {
+  return quote.isLatestVersion === false;
+}
+
+function sendArchivedQuoteResponse(res: any, action: string, status = 409) {
+  return res.status(status).json({
+    message: `This quote version is archived. Make it the current version before you ${action}.`,
+    code: "QUOTE_VERSION_ARCHIVED",
+  });
+}
+
 function createDocumentFingerprint(snapshot: unknown): string {
   return crypto
     .createHash("sha256")
@@ -1321,6 +1332,16 @@ export function registerQuoteRoutes(app: Express) {
       if (!originalQuote) {
         return res.status(404).json({ message: "Quote not found" });
       }
+
+      if (isArchivedQuoteVersion(originalQuote)) {
+        if (quoteData.enableESignature === true) {
+          return sendArchivedQuoteResponse(res, "prepare it for customer approval");
+        }
+
+        if (quoteData.dealStage) {
+          return sendArchivedQuoteResponse(res, "change its pipeline stage");
+        }
+      }
       
       const quote = await storage.updateQuote(params.data.id, quoteData);
       if (!quote) {
@@ -1375,6 +1396,15 @@ export function registerQuoteRoutes(app: Express) {
           message: "lost_reason is required when setting stage to lost" 
         });
       }
+
+      const existingQuote = await storage.getQuote(params.data.id);
+      if (!existingQuote) {
+        return res.status(404).json({ message: "Quote not found" });
+      }
+
+      if (isArchivedQuoteVersion(existingQuote)) {
+        return sendArchivedQuoteResponse(res, "change its pipeline stage");
+      }
       
       const updateData: any = { dealStage: deal_stage };
       if (lost_reason) {
@@ -1402,6 +1432,15 @@ export function registerQuoteRoutes(app: Express) {
           message: "Invalid request parameters",
           errors: params.error.errors,
         });
+      }
+
+      const quote = await storage.getQuote(params.data.id);
+      if (!quote) {
+        return res.status(404).json({ message: "Quote not found" });
+      }
+
+      if (isArchivedQuoteVersion(quote)) {
+        return sendArchivedQuoteResponse(res, "send it to Ops");
       }
 
       const result = await sendQuoteToOperations(params.data.id, {
@@ -1491,6 +1530,34 @@ export function registerQuoteRoutes(app: Express) {
     }
   });
 
+  app.post("/api/quotes/:id/use-version", isAuthenticated, async (req, res) => {
+    try {
+      const params = idParamSchema.safeParse(req.params);
+      if (!params.success) {
+        return res.status(400).json({
+          message: "Invalid request parameters",
+          errors: params.error.errors
+        });
+      }
+
+      const targetQuote = await storage.getQuote(params.data.id);
+      if (!targetQuote) {
+        return res.status(404).json({ message: "Quote not found" });
+      }
+
+      const updatedQuote = await storage.setCurrentQuoteVersion(params.data.id);
+      if (!updatedQuote) {
+        return res.status(404).json({ message: "Quote not found" });
+      }
+
+      const quoteWithDetails = await storage.getQuoteWithDetails(updatedQuote.id);
+      res.json(quoteWithDetails || updatedQuote);
+    } catch (error) {
+      console.error("Error setting current quote version:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
   app.post("/api/quotes/:id/enable-esignature", isAuthenticated, async (req, res) => {
     try {
       const params = idParamSchema.safeParse(req.params);
@@ -1504,6 +1571,10 @@ export function registerQuoteRoutes(app: Express) {
       const quote = await storage.getQuote(params.data.id);
       if (!quote) {
         return res.status(404).json({ message: "Quote not found" });
+      }
+
+      if (isArchivedQuoteVersion(quote)) {
+        return sendArchivedQuoteResponse(res, "prepare it for customer approval");
       }
 
       const signingToken = quote.signingToken || nanoid(32);
@@ -1544,6 +1615,10 @@ export function registerQuoteRoutes(app: Express) {
       const quote = await storage.getQuoteWithDetails(params.data.id);
       if (!quote) {
         return res.status(404).json({ message: "Quote not found" });
+      }
+
+      if (isArchivedQuoteVersion(quote)) {
+        return sendArchivedQuoteResponse(res, "send it for customer approval");
       }
 
       if (!quote.enableESignature || !quote.signingToken) {
@@ -1692,6 +1767,10 @@ export function registerQuoteRoutes(app: Express) {
         return res.status(403).json({ message: "E-signature not enabled for this quote" });
       }
 
+      if (isArchivedQuoteVersion(quote)) {
+        return sendArchivedQuoteResponse(res, "review or sign it", 410);
+      }
+
       res.json({
         id: quote.id,
         quoteNumber: quote.quoteNumber,
@@ -1736,6 +1815,10 @@ export function registerQuoteRoutes(app: Express) {
         return res.status(403).json({ message: "E-signature not enabled for this quote" });
       }
 
+      if (isArchivedQuoteVersion(quote)) {
+        return sendArchivedQuoteResponse(res, "review or sign it", 410);
+      }
+
       res.json(buildPublicSigningQuote(quote));
     } catch (error) {
       console.error("Error getting full quote data:", error);
@@ -1767,6 +1850,10 @@ export function registerQuoteRoutes(app: Express) {
       const quote = await storage.getQuoteWithDetails(params.data.id);
       if (!quote) {
         return res.status(404).json({ message: "Quote not found" });
+      }
+
+      if (isArchivedQuoteVersion(quote)) {
+        return sendArchivedQuoteResponse(res, "sign it for EDG");
       }
 
       if (!quote.enableESignature || !quote.signingToken) {
@@ -1850,6 +1937,10 @@ export function registerQuoteRoutes(app: Express) {
       const quote = await storage.getQuoteBySigningToken(params.data.token);
       if (!quote) {
         return res.status(404).json({ message: "Invalid or expired signing link" });
+      }
+
+      if (isArchivedQuoteVersion(quote)) {
+        return sendArchivedQuoteResponse(res, "sign it", 410);
       }
 
       if (!quote.enableESignature) {

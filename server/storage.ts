@@ -113,6 +113,7 @@ export interface IStorage {
   // Quote versioning methods
   getQuoteVersions(quoteId: number): Promise<QuoteWithDetails[]>;
   createQuoteVersion(originalQuoteId: number): Promise<Quote>;
+  setCurrentQuoteVersion(quoteId: number): Promise<Quote | undefined>;
   markPreviousVersionsAsOld(parentQuoteId: number): Promise<void>;
 
 
@@ -455,11 +456,24 @@ export class MemStorage {
     if (!original) {
       throw new Error('Original quote not found');
     }
+    const parentId = original.parentQuoteId || original.id;
+    const familyVersions = Array.from(this.quotes.values()).filter(
+      quote => quote.id === parentId || quote.parentQuoteId === parentId
+    );
+    const nextVersionNumber = Math.max(
+      original.versionNumber,
+      ...familyVersions.map(quote => quote.versionNumber || 1)
+    ) + 1;
+    for (const quote of familyVersions) {
+      quote.isLatestVersion = false;
+    }
+    const baseQuoteNumber = original.quoteNumber.replace(/-v\d+$/, '');
     const newVersion: Quote = {
       ...original,
       id: this.currentQuoteId++,
-      versionNumber: original.versionNumber + 1,
-      parentQuoteId: original.parentQuoteId || original.id,
+      quoteNumber: `${baseQuoteNumber}-v${nextVersionNumber}`,
+      versionNumber: nextVersionNumber,
+      parentQuoteId: parentId,
       isLatestVersion: true,
       enableESignature: false,
       signingToken: null,
@@ -476,6 +490,21 @@ export class MemStorage {
     };
     this.quotes.set(newVersion.id, newVersion);
     return newVersion;
+  }
+
+  async setCurrentQuoteVersion(quoteId: number): Promise<Quote | undefined> {
+    const targetQuote = this.quotes.get(quoteId);
+    if (!targetQuote) return undefined;
+
+    const parentId = targetQuote.parentQuoteId || targetQuote.id;
+    for (const quote of this.quotes.values()) {
+      if (quote.id === parentId || quote.parentQuoteId === parentId) {
+        quote.isLatestVersion = quote.id === quoteId;
+        quote.updatedAt = new Date();
+      }
+    }
+
+    return this.quotes.get(quoteId);
   }
 
   async markPreviousVersionsAsOld(parentQuoteId: number): Promise<void> {
@@ -1018,7 +1047,7 @@ export class DatabaseStorage implements IStorage {
 
   async getAllQuotes(options?: { page?: number; pageSize?: number }): Promise<QuoteWithDetails[]> {
     await ensureSignatureAuditColumns();
-    // Only get latest versions by default to avoid showing old quote revisions
+    // Only get the current version by default so archived quote revisions stay in history.
     const baseQuery = db
       .select()
       .from(quotes)
@@ -1322,7 +1351,19 @@ export class DatabaseStorage implements IStorage {
       
       // Determine parent ID and new version number
       const parentId = originalQuote.parentQuoteId || originalQuote.id;
-      const newVersionNumber = originalQuote.versionNumber + 1;
+      const versionRows = await tx
+        .select({ versionNumber: quotes.versionNumber })
+        .from(quotes)
+        .where(
+          or(
+            eq(quotes.id, parentId),
+            eq(quotes.parentQuoteId, parentId)
+          )
+        );
+      const newVersionNumber = Math.max(
+        originalQuote.versionNumber,
+        ...versionRows.map((version) => version.versionNumber || 1)
+      ) + 1;
       
       // Mark all previous versions as not latest
       await tx
@@ -1454,6 +1495,36 @@ export class DatabaseStorage implements IStorage {
       }
       
       return newQuote;
+    });
+  }
+
+  async setCurrentQuoteVersion(quoteId: number): Promise<Quote | undefined> {
+    await ensureSignatureAuditColumns();
+
+    return await db.transaction(async (tx) => {
+      const [targetQuote] = await tx.select().from(quotes).where(eq(quotes.id, quoteId));
+      if (!targetQuote) {
+        return undefined;
+      }
+
+      const parentId = targetQuote.parentQuoteId || targetQuote.id;
+      const versionFamilyFilter = or(
+        eq(quotes.id, parentId),
+        eq(quotes.parentQuoteId, parentId)
+      );
+
+      await tx
+        .update(quotes)
+        .set({ isLatestVersion: false, updatedAt: new Date() })
+        .where(versionFamilyFilter);
+
+      const [updatedQuote] = await tx
+        .update(quotes)
+        .set({ isLatestVersion: true, updatedAt: new Date() })
+        .where(eq(quotes.id, quoteId))
+        .returning();
+
+      return updatedQuote || undefined;
     });
   }
 

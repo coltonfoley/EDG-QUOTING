@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
-import { FileText, Plus, Eye, Send, Mail, CheckCircle, AlertCircle, Clock, Link2, Copy, Download, PenTool, Package, Loader2 } from "lucide-react";
+import { Archive, FileText, Plus, Eye, Send, Mail, CheckCircle, AlertCircle, Clock, Link2, Copy, Download, PenTool, Package, Loader2 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { formatCurrency, calculateQuoteTotals, type QuoteTotalsLineItem } from "@/lib/utils";
@@ -350,6 +350,7 @@ export function QuoteSummary({ quote, onUpdateQuote, onGenerateProposal, isPrepa
     quote.tariffRate ?? 0
   );
   const signatureAudit = quote.signatureAuditTrail as { documentFingerprint?: string; entries?: Array<{ signerName?: string; signedAt?: string }> } | null;
+  const isArchivedVersion = quote.isLatestVersion === false;
 
   return (
     <>
@@ -653,6 +654,14 @@ export function QuoteSummary({ quote, onUpdateQuote, onGenerateProposal, isPrepa
             <CardTitle className="text-base">Proposal Approval</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
+            {isArchivedVersion && (
+              <Alert className="border-amber-200 bg-amber-50">
+                <Archive className="h-4 w-4 text-amber-700" />
+                <AlertDescription className="text-amber-900">
+                  This version is archived. Make it current before using approval, proposal, BOM, or Ops tools.
+                </AlertDescription>
+              </Alert>
+            )}
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
                 <Label htmlFor="enable-esignature" className="text-sm font-medium">
@@ -667,7 +676,7 @@ export function QuoteSummary({ quote, onUpdateQuote, onGenerateProposal, isPrepa
                 data-testid="switch-enable-esignature"
                 checked={quote.enableESignature ?? false}
                 onCheckedChange={(checked) => toggleESignatureMutation.mutate(checked)}
-                disabled={toggleESignatureMutation.isPending}
+                disabled={toggleESignatureMutation.isPending || isArchivedVersion}
               />
             </div>
 
@@ -761,7 +770,7 @@ export function QuoteSummary({ quote, onUpdateQuote, onGenerateProposal, isPrepa
 
                 <Button
                   onClick={handleSigningLinkClick}
-                  disabled={generateSigningLinkMutation.isPending || !!(quote.clientSignedAt && quote.companySignedAt)}
+                  disabled={isArchivedVersion || generateSigningLinkMutation.isPending || !!(quote.clientSignedAt && quote.companySignedAt)}
                   className="w-full"
                   data-testid="button-send-for-signature"
                 >
@@ -774,6 +783,7 @@ export function QuoteSummary({ quote, onUpdateQuote, onGenerateProposal, isPrepa
                     onClick={() => setShowCompanySignDialog(true)}
                     variant="outline"
                     className="w-full border-edg-teal text-edg-teal hover:bg-edg-light-teal hover:bg-opacity-10"
+                    disabled={isArchivedVersion}
                     data-testid="button-sign-as-company"
                   >
                     <PenTool className="mr-2 h-4 w-4" />
@@ -794,7 +804,7 @@ export function QuoteSummary({ quote, onUpdateQuote, onGenerateProposal, isPrepa
             <div className={onGenerateProposal ? "grid grid-cols-1 gap-3 sm:grid-cols-2" : ""}>
               <Button
                 onClick={() => downloadBomPdfMutation.mutate()}
-                disabled={downloadBomPdfMutation.isPending || quote.lineItems.length === 0}
+                disabled={isArchivedVersion || downloadBomPdfMutation.isPending || quote.lineItems.length === 0}
                 variant="outline"
                 className="w-full"
                 data-testid="button-download-bom"
@@ -806,7 +816,7 @@ export function QuoteSummary({ quote, onUpdateQuote, onGenerateProposal, isPrepa
               {onGenerateProposal && (
                 <Button
                   onClick={onGenerateProposal}
-                  disabled={isPreparingProposal || quote.lineItems.length === 0}
+                  disabled={isArchivedVersion || isPreparingProposal || quote.lineItems.length === 0}
                   variant="outline"
                   className="w-full border-edg-black text-edg-black hover:bg-edg-black hover:text-white"
                   data-testid="button-generate-proposal"

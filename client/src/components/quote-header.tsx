@@ -418,7 +418,8 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
 
   const opsJobUrl = opsImportResult?.opsJobUrl || null;
   const opsJobLabel = getOpsJobLabel(opsImportResult);
-  const canSendToOps = Boolean(quote?.id && quote.lineItems?.length);
+  const isArchivedVersion = quote?.isLatestVersion === false;
+  const canSendToOps = Boolean(quote?.id && quote.lineItems?.length && !isArchivedVersion);
   const hasLineItems = Boolean(quote?.lineItems?.length);
   const hasProjectName = Boolean((form.watch("projectName") as string | undefined)?.trim());
   const proposalShared = Boolean(quote?.signingToken || quote?.signatureEmailSentAt || quote?.clientSignedAt || quote?.companySignedAt);
@@ -479,7 +480,7 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
                   <Select
                     value={(form.watch("dealStage") as string) || "new_lead"}
                     onValueChange={handleDealStageChange}
-                    disabled={updateDealStageMutation.isPending}
+                    disabled={updateDealStageMutation.isPending || isArchivedVersion}
                   >
                     <SelectTrigger className="w-48">
                       <SelectValue />
@@ -501,7 +502,7 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
                         variant="outline"
                         disabled={!canSendToOps || sendToOpsMutation.isPending}
                         data-testid="button-send-to-ops"
-                        title={!canSendToOps ? "Add at least one line item before sending to Ops" : "Create or open the matching Ops job"}
+                        title={isArchivedVersion ? "Make this the current version before sending it to Ops" : !canSendToOps ? "Add at least one line item before sending to Ops" : "Create or open the matching Ops job"}
                       >
                         {sendToOpsMutation.isPending ? (
                           <Clock className="mr-2 h-4 w-4 animate-spin" />
