@@ -12,6 +12,7 @@ import {
 } from "./validation-schemas";
 import multer from "multer";
 import { extractProductsFromPriceSheet, analyzePriceSheetColumns } from "./openai";
+import { applySundanceSkuDefault, deriveSundanceSku } from "./sundanceSku";
 
 import { registerAccountRoutes } from "./routes/accountRoutes";
 import { registerQuoteRoutes } from "./routes/quoteRoutes";
@@ -379,8 +380,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const skuRegex = /\(([A-Z0-9][A-Z0-9\-]+)\)\s*$/i;
       for (const p of allProducts) {
         productLookupByName.set(p.name.toLowerCase().trim(), p);
-        if (p.sku) {
-          productLookupBySku.set(p.sku.toUpperCase().trim(), p);
+        const lookupSku = deriveSundanceSku(p) || p.sku;
+        if (lookupSku) {
+          productLookupBySku.set(lookupSku.toUpperCase().trim(), p);
         }
         const skuMatch = p.name.match(skuRegex);
         if (skuMatch) {
@@ -390,7 +392,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       for (const product of products) {
         try {
-          const { name, sku, manufacturer, category, unit, description, retailPrice, cost } = product;
+          const { name, manufacturer, category, unit, description, retailPrice, cost } = product;
+          const sku = deriveSundanceSku(product) || product.sku;
 
           if (!name || typeof retailPrice !== 'number' || typeof cost !== 'number') {
             errors.push(`Invalid product data for: ${name || 'unnamed'}`);
@@ -431,7 +434,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             await storage.updateProduct(existingProduct.id, updateData);
             updated++;
           } else {
-            const productData = {
+            const productData = applySundanceSkuDefault({
               name: name.trim(),
               sku: sku ? sku.trim() : null,
               description: description || '',
@@ -442,7 +445,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               defaultDiscountType: pricingFields.defaultDiscountType,
               defaultDiscountValue: pricingFields.defaultDiscountValue,
               unit: unit || 'each',
-            };
+            });
             
             const newProduct = await storage.createProduct(productData);
             productLookupByName.set(name.toLowerCase().trim(), newProduct);

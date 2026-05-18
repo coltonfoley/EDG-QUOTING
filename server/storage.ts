@@ -6,6 +6,7 @@ import { promisify } from "util";
 import connectPg from "connect-pg-simple";
 import session from "express-session";
 import { calculateCostFromMsrpAndDiscount, deriveProductCostFields } from "@shared/pricing";
+import { applySundanceSkuDefault } from "./sundanceSku";
 
 const scryptAsync = promisify(scrypt);
 
@@ -1772,7 +1773,7 @@ export class DatabaseStorage implements IStorage {
     // Strip any validation metadata field if present
     const { _categoryValidation, ...cleanProduct } = insertProduct as any;
     
-    const productData = normalizeProductPricingPayload({ ...cleanProduct });
+    const productData = applySundanceSkuDefault(normalizeProductPricingPayload({ ...cleanProduct }));
     
     // Ensure manufacturer field is present
     if (!productData.manufacturer) {
@@ -1792,7 +1793,10 @@ export class DatabaseStorage implements IStorage {
     const { _categoryValidation, ...cleanProductData } = productData as any;
     
     const existingProduct = await this.getProduct(id);
-    const updateData = normalizeProductPricingPayload({ ...cleanProductData }, existingProduct);
+    const updateData = applySundanceSkuDefault(
+      normalizeProductPricingPayload({ ...cleanProductData }, existingProduct),
+      existingProduct,
+    );
     
     const [updated] = await db
       .update(products)
@@ -1828,7 +1832,10 @@ export class DatabaseStorage implements IStorage {
       const updated = await db.transaction(async (tx) => {
         const results = [];
         for (const product of currentProducts) {
-          const updateData = normalizeProductPricingPayload({ ...cleanUpdates }, product);
+          const updateData = applySundanceSkuDefault(
+            normalizeProductPricingPayload({ ...cleanUpdates }, product),
+            product,
+          );
           const [result] = await tx
             .update(products)
             .set(updateData)
@@ -1842,14 +1849,26 @@ export class DatabaseStorage implements IStorage {
       return updated.length;
     }
 
-    const updateData = { ...cleanUpdates };
+    const currentProducts = await db
+      .select()
+      .from(products)
+      .where(inArray(products.id, productIds));
 
-    const result = await db
-      .update(products)
-      .set(updateData)
-      .where(inArray(products.id, productIds))
-      .returning();
-    return result.length;
+    const updated = await db.transaction(async (tx) => {
+      const results = [];
+      for (const product of currentProducts) {
+        const updateData = applySundanceSkuDefault({ ...cleanUpdates }, product);
+        const [result] = await tx
+          .update(products)
+          .set(updateData)
+          .where(eq(products.id, product.id))
+          .returning();
+        if (result) results.push(result);
+      }
+      return results;
+    });
+
+    return updated.length;
   }
 
   async getPricingDefault(scope: string): Promise<PricingDefault | undefined> {
