@@ -111,30 +111,25 @@ if (storageProvider === "replit") {
 
 const emailProvider = allowValue(
   "EMAIL_PROVIDER",
-  ["replit-gmail", "google-workspace-gmail", "resend"],
-  "replit-gmail"
+  ["google-workspace-gmail"],
+  "google-workspace-gmail"
 );
 
-if (emailProvider === "replit-gmail") {
-  requireVars(["REPLIT_CONNECTORS_HOSTNAME"], "Replit Gmail needs the connector hostname.");
-  requireOneOf(["REPL_IDENTITY", "WEB_REPL_RENEWAL"], "Replit Gmail needs one connector token.");
-  warnings.push("EMAIL_PROVIDER is still replit-gmail. Use google-workspace-gmail for the Google Workspace target.");
-} else if (emailProvider === "google-workspace-gmail") {
-  requireVars(
-    [
-      "GOOGLE_WORKSPACE_CLIENT_ID",
-      "GOOGLE_WORKSPACE_CLIENT_SECRET",
-      "GOOGLE_WORKSPACE_REFRESH_TOKEN",
-    ],
-    "Google Workspace Gmail uses OAuth refresh-token credentials."
-  );
-  warnMissing("GOOGLE_WORKSPACE_EMAIL_FROM", "Set this to the EDG mailbox that should send customer emails.");
-} else if (emailProvider === "resend") {
-  requireVars(["RESEND_API_KEY"], "Resend transactional email needs an API key.");
-  requireOneOf(
-    ["RESEND_EMAIL_FROM", "EMAIL_FROM"],
-    "Resend needs a verified sender address, for example EDG Patio & Shade <quotes@edgpatioshade.com>."
-  );
+if (emailProvider === "google-workspace-gmail") {
+  const hasWorkspaceServiceAccount = has("GOOGLE_SERVICE_ACCOUNT_KEY");
+  const hasWorkspaceOauth =
+    has("GOOGLE_WORKSPACE_CLIENT_ID") &&
+    has("GOOGLE_WORKSPACE_CLIENT_SECRET") &&
+    has("GOOGLE_WORKSPACE_REFRESH_TOKEN");
+
+  if (!hasWorkspaceServiceAccount && !hasWorkspaceOauth) {
+    errors.push(
+      "Google Workspace Gmail needs either GOOGLE_SERVICE_ACCOUNT_KEY or GOOGLE_WORKSPACE_CLIENT_ID, GOOGLE_WORKSPACE_CLIENT_SECRET, and GOOGLE_WORKSPACE_REFRESH_TOKEN."
+    );
+  }
+
+  requireVars(["GOOGLE_WORKSPACE_EMAIL_FROM"], "Set this to the EDG mailbox that should send customer emails.");
+  warnMissing("GOOGLE_WORKSPACE_EMAIL_REPLY_TO", "Set this so customer replies land in the EDG sales inbox.");
 }
 
 warnMissing("RAINMAKER_API_KEY", "Website lead intake and scripts/smoke-lead-intake.mjs need it.");

@@ -307,7 +307,7 @@ export function QuoteSummary({ quote, onUpdateQuote, onGenerateProposal, isPrepa
         title: "Email Sent!",
         description: data.message || "E-signature email sent to customer"
       });
-      // Don't clear the personalized message - keep it for potential resend
+      // Don't clear the personalized message - keep it for another send
       // Refresh to get updated signatureEmailSentAt
       queryClient.invalidateQueries({ queryKey: [`/api/quotes/${quote.id}`] });
     },

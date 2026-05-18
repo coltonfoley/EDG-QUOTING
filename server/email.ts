@@ -1,41 +1,36 @@
-import {
-  sendEmail as sendReplitGmailEmail,
-  type InlineAttachment,
-} from "./gmail";
 import { sendGoogleWorkspaceEmail } from "./googleWorkspaceEmail";
-import { sendResendEmail } from "./resendEmail";
 
-export type EmailProvider = "replit-gmail" | "google-workspace-gmail" | "resend";
+export type EmailProvider = "google-workspace-gmail";
+
+export interface InlineAttachment {
+  contentId: string;
+  base64Data: string;
+  mimeType: string;
+  filename: string;
+}
 
 export interface SendEmailParams {
   to: string;
   subject: string;
   htmlBody: string;
   textBody?: string;
+  replyTo?: string;
   inlineAttachments?: InlineAttachment[];
 }
 
-function getEmailProvider(): EmailProvider {
-  const provider = (process.env.EMAIL_PROVIDER || "replit-gmail").trim();
+function assertGoogleWorkspaceProvider(): EmailProvider {
+  const provider = (process.env.EMAIL_PROVIDER || "google-workspace-gmail").trim();
 
-  if (provider === "replit-gmail" || provider === "google-workspace-gmail" || provider === "resend") {
+  if (provider === "google-workspace-gmail") {
     return provider;
   }
 
   throw new Error(
-    `Unsupported EMAIL_PROVIDER "${provider}". Supported providers: replit-gmail, google-workspace-gmail, resend.`
+    `Unsupported EMAIL_PROVIDER "${provider}". Rainmaker customer emails now use google-workspace-gmail only.`
   );
 }
 
 export async function sendEmail(params: SendEmailParams) {
-  switch (getEmailProvider()) {
-    case "replit-gmail":
-      return sendReplitGmailEmail(params);
-    case "google-workspace-gmail":
-      return sendGoogleWorkspaceEmail(params);
-    case "resend":
-      return sendResendEmail(params);
-  }
+  assertGoogleWorkspaceProvider();
+  return sendGoogleWorkspaceEmail(params);
 }
-
-export type { InlineAttachment };
