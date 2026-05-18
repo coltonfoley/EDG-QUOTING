@@ -1,4 +1,5 @@
 import { google } from "googleapis";
+import { JWT } from "google-auth-library";
 import type { InlineAttachment, SendEmailParams } from "./email";
 
 function requireEnv(name: string): string {
@@ -30,6 +31,34 @@ function getFromHeader(): string | undefined {
   if (!fromName) return sanitizeHeader(from);
 
   return `"${sanitizeHeader(fromName).replace(/"/g, '\\"')}" <${sanitizeHeader(from)}>`;
+}
+
+function getReplyToHeader(params: SendEmailParams): string | undefined {
+  const replyTo =
+    params.replyTo?.trim() ||
+    process.env.GOOGLE_WORKSPACE_EMAIL_REPLY_TO?.trim() ||
+    process.env.EMAIL_REPLY_TO?.trim();
+
+  return replyTo ? sanitizeHeader(replyTo) : undefined;
+}
+
+function optionalEnv(name: string): string | undefined {
+  const value = process.env[name]?.trim();
+  return value || undefined;
+}
+
+function parseServiceAccountKey() {
+  const serviceAccountKeyJson = optionalEnv("GOOGLE_SERVICE_ACCOUNT_KEY");
+  if (!serviceAccountKeyJson) return null;
+
+  try {
+    return JSON.parse(serviceAccountKeyJson) as {
+      client_email?: string;
+      private_key?: string;
+    };
+  } catch {
+    throw new Error("Failed to parse GOOGLE_SERVICE_ACCOUNT_KEY JSON");
+  }
 }
 
 function encodeRawMessage(message: string): string {
@@ -71,8 +100,10 @@ function createAlternativeBodyParts(
 
 function createMessage(params: SendEmailParams): string {
   const fromHeader = getFromHeader();
+  const replyToHeader = getReplyToHeader(params);
   const headers = [
     fromHeader ? `From: ${fromHeader}` : undefined,
+    replyToHeader ? `Reply-To: ${replyToHeader}` : undefined,
     `To: ${sanitizeHeader(params.to)}`,
     `Subject: ${encodeSubjectLine(params.subject)}`,
     "MIME-Version: 1.0",
@@ -124,6 +155,19 @@ function createInlineAttachmentParts(
 }
 
 function getGmailClient() {
+  const serviceAccountKey = parseServiceAccountKey();
+  if (serviceAccountKey) {
+    const fromEmail = requireEnv("GOOGLE_WORKSPACE_EMAIL_FROM");
+    const jwtClient = new JWT({
+      email: serviceAccountKey.client_email,
+      key: serviceAccountKey.private_key,
+      scopes: ["https://www.googleapis.com/auth/gmail.send"],
+      subject: fromEmail,
+    });
+
+    return google.gmail({ version: "v1", auth: jwtClient });
+  }
+
   const oauth2Client = new google.auth.OAuth2(
     requireEnv("GOOGLE_WORKSPACE_CLIENT_ID"),
     requireEnv("GOOGLE_WORKSPACE_CLIENT_SECRET")

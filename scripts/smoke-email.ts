@@ -12,7 +12,7 @@ if (!recipient) {
   process.exit(1);
 }
 
-const provider = process.env.EMAIL_PROVIDER || "replit-gmail";
+const provider = process.env.EMAIL_PROVIDER || "google-workspace-gmail";
 const timestamp = new Date().toISOString();
 
 try {
