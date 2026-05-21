@@ -55,7 +55,7 @@ export async function generateSignedPDF(options: GenerateSignedPDFOptions): Prom
     email: 'info@edgpatioshade.com'
   };
 
-  // Get contract text (combine notes with contract terms) if includeContract is true
+  // Get contract text (combine customer-facing quote notes with contract terms) if includeContract is true
   let contractText = '';
   if (includeContract) {
     const parts = [];

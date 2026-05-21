@@ -26,6 +26,7 @@ let pricingDefaultsTableReady: Promise<void> | null = null;
 export async function ensureSignatureAuditColumns(): Promise<void> {
   if (!signatureAuditColumnsReady) {
     signatureAuditColumnsReady = pool.query(`
+      ALTER TABLE "quotes" ADD COLUMN IF NOT EXISTS "internal_notes" text;
       ALTER TABLE "quotes" ADD COLUMN IF NOT EXISTS "signed_document_snapshot" jsonb;
       ALTER TABLE "quotes" ADD COLUMN IF NOT EXISTS "signature_audit_trail" jsonb;
     `).then(() => undefined);

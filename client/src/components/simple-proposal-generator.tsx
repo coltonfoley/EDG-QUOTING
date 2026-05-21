@@ -679,9 +679,9 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
 
               <div className="flex items-center justify-between">
                 <div className="flex flex-col">
-                  <Label htmlFor="include-contract">Include Notes & Terms</Label>
+                  <Label htmlFor="include-contract">Include Contract Notes & Terms</Label>
                   {!hasContractData && (
-                    <span className="text-xs text-gray-500 mt-1">No notes or contract terms available for this quote</span>
+                    <span className="text-xs text-gray-500 mt-1">No contract notes or terms available for this quote</span>
                   )}
                 </div>
                 <Switch 

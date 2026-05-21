@@ -116,6 +116,7 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
       jobsiteCountry: quote?.jobsiteCountry || "",
       jobsitePlaceId: quote?.jobsitePlaceId || "",
       estimatedStartDate: quote?.estimatedStartDate || "",
+      internalNotes: quote?.internalNotes || "",
       dealStage: quote?.dealStage || "new_lead",
       taxRate: quote?.taxRate || "0",
       tariffRate: quote?.tariffRate || "0",
@@ -141,6 +142,7 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
         jobsiteCountry: quote.jobsiteCountry || "",
         jobsitePlaceId: quote.jobsitePlaceId || "",
         estimatedStartDate: quote.estimatedStartDate || "",
+        internalNotes: quote.internalNotes || "",
         dealStage: quote.dealStage || "new_lead",
         taxRate: quote.taxRate || "0",
         tariffRate: quote.tariffRate || "0",
@@ -674,6 +676,26 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
                             onChange={(e) => handleFieldChange("projectName", e.target.value, field.onChange)}
                             onBlur={handleFieldBlur}
                             data-testid="input-project-name" 
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="internalNotes"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Internal Notes</FormLabel>
+                        <FormControl>
+                          <Textarea
+                            rows={3}
+                            placeholder="Internal handoff notes for Ops. Not shown on the customer proposal or contract."
+                            value={field.value as string || ""}
+                            onChange={(e) => handleFieldChange("internalNotes", e.target.value, field.onChange)}
+                            onBlur={handleFieldBlur}
+                            data-testid="textarea-internal-notes"
                           />
                         </FormControl>
                         <FormMessage />
