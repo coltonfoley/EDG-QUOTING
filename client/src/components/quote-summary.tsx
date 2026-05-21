@@ -332,6 +332,12 @@ export function QuoteSummary({ quote, onUpdateQuote, onGenerateProposal, isPrepa
     companySignMutation.mutate(companySignature);
   };
 
+  const isShippingTaxable = quote.isShippingTaxable === true;
+  const taxableLineCount = quote.lineItems.filter((item) => item.isTaxable !== false).length;
+  const taxBaseSummary = quote.lineItems.length === 0
+    ? "No line items yet."
+    : `${taxableLineCount} of ${quote.lineItems.length} line${quote.lineItems.length === 1 ? "" : "s"} taxable; shipping ${isShippingTaxable ? "included" : "excluded"}.`;
+
   const totals = calculateQuoteTotals(
     quote.lineItems.map((item: QuoteTotalsLineItem) => ({
       quantity: item.quantity,
@@ -346,7 +352,7 @@ export function QuoteSummary({ quote, onUpdateQuote, onGenerateProposal, isPrepa
     quote.taxRate ?? 0,
     quote.discount ?? 0,
     quote.shipping ?? 0,
-    quote.isShippingTaxable ?? true,
+    isShippingTaxable,
     quote.tariffRate ?? 0
   );
   const signatureAudit = quote.signatureAuditTrail as { documentFingerprint?: string; entries?: Array<{ signerName?: string; signedAt?: string }> } | null;
@@ -482,7 +488,7 @@ export function QuoteSummary({ quote, onUpdateQuote, onGenerateProposal, isPrepa
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <div>
-                <Label htmlFor="taxRate">Tax Rate (%)</Label>
+                <Label htmlFor="taxRate">Sales Tax Rate (%)</Label>
                 <Input
                   id="taxRate"
                   type="number"
@@ -500,9 +506,12 @@ export function QuoteSummary({ quote, onUpdateQuote, onGenerateProposal, isPrepa
                   }}
                   className="mt-1"
                 />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Applies only to rows marked Sales Tax, plus shipping when Tax shipping is checked.
+                </p>
               </div>
               <div>
-                <Label htmlFor="tariffRate">Tariff Rate (%) - Internal</Label>
+                <Label htmlFor="tariffRate">Tariff Rate (%)</Label>
                 <Input
                   id="tariffRate"
                   type="number"
@@ -521,9 +530,12 @@ export function QuoteSummary({ quote, onUpdateQuote, onGenerateProposal, isPrepa
                   className="mt-1"
                   data-testid="input-tariff-rate"
                 />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Applies only to rows with Tariff checked; treated as pass-through, not margin.
+                </p>
               </div>
               <div>
-                <Label htmlFor="discount">Discount (%)</Label>
+                <Label htmlFor="discount">Quote Discount (%)</Label>
                 <Input
                   id="discount"
                   type="number"
@@ -541,9 +553,12 @@ export function QuoteSummary({ quote, onUpdateQuote, onGenerateProposal, isPrepa
                   }}
                   className="mt-1"
                 />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Customer-level discount across the full quote.
+                </p>
               </div>
               <div>
-                <Label htmlFor="shipping">Shipping ($)</Label>
+                <Label htmlFor="shipping">Shipping / Delivery ($)</Label>
                 <Input
                   id="shipping"
                   type="number"
@@ -566,19 +581,23 @@ export function QuoteSummary({ quote, onUpdateQuote, onGenerateProposal, isPrepa
                 <div className="flex items-center gap-2 mt-2">
                   <Checkbox
                     id="isShippingTaxable"
-                    checked={quote.isShippingTaxable !== false}
+                    checked={isShippingTaxable}
                     onCheckedChange={(checked) => {
                       onUpdateQuote("isShippingTaxable", checked === true);
                     }}
                     data-testid="checkbox-shipping-taxable"
+                    title={isShippingTaxable ? "Shipping is included in sales tax" : "Shipping is excluded from sales tax"}
                   />
                   <Label 
                     htmlFor="isShippingTaxable" 
                     className="text-sm font-normal cursor-pointer"
                   >
-                    Taxable
+                    Tax shipping
                   </Label>
                 </div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Check only when shipping or delivery should be part of the sales-tax base.
+                </p>
               </div>
             </div>
           </CardContent>
@@ -629,10 +648,13 @@ export function QuoteSummary({ quote, onUpdateQuote, onGenerateProposal, isPrepa
               </div>
             )}
             <div className="flex justify-between items-center text-sm">
-              <span className="text-muted-foreground">Tax ({quote.taxRate}%):</span>
+              <span className="text-muted-foreground">Sales Tax ({quote.taxRate ?? 0}%):</span>
               <span className="font-medium text-foreground">
                 {formatCurrency(totals.taxAmount)}
               </span>
+            </div>
+            <div className="rounded-md bg-muted/60 px-3 py-2 text-xs text-muted-foreground">
+              Tax base: {taxBaseSummary}
             </div>
             <div className="border-t border-border pt-3">
               <div className="flex justify-between items-center">
