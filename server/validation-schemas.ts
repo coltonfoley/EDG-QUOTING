@@ -192,6 +192,7 @@ export const insertQuoteSchema = baseQuoteSchema.extend({
   jobsitePlaceId: z.string().max(500, "Place ID is too long").optional(),
   estimatedStartDate: z.string().optional(),
   notes: z.string().max(5000, "Notes are too long").optional(),
+  internalNotes: z.string().max(5000, "Internal notes are too long").optional(),
   taxRate: z.union([z.string(), z.number(), z.null()])
     .transform(val => val === null ? "0" : (typeof val === 'string' ? val : val.toString()))
     .refine(val => {
@@ -253,6 +254,7 @@ export const createQuoteSchema = z.object({
   jobsitePlaceId: z.string().max(500, "Place ID is too long").optional(),
   estimatedStartDate: z.string().optional(),
   notes: z.string().max(5000, "Notes are too long").optional(),
+  internalNotes: z.string().max(5000, "Internal notes are too long").optional(),
   
   // Financial fields
   taxRate: z.union([z.string(), z.number(), z.null()])
@@ -320,6 +322,7 @@ export const updateQuoteSchema = z.object({
   jobsitePlaceId: z.string().max(500, "Place ID is too long").optional(),
   estimatedStartDate: z.string().optional(),
   notes: z.string().max(5000, "Notes are too long").optional(),
+  internalNotes: z.string().max(5000, "Internal notes are too long").optional(),
   // Financial fields - null means "no change" (undefined), not "set to 0"
   // This prevents partial updates from accidentally zeroing out these fields
   taxRate: z.union([z.string(), z.number(), z.null()])

@@ -193,6 +193,8 @@ export const buildOperationsPayload = (quote: any, dryRun = false) => {
       jobsiteAddress: formatJobsiteAddress(quote),
       estimatedStartDate: quote.estimatedStartDate,
       notes: quote.notes,
+      contractNotes: quote.notes,
+      internalNotes: quote.internalNotes,
       totals,
       account: quote.account || quote.customer || null,
       lineItems: (quote.lineItems || []).map((item: any) => ({

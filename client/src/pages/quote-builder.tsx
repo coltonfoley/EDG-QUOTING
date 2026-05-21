@@ -299,6 +299,7 @@ export default function QuoteBuilder() {
     jobsitePlaceId: null,
     estimatedStartDate: "",
     notes: "",
+    internalNotes: "",
     taxRate: "8.5",
     tariffRate: "0",
     discount: "0",

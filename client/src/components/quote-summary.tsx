@@ -49,7 +49,7 @@ export function QuoteSummary({ quote, onUpdateQuote, onGenerateProposal, isPrepa
     return !Number.isNaN(nextNumber) && nextNumber !== currentNumber;
   };
 
-  // Sync localNotes with quote.notes when not editing
+  // Sync customer-facing contract notes with quote.notes when not editing
   useEffect(() => {
     if (!isEditingNotes) {
       setLocalNotes(quote.notes || "");
@@ -355,7 +355,7 @@ export function QuoteSummary({ quote, onUpdateQuote, onGenerateProposal, isPrepa
   return (
     <>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      {/* Quote details and terms */}
+      {/* Customer-facing contract notes and terms */}
       <div className="lg:col-span-2">
         <Card>
           <CardHeader>
@@ -363,7 +363,10 @@ export function QuoteSummary({ quote, onUpdateQuote, onGenerateProposal, isPrepa
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
-              <Label htmlFor="notes">Notes & Terms</Label>
+              <Label htmlFor="notes">Quote Contract Notes</Label>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Shown on the customer proposal and signed contract. Use Internal Notes above for Ops handoff context.
+              </p>
               <Textarea
                 id="notes"
                 rows={4}
@@ -376,7 +379,7 @@ export function QuoteSummary({ quote, onUpdateQuote, onGenerateProposal, isPrepa
                   }
                   setIsEditingNotes(false);
                 }}
-                placeholder="Add project notes, terms, or special conditions..."
+                placeholder="Add customer-facing contract notes, exclusions, terms, or special conditions..."
                 className="mt-1"
               />
             </div>

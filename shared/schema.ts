@@ -136,7 +136,8 @@ export const quotes = pgTable("quotes", {
   jobsiteCountry: text("jobsite_country"),
   jobsitePlaceId: text("jobsite_place_id"),
   estimatedStartDate: text("estimated_start_date"),
-  notes: text("notes"),
+  notes: text("notes"), // customer-facing quote contract notes
+  internalNotes: text("internal_notes"), // internal handoff notes for Ops
   taxRate: decimal("tax_rate", { precision: 5, scale: 2 }).default("0"),
   tariffRate: decimal("tariff_rate", { precision: 5, scale: 2 }).default("0"), // tariff percentage to increase cost
   discount: decimal("discount", { precision: 5, scale: 2 }).default("0"),
@@ -483,6 +484,7 @@ export const insertQuoteSchema = createInsertSchema(quotes).omit({
   jobsiteAddress: z.union([z.string(), z.null()]).transform(val => val === null ? "" : val).optional(),
   estimatedStartDate: z.union([z.string(), z.null()]).transform(val => val === null ? "" : val).optional(),
   notes: z.union([z.string(), z.null()]).transform(val => val === null ? "" : val).optional(),
+  internalNotes: z.union([z.string(), z.null()]).transform(val => val === null ? "" : val).optional(),
   dealStage: z.enum(["new_lead", "qualifying", "consultation_scheduled", "building_estimate", "quote_sent", "closed_won", "closed_lost", "on_hold"]).default("new_lead"),
   lostReason: z.string().optional().nullable(),
   // Contract template fields
