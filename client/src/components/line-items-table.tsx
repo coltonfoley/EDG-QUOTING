@@ -53,6 +53,27 @@ type PricingDefaultResponse = {
   updatedAt: string | null;
 };
 
+function HeaderHelp({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            aria-label={label}
+            className="inline-flex h-4 w-4 items-center justify-center text-blue-500 hover:text-blue-700"
+          >
+            <Info className="h-3.5 w-3.5" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent className="max-w-xs text-xs">
+          {children}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
 interface SortableLineItemRowProps {
   item: LineItem;
   rowIndex: number;
@@ -431,10 +452,12 @@ const SortableLineItemRow = memo(function SortableLineItemRow({
         {formatCurrency(total)}
       </td>
 
-      {/* Taxable - Always visible */}
+      {/* Sales tax - Always visible */}
       <td className="border-r border-border px-2 py-1 text-center">
         <div className="flex justify-center">
           <Checkbox
+            aria-label={`Include ${item.description || "this line item"} in sales tax`}
+            title={item.isTaxable !== false ? "Included in sales tax" : "Excluded from sales tax"}
             checked={item.isTaxable !== false}
             onCheckedChange={(checked) => {
               updateLineItemMutation.mutate({ 
@@ -452,6 +475,8 @@ const SortableLineItemRow = memo(function SortableLineItemRow({
       <td className="border-r border-border px-2 py-1 text-center">
         <div className="flex justify-center">
           <Checkbox
+            aria-label={`Apply tariff to ${item.description || "this line item"}`}
+            title={item.isTariffApplicable ? "Tariff applies to this line" : "Tariff does not apply to this line"}
             checked={!!item.isTariffApplicable}
             onCheckedChange={(checked) => {
               updateLineItemMutation.mutate({ 
@@ -2349,7 +2374,7 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
           <div className="overflow-x-auto">
             <table className="w-full border border-border divide-y divide-gray-300">
               <colgroup>
-                <col style={{width: '40px'}} /><col style={{width: '26%'}} /><col style={{width: '80px'}} /><col style={{width: '100px'}} /><col style={{width: '160px'}} /><col style={{width: '120px'}} /><col style={{width: '100px'}} /><col style={{width: '140px'}} /><col style={{width: '70px'}} /><col style={{width: '70px'}} /><col style={{width: '80px'}} />
+                <col style={{width: '40px'}} /><col style={{width: '26%'}} /><col style={{width: '80px'}} /><col style={{width: '100px'}} /><col style={{width: '160px'}} /><col style={{width: '120px'}} /><col style={{width: '100px'}} /><col style={{width: '140px'}} /><col style={{width: '90px'}} /><col style={{width: '80px'}} /><col style={{width: '80px'}} />
               </colgroup>
               <thead>
                 <tr className="bg-muted">
@@ -2363,25 +2388,55 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
                     QTY
                   </th>
                   <th className="border-r border-border px-3 py-2 text-center text-sm font-medium text-foreground hidden lg:table-cell">
-                    Cost
+                    <span className="inline-flex items-center justify-center gap-1.5">
+                      Cost
+                      <HeaderHelp label="Explain cost column">
+                        EDG's internal cost before customer markup.
+                      </HeaderHelp>
+                    </span>
                   </th>
                   <th className="border-r border-border px-3 py-2 text-center text-sm font-medium text-foreground hidden lg:table-cell">
-                    Markup
+                    <span className="inline-flex items-center justify-center gap-1.5">
+                      Markup
+                      <HeaderHelp label="Explain markup column">
+                        Adds EDG margin to the customer unit price.
+                      </HeaderHelp>
+                    </span>
                   </th>
                   <th className="border-r border-border px-3 py-2 text-center text-sm font-medium text-foreground">
-                    Customer Unit
+                    <span className="inline-flex items-center justify-center gap-1.5">
+                      Customer Unit
+                      <HeaderHelp label="Explain customer unit column">
+                        Customer-facing price per unit after markup.
+                      </HeaderHelp>
+                    </span>
                   </th>
                   <th className="border-r border-border px-3 py-2 text-center text-sm font-medium text-foreground hidden md:table-cell">
-                    Margin$
+                    <span className="inline-flex items-center justify-center gap-1.5">
+                      Margin$
+                      <HeaderHelp label="Explain margin column">
+                        Estimated EDG profit for this row. Tariff is treated as pass-through and not counted as margin.
+                      </HeaderHelp>
+                    </span>
                   </th>
                   <th className="border-r border-border px-3 py-2 text-center text-sm font-medium text-foreground">
                     Total
                   </th>
                   <th className="border-r border-border px-2 py-2 text-center text-sm font-medium text-foreground">
-                    Taxable
+                    <span className="inline-flex items-center justify-center gap-1.5">
+                      Sales Tax
+                      <HeaderHelp label="Explain sales tax line checkbox">
+                        Checked rows are included in sales-tax math. Uncheck labor or any row that should not be taxed.
+                      </HeaderHelp>
+                    </span>
                   </th>
                   <th className="border-r border-border px-2 py-2 text-center text-sm font-medium text-foreground">
-                    Tariff
+                    <span className="inline-flex items-center justify-center gap-1.5">
+                      Tariff
+                      <HeaderHelp label="Explain tariff line checkbox">
+                        Checked rows receive the quote's tariff rate as a pass-through cost.
+                      </HeaderHelp>
+                    </span>
                   </th>
                   <th className="px-3 py-2 text-center text-sm font-medium text-foreground">
                     Actions
@@ -2492,7 +2547,7 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
                 {/* Show message if no items at all */}
                 {lineItems.length === 0 && (
                   <tr>
-                    <td colSpan={9} className="px-4 py-8 text-center text-muted-foreground">
+                    <td colSpan={11} className="px-4 py-8 text-center text-muted-foreground">
                       No line items yet. Click "Add Item" to get started.
                     </td>
                   </tr>
