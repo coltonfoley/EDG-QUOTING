@@ -10,13 +10,10 @@ As of 2026-04-25:
 
 - EDG Vercel project `edgpatioshade/rainmaker` exists and is linked locally.
 - The Vercel project and repo are both pinned to Node.js `22.x`.
-- Preview/staging should use the direct prebuilt flow: `npm run build`, `npm run vercel:bundle-function`, then `vercel deploy --prebuilt`.
+- If preview/staging is intentionally re-enabled, use the direct prebuilt flow: `npm run build`, `npm run vercel:bundle-function`, then `vercel deploy --prebuilt`.
 - Production was redeployed through the Vercel REST API because the locally installed Vercel CLI is too old for the current production deploy endpoint.
-- A Neon database named `rainmaker-staging` is connected to the Vercel `rainmaker` project for Preview and Development.
-- The Neon connection creates `DATABASE_URL` and related encrypted database variables for Preview and Development only.
-- Stable staging subdomain: `https://rainmaker-staging.edgpatioshade.com`.
-- Latest verified staging deployment: `https://rainmaker-lseb4k9bw-edgpatioshade.vercel.app`.
-- Staging health, login, leads, accounts, products, quote image uploads, and large PDF/AI quote import have all passed.
+- Preview/Development database environment variables were retired on 2026-05-22 because EDG does not use a staging workflow for Rainmaker.
+- If staging is needed again, provision a fresh temporary database before deploying a preview.
 
 ## Production Cutover
 
@@ -24,7 +21,7 @@ As of 2026-04-25:
 
 - Live Vercel URL: `https://rainmaker.edgpatioshade.com`.
 - Latest production deployment: `https://rainmaker-3tz8809yc-edgpatioshade.vercel.app`.
-- Live production database: `rainmaker-production` in the EDG Neon cluster. Older cutover databases remain present for archive/rollback context; see `docs/neon-database-inventory.md`.
+- Live production database: `rainmaker-production` in the EDG Neon cluster; see `docs/neon-database-inventory.md`.
 - The cutover database was built from the current Replit Rainmaker database, then merged with the real website lead that had already landed in the prior Vercel database.
 - Final cutover counts: 93 accounts, 218 quotes, 1,819 line items, 62 groups, 1,147 products, 242 quote renderings, 9 cover photos, 5 users, and 2 API keys.
 - The two synthetic smoke-test leads from the previous Vercel database were not copied into the cutover database.
@@ -53,7 +50,7 @@ not be committed.
 
 ## Preview Environment
 
-Set these in the Rainmaker Vercel project for Preview first:
+If Preview is re-enabled later, set these in the Rainmaker Vercel project first:
 
 ```env
 NODE_ENV=production

@@ -12,15 +12,13 @@ Evidence from Neon `main` branch:
 | --- | ---: | ---: | --- | --- |
 | `rainmaker-production` | 302 | 609 | 2026-05-21 20:41:53 | Active live database. Contains quote `591` and quote `609`. |
 
-On 2026-05-22, the `main` branch was reduced from 8 non-template databases to 5 after creating a temporary recovery branch and aligning database names to live app reality.
+On 2026-05-22, the `main` branch was reduced from 8 non-template databases to 3 after creating a temporary recovery branch and aligning database names to live app reality.
 
 ## Other Databases In The Neon Project
 
 | Database | Current interpretation |
 | --- | --- |
-| `ops_staging` | Ops Portal staging database. Not Rainmaker. |
 | `ops_production` | Live Ops Portal production database. Not Rainmaker. |
-| `neondb` | Default Neon database. Not the Rainmaker source of truth. |
 | `postgres` | Default system/admin database. Do not treat as app data. |
 
 ## Removed Databases
@@ -32,8 +30,10 @@ A temporary recovery branch named `pre-rainmaker-db-cleanup-20260522` was create
 | `rainmaker_production` | Stale duplicate-looking Rainmaker database. It had 216 quotes, max quote id `507`, latest quote created 2026-04-24 20:06:24, and did not contain quote `591` or `609`. |
 | `rainmaker_cutover_20260425200501` | Historical Rainmaker cutover copy. It was removed after the active Rainmaker database was confirmed as `rainmaker-production`. |
 | `ops_prod_cutover_202604251913` | Former Ops Portal production database name. It was copied into `ops_production`, Vercel Production `DATABASE_URL` was updated, live Ops was verified, and the cutover-named database was removed. |
+| `ops_staging` | Unused Ops staging database. Ops Preview and Development `DATABASE_URL` values were removed from Vercel before deletion. |
+| `neondb` | Unused default/test database. Rainmaker Preview and Development database environment variables were removed from Vercel before deletion. |
 
-Post-cleanup Neon verification showed these remaining non-template databases on `main`: `neondb`, `ops_production`, `ops_staging`, `postgres`, and `rainmaker-production`.
+Post-cleanup Neon verification showed these remaining non-template databases on `main`: `ops_production`, `postgres`, and `rainmaker-production`.
 
 ## Rainmaker App Tables
 
