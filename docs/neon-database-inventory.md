@@ -11,19 +11,29 @@ Evidence from Neon `main` branch:
 | Database | Quotes | Max quote id | Latest quote created | Notes |
 | --- | ---: | ---: | --- | --- |
 | `rainmaker-production` | 302 | 609 | 2026-05-21 20:41:53 | Active live database. Contains quote `591` and quote `609`. |
-| `rainmaker_production` | 216 | 507 | 2026-04-24 20:06:24 | Older duplicate-looking database. Does not contain quote `591` or `609`. |
+
+On 2026-05-22, the `main` branch was reduced from 8 non-template databases to 6 after creating a temporary recovery branch.
 
 ## Other Databases In The Neon Project
 
 | Database | Current interpretation |
 | --- | --- |
-| `rainmaker_cutover_20260425200501` | Historical Rainmaker cutover copy. Keep as archive until backups/rollback policy is confirmed. |
-| `rainmaker_production` | Stale Rainmaker database with a confusing name. Candidate for archive/drop after backup confirmation. |
 | `ops_staging` | Ops Portal staging database. Not Rainmaker. |
 | `ops_production` | Ops Portal production database. Not Rainmaker. |
 | `ops_prod_cutover_202604251913` | Historical Ops cutover copy. Keep as archive until Ops backup policy is confirmed. |
 | `neondb` | Default Neon database. Not the Rainmaker source of truth. |
 | `postgres` | Default system/admin database. Do not treat as app data. |
+
+## Removed Databases
+
+A temporary recovery branch named `pre-rainmaker-db-cleanup-20260522` was created from `main` before database removal. Neon set it to auto-delete on 2026-05-23 at 9:19 AM CDT.
+
+| Removed database | Why |
+| --- | --- |
+| `rainmaker_production` | Stale duplicate-looking Rainmaker database. It had 216 quotes, max quote id `507`, latest quote created 2026-04-24 20:06:24, and did not contain quote `591` or `609`. |
+| `rainmaker_cutover_20260425200501` | Historical Rainmaker cutover copy. It was removed after the active Rainmaker database was confirmed as `rainmaker-production`. |
+
+Post-cleanup Neon verification showed these remaining non-template databases on `main`: `neondb`, `ops_prod_cutover_202604251913`, `ops_production`, `ops_staging`, `postgres`, and `rainmaker-production`.
 
 ## Rainmaker App Tables
 
