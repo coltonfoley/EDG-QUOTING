@@ -31,23 +31,33 @@ After the 2026-05-22 cleanup, Rainmaker code should retain these app tables:
 
 `accounts`, `api_keys`, `colors`, `contract_templates`, `groups`, `issue_reports`, `line_items`, `pricing_defaults`, `pricing_tables`, `product_colors`, `products`, `quickbooks_settings`, `quote_cover_photos`, `quote_product_renderings`, `quotes`, `sessions`, `users`.
 
-Two unused tables were intentionally retired from the app code on 2026-05-22. Neon may still contain them until the backup-and-drop checklist below is completed.
+Two unused tables were intentionally retired from the app code and removed from the live `rainmaker-production` database on 2026-05-22.
+
+Before removal, Neon verification showed:
+
+- `google_contacts_sync`: 0 rows.
+- `product_accessories`: 0 rows.
+- `accounts.google_contact_id`: 0 populated values.
+- `accounts`: 136 rows.
+- `quotes`: 302 rows, max quote id `609`.
+
+After removal, Neon verification showed both retired tables absent, `accounts.google_contact_id` absent, and the `accounts`/`quotes` counts unchanged.
 
 | Retired table | Why |
 | --- | --- |
-| `google_contacts_sync` | Google Contacts sync is not part of the current Rainmaker workflow. The live table had 0 rows at audit time. |
-| `product_accessories` | Product accessory linking is not used by the current product/quote workflow. The live table had 0 rows at audit time. |
+| `google_contacts_sync` | Google Contacts sync is not part of the current Rainmaker workflow. The live table had 0 rows before removal. |
+| `product_accessories` | Product accessory linking is not used by the current product/quote workflow. The live table had 0 rows before removal. |
 
 ## Cleanup Rule
 
-Before dropping databases or tables in Neon:
+Before any future database or table removal in Neon:
 
 1. Confirm the Vercel production `DATABASE_URL` points to `rainmaker-production`.
 2. Export or snapshot the database being removed.
 3. Run a read-only count/recency check immediately before deletion.
 4. Drop only the specific archive/unused object, never the whole Neon project.
 
-Suggested table-drop SQL after backup confirmation:
+The 2026-05-22 retired-table cleanup used this targeted SQL after the proof gate above:
 
 ```sql
 DROP TABLE IF EXISTS public.google_contacts_sync;
