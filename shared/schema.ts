@@ -69,8 +69,6 @@ export const accounts = pgTable("accounts", {
   secondaryContacts: jsonb("secondary_contacts"), // Array of additional contact info for multi-person accounts
   // Legacy accounting integration field retained so drizzle push does not drop production data.
   qbCustomerId: text("qb_customer_id"),
-  // Google Contacts integration
-  googleContactId: text("google_contact_id"), // Google People API resource name
   // Lead intake tracking
   leadStatus: text("lead_status"), // new, contacted, qualified, unresponsive, converted, archived
   leadSource: text("lead_source"),
@@ -93,21 +91,6 @@ export const accounts = pgTable("accounts", {
 // Aliases for different conceptual uses
 export const customers = accounts; // Legacy alias for backward compatibility
 export const clients = accounts; // New unified client model alias
-
-// Google Contacts sync tracking table
-export const googleContactsSync = pgTable("google_contacts_sync", {
-  id: serial("id").primaryKey(),
-  accountId: integer("account_id").notNull().references(() => accounts.id, { onDelete: "cascade" }),
-  googleResourceName: text("google_resource_name").unique(), // Google People API resource name (e.g., "people/c1234567890")
-  googleEtag: text("google_etag"), // Google ETag for conflict detection
-  lastSyncedAt: timestamp("last_synced_at").defaultNow(),
-  localUpdatedAt: timestamp("local_updated_at"), // When account was last updated locally
-  googleUpdatedAt: timestamp("google_updated_at"), // When contact was last updated in Google
-  syncDirection: text("sync_direction"), // 'push', 'pull', or 'both'
-}, (table) => [
-  index("idx_google_sync_account_id").on(table.accountId),
-  index("idx_google_sync_resource_name").on(table.googleResourceName),
-]);
 
 // Legacy accounting integration settings retained so drizzle push does not drop production data.
 export const quickbooksSettings = pgTable("quickbooks_settings", {
@@ -297,20 +280,6 @@ export const pricingTables = pgTable("pricing_tables", {
   index("idx_pricing_tables_product_id").on(table.productId),
 ]);
 
-// Product accessories - items that can be added to base products
-export const productAccessories = pgTable("product_accessories", {
-  id: serial("id").primaryKey(),
-  baseProductId: integer("base_product_id").notNull(), // the main product (e.g., Brustor B200xl)
-  accessoryProductId: integer("accessory_product_id").notNull(), // the accessory product
-  isRequired: boolean("is_required").default(false),
-  displayOrder: integer("display_order").default(0),
-  category: text("category"), // e.g., "Motors", "Lighting", "Sensors"
-  createdAt: timestamp("created_at").defaultNow(),
-}, (table) => [
-  index("idx_product_accessories_base_product").on(table.baseProductId),
-  index("idx_product_accessories_accessory_product").on(table.accessoryProductId),
-]);
-
 // Colors table - predefined color options for products
 export const colors = pgTable("colors", {
   id: serial("id").primaryKey(),
@@ -362,8 +331,8 @@ export const lineItems = pgTable("line_items", {
   discountValue: decimal("discount_value", { precision: 10, scale: 2 }).notNull().default("0"),
   // Configuration data for configurable products
   configData: jsonb("config_data"), // JSON object storing configuration values (dimensions, options, etc.)
-  baseProductId: integer("base_product_id"), // reference to base product for accessories
-  isAccessory: boolean("is_accessory").default(false),
+  baseProductId: integer("base_product_id"), // optional parent line-item relationship
+  isAccessory: boolean("is_accessory").default(false), // legacy line-item flag retained for existing quotes
   isTaxable: boolean("is_taxable").default(true), // whether this line item is subject to sales tax
   isTariffApplicable: boolean("is_tariff_applicable").default(false), // whether tariff applies to this line item
   // Grouping and ordering fields
@@ -547,11 +516,6 @@ export const insertPricingTableSchema = createInsertSchema(pricingTables).omit({
   housingCode: z.string().optional().nullable(),
 });
 
-export const insertProductAccessorySchema = createInsertSchema(productAccessories).omit({
-  id: true,
-  createdAt: true,
-});
-
 export const insertColorSchema = createInsertSchema(colors).omit({
   id: true,
   createdAt: true,
@@ -632,13 +596,11 @@ export type Group = typeof groups.$inferSelect;
 export type ContractTemplate = typeof contractTemplates.$inferSelect;
 export type PricingDefault = typeof pricingDefaults.$inferSelect;
 export type PricingTable = typeof pricingTables.$inferSelect;
-export type ProductAccessory = typeof productAccessories.$inferSelect;
 export type Color = typeof colors.$inferSelect;
 export type ProductColor = typeof productColors.$inferSelect;
 export type QuoteCoverPhoto = typeof quoteCoverPhotos.$inferSelect;
 export type QuoteProductRendering = typeof quoteProductRenderings.$inferSelect;
 export type IssueReport = typeof issueReports.$inferSelect;
-export type GoogleContactsSync = typeof googleContactsSync.$inferSelect;
 
 export type InsertApiKey = z.infer<typeof insertApiKeySchema>;
 export type InsertAccount = z.infer<typeof insertAccountSchema>;
@@ -650,7 +612,6 @@ export type InsertGroup = z.infer<typeof insertGroupSchema>;
 export type InsertContractTemplate = z.infer<typeof insertContractTemplateSchema>;
 export type InsertPricingDefault = z.infer<typeof insertPricingDefaultSchema>;
 export type InsertPricingTable = z.infer<typeof insertPricingTableSchema>;
-export type InsertProductAccessory = z.infer<typeof insertProductAccessorySchema>;
 export type InsertColor = z.infer<typeof insertColorSchema>;
 export type InsertProductColor = z.infer<typeof insertProductColorSchema>;
 export type InsertQuoteCoverPhoto = z.infer<typeof insertQuoteCoverPhotoSchema>;
@@ -682,7 +643,6 @@ export type QuoteDetail = QuoteListItem & {
 
 export type ProductWithDetails = Product & {
   pricingTables?: PricingTable[];
-  accessories?: (ProductAccessory & { accessory: Product })[];
 };
 
 

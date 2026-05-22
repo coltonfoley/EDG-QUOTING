@@ -8,7 +8,6 @@ import {
   insertProductSchema as baseProductSchema,
   insertContractTemplateSchema as baseContractTemplateSchema,
   insertPricingTableSchema as basePricingTableSchema,
-  insertProductAccessorySchema as baseProductAccessorySchema,
   insertUserSchema as baseUserSchema,
   insertIssueReportSchema as baseIssueReportSchema
 } from "@shared/schema";
@@ -873,15 +872,6 @@ export const insertContractTemplateSchema = baseContractTemplateSchema.extend({
   isDefault: z.boolean().optional()
 });
 
-
-// Product accessory validation (reuse from base)
-export const insertProductAccessorySchema = baseProductAccessorySchema.extend({
-  baseProductId: z.number().int().positive("Base product ID must be a positive integer"),
-  accessoryProductId: z.number().int().positive("Accessory product ID must be a positive integer"),
-  isRequired: z.boolean().optional(),
-  displayOrder: z.number().int().min(0).max(999).optional(),
-  category: z.string().max(100, "Category name is too long").optional()
-});
 
 // Quote image validation schemas
 export const createQuoteCoverPhotoSchema = z.object({

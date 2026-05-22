@@ -24,7 +24,7 @@ As of 2026-04-25:
 
 - Live Vercel URL: `https://rainmaker.edgpatioshade.com`.
 - Latest production deployment: `https://rainmaker-3tz8809yc-edgpatioshade.vercel.app`.
-- Live production database: `rainmaker_cutover_20260425200501` in the EDG Neon cluster.
+- Live production database: `rainmaker-production` in the EDG Neon cluster. Older cutover databases remain present for archive/rollback context; see `docs/neon-database-inventory.md`.
 - The cutover database was built from the current Replit Rainmaker database, then merged with the real website lead that had already landed in the prior Vercel database.
 - Final cutover counts: 93 accounts, 218 quotes, 1,819 line items, 62 groups, 1,147 products, 242 quote renderings, 9 cover photos, 5 users, and 2 API keys.
 - The two synthetic smoke-test leads from the previous Vercel database were not copied into the cutover database.
