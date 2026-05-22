@@ -828,51 +828,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/google-contacts/sync", isAuthenticated, async (req, res) => {
-    try {
-      const { userEmail } = req.body;
-      
-      if (!userEmail) {
-        return res.status(400).json({ message: 'User email is required for Google Contacts sync' });
-      }
-
-      const serviceAccountKey = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
-      if (!serviceAccountKey) {
-        return res.status(400).json({ 
-          message: 'Google Contacts not configured', 
-          configured: false 
-        });
-      }
-
-      const { GoogleContactsSyncEngine } = await import('./googleContactsSync');
-      const syncEngine = new GoogleContactsSyncEngine(userEmail);
-
-      const result = await syncEngine.performFullSync();
-
-      res.json({
-        success: true,
-        ...result,
-      });
-    } catch (error: any) {
-      console.error('Error syncing Google Contacts:', error);
-      res.status(500).json({ message: error.message || 'Failed to sync Google Contacts' });
-    }
-  });
-
-  app.get("/api/google-contacts/status", isAuthenticated, async (req, res) => {
-    try {
-      const serviceAccountKey = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
-      
-      res.json({
-        configured: !!serviceAccountKey,
-        lastSync: null,
-      });
-    } catch (error: any) {
-      console.error('Error getting Google Contacts status:', error);
-      res.status(500).json({ message: error.message || 'Failed to get status' });
-    }
-  });
-
   const httpServer = createServer(app);
   return httpServer;
 }

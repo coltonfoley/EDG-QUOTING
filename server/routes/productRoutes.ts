@@ -8,7 +8,6 @@ import { isAuthenticated } from "../replitAuth";
 import {
   insertProductSchema,
   insertPricingTableSchema,
-  insertProductAccessorySchema,
   idParamSchema,
   productIdParamSchema,
   calculatePriceSchema,
@@ -239,7 +238,7 @@ export function registerProductRoutes(app: Express) {
     }
   });
 
-  // Enhanced product endpoint with pricing tables and accessories
+  // Enhanced product endpoint with pricing tables
   app.get("/api/products/:id/with-details", isAuthenticated, async (req, res) => {
     try {
       const params = idParamSchema.safeParse(req.params);
@@ -324,61 +323,6 @@ export function registerProductRoutes(app: Express) {
       const deleted = await storage.deletePricingTable(id);
       if (!deleted) {
         return res.status(404).json({ message: "Pricing table not found" });
-      }
-      res.status(204).send();
-    } catch (error) {
-      res.status(500).json({ message: "Internal server error" });
-    }
-  });
-
-  // Product accessories routes
-  app.get("/api/products/:productId/accessories", isAuthenticated, async (req, res) => {
-    try {
-      const productId = parseInt(req.params.productId);
-      const accessories = await storage.getProductAccessoriesByProductId(productId);
-      res.json(accessories);
-    } catch (error) {
-      res.status(500).json({ message: "Internal server error" });
-    }
-  });
-
-  app.post("/api/products/:productId/accessories", isAuthenticated, requireAdmin, async (req, res) => {
-    try {
-      const productId = parseInt(req.params.productId);
-      const accessoryData = insertProductAccessorySchema.parse({ ...req.body, baseProductId: productId });
-      const accessory = await storage.createProductAccessory(accessoryData);
-      res.status(201).json(accessory);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: "Invalid accessory data", errors: error.errors });
-      }
-      res.status(500).json({ message: "Internal server error" });
-    }
-  });
-
-  app.put("/api/product-accessories/:id", isAuthenticated, requireAdmin, async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      const accessoryData = insertProductAccessorySchema.partial().parse(req.body);
-      const accessory = await storage.updateProductAccessory(id, accessoryData);
-      if (!accessory) {
-        return res.status(404).json({ message: "Product accessory not found" });
-      }
-      res.json(accessory);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: "Invalid accessory data", errors: error.errors });
-      }
-      res.status(500).json({ message: "Internal server error" });
-    }
-  });
-
-  app.delete("/api/product-accessories/:id", isAuthenticated, requireAdmin, async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      const deleted = await storage.deleteProductAccessory(id);
-      if (!deleted) {
-        return res.status(404).json({ message: "Product accessory not found" });
       }
       res.status(204).send();
     } catch (error) {

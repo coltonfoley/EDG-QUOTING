@@ -15,7 +15,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
-import { UserPlus, Shield, User as UserIcon, Trash2, Edit, Package, Settings, Users, Copy, Eye, EyeOff } from "lucide-react";
+import { UserPlus, Shield, User as UserIcon, Trash2, Edit, Package, Settings, Copy, Eye, EyeOff } from "lucide-react";
 import { z } from "zod";
 import type { User } from "@shared/schema";
 
@@ -273,14 +273,6 @@ export default function AdminPage() {
             >
               <Settings className="inline mr-2 h-4 w-4" />
               Contracts
-            </Link>
-            <Link 
-              href="/admin/google-contacts"
-              className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-edg-black hover:border-b-2 hover:border-gray-300 transition-colors"
-              data-testid="link-admin-google-contacts"
-            >
-              <Users className="inline mr-2 h-4 w-4" />
-              Google Contacts
             </Link>
           </div>
         </div>

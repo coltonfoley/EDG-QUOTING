@@ -124,7 +124,6 @@ export function registerLeadIntakeRoutes(app: Express) {
           firstName: accounts.firstName,
           lastName: accounts.lastName,
           secondaryContacts: accounts.secondaryContacts,
-          googleContactId: accounts.googleContactId,
           leadStatus: accounts.leadStatus,
           leadSource: accounts.leadSource,
           leadProjectType: accounts.leadProjectType,
