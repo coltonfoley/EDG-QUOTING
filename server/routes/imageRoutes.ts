@@ -428,6 +428,14 @@ export function registerImageRoutes(app: Express) {
         buffer = downloadedBuffer;
       }
 
+      if (req.query.raw === "1") {
+        res.setHeader("Content-Type", asset.contentType);
+        res.setHeader("Content-Length", buffer.byteLength.toString());
+        res.setHeader("Access-Control-Allow-Origin", "*");
+        res.setHeader("Cache-Control", "public, max-age=86400");
+        return res.send(buffer);
+      }
+
       const base64 = buffer.toString("base64");
       const prefix = asset.contentType === "image/png" ? "data:image/png;base64," : "data:image/jpeg;base64,";
 

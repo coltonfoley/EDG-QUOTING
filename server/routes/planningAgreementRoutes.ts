@@ -1,6 +1,4 @@
 import type { Express } from "express";
-import fs from "fs";
-import path from "path";
 import crypto from "crypto";
 import { nanoid } from "nanoid";
 import type { Account, InsertPlanningAgreementEvent, PlanningAgreement, QuoteWithDetails } from "@shared/schema";
@@ -430,17 +428,11 @@ export function registerPlanningAgreementRoutes(app: Express) {
       }
 
       const { sendEmail } = await import("../email");
-      const logoPath = path.join(process.cwd(), "attached_assets", "Logo_Full_Color_Black_1766097629382.png");
-      let logoBase64 = "";
-      try {
-        logoBase64 = fs.readFileSync(logoPath).toString("base64");
-      } catch (error) {
-        console.warn("Could not load logo for planning agreement email:", error);
-      }
 
       const personalizedMessage = body.data.message?.trim() || "";
       const safePersonalizedMessage = personalizedMessage ? escapeHtml(personalizedMessage) : "";
       const signingUrl = buildAppUrl(`/planning-agreements/sign/${prepared.signingToken}`, req);
+      const logoUrl = buildAppUrl("/api/brand-assets/brand-logo.png?raw=1", req);
       const customerName = getAccountName(account);
       const projectLabel = quote?.projectName || quote?.quoteNumber || `Design + Planning Agreement #${prepared.agreement.id}`;
       const personalizedMessageHtml = safePersonalizedMessage ? `
@@ -459,7 +451,7 @@ export function registerPlanningAgreementRoutes(app: Express) {
         </head>
         <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #1a1a1a; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9fafb;">
           <div style="background-color: #000000; border-radius: 8px 8px 0 0; border-bottom: 4px solid #14b8a6; padding: 30px; margin-bottom: 20px; text-align: center;">
-            <img src="cid:edg-logo" alt="EDG Patio & Shade" style="max-width: 200px; height: auto; margin-bottom: 20px;" />
+            <img src="${logoUrl}" alt="EDG Patio & Shade" width="200" style="display: block; max-width: 200px; width: 200px; height: auto; margin: 0 auto 20px auto; border: 0; outline: none; text-decoration: none;" />
             <h1 style="color: #ffffff; margin-top: 0; font-size: 24px;">Design + Planning Agreement</h1>
             <p style="color: #ffffff; margin-bottom: 0;">Hello ${escapeHtml(customerName)},</p>
             <p style="color: #f0f0f0;">Your agreement for <strong>${escapeHtml(projectLabel)}</strong> is ready to review and sign.</p>
@@ -492,12 +484,6 @@ export function registerPlanningAgreementRoutes(app: Express) {
         to: account.email,
         subject: `EDG Patio & Shade - Design + Planning Agreement for ${projectLabel}`,
         htmlBody,
-        inlineAttachments: logoBase64 ? [{
-          contentId: "edg-logo",
-          base64Data: logoBase64,
-          mimeType: "image/png",
-          filename: "edg-logo.png",
-        }] : undefined,
       });
 
       const sentAt = new Date();
