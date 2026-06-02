@@ -30,6 +30,7 @@ const Accounts = lazyWithReload(() => import("@/pages/accounts"), "accounts");
 const AccountDetail = lazyWithReload(() => import("@/pages/account-detail"), "account-detail");
 const Pipeline = lazyWithReload(() => import("@/pages/pipeline"), "pipeline");
 const PublicSignPage = lazyWithReload(() => import("@/pages/public-sign"), "public-sign");
+const PublicPlanningAgreementSignPage = lazyWithReload(() => import("@/pages/public-planning-agreement-sign"), "public-planning-agreement-sign");
 const ChangePassword = lazyWithReload(() => import("@/pages/change-password"), "change-password");
 
 function GlobalLoadingIndicator() {
@@ -88,6 +89,7 @@ function Router() {
       <Switch>
         {/* Public routes - accessible without authentication */}
         <Route path="/sign/:token" component={PublicSignPage} />
+        <Route path="/planning-agreements/sign/:token" component={PublicPlanningAgreementSignPage} />
         
         {!isAuthenticated ? (
           <>

@@ -1,9 +1,10 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertCircle, CheckCircle2, Circle, Clock, CreditCard, FileCheck2, FileText, Send, ShieldCheck } from "lucide-react";
+import { AlertCircle, CheckCircle2, Circle, Clock, Copy, CreditCard, ExternalLink, FileCheck2, FileText, Mail, Send, ShieldCheck } from "lucide-react";
 import type { PlanningAgreement, QuoteWithDetails } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -74,6 +75,9 @@ export function PlanningAgreementPanel({ quote, isArchivedVersion = false }: Pla
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [waiveOpen, setWaiveOpen] = useState(false);
   const [creditOpen, setCreditOpen] = useState(false);
+  const [sendOpen, setSendOpen] = useState(false);
+  const [signingLink, setSigningLink] = useState("");
+  const [agreementEmailMessage, setAgreementEmailMessage] = useState("");
 
   const [tier, setTier] = useState("standard_design");
   const [amount, setAmount] = useState("1500.00");
@@ -106,6 +110,10 @@ export function PlanningAgreementPanel({ quote, isArchivedVersion = false }: Pla
     (agreement.paymentConfirmedAt || ["paid_active", "delivered"].includes(agreement.status))
   );
   const creditExpired = Boolean(agreement?.creditExpiresAt && new Date(agreement.creditExpiresAt) < new Date());
+  const agreementSigningLink = agreement?.signingToken
+    ? `${window.location.origin}/planning-agreements/sign/${agreement.signingToken}`
+    : signingLink;
+  const agreementSignatureAudit = agreement?.signatureAuditTrail as { documentFingerprint?: string } | null | undefined;
 
   const invalidatePlanningData = () => {
     if (!quote?.id) return;
@@ -153,6 +161,56 @@ export function PlanningAgreementPanel({ quote, isArchivedVersion = false }: Pla
     },
     onError: (error: Error) => {
       toast({ title: "Could not require planning agreement", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const prepareSigningMutation = useMutation({
+    mutationFn: async () => {
+      if (!agreement) throw new Error("No planning agreement selected.");
+      const response = await apiRequest("POST", `/api/planning-agreements/${agreement.id}/prepare-signing`, {});
+      return response.json() as Promise<{
+        agreement: PlanningAgreement;
+        signingToken: string;
+        signingUrl: string;
+        absoluteSigningUrl?: string;
+      }>;
+    },
+    onSuccess: (data) => {
+      setSigningLink(data.absoluteSigningUrl || `${window.location.origin}${data.signingUrl}`);
+      setAgreementEmailMessage(data.agreement.signatureEmailMessage || agreement?.signatureEmailMessage || "");
+      setSendOpen(true);
+      invalidatePlanningData();
+      toast({ title: "Agreement link ready" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Could not prepare agreement link", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const sendAgreementEmailMutation = useMutation({
+    mutationFn: async () => {
+      if (!agreement) throw new Error("No planning agreement selected.");
+      const response = await apiRequest("POST", `/api/planning-agreements/${agreement.id}/send-signature-email`, {
+        message: agreementEmailMessage || "",
+      });
+      return response.json() as Promise<{
+        agreement: PlanningAgreement;
+        signingToken: string;
+        signingUrl: string;
+        absoluteSigningUrl?: string;
+        message?: string;
+      }>;
+    },
+    onSuccess: (data) => {
+      setSigningLink(data.absoluteSigningUrl || `${window.location.origin}${data.signingUrl}`);
+      invalidatePlanningData();
+      toast({
+        title: "Agreement email sent",
+        description: data.message || "Design + Planning Agreement sent to customer.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Could not send agreement email", description: error.message, variant: "destructive" });
     },
   });
 
@@ -220,8 +278,8 @@ export function PlanningAgreementPanel({ quote, isArchivedVersion = false }: Pla
   const nextAction = useMemo(() => {
     if (!quote?.id) return "Create the quote before requiring a planning agreement.";
     if (!agreement) return "Optional: require paid design work only when this job needs it.";
-    if (agreement.status === "required") return "Send the agreement or waive it before detailed design work.";
-    if (agreement.status === "sent") return "Mark signed or confirm payment when the outside record is ready.";
+    if (agreement.status === "required") return "Send the agreement for customer signature or waive it before detailed design work.";
+    if (agreement.status === "sent") return "Waiting on customer signature. Payment is still confirmed manually after it is verified.";
     if (agreement.status === "signed_awaiting_payment") return "Manually confirm payment after it is verified outside Rainmaker.";
     if (agreement.status === "paid_active") return "Planning work is active. Mark delivered or apply credit when ready.";
     if (agreement.status === "delivered") return "Planning work is delivered. Apply the credit if it should count toward the project.";
@@ -229,6 +287,24 @@ export function PlanningAgreementPanel({ quote, isArchivedVersion = false }: Pla
     if (agreement.status === "waived") return "Planning fee was waived; normal quote workflow can continue.";
     return "Review this planning agreement before moving the job forward.";
   }, [agreement, quote?.id]);
+
+  const openSigningDialog = () => {
+    if (!agreement) return;
+    setAgreementEmailMessage(agreement.signatureEmailMessage || "");
+    if (agreement.signingToken) {
+      setSigningLink(`${window.location.origin}/planning-agreements/sign/${agreement.signingToken}`);
+      setSendOpen(true);
+      return;
+    }
+    prepareSigningMutation.mutate();
+  };
+
+  const copySigningLink = async () => {
+    const link = agreementSigningLink || signingLink;
+    if (!link) return;
+    await navigator.clipboard.writeText(link);
+    toast({ title: "Copied", description: "Agreement signing link copied to clipboard." });
+  };
 
   return (
     <div className="mt-4 rounded-md border bg-background p-4">
@@ -257,9 +333,12 @@ export function PlanningAgreementPanel({ quote, isArchivedVersion = false }: Pla
             <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
               <span>{tierLabels[agreement.tier] ?? agreement.tier}</span>
               <span>{money(agreement.amount)}</span>
+              {agreement.signatureEmailSentAt && <span>Email sent {formatDate(agreement.signatureEmailSentAt)}</span>}
+              {agreement.customerSignedAt && <span>Signed {formatDate(agreement.customerSignedAt)}</span>}
               {agreement.paymentConfirmedAt && <span>Paid {formatDate(agreement.paymentConfirmedAt)}</span>}
               {agreement.creditEligible && <span>Credit eligible{agreement.creditExpiresAt ? ` until ${formatDate(agreement.creditExpiresAt)}` : ""}</span>}
               {agreement.creditedAt && <span>Credit applied: {money(agreement.appliedCreditAmount)}</span>}
+              {agreementSignatureAudit?.documentFingerprint && <span>Doc ID {agreementSignatureAudit.documentFingerprint.slice(0, 12)}</span>}
               {creditExpired && <span className="text-red-700">Credit expired</span>}
             </div>
           )}
@@ -328,10 +407,117 @@ export function PlanningAgreementPanel({ quote, isArchivedVersion = false }: Pla
             </Dialog>
           ) : (
             <>
-              {agreement.status === "required" && (
+              <Dialog open={sendOpen} onOpenChange={setSendOpen}>
+                <DialogContent className="sm:max-w-lg">
+                  <DialogHeader>
+                    <DialogTitle>Send Design + Planning Agreement</DialogTitle>
+                    <DialogDescription>
+                      Share the secure agreement link or email it directly to the customer.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4">
+                    {agreement.signatureEmailSentAt && (
+                      <Alert className="border-emerald-300 bg-emerald-50">
+                        <CheckCircle2 className="h-4 w-4 text-emerald-700" />
+                        <AlertDescription className="text-emerald-900">
+                          Email sent {new Date(agreement.signatureEmailSentAt).toLocaleString()}
+                        </AlertDescription>
+                      </Alert>
+                    )}
+
+                    <div className="space-y-2">
+                      <Label>Signing Link</Label>
+                      <div className="flex gap-2">
+                        <Input
+                          value={agreementSigningLink || signingLink}
+                          readOnly
+                          className="font-mono text-sm"
+                          data-testid="input-planning-agreement-signing-link"
+                        />
+                        <Button type="button" variant="outline" onClick={copySigningLink} disabled={!(agreementSigningLink || signingLink)}>
+                          <Copy className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          disabled={!(agreementSigningLink || signingLink)}
+                          onClick={() => window.open(agreementSigningLink || signingLink, "_blank", "noopener,noreferrer")}
+                        >
+                          <ExternalLink className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="border-t pt-4 space-y-3">
+                      <Label className="text-sm font-medium">Send via Email</Label>
+                      {!quote?.account?.email ? (
+                        <Alert className="border-amber-300 bg-amber-50">
+                          <AlertCircle className="h-4 w-4 text-amber-700" />
+                          <AlertDescription className="text-amber-900">
+                            Add a customer email address before sending the agreement.
+                          </AlertDescription>
+                        </Alert>
+                      ) : (
+                        <>
+                          <div className="text-sm text-muted-foreground">
+                            Sending to: <span className="font-medium text-foreground">{quote.account.email}</span>
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="planning-agreement-message" className="text-sm">
+                              Personal Message <span className="text-muted-foreground">(optional)</span>
+                            </Label>
+                            <Textarea
+                              id="planning-agreement-message"
+                              value={agreementEmailMessage}
+                              onChange={(event) => setAgreementEmailMessage(event.target.value)}
+                              rows={3}
+                              className="resize-none"
+                              placeholder="Please review and sign the Design + Planning Agreement so we can begin the planning work."
+                              data-testid="input-planning-agreement-email-message"
+                            />
+                          </div>
+                          <Button
+                            type="button"
+                            onClick={() => sendAgreementEmailMutation.mutate()}
+                            disabled={sendAgreementEmailMutation.isPending}
+                            className="w-full"
+                            data-testid="button-send-planning-agreement-email"
+                          >
+                            <Mail className="mr-2 h-4 w-4" />
+                            {sendAgreementEmailMutation.isPending
+                              ? "Sending..."
+                              : agreement.signatureEmailSentAt
+                                ? "Resend Email"
+                                : "Send Email"}
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button type="button" variant="outline" onClick={() => setSendOpen(false)}>
+                      Done
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+
+              {!["waived", "credited", "canceled", "expired"].includes(agreement.status) && (
                 <Button
                   type="button"
                   variant="outline"
+                  size="sm"
+                  disabled={isArchivedVersion || prepareSigningMutation.isPending}
+                  onClick={openSigningDialog}
+                >
+                  <Send className="mr-2 h-4 w-4" />
+                  {agreement.signatureEmailSentAt ? "Agreement Link" : "Send Agreement"}
+                </Button>
+              )}
+              {agreement.status === "required" && (
+                <Button
+                  type="button"
+                  variant="ghost"
                   size="sm"
                   disabled={isArchivedVersion || actionMutation.isPending}
                   onClick={() => actionMutation.mutate({ path: `/api/planning-agreements/${agreement.id}/send` })}

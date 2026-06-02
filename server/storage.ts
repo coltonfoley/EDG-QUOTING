@@ -123,6 +123,7 @@ export interface IStorage {
   getPlanningAgreementsByAccountId(accountId: number): Promise<(PlanningAgreement & { quote?: Quote })[]>;
   getPlanningAgreementByQuoteId(quoteId: number): Promise<PlanningAgreement | undefined>;
   getPlanningAgreementByQuoteFamilyRootId(quoteFamilyRootId: number): Promise<PlanningAgreement | undefined>;
+  getPlanningAgreementBySigningToken(token: string): Promise<PlanningAgreement | undefined>;
   createPlanningAgreement(planningAgreement: InsertPlanningAgreement, actorUserId?: number | null): Promise<PlanningAgreement>;
   updatePlanningAgreement(id: number, planningAgreement: PlanningAgreementUpdate, actorUserId?: number | null, eventType?: InsertPlanningAgreementEvent["eventType"], payload?: Record<string, unknown>): Promise<PlanningAgreement | undefined>;
   createPlanningAgreementEvent(event: InsertPlanningAgreementEvent): Promise<PlanningAgreementEvent>;
@@ -1402,6 +1403,16 @@ export class DatabaseStorage implements IStorage {
       .from(planningAgreements)
       .where(eq(planningAgreements.quoteFamilyRootId, quoteFamilyRootId))
       .orderBy(desc(planningAgreements.createdAt))
+      .limit(1);
+    return agreement || undefined;
+  }
+
+  async getPlanningAgreementBySigningToken(token: string): Promise<PlanningAgreement | undefined> {
+    await ensurePlanningAgreementTables();
+    const [agreement] = await db
+      .select()
+      .from(planningAgreements)
+      .where(eq(planningAgreements.signingToken, token))
       .limit(1);
     return agreement || undefined;
   }
