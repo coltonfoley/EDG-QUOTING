@@ -3,13 +3,17 @@ import {
   insertAccountSchema as baseAccountSchema,
   insertCustomerSchema as baseCustomerSchema,
   insertQuoteSchema as baseQuoteSchema,
+  insertPlanningAgreementSchema as basePlanningAgreementSchema,
   insertLineItemSchema as baseLineItemSchema,
   insertGroupSchema as baseGroupSchema,
   insertProductSchema as baseProductSchema,
   insertContractTemplateSchema as baseContractTemplateSchema,
   insertPricingTableSchema as basePricingTableSchema,
   insertUserSchema as baseUserSchema,
-  insertIssueReportSchema as baseIssueReportSchema
+  insertIssueReportSchema as baseIssueReportSchema,
+  planningAgreementStatusValues,
+  planningAgreementTierValues,
+  planningAgreementPaymentMethodValues
 } from "@shared/schema";
 
 // Common validation schemas
@@ -23,6 +27,14 @@ export const queryIdParamSchema = z.object({
 
 export const productIdParamSchema = z.object({
   productId: z.string().regex(/^\d+$/, "Product ID must be a valid positive integer").transform(val => parseInt(val))
+});
+
+export const accountIdParamSchema = z.object({
+  accountId: z.string().regex(/^\d+$/, "Account ID must be a valid positive integer").transform(val => parseInt(val))
+});
+
+export const planningAgreementIdParamSchema = z.object({
+  id: z.string().regex(/^\d+$/, "Planning agreement ID must be a valid positive integer").transform(val => parseInt(val))
 });
 
 // Enhanced Account validation
@@ -370,6 +382,76 @@ export const updateQuoteSchema = z.object({
 }, {
   message: "Cannot specify both a contract template and custom contract terms",
   path: ["contractTemplateId", "customContractTerms"]
+});
+
+const planningMoneySchema = z.union([z.string(), z.number()])
+  .transform((value) => typeof value === "string" ? value.trim() : value.toString())
+  .refine((value) => {
+    const amount = Number(value);
+    return Number.isFinite(amount) && amount >= 0 && amount <= 1000000;
+  }, "Amount must be between 0 and 1,000,000")
+  .refine((value) => {
+    const amount = Number(value);
+    return Math.abs(amount - Math.round(amount * 100) / 100) < 0.001;
+  }, "Amount can have maximum 2 decimal places");
+
+const optionalPlanningDateSchema = z.preprocess(
+  (value) => value === "" ? null : value,
+  z.coerce.date().optional().nullable()
+);
+
+export const createPlanningAgreementSchema = basePlanningAgreementSchema.pick({
+  tier: true,
+  amount: true,
+  creditEligible: true,
+  creditExpiresAt: true,
+  scopeSummary: true,
+  internalNotes: true,
+}).extend({
+  tier: z.enum(planningAgreementTierValues).default("standard_design"),
+  amount: planningMoneySchema,
+  creditEligible: z.boolean().default(true),
+  creditExpiresAt: optionalPlanningDateSchema,
+  scopeSummary: z.string().max(5000, "Scope summary is too long").optional().nullable(),
+  internalNotes: z.string().max(5000, "Internal notes are too long").optional().nullable(),
+});
+
+export const updatePlanningAgreementSchema = z.object({
+  status: z.enum(planningAgreementStatusValues).optional(),
+  tier: z.enum(planningAgreementTierValues).optional(),
+  amount: planningMoneySchema.optional(),
+  creditEligible: z.boolean().optional(),
+  creditExpiresAt: optionalPlanningDateSchema,
+  scopeSummary: z.string().max(5000, "Scope summary is too long").optional().nullable(),
+  internalNotes: z.string().max(5000, "Internal notes are too long").optional().nullable(),
+});
+
+export const confirmPlanningAgreementPaymentSchema = z.object({
+  verified: z.literal(true, {
+    errorMap: () => ({ message: "Confirm that payment was verified outside Rainmaker" }),
+  }),
+  amount: planningMoneySchema.optional(),
+  paymentMethod: z.enum(planningAgreementPaymentMethodValues),
+  paymentReference: z.string().max(255, "Payment reference is too long").optional().nullable(),
+  paymentNotes: z.string().max(5000, "Payment notes are too long").optional().nullable(),
+  paymentConfirmedAt: optionalPlanningDateSchema,
+});
+
+export const waivePlanningAgreementSchema = z.object({
+  waiverReason: z.string().min(1, "Waiver reason is required").max(5000, "Waiver reason is too long"),
+});
+
+export const markPlanningAgreementSignedSchema = z.object({
+  agreementSignedAt: optionalPlanningDateSchema,
+});
+
+export const markPlanningAgreementDeliveredSchema = z.object({
+  deliveredAt: optionalPlanningDateSchema,
+});
+
+export const applyPlanningAgreementCreditSchema = z.object({
+  quoteId: z.number().int().positive("Quote ID must be a positive integer"),
+  amount: planningMoneySchema,
 });
 
 // Enhanced LineItem validation

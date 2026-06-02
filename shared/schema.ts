@@ -170,6 +170,100 @@ export const quotes = pgTable("quotes", {
   index("idx_quotes_parent_latest").on(table.parentQuoteId, table.isLatestVersion),
 ]);
 
+export const planningAgreementStatusValues = [
+  "required",
+  "sent",
+  "signed_awaiting_payment",
+  "paid_active",
+  "delivered",
+  "credited",
+  "waived",
+  "expired",
+  "canceled",
+] as const;
+
+export const planningAgreementTierValues = [
+  "simple_layout",
+  "standard_design",
+  "complex_planning",
+  "custom",
+] as const;
+
+export const planningAgreementPaymentMethodValues = [
+  "check",
+  "card",
+  "ach",
+  "cash",
+  "quickbooks",
+  "other",
+] as const;
+
+export const planningAgreementEventTypeValues = [
+  "created",
+  "updated",
+  "sent",
+  "signed",
+  "payment_confirmed",
+  "waived",
+  "delivered",
+  "credit_applied",
+  "expired",
+  "canceled",
+] as const;
+
+export const planningAgreements = pgTable("planning_agreements", {
+  id: serial("id").primaryKey(),
+  accountId: integer("account_id").references(() => accounts.id, { onDelete: "set null" }),
+  quoteId: integer("quote_id").references((): AnyPgColumn => quotes.id, { onDelete: "set null" }),
+  quoteFamilyRootId: integer("quote_family_root_id").references((): AnyPgColumn => quotes.id, { onDelete: "set null" }),
+  status: text("status").notNull().default("required"),
+  tier: text("tier").notNull().default("standard_design"),
+  amount: decimal("amount", { precision: 10, scale: 2 }).notNull().default("0"),
+  creditEligible: boolean("credit_eligible").notNull().default(true),
+  creditExpiresAt: timestamp("credit_expires_at"),
+  scopeSummary: text("scope_summary"),
+  internalNotes: text("internal_notes"),
+  agreementSentAt: timestamp("agreement_sent_at"),
+  agreementSignedAt: timestamp("agreement_signed_at"),
+  paymentConfirmedAt: timestamp("payment_confirmed_at"),
+  paymentConfirmedBy: integer("payment_confirmed_by").references(() => users.id, { onDelete: "set null" }),
+  paymentMethod: text("payment_method"),
+  paymentReference: text("payment_reference"),
+  paymentNotes: text("payment_notes"),
+  waivedAt: timestamp("waived_at"),
+  waivedBy: integer("waived_by").references(() => users.id, { onDelete: "set null" }),
+  waiverReason: text("waiver_reason"),
+  deliveredAt: timestamp("delivered_at"),
+  deliveredBy: integer("delivered_by").references(() => users.id, { onDelete: "set null" }),
+  creditedQuoteId: integer("credited_quote_id").references((): AnyPgColumn => quotes.id, { onDelete: "set null" }),
+  creditedAt: timestamp("credited_at"),
+  appliedCreditAmount: decimal("applied_credit_amount", { precision: 10, scale: 2 }).notNull().default("0"),
+  createdBy: integer("created_by").references(() => users.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_planning_agreements_account_id").on(table.accountId),
+  index("idx_planning_agreements_quote_id").on(table.quoteId),
+  index("idx_planning_agreements_quote_family_root_id").on(table.quoteFamilyRootId),
+  index("idx_planning_agreements_status").on(table.status),
+  index("idx_planning_agreements_payment_confirmed_at").on(table.paymentConfirmedAt),
+  index("idx_planning_agreements_credit_expires_at").on(table.creditExpiresAt),
+]);
+
+export const planningAgreementEvents = pgTable("planning_agreement_events", {
+  id: serial("id").primaryKey(),
+  planningAgreementId: integer("planning_agreement_id").notNull().references(() => planningAgreements.id, { onDelete: "cascade" }),
+  eventType: text("event_type").notNull(),
+  actorUserId: integer("actor_user_id").references(() => users.id, { onDelete: "set null" }),
+  fromStatus: text("from_status"),
+  toStatus: text("to_status"),
+  payload: jsonb("payload"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_planning_agreement_events_agreement_id").on(table.planningAgreementId),
+  index("idx_planning_agreement_events_created_at").on(table.createdAt),
+]);
+
 // Quote cover photos - stores metadata for cover page images
 export const quoteCoverPhotos = pgTable("quote_cover_photos", {
   id: serial("id").primaryKey(),
@@ -472,6 +566,60 @@ export const insertQuoteSchema = createInsertSchema(quotes).omit({
   signatureAuditTrail: z.any().optional().nullable(),
 });
 
+const planningMoneySchema = z.union([z.string(), z.number()]).transform(val => typeof val === 'string' ? val : val.toString());
+const planningDateSchema = z.union([z.date(), z.string(), z.null()])
+  .transform((value) => {
+    if (value === null || value === "") return null;
+    return value instanceof Date ? value : new Date(value);
+  })
+  .optional()
+  .nullable();
+
+export const insertPlanningAgreementSchema = createInsertSchema(planningAgreements).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  accountId: z.number().int().positive().optional().nullable(),
+  quoteId: z.number().int().positive().optional().nullable(),
+  quoteFamilyRootId: z.number().int().positive().optional().nullable(),
+  status: z.enum(planningAgreementStatusValues).default("required"),
+  tier: z.enum(planningAgreementTierValues).default("standard_design"),
+  amount: planningMoneySchema,
+  creditEligible: z.boolean().default(true),
+  creditExpiresAt: planningDateSchema,
+  scopeSummary: z.string().optional().nullable(),
+  internalNotes: z.string().optional().nullable(),
+  agreementSentAt: planningDateSchema,
+  agreementSignedAt: planningDateSchema,
+  paymentConfirmedAt: planningDateSchema,
+  paymentConfirmedBy: z.number().int().positive().optional().nullable(),
+  paymentMethod: z.enum(planningAgreementPaymentMethodValues).optional().nullable(),
+  paymentReference: z.string().optional().nullable(),
+  paymentNotes: z.string().optional().nullable(),
+  waivedAt: planningDateSchema,
+  waivedBy: z.number().int().positive().optional().nullable(),
+  waiverReason: z.string().optional().nullable(),
+  deliveredAt: planningDateSchema,
+  deliveredBy: z.number().int().positive().optional().nullable(),
+  creditedQuoteId: z.number().int().positive().optional().nullable(),
+  creditedAt: planningDateSchema,
+  appliedCreditAmount: planningMoneySchema.optional().default("0"),
+  createdBy: z.number().int().positive().optional().nullable(),
+});
+
+export const insertPlanningAgreementEventSchema = createInsertSchema(planningAgreementEvents).omit({
+  id: true,
+  createdAt: true,
+}).extend({
+  planningAgreementId: z.number().int().positive(),
+  eventType: z.enum(planningAgreementEventTypeValues),
+  actorUserId: z.number().int().positive().optional().nullable(),
+  fromStatus: z.enum(planningAgreementStatusValues).optional().nullable(),
+  toStatus: z.enum(planningAgreementStatusValues).optional().nullable(),
+  payload: z.any().optional().nullable(),
+});
+
 
 export const insertProductSchema = createInsertSchema(products).omit({
   id: true,
@@ -590,6 +738,8 @@ export type ApiKey = typeof apiKeys.$inferSelect;
 export type Account = typeof accounts.$inferSelect;
 export type Customer = typeof accounts.$inferSelect; // Legacy alias
 export type Quote = typeof quotes.$inferSelect;
+export type PlanningAgreement = typeof planningAgreements.$inferSelect;
+export type PlanningAgreementEvent = typeof planningAgreementEvents.$inferSelect;
 export type Product = typeof products.$inferSelect;
 export type LineItem = typeof lineItems.$inferSelect;
 export type Group = typeof groups.$inferSelect;
@@ -606,6 +756,8 @@ export type InsertApiKey = z.infer<typeof insertApiKeySchema>;
 export type InsertAccount = z.infer<typeof insertAccountSchema>;
 export type InsertCustomer = z.infer<typeof insertAccountSchema>; // Legacy alias
 export type InsertQuote = z.infer<typeof insertQuoteSchema>;
+export type InsertPlanningAgreement = z.infer<typeof insertPlanningAgreementSchema>;
+export type InsertPlanningAgreementEvent = z.infer<typeof insertPlanningAgreementEventSchema>;
 export type InsertProduct = z.infer<typeof insertProductSchema>;
 export type InsertLineItem = z.infer<typeof insertLineItemSchema>;
 export type InsertGroup = z.infer<typeof insertGroupSchema>;
@@ -625,6 +777,7 @@ export type QuoteWithDetails = Quote & {
   contractTemplate?: ContractTemplate;
   coverPhoto?: QuoteCoverPhoto; // Cover page image
   productRenderings?: QuoteProductRendering[]; // Visual assets and details
+  planningAgreement?: PlanningAgreement;
 };
 
 // DTO types for API responses that include calculated fields

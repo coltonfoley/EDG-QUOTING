@@ -1,5 +1,5 @@
-import { accounts, customers, quotes, lineItems, groups, products, pricingDefaults, users, apiKeys, contractTemplates, pricingTables, colors, productColors, quoteCoverPhotos, quoteProductRenderings, issueReports, type Account, type Customer, type Quote, type LineItem, type Group, type Product, type PricingDefault, type User, type ApiKey, type ContractTemplate, type PricingTable, type Color, type ProductColor, type QuoteCoverPhoto, type QuoteProductRendering, type IssueReport, type InsertAccount, type InsertCustomer, type InsertQuote, type InsertLineItem, type InsertGroup, type InsertProduct, type InsertUser, type InsertApiKey, type InsertContractTemplate, type InsertPricingTable, type InsertColor, type InsertProductColor, type InsertQuoteCoverPhoto, type InsertQuoteProductRendering, type InsertIssueReport, type QuoteWithDetails, type ProductWithDetails } from "@shared/schema";
-import { db, ensurePricingDefaultsTable, ensureProductCatalogColumns, ensureSignatureAuditColumns } from "./db";
+import { accounts, customers, quotes, planningAgreements, planningAgreementEvents, lineItems, groups, products, pricingDefaults, users, apiKeys, contractTemplates, pricingTables, colors, productColors, quoteCoverPhotos, quoteProductRenderings, issueReports, type Account, type Customer, type Quote, type PlanningAgreement, type PlanningAgreementEvent, type LineItem, type Group, type Product, type PricingDefault, type User, type ApiKey, type ContractTemplate, type PricingTable, type Color, type ProductColor, type QuoteCoverPhoto, type QuoteProductRendering, type IssueReport, type InsertAccount, type InsertCustomer, type InsertQuote, type InsertPlanningAgreement, type InsertPlanningAgreementEvent, type InsertLineItem, type InsertGroup, type InsertProduct, type InsertUser, type InsertApiKey, type InsertContractTemplate, type InsertPricingTable, type InsertColor, type InsertProductColor, type InsertQuoteCoverPhoto, type InsertQuoteProductRendering, type InsertIssueReport, type QuoteWithDetails, type ProductWithDetails } from "@shared/schema";
+import { db, ensurePlanningAgreementTables, ensurePricingDefaultsTable, ensureProductCatalogColumns, ensureSignatureAuditColumns, pool } from "./db";
 import { eq, desc, asc, inArray, sql, and, ne, or, ilike } from "drizzle-orm";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
@@ -72,6 +72,12 @@ export function normalizeEmail(email: string): string {
   return email.toLowerCase().trim();
 }
 
+const getQuoteFamilyRootId = (quote: Pick<Quote, "id" | "parentQuoteId">): number => {
+  return quote.parentQuoteId || quote.id;
+};
+
+type PlanningAgreementUpdate = Partial<InsertPlanningAgreement>;
+
 export interface IStorage {
   // Account methods (formerly customer methods)
   getAccount(id: number): Promise<Account | undefined>;
@@ -110,6 +116,16 @@ export interface IStorage {
   createQuote(quote: InsertQuote): Promise<Quote>;
   updateQuote(id: number, quote: Partial<InsertQuote>): Promise<Quote | undefined>;
   deleteQuote(id: number): Promise<boolean>;
+
+  // Planning agreement methods
+  getPlanningAgreement(id: number): Promise<PlanningAgreement | undefined>;
+  getPlanningAgreementEvents(planningAgreementId: number): Promise<PlanningAgreementEvent[]>;
+  getPlanningAgreementsByAccountId(accountId: number): Promise<(PlanningAgreement & { quote?: Quote })[]>;
+  getPlanningAgreementByQuoteId(quoteId: number): Promise<PlanningAgreement | undefined>;
+  getPlanningAgreementByQuoteFamilyRootId(quoteFamilyRootId: number): Promise<PlanningAgreement | undefined>;
+  createPlanningAgreement(planningAgreement: InsertPlanningAgreement, actorUserId?: number | null): Promise<PlanningAgreement>;
+  updatePlanningAgreement(id: number, planningAgreement: PlanningAgreementUpdate, actorUserId?: number | null, eventType?: InsertPlanningAgreementEvent["eventType"], payload?: Record<string, unknown>): Promise<PlanningAgreement | undefined>;
+  createPlanningAgreementEvent(event: InsertPlanningAgreementEvent): Promise<PlanningAgreementEvent>;
   
   // Quote versioning methods
   getQuoteVersions(quoteId: number): Promise<QuoteWithDetails[]>;
@@ -570,7 +586,7 @@ export class DatabaseStorage implements IStorage {
     // Initialize session store synchronously - imports are at top of file
     const PostgresSessionStore = connectPg(session);
     this.sessionStore = new PostgresSessionStore({
-      conString: process.env.DATABASE_URL,
+      pool,
       createTableIfMissing: false,
       schemaName: "public",
       tableName: "sessions",
@@ -811,10 +827,12 @@ export class DatabaseStorage implements IStorage {
     const accountQuotes = await db.select().from(quotes)
       .where(eq(quotes.accountId, id))
       .orderBy(desc(quotes.createdAt));
+    const accountPlanningAgreements = await this.getPlanningAgreementsByAccountId(id);
 
     return {
       ...account,
       quotes: accountQuotes,
+      planningAgreements: accountPlanningAgreements,
       projectCount: accountQuotes.length
     };
   }
@@ -949,12 +967,15 @@ export class DatabaseStorage implements IStorage {
       [contractTemplate] = await db.select().from(contractTemplates).where(eq(contractTemplates.id, quote.contractTemplateId));
     }
 
+    const planningAgreement = await this.getPlanningAgreementByQuoteFamilyRootId(getQuoteFamilyRootId(quote));
+
     return {
       ...quote,
       account,
       customer: account, // Legacy alias for backward compatibility
       lineItems: quoteLineItems,
       contractTemplate,
+      planningAgreement,
     };
   }
 
@@ -1030,17 +1051,21 @@ export class DatabaseStorage implements IStorage {
       [contractTemplate] = await db.select().from(contractTemplates).where(eq(contractTemplates.id, quote.contractTemplateId));
     }
 
+    const planningAgreement = await this.getPlanningAgreementByQuoteFamilyRootId(getQuoteFamilyRootId(quote));
+
     return {
       ...quote,
       account,
       customer: account, // Legacy alias for backward compatibility
       lineItems: quoteLineItems,
       contractTemplate,
+      planningAgreement,
     };
   }
 
   async getAllQuotes(options?: { page?: number; pageSize?: number }): Promise<QuoteWithDetails[]> {
     await ensureSignatureAuditColumns();
+    await ensurePlanningAgreementTables();
     // Only get the current version by default so archived quote revisions stay in history.
     const baseQuery = db
       .select()
@@ -1063,6 +1088,9 @@ export class DatabaseStorage implements IStorage {
     }
 
     const quoteIds = allQuotes.map(quote => quote.id);
+    const quoteFamilyRootIds = Array.from(
+      new Set(allQuotes.map((quote) => getQuoteFamilyRootId(quote)))
+    );
     const accountIds = Array.from(
       new Set(
         allQuotes
@@ -1078,7 +1106,7 @@ export class DatabaseStorage implements IStorage {
       )
     );
 
-    const [accountsList, contractTemplatesList, lineItemRows] = await Promise.all([
+    const [accountsList, contractTemplatesList, lineItemRows, planningAgreementRows] = await Promise.all([
       accountIds.length
         ? db.select().from(accounts).where(inArray(accounts.id, accountIds))
         : Promise.resolve([] as Account[]),
@@ -1111,11 +1139,24 @@ export class DatabaseStorage implements IStorage {
         .from(lineItems)
         .leftJoin(products, eq(lineItems.productId, products.id))
         .where(inArray(lineItems.quoteId, quoteIds))
-        .orderBy(asc(lineItems.quoteId), asc(lineItems.position))
+        .orderBy(asc(lineItems.quoteId), asc(lineItems.position)),
+      quoteFamilyRootIds.length
+        ? db
+            .select()
+            .from(planningAgreements)
+            .where(inArray(planningAgreements.quoteFamilyRootId, quoteFamilyRootIds))
+            .orderBy(desc(planningAgreements.createdAt))
+        : Promise.resolve([] as PlanningAgreement[]),
     ]);
 
     const accountMap = new Map(accountsList.map(account => [account.id, account]));
     const contractTemplateMap = new Map(contractTemplatesList.map(template => [template.id, template]));
+    const planningAgreementMap = new Map<number, PlanningAgreement>();
+    for (const agreement of planningAgreementRows) {
+      if (agreement.quoteFamilyRootId && !planningAgreementMap.has(agreement.quoteFamilyRootId)) {
+        planningAgreementMap.set(agreement.quoteFamilyRootId, agreement);
+      }
+    }
 
     const lineItemsByQuoteId = new Map<number, QuoteWithDetails["lineItems"]>();
     for (const item of lineItemRows) {
@@ -1154,6 +1195,7 @@ export class DatabaseStorage implements IStorage {
         ? contractTemplateMap.get(quote.contractTemplateId)
         : undefined;
       const quoteLineItems = lineItemsByQuoteId.get(quote.id) ?? [];
+      const planningAgreement = planningAgreementMap.get(getQuoteFamilyRootId(quote));
 
       return {
         ...quote,
@@ -1161,6 +1203,7 @@ export class DatabaseStorage implements IStorage {
         customer: account, // Legacy alias for backward compatibility
         lineItems: quoteLineItems,
         contractTemplate,
+        planningAgreement,
       };
     });
 
@@ -1300,6 +1343,173 @@ export class DatabaseStorage implements IStorage {
     // Then delete the quote
     const result = await db.delete(quotes).where(eq(quotes.id, id));
     return (result.rowCount || 0) > 0;
+  }
+
+  async getPlanningAgreement(id: number): Promise<PlanningAgreement | undefined> {
+    await ensurePlanningAgreementTables();
+    const [agreement] = await db
+      .select()
+      .from(planningAgreements)
+      .where(eq(planningAgreements.id, id));
+    return agreement || undefined;
+  }
+
+  async getPlanningAgreementEvents(planningAgreementId: number): Promise<PlanningAgreementEvent[]> {
+    await ensurePlanningAgreementTables();
+    return db
+      .select()
+      .from(planningAgreementEvents)
+      .where(eq(planningAgreementEvents.planningAgreementId, planningAgreementId))
+      .orderBy(asc(planningAgreementEvents.createdAt));
+  }
+
+  async getPlanningAgreementsByAccountId(accountId: number): Promise<(PlanningAgreement & { quote?: Quote })[]> {
+    await ensurePlanningAgreementTables();
+    const agreements = await db
+      .select()
+      .from(planningAgreements)
+      .where(eq(planningAgreements.accountId, accountId))
+      .orderBy(desc(planningAgreements.createdAt));
+
+    const quoteIds = Array.from(
+      new Set(
+        agreements
+          .map((agreement) => agreement.quoteId)
+          .filter((id): id is number => typeof id === "number")
+      )
+    );
+
+    if (quoteIds.length === 0) {
+      return agreements;
+    }
+
+    const agreementQuotes = await db
+      .select()
+      .from(quotes)
+      .where(inArray(quotes.id, quoteIds));
+    const quoteMap = new Map(agreementQuotes.map((quote) => [quote.id, quote]));
+
+    return agreements.map((agreement) => ({
+      ...agreement,
+      quote: agreement.quoteId ? quoteMap.get(agreement.quoteId) : undefined,
+    }));
+  }
+
+  async getPlanningAgreementByQuoteFamilyRootId(quoteFamilyRootId: number): Promise<PlanningAgreement | undefined> {
+    await ensurePlanningAgreementTables();
+    const [agreement] = await db
+      .select()
+      .from(planningAgreements)
+      .where(eq(planningAgreements.quoteFamilyRootId, quoteFamilyRootId))
+      .orderBy(desc(planningAgreements.createdAt))
+      .limit(1);
+    return agreement || undefined;
+  }
+
+  async getPlanningAgreementByQuoteId(quoteId: number): Promise<PlanningAgreement | undefined> {
+    const quote = await this.getQuote(quoteId);
+    if (!quote) return undefined;
+    return this.getPlanningAgreementByQuoteFamilyRootId(getQuoteFamilyRootId(quote));
+  }
+
+  async createPlanningAgreement(
+    insertAgreement: InsertPlanningAgreement,
+    actorUserId?: number | null,
+  ): Promise<PlanningAgreement> {
+    await ensurePlanningAgreementTables();
+    return db.transaction(async (tx) => {
+      let agreementData: InsertPlanningAgreement = { ...insertAgreement };
+
+      if (agreementData.quoteId && !agreementData.quoteFamilyRootId) {
+        const [sourceQuote] = await tx
+          .select()
+          .from(quotes)
+          .where(eq(quotes.id, agreementData.quoteId));
+        if (!sourceQuote) {
+          throw new Error("Quote not found for planning agreement");
+        }
+
+        agreementData = {
+          ...agreementData,
+          accountId: agreementData.accountId ?? sourceQuote.accountId,
+          quoteFamilyRootId: getQuoteFamilyRootId(sourceQuote),
+        };
+      }
+
+      if (!agreementData.quoteFamilyRootId && agreementData.quoteId) {
+        agreementData.quoteFamilyRootId = agreementData.quoteId;
+      }
+
+      const [agreement] = await tx
+        .insert(planningAgreements)
+        .values({
+          ...agreementData,
+          createdBy: agreementData.createdBy ?? actorUserId ?? null,
+          updatedAt: new Date(),
+        })
+        .returning();
+
+      await tx.insert(planningAgreementEvents).values({
+        planningAgreementId: agreement.id,
+        eventType: "created",
+        actorUserId: actorUserId ?? agreement.createdBy ?? null,
+        fromStatus: null,
+        toStatus: agreement.status,
+        payload: {
+          tier: agreement.tier,
+          amount: agreement.amount,
+          quoteId: agreement.quoteId,
+          quoteFamilyRootId: agreement.quoteFamilyRootId,
+        },
+      });
+
+      return agreement;
+    });
+  }
+
+  async updatePlanningAgreement(
+    id: number,
+    updateData: PlanningAgreementUpdate,
+    actorUserId?: number | null,
+    eventType: InsertPlanningAgreementEvent["eventType"] = "updated",
+    payload?: Record<string, unknown>,
+  ): Promise<PlanningAgreement | undefined> {
+    await ensurePlanningAgreementTables();
+    return db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select()
+        .from(planningAgreements)
+        .where(eq(planningAgreements.id, id));
+      if (!existing) {
+        return undefined;
+      }
+
+      const [updated] = await tx
+        .update(planningAgreements)
+        .set({ ...updateData, updatedAt: new Date() })
+        .where(eq(planningAgreements.id, id))
+        .returning();
+
+      await tx.insert(planningAgreementEvents).values({
+        planningAgreementId: id,
+        eventType,
+        actorUserId: actorUserId ?? null,
+        fromStatus: existing.status,
+        toStatus: updated.status,
+        payload: payload ?? updateData,
+      });
+
+      return updated || undefined;
+    });
+  }
+
+  async createPlanningAgreementEvent(event: InsertPlanningAgreementEvent): Promise<PlanningAgreementEvent> {
+    await ensurePlanningAgreementTables();
+    const [created] = await db
+      .insert(planningAgreementEvents)
+      .values(event)
+      .returning();
+    return created;
   }
 
   // Quote versioning methods

@@ -357,6 +357,12 @@ export function QuoteSummary({ quote, onUpdateQuote, onGenerateProposal, isPrepa
   );
   const signatureAudit = quote.signatureAuditTrail as { documentFingerprint?: string; entries?: Array<{ signerName?: string; signedAt?: string }> } | null;
   const isArchivedVersion = quote.isLatestVersion === false;
+  const planningAgreement = quote.planningAgreement;
+  const planningAgreementClear = !planningAgreement || ["paid_active", "delivered", "credited", "waived"].includes(planningAgreement.status);
+  const planningCreditAmount = planningAgreement?.status === "credited"
+    ? Math.max(0, Number(planningAgreement.appliedCreditAmount || 0))
+    : 0;
+  const amountDueAfterPlanningCredit = Math.max(0, totals.total - planningCreditAmount);
 
   return (
     <>
@@ -664,6 +670,25 @@ export function QuoteSummary({ quote, onUpdateQuote, onGenerateProposal, isPrepa
                 </span>
               </div>
             </div>
+            {planningCreditAmount > 0 && (
+              <div className="rounded-md border border-edg-teal/30 bg-edg-light-teal/10 p-3">
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-muted-foreground">Planning Fee Credit:</span>
+                  <span className="font-medium text-edg-teal">
+                    -{formatCurrency(planningCreditAmount)}
+                  </span>
+                </div>
+                <div className="mt-2 flex justify-between items-center">
+                  <span className="font-semibold text-foreground">Amount Due After Credit:</span>
+                  <span className="text-lg font-bold text-foreground">
+                    {formatCurrency(amountDueAfterPlanningCredit)}
+                  </span>
+                </div>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Credit is shown separately so tax base and product margin stay unchanged.
+                </p>
+              </div>
+            )}
             <div className="mt-3 p-3 bg-muted rounded-lg border">
               <div className="text-xs text-muted-foreground">Profit Margin:</div>
               <div className="text-lg font-semibold text-edg-teal">
@@ -684,6 +709,14 @@ export function QuoteSummary({ quote, onUpdateQuote, onGenerateProposal, isPrepa
                 <Archive className="h-4 w-4 text-amber-700" />
                 <AlertDescription className="text-amber-900">
                   This version is archived. Make it current before using approval, proposal, BOM, or Ops tools.
+                </AlertDescription>
+              </Alert>
+            )}
+            {!planningAgreementClear && (
+              <Alert className="border-amber-200 bg-amber-50">
+                <AlertCircle className="h-4 w-4 text-amber-700" />
+                <AlertDescription className="text-amber-900">
+                  Confirm or waive the Design + Planning Agreement before preparing the final proposal.
                 </AlertDescription>
               </Alert>
             )}
@@ -841,7 +874,7 @@ export function QuoteSummary({ quote, onUpdateQuote, onGenerateProposal, isPrepa
               {onGenerateProposal && (
                 <Button
                   onClick={onGenerateProposal}
-                  disabled={isArchivedVersion || isPreparingProposal || quote.lineItems.length === 0}
+                  disabled={isArchivedVersion || !planningAgreementClear || isPreparingProposal || quote.lineItems.length === 0}
                   variant="outline"
                   className="w-full border-edg-black text-edg-black hover:bg-edg-black hover:text-white"
                   data-testid="button-generate-proposal"
