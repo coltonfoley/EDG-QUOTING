@@ -849,7 +849,27 @@ export function drawLineItemsSection(pdf: jsPDF, opts: DrawLineItemsSectionOpts)
   pdf.setFontSize(12);
   pdf.text('Total', margin, y);
   pdf.text(formatCurrency(totals.total), margin + contentW - 30, y, { align: 'right' });
-  y += 18;
+  y += 7;
+
+  const planningCreditAmount = quote.planningAgreement?.status === 'credited'
+    ? Math.max(0, Number(quote.planningAgreement.appliedCreditAmount || 0))
+    : 0;
+
+  if (planningCreditAmount > 0) {
+    pdf.setFont('Barlow-Regular', 'normal');
+    pdf.setFontSize(11);
+    pdf.text('Planning Fee Credit', margin, y);
+    pdf.text(`-${formatCurrency(planningCreditAmount)}`, margin + contentW - 30, y, { align: 'right' });
+    y += 6;
+
+    pdf.setFont('Barlow-SemiBold', 'normal');
+    pdf.setFontSize(12);
+    pdf.text('Amount Due After Credit', margin, y);
+    pdf.text(formatCurrency(Math.max(0, totals.total - planningCreditAmount)), margin + contentW - 30, y, { align: 'right' });
+    y += 5;
+  }
+
+  y += 11;
 
   // Client Acceptance Block - positioned at bottom of page
   const acceptanceH = measureAcceptanceBlock(pdf, {

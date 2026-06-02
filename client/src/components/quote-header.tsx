@@ -34,6 +34,7 @@ import { DEAL_STAGES } from "@shared/dealStageConstants";
 import { omitQuoteSummaryFields } from "@shared/quoteSavePayload";
 import { ClientComboboxWithCreate } from "@/components/client-combobox-with-create";
 import { AddressAutocomplete } from "@/components/address-autocomplete";
+import { PlanningAgreementPanel } from "@/components/planning-agreement-panel";
 
 // Form schema extends the insert schema with new structured address fields
 const quoteFormSchema = insertQuoteSchema.extend({
@@ -421,13 +422,17 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
   const opsJobUrl = opsImportResult?.opsJobUrl || null;
   const opsJobLabel = getOpsJobLabel(opsImportResult);
   const isArchivedVersion = quote?.isLatestVersion === false;
-  const canSendToOps = Boolean(quote?.id && quote.lineItems?.length && !isArchivedVersion);
+  const planningAgreement = quote?.planningAgreement;
+  const planningAgreementClear = !planningAgreement || ["paid_active", "delivered", "credited", "waived"].includes(planningAgreement.status);
+  const planningAgreementRequired = Boolean(planningAgreement && !planningAgreementClear);
+  const canSendToOps = Boolean(quote?.id && quote.lineItems?.length && !isArchivedVersion && planningAgreementClear);
   const hasLineItems = Boolean(quote?.lineItems?.length);
   const hasProjectName = Boolean((form.watch("projectName") as string | undefined)?.trim());
   const proposalShared = Boolean(quote?.signingToken || quote?.signatureEmailSentAt || quote?.clientSignedAt || quote?.companySignedAt);
   const signatureComplete = Boolean(quote?.clientSignedAt || quote?.companySignedAt);
   const workflowSteps = [
     { label: "Details", complete: hasProjectName },
+    ...(planningAgreement ? [{ label: "Planning Fee", complete: planningAgreementClear }] : []),
     { label: "Line Items", complete: hasLineItems },
     { label: "Review", complete: hasProjectName && hasLineItems },
     { label: "Proposal", complete: proposalShared },
@@ -438,6 +443,8 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
     ? "Create the quote, then add products or custom line items."
     : !hasProjectName
       ? "Add a clear project name so the quote is easy to find later."
+      : planningAgreementRequired
+        ? "Confirm or waive the Design + Planning Agreement before detailed handoff."
       : !hasLineItems
         ? "Add line items from the catalog or as custom items."
         : !proposalShared
@@ -504,7 +511,7 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
                         variant="outline"
                         disabled={!canSendToOps || sendToOpsMutation.isPending}
                         data-testid="button-send-to-ops"
-                        title={isArchivedVersion ? "Make this the current version before sending it to Ops" : !canSendToOps ? "Add at least one line item before sending to Ops" : "Create or open the matching Ops job"}
+                        title={isArchivedVersion ? "Make this the current version before sending it to Ops" : planningAgreementRequired ? "Confirm or waive the Design + Planning Agreement before sending to Ops" : !canSendToOps ? "Add at least one line item before sending to Ops" : "Create or open the matching Ops job"}
                       >
                         {sendToOpsMutation.isPending ? (
                           <Clock className="mr-2 h-4 w-4 animate-spin" />
@@ -600,6 +607,7 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
             </div>
           </div>
         </div>
+        <PlanningAgreementPanel quote={quote} isArchivedVersion={isArchivedVersion} />
       </CardHeader>
 
       <CardContent className="p-6">

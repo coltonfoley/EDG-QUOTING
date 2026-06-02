@@ -8,20 +8,45 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Building2, Briefcase, Edit, ChevronLeft, User, FolderPlus, Users, Mail, Phone, ChevronDown, ChevronRight, FileStack, Inbox } from "lucide-react";
+import { Building2, Briefcase, Edit, ChevronLeft, User, FolderPlus, Users, Mail, Phone, ChevronDown, ChevronRight, FileStack, Inbox, FileText } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { AccountForm } from "@/components/forms/account-form";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { Account, Quote, SecondaryContact } from "@shared/schema";
+import type { Account, PlanningAgreement, Quote, SecondaryContact } from "@shared/schema";
 import { format } from "date-fns";
 import { getDealStageColor, getDealStageLabel } from "@shared/dealStageConstants";
 
 interface AccountDetails extends Account {
   quotes: Quote[];
+  planningAgreements?: (PlanningAgreement & { quote?: Quote })[];
   projectCount: number;
 }
+
+const planningStatusLabels: Record<string, string> = {
+  required: "Required",
+  sent: "Sent",
+  signed_awaiting_payment: "Signed, Awaiting Payment",
+  paid_active: "Paid / Active",
+  delivered: "Delivered",
+  credited: "Credited",
+  waived: "Waived",
+  expired: "Expired",
+  canceled: "Canceled",
+};
+
+const planningStatusColors: Record<string, string> = {
+  required: "border-amber-200 bg-amber-50 text-amber-900",
+  sent: "border-blue-200 bg-blue-50 text-blue-900",
+  signed_awaiting_payment: "border-indigo-200 bg-indigo-50 text-indigo-900",
+  paid_active: "border-emerald-200 bg-emerald-50 text-emerald-900",
+  delivered: "border-emerald-200 bg-emerald-50 text-emerald-900",
+  credited: "border-teal-200 bg-teal-50 text-teal-900",
+  waived: "border-slate-200 bg-slate-50 text-slate-900",
+  expired: "border-red-200 bg-red-50 text-red-900",
+  canceled: "border-slate-200 bg-slate-50 text-slate-900",
+};
 
 export default function AccountDetail() {
   const [match, params] = useRoute("/accounts/:id");
@@ -335,6 +360,72 @@ export default function AccountDetail() {
             )}
           </CardContent>
         </Card>
+
+        {account.planningAgreements && account.planningAgreements.length > 0 && (
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <FileText className="h-5 w-5" />
+                Design + Planning
+              </CardTitle>
+              <CardDescription>
+                Paid planning agreements, manual payment state, and project credits for this client.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {account.planningAgreements.map((agreement) => {
+                  const feeAmount = Number(agreement.amount || 0);
+                  const creditAmount = Number(agreement.appliedCreditAmount || 0);
+                  const quote = agreement.quote;
+
+                  return (
+                    <div key={agreement.id} className="rounded-lg border p-4">
+                      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="font-medium text-gray-900">
+                              {quote?.projectName || quote?.quoteNumber || `Planning Agreement #${agreement.id}`}
+                            </p>
+                            <Badge variant="outline" className={planningStatusColors[agreement.status] || "bg-gray-50 text-gray-800"}>
+                              {planningStatusLabels[agreement.status] || agreement.status}
+                            </Badge>
+                          </div>
+                          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-gray-600">
+                            <span>Fee: {formatCurrency(Number.isFinite(feeAmount) ? feeAmount : 0)}</span>
+                            {agreement.paymentConfirmedAt && (
+                              <span>Paid {format(new Date(agreement.paymentConfirmedAt), 'MMM d, yyyy')}</span>
+                            )}
+                            {agreement.creditEligible && agreement.creditExpiresAt && (
+                              <span>Credit expires {format(new Date(agreement.creditExpiresAt), 'MMM d, yyyy')}</span>
+                            )}
+                            {agreement.creditedAt && (
+                              <span>Credit applied: {formatCurrency(Number.isFinite(creditAmount) ? creditAmount : 0)}</span>
+                            )}
+                          </div>
+                          {agreement.scopeSummary && (
+                            <p className="mt-3 max-w-3xl text-sm leading-6 text-gray-700">
+                              {agreement.scopeSummary}
+                            </p>
+                          )}
+                        </div>
+                        {quote && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => navigate(`/quotes/${quote.id}/edit`)}
+                          >
+                            Open Quote
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Quotes Section - Full Width */}
         <div className="grid grid-cols-1 gap-6">

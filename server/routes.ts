@@ -21,6 +21,7 @@ import { registerProductRoutes } from "./routes/productRoutes";
 import { registerImageRoutes } from "./routes/imageRoutes";
 import { registerAIAssistantRoutes } from "./routes/aiAssistantRoutes";
 import { registerLeadIntakeRoutes } from "./routes/leadIntakeRoutes";
+import { registerPlanningAgreementRoutes } from "./routes/planningAgreementRoutes";
 import { deriveProductCostFields } from "@shared/pricing";
 
 const STORAGE_USAGE_CACHE_MS = 5 * 60 * 1000;
@@ -217,6 +218,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerImageRoutes(app);
   registerLeadIntakeRoutes(app);
   registerAccountRoutes(app);
+  registerPlanningAgreementRoutes(app);
   registerQuoteRoutes(app);
   registerLineItemRoutes(app);
   registerProductRoutes(app);

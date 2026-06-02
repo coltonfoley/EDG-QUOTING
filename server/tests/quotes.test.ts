@@ -1,7 +1,12 @@
-import { describe, it, expect } from "vitest";
+import { afterAll, describe, it, expect } from "vitest";
 import { storage } from "../storage";
+import { pool } from "../db";
 import type { InsertQuote } from "@shared/schema";
 import { nanoid } from "nanoid";
+
+afterAll(async () => {
+  await pool.end();
+});
 
 describe("Quote Storage Layer", () => {
   describe("createQuote", () => {
@@ -248,6 +253,75 @@ describe("Quote Storage Layer", () => {
 
       expect(versions).toBeDefined();
       expect(Array.isArray(versions)).toBe(true);
+    });
+  });
+
+  describe("Design + Planning Agreements", () => {
+    it("keeps normal quotes without planning agreement state", async () => {
+      const quote = await storage.createQuote({
+        projectName: "No Planning Required " + Date.now(),
+      });
+
+      const quoteWithDetails = await storage.getQuoteWithDetails(quote.id);
+
+      expect(quoteWithDetails).toBeDefined();
+      expect(quoteWithDetails?.planningAgreement).toBeUndefined();
+    });
+
+    it("attaches one planning agreement to the full quote family", async () => {
+      const originalQuote = await storage.createQuote({
+        projectName: "Planning Family " + Date.now(),
+      });
+
+      const agreement = await storage.createPlanningAgreement({
+        quoteId: originalQuote.id,
+        quoteFamilyRootId: originalQuote.id,
+        accountId: originalQuote.accountId,
+        status: "required",
+        tier: "standard_design",
+        amount: "1500.00",
+        creditEligible: true,
+      });
+
+      const newVersion = await storage.createQuoteVersion(originalQuote.id);
+      const versionDetails = await storage.getQuoteWithDetails(newVersion.id);
+
+      expect(versionDetails?.planningAgreement?.id).toBe(agreement.id);
+      expect(versionDetails?.planningAgreement?.quoteFamilyRootId).toBe(originalQuote.id);
+    });
+
+    it("records an audit event when manual planning payment is confirmed", async () => {
+      const quote = await storage.createQuote({
+        projectName: "Planning Payment Audit " + Date.now(),
+      });
+
+      const agreement = await storage.createPlanningAgreement({
+        quoteId: quote.id,
+        quoteFamilyRootId: quote.id,
+        status: "sent",
+        tier: "complex_planning",
+        amount: "2500.00",
+        creditEligible: true,
+      });
+
+      const paid = await storage.updatePlanningAgreement(
+        agreement.id,
+        {
+          status: "paid_active",
+          paymentConfirmedAt: new Date(),
+          paymentMethod: "quickbooks",
+          paymentReference: "QB-123",
+          paymentNotes: "Verified outside Rainmaker",
+        },
+        null,
+        "payment_confirmed",
+        { verified: true, paymentReference: "QB-123" },
+      );
+      const events = await storage.getPlanningAgreementEvents(agreement.id);
+
+      expect(paid?.status).toBe("paid_active");
+      expect(paid?.paymentMethod).toBe("quickbooks");
+      expect(events.some((event) => event.eventType === "payment_confirmed")).toBe(true);
     });
   });
 
