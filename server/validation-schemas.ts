@@ -454,6 +454,14 @@ export const applyPlanningAgreementCreditSchema = z.object({
   amount: planningMoneySchema,
 });
 
+export const sendPlanningAgreementEmailSchema = z.object({
+  message: z.string().max(5000, "Message is too long").optional().nullable(),
+});
+
+export const planningAgreementSignatureTokenParamSchema = z.object({
+  token: z.string().min(16, "Token is required").max(128, "Token is too long"),
+});
+
 // Enhanced LineItem validation
 export const insertLineItemSchema = baseLineItemSchema.extend({
   quoteId: z.number().int().positive("Quote ID must be a positive integer"),

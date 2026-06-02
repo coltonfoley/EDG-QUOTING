@@ -136,6 +136,15 @@ export async function ensurePlanningAgreementTables(): Promise<void> {
         "credit_expires_at" timestamp,
         "scope_summary" text,
         "internal_notes" text,
+        "signing_token" text,
+        "agreement_document_snapshot" jsonb,
+        "signed_document_snapshot" jsonb,
+        "customer_signature_data" jsonb,
+        "customer_signed_at" timestamp,
+        "customer_signed_ip" text,
+        "signature_audit_trail" jsonb,
+        "signature_email_sent_at" timestamp,
+        "signature_email_message" text,
         "agreement_sent_at" timestamp,
         "agreement_signed_at" timestamp,
         "payment_confirmed_at" timestamp,
@@ -156,6 +165,16 @@ export async function ensurePlanningAgreementTables(): Promise<void> {
         "updated_at" timestamp DEFAULT now()
       );
 
+      ALTER TABLE "planning_agreements" ADD COLUMN IF NOT EXISTS "signing_token" text;
+      ALTER TABLE "planning_agreements" ADD COLUMN IF NOT EXISTS "agreement_document_snapshot" jsonb;
+      ALTER TABLE "planning_agreements" ADD COLUMN IF NOT EXISTS "signed_document_snapshot" jsonb;
+      ALTER TABLE "planning_agreements" ADD COLUMN IF NOT EXISTS "customer_signature_data" jsonb;
+      ALTER TABLE "planning_agreements" ADD COLUMN IF NOT EXISTS "customer_signed_at" timestamp;
+      ALTER TABLE "planning_agreements" ADD COLUMN IF NOT EXISTS "customer_signed_ip" text;
+      ALTER TABLE "planning_agreements" ADD COLUMN IF NOT EXISTS "signature_audit_trail" jsonb;
+      ALTER TABLE "planning_agreements" ADD COLUMN IF NOT EXISTS "signature_email_sent_at" timestamp;
+      ALTER TABLE "planning_agreements" ADD COLUMN IF NOT EXISTS "signature_email_message" text;
+
       CREATE TABLE IF NOT EXISTS "planning_agreement_events" (
         "id" serial PRIMARY KEY NOT NULL,
         "planning_agreement_id" integer NOT NULL REFERENCES "planning_agreements"("id") ON DELETE cascade,
@@ -171,6 +190,8 @@ export async function ensurePlanningAgreementTables(): Promise<void> {
       CREATE INDEX IF NOT EXISTS "idx_planning_agreements_quote_id" ON "planning_agreements" ("quote_id");
       CREATE INDEX IF NOT EXISTS "idx_planning_agreements_quote_family_root_id" ON "planning_agreements" ("quote_family_root_id");
       CREATE INDEX IF NOT EXISTS "idx_planning_agreements_status" ON "planning_agreements" ("status");
+      CREATE UNIQUE INDEX IF NOT EXISTS "planning_agreements_signing_token_unique" ON "planning_agreements" ("signing_token") WHERE "signing_token" IS NOT NULL;
+      CREATE INDEX IF NOT EXISTS "idx_planning_agreements_signing_token" ON "planning_agreements" ("signing_token");
       CREATE INDEX IF NOT EXISTS "idx_planning_agreements_payment_confirmed_at" ON "planning_agreements" ("payment_confirmed_at");
       CREATE INDEX IF NOT EXISTS "idx_planning_agreements_credit_expires_at" ON "planning_agreements" ("credit_expires_at");
       CREATE INDEX IF NOT EXISTS "idx_planning_agreement_events_agreement_id" ON "planning_agreement_events" ("planning_agreement_id");

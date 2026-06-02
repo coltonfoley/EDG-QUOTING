@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Building2, Briefcase, Edit, ChevronLeft, User, FolderPlus, Users, Mail, Phone, ChevronDown, ChevronRight, FileStack, Inbox, FileText } from "lucide-react";
+import { Building2, Briefcase, Edit, ChevronLeft, User, FolderPlus, Users, Mail, Phone, ChevronDown, ChevronRight, FileStack, Inbox, FileText, ExternalLink } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
@@ -378,6 +378,7 @@ export default function AccountDetail() {
                   const feeAmount = Number(agreement.amount || 0);
                   const creditAmount = Number(agreement.appliedCreditAmount || 0);
                   const quote = agreement.quote;
+                  const signatureAudit = agreement.signatureAuditTrail as { documentFingerprint?: string } | null;
 
                   return (
                     <div key={agreement.id} className="rounded-lg border p-4">
@@ -396,11 +397,20 @@ export default function AccountDetail() {
                             {agreement.paymentConfirmedAt && (
                               <span>Paid {format(new Date(agreement.paymentConfirmedAt), 'MMM d, yyyy')}</span>
                             )}
+                            {agreement.signatureEmailSentAt && (
+                              <span>Email sent {format(new Date(agreement.signatureEmailSentAt), 'MMM d, yyyy')}</span>
+                            )}
+                            {agreement.customerSignedAt && (
+                              <span>Signed {format(new Date(agreement.customerSignedAt), 'MMM d, yyyy')}</span>
+                            )}
                             {agreement.creditEligible && agreement.creditExpiresAt && (
                               <span>Credit expires {format(new Date(agreement.creditExpiresAt), 'MMM d, yyyy')}</span>
                             )}
                             {agreement.creditedAt && (
                               <span>Credit applied: {formatCurrency(Number.isFinite(creditAmount) ? creditAmount : 0)}</span>
+                            )}
+                            {signatureAudit?.documentFingerprint && (
+                              <span>Doc ID {signatureAudit.documentFingerprint.slice(0, 12)}</span>
                             )}
                           </div>
                           {agreement.scopeSummary && (
@@ -409,15 +419,27 @@ export default function AccountDetail() {
                             </p>
                           )}
                         </div>
-                        {quote && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => navigate(`/quotes/${quote.id}/edit`)}
-                          >
-                            Open Quote
-                          </Button>
-                        )}
+                        <div className="flex flex-wrap gap-2">
+                          {agreement.signingToken && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => window.open(`/planning-agreements/sign/${agreement.signingToken}`, '_blank', 'noopener,noreferrer')}
+                            >
+                              <ExternalLink className="mr-2 h-4 w-4" />
+                              Agreement
+                            </Button>
+                          )}
+                          {quote && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => navigate(`/quotes/${quote.id}/edit`)}
+                            >
+                              Open Quote
+                            </Button>
+                          )}
+                        </div>
                       </div>
                     </div>
                   );
