@@ -1,4 +1,5 @@
 import type { Express } from "express";
+import type { InsertPlanningAgreementEvent } from "@shared/schema";
 import { storage } from "../storage";
 import { isAuthenticated } from "../replitAuth";
 import {
@@ -101,6 +102,7 @@ export function registerPlanningAgreementRoutes(app: Express) {
         quoteId: quote.id,
         quoteFamilyRootId: quote.parentQuoteId || quote.id,
         accountId: quote.accountId,
+        appliedCreditAmount: "0",
       }, getActorUserId(req));
 
       res.status(201).json(agreement);
@@ -335,12 +337,13 @@ export function registerPlanningAgreementRoutes(app: Express) {
       }
 
       if (agreement.creditExpiresAt && new Date(agreement.creditExpiresAt) < new Date()) {
+        const currentStatus = agreement.status as InsertPlanningAgreementEvent["fromStatus"];
         await storage.createPlanningAgreementEvent({
           planningAgreementId: agreement.id,
           eventType: "expired",
           actorUserId: getActorUserId(req),
-          fromStatus: agreement.status,
-          toStatus: agreement.status,
+          fromStatus: currentStatus,
+          toStatus: currentStatus,
           payload: {
             creditExpiresAt: agreement.creditExpiresAt,
             attemptedQuoteId: body.data.quoteId,
