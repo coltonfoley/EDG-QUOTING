@@ -1,9 +1,8 @@
 import type { IncomingMessage, ServerResponse } from "http";
 import type { Express } from "express";
-import { createApp } from "./app";
-import { handleLeadIntake } from "../api/lead-intake";
 
 let appPromise: Promise<Express> | null = null;
+let leadIntakePromise: Promise<typeof import("../api/lead-intake")> | null = null;
 
 function restoreExpressPath(req: IncomingMessage) {
   const requestUrl = new URL(req.url || "/", "https://rainmaker.local");
@@ -29,8 +28,15 @@ function sendJson(res: ServerResponse, statusCode: number, payload: unknown) {
 }
 
 async function getApp() {
-  appPromise ??= createApp({ serveClient: false }).then(({ app }) => app);
+  appPromise ??= import("./app").then(({ createApp }) =>
+    createApp({ serveClient: false }).then(({ app }) => app)
+  );
   return appPromise;
+}
+
+function getLeadIntake() {
+  leadIntakePromise ??= import("../api/lead-intake");
+  return leadIntakePromise;
 }
 
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
@@ -42,6 +48,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   }
 
   if (path === "/api/leads/intake") {
+    const { handleLeadIntake } = await getLeadIntake();
     return handleLeadIntake(req, res);
   }
 
