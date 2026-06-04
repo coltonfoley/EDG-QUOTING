@@ -1,7 +1,7 @@
 import { createHash } from "crypto";
 import { jsPDF } from "jspdf";
 
-type HandoffDocumentKind = "proposal" | "bill_of_materials";
+type HandoffDocumentKind = "contract" | "bill_of_materials";
 
 export type HandoffDocument = {
   kind: HandoffDocumentKind;
@@ -224,7 +224,7 @@ const buildBomPdf = (quote: any) => {
 const createSourceDocumentKey = (
   quote: any,
   kind: HandoffDocumentKind,
-): string => kind === "proposal"
+): string => kind === "contract"
   ? `EDG-QUOTING:quote:${quote.id}:rainmaker_proposal_pdf`
   : `EDG-QUOTING:quote:${quote.id}:rainmaker_bom_pdf`;
 
@@ -238,13 +238,13 @@ export async function buildOperationsDocuments(quote: any, totals?: QuoteTotals)
 
   return [
     {
-      kind: "proposal",
+      kind: "contract",
       type: "Proposal PDF",
       fileName: `Quote-${filenameQuotePart}-Proposal.pdf`,
       contentType: "application/pdf",
       contentBase64: proposal.base64,
       contentSha256: proposal.sha256,
-      sourceDocumentKey: createSourceDocumentKey(quote, "proposal"),
+      sourceDocumentKey: createSourceDocumentKey(quote, "contract"),
       sourceQuoteId: quoteId,
       sourceQuoteNumber: quoteNumber,
       visibility: "internal",

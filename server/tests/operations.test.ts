@@ -46,7 +46,7 @@ describe("operations payload planning agreement handling", () => {
     }, true, {
       buildDocuments: async (quote) => [
         {
-          kind: "proposal",
+          kind: "contract",
           type: "Proposal PDF",
           contentType: "application/pdf",
           contentBase64: Buffer.from("%PDF proposal").toString("base64"),
@@ -71,7 +71,7 @@ describe("operations payload planning agreement handling", () => {
     expect(payload.quote.totals.total).toBe(1000);
     expect(payload.handoffDocuments).toHaveLength(2);
     expect(payload.handoffDocuments.map((document: any) => document.kind)).toEqual([
-      "proposal",
+      "contract",
       "bill_of_materials",
     ]);
     expect(payload.handoffDocuments.map((document: any) => document.type)).toEqual([
@@ -96,7 +96,7 @@ describe("operations payload planning agreement handling", () => {
 
     expect(payload.handoffDocuments).toHaveLength(2);
     expect(payload.handoffDocuments.map((document: any) => document.kind)).toEqual([
-      "proposal",
+      "contract",
       "bill_of_materials",
     ]);
     expect(payload.handoffDocuments.map((document: any) => document.sourceDocumentKey)).toEqual([
@@ -122,7 +122,7 @@ describe("operations payload planning agreement handling", () => {
 
     expect(documents).toHaveLength(2);
     expect(documents[0]).toEqual(expect.objectContaining({
-      kind: "proposal",
+      kind: "contract",
       type: "Proposal PDF",
       sourceDocumentKey: "EDG-QUOTING:quote:100:rainmaker_proposal_pdf",
       visibility: "internal",
