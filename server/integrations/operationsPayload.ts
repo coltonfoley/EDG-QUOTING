@@ -1,3 +1,5 @@
+import { buildOperationsDocuments } from "./operationsDocuments";
+
 const parseDecimal = (value: unknown, fallback = 0): number => {
   if (typeof value === "number") return Number.isFinite(value) ? value : fallback;
   if (typeof value === "string") {
@@ -105,6 +107,7 @@ export const isPlanningAgreementClearForOps = (planningAgreement: any): boolean 
 
 export const buildOperationsPayload = (quote: any, dryRun = false) => {
   const totals = calculateQuoteTotals(quote);
+  const handoffDocuments = buildOperationsDocuments(quote, totals);
   const planningAgreement = quote.planningAgreement
     ? {
         id: quote.planningAgreement.id,
@@ -123,6 +126,7 @@ export const buildOperationsPayload = (quote: any, dryRun = false) => {
     sourceSystem: "EDG-QUOTING",
     sentAt: new Date().toISOString(),
     dryRun,
+    handoffDocuments,
     quote: {
       id: quote.id,
       quoteNumber: quote.quoteNumber,

@@ -44,5 +44,12 @@ describe("operations payload planning agreement handling", () => {
       appliedCreditAmount: "1500.00",
     }));
     expect(payload.quote.totals.total).toBe(1000);
+    expect(payload.handoffDocuments).toHaveLength(2);
+    expect(payload.handoffDocuments.map((document: any) => document.type)).toEqual([
+      "Contract",
+      "Bill of Materials",
+    ]);
+    expect(payload.handoffDocuments[0].contentType).toBe("application/pdf");
+    expect(Buffer.from(payload.handoffDocuments[0].contentBase64, "base64").subarray(0, 4).toString()).toBe("%PDF");
   });
 });
