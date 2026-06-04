@@ -104,12 +104,15 @@ export const isPlanningAgreementClearForOps = (planningAgreement: any): boolean 
 };
 
 type BuildOperationsPayloadOptions = {
-  buildDocuments?: (quote: any) => Promise<any[]>;
+  buildDocuments?: (quote: any, totals: ReturnType<typeof calculateQuoteTotals>) => Promise<any[]> | any[];
 };
 
-const buildDefaultOperationsDocuments = async (quote: any): Promise<any[]> => {
+const buildDefaultOperationsDocuments = async (
+  quote: any,
+  totals: ReturnType<typeof calculateQuoteTotals>,
+): Promise<any[]> => {
   const { buildOperationsDocuments } = await import("./operationsDocuments");
-  return buildOperationsDocuments(quote);
+  return buildOperationsDocuments(quote, totals);
 };
 
 export const buildOperationsPayload = async (
@@ -119,7 +122,7 @@ export const buildOperationsPayload = async (
 ) => {
   const totals = calculateQuoteTotals(quote);
   const buildDocuments = options.buildDocuments || buildDefaultOperationsDocuments;
-  const handoffDocuments = await buildDocuments(quote);
+  const handoffDocuments = await buildDocuments(quote, totals);
   const planningAgreement = quote.planningAgreement
     ? {
         id: quote.planningAgreement.id,
