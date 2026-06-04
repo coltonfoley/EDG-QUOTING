@@ -33,6 +33,11 @@ interface BrandedSequenceOptions {
   showPricing: boolean;
   clientLogoDataUrl: string | null;
   groups?: PdfGroup[];
+  brandAssets?: {
+    coverJpg: string;
+    logoPng: string;
+    backPageJpg: string;
+  };
 }
 
 /**
@@ -45,13 +50,15 @@ interface BrandedSequenceOptions {
  * 6. Branded Back Page
  */
 export async function generateBrandedSequencePDF(options: BrandedSequenceOptions): Promise<void> {
-  const { pdf, company, quote, renderImages, contractText, showPricing, clientLogoDataUrl, groups = [] } = options;
+  const { pdf, company, quote, renderImages, contractText, showPricing, clientLogoDataUrl, groups = [], brandAssets } = options;
 
-  const [BRAND_COVER_JPG, BRAND_LOGO_PNG, BRAND_BACK_PAGE_PNG] = await Promise.all([
-    getBrandCoverJPG(),
-    getBrandLogoPNG(),
-    getBrandBackPagePNG(),
-  ]);
+  const [BRAND_COVER_JPG, BRAND_LOGO_PNG, BRAND_BACK_PAGE_PNG] = brandAssets
+    ? [brandAssets.coverJpg, brandAssets.logoPng, brandAssets.backPageJpg]
+    : await Promise.all([
+        getBrandCoverJPG(),
+        getBrandLogoPNG(),
+        getBrandBackPagePNG(),
+      ]);
 
   const pageW = pdf.internal.pageSize.getWidth();
   const pageH = pdf.internal.pageSize.getHeight();

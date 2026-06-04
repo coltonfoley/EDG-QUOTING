@@ -138,7 +138,7 @@ export async function sendQuoteToOperations(
     const response = await fetch(importUrl, {
       method: "POST",
       headers,
-      body: JSON.stringify(buildOperationsPayload(quote, Boolean(options.dryRun))),
+      body: JSON.stringify(await buildOperationsPayload(quote, Boolean(options.dryRun))),
       signal: controller.signal,
     });
 
