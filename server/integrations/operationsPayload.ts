@@ -1,5 +1,3 @@
-import { buildOperationsDocuments } from "./operationsDocuments";
-
 const parseDecimal = (value: unknown, fallback = 0): number => {
   if (typeof value === "number") return Number.isFinite(value) ? value : fallback;
   if (typeof value === "string") {
@@ -109,13 +107,19 @@ type BuildOperationsPayloadOptions = {
   buildDocuments?: (quote: any) => Promise<any[]>;
 };
 
+const buildDefaultOperationsDocuments = async (quote: any): Promise<any[]> => {
+  const { buildOperationsDocuments } = await import("./operationsDocuments");
+  return buildOperationsDocuments(quote);
+};
+
 export const buildOperationsPayload = async (
   quote: any,
   dryRun = false,
   options: BuildOperationsPayloadOptions = {},
 ) => {
   const totals = calculateQuoteTotals(quote);
-  const handoffDocuments = await (options.buildDocuments || buildOperationsDocuments)(quote);
+  const buildDocuments = options.buildDocuments || buildDefaultOperationsDocuments;
+  const handoffDocuments = await buildDocuments(quote);
   const planningAgreement = quote.planningAgreement
     ? {
         id: quote.planningAgreement.id,
