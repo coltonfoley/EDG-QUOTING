@@ -105,9 +105,17 @@ export const isPlanningAgreementClearForOps = (planningAgreement: any): boolean 
   return ["paid_active", "delivered", "credited", "waived"].includes(planningAgreement.status);
 };
 
-export const buildOperationsPayload = (quote: any, dryRun = false) => {
+type BuildOperationsPayloadOptions = {
+  buildDocuments?: (quote: any) => Promise<any[]>;
+};
+
+export const buildOperationsPayload = async (
+  quote: any,
+  dryRun = false,
+  options: BuildOperationsPayloadOptions = {},
+) => {
   const totals = calculateQuoteTotals(quote);
-  const handoffDocuments = buildOperationsDocuments(quote, totals);
+  const handoffDocuments = await (options.buildDocuments || buildOperationsDocuments)(quote);
   const planningAgreement = quote.planningAgreement
     ? {
         id: quote.planningAgreement.id,

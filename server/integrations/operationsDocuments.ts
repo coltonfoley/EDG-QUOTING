@@ -1,9 +1,14 @@
 import { createHash } from "crypto";
-import { jsPDF } from "jspdf";
+import { get as getBlob } from "@vercel/blob";
+import sharp from "sharp";
+import { ObjectStorageService, getObjectStorageProvider } from "../objectStorage";
+import { storage } from "../storage";
+import { generateSignedPDF } from "../../client/src/lib/generate-signed-pdf";
+import { generateBomPDF } from "../../client/src/lib/generate-bom-pdf";
 
 type HandoffDocumentKind = "contract" | "bill_of_materials";
 
-type HandoffDocument = {
+export type HandoffDocument = {
   kind: HandoffDocumentKind;
   type: "Contract" | "Bill of Materials";
   fileName: string;
@@ -17,18 +22,21 @@ type HandoffDocument = {
   metadata: Record<string, unknown>;
 };
 
-const currency = new Intl.NumberFormat("en-US", {
-  style: "currency",
-  currency: "USD",
-});
+type PdfImage = { dataUrl: string; format: "PNG" | "JPEG" };
 
-const parseDecimal = (value: unknown, fallback = 0): number => {
-  if (typeof value === "number") return Number.isFinite(value) ? value : fallback;
-  if (typeof value === "string") {
-    const parsed = parseFloat(value.replace(/[^0-9.-]/g, ""));
-    return Number.isFinite(parsed) ? parsed : fallback;
-  }
-  return fallback;
+type BrandAssets = {
+  coverJpg: string;
+  logoPng: string;
+  backPageJpg: string;
+};
+
+const PDF_MAX_IMAGE_DIMENSION = 1200;
+const PDF_JPEG_QUALITY = 75;
+
+const BRAND_ASSET_MAP: Record<keyof BrandAssets, { objectPath: string; contentType: string }> = {
+  coverJpg: { objectPath: "brand-assets/brand-cover.jpg", contentType: "image/jpeg" },
+  logoPng: { objectPath: "brand-assets/brand-logo.png", contentType: "image/png" },
+  backPageJpg: { objectPath: "brand-assets/brand-back.jpg", contentType: "image/jpeg" },
 };
 
 const sanitizeFilenamePart = (value: unknown, fallback: string): string => {
@@ -39,167 +47,167 @@ const sanitizeFilenamePart = (value: unknown, fallback: string): string => {
 const getQuoteNumber = (quote: any): string | null =>
   quote.quoteNumber ? String(quote.quoteNumber) : null;
 
-const getCustomerName = (quote: any): string =>
-  quote.account?.company ||
-  quote.account?.name ||
-  quote.customer?.company ||
-  quote.customer?.name ||
-  "Customer";
+const createSourceDocumentKey = (
+  quote: any,
+  kind: HandoffDocumentKind,
+): string => kind === "contract"
+  ? `EDG-QUOTING:quote:${quote.id}:rainmaker_contract_pdf`
+  : `EDG-QUOTING:quote:${quote.id}:rainmaker_bom_pdf`;
 
-const getJobsiteAddress = (quote: any): string | null => {
-  if (quote.jobsiteAddress) return quote.jobsiteAddress;
-  const street = [quote.jobsiteStreetAddress, quote.jobsiteAddressLine2].filter(Boolean).join(", ");
-  const cityLine = [quote.jobsiteCity, quote.jobsiteState, quote.jobsiteZipCode].filter(Boolean).join(", ");
-  return [street, cityLine].filter(Boolean).join(", ") || null;
-};
+async function readBlobStream(stream: ReadableStream<Uint8Array>): Promise<Buffer> {
+  const reader = stream.getReader();
+  const chunks: Uint8Array[] = [];
+  let byteLength = 0;
 
-const getLineTotal = (item: any, quote: any): number => {
-  const quantity = Math.max(0, parseDecimal(item.quantity, 0));
-  const unitPrice = Math.max(0, parseDecimal(item.unitPrice, 0));
-  const markupValue = Math.max(0, parseDecimal(item.markupValue, 0));
-  const discountValue = Math.max(0, parseDecimal(item.discountValue, 0));
-  const tariffRate = Math.max(0, parseDecimal(quote.tariffRate, 0));
-  const baseTotal = quantity * unitPrice;
-  const discounted = item.discountType === "fixed"
-    ? Math.max(0, baseTotal - discountValue)
-    : baseTotal - (baseTotal * Math.min(discountValue, 100) / 100);
-  const tariffed = item.isTariffApplicable
-    ? discounted + (discounted * Math.min(tariffRate, 100) / 100)
-    : discounted;
-  const total = item.markupType === "fixed"
-    ? tariffed + markupValue
-    : tariffed + (tariffed * markupValue / 100);
-  return Math.round(Math.max(0, total) * 100) / 100;
-};
-
-const addWrappedText = (pdf: jsPDF, text: string, x: number, y: number, width: number): number => {
-  const lines = pdf.splitTextToSize(text, width);
-  pdf.text(lines, x, y);
-  return y + lines.length * 5;
-};
-
-const ensureSpace = (pdf: jsPDF, y: number, needed = 18): number => {
-  if (y + needed < 265) return y;
-  pdf.addPage();
-  return 20;
-};
-
-const addFooter = (pdf: jsPDF) => {
-  const pages = pdf.getNumberOfPages();
-  for (let page = 1; page <= pages; page++) {
-    pdf.setPage(page);
-    pdf.setFontSize(8);
-    pdf.setTextColor(120);
-    pdf.text(`EDG Patio & Shade | Page ${page} of ${pages}`, 105, 275, { align: "center" });
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+      byteLength += value.byteLength;
+    }
+  } finally {
+    reader.releaseLock();
   }
-};
 
-const toPdfBase64 = (pdf: jsPDF) => {
-  addFooter(pdf);
-  const buffer = Buffer.from(pdf.output("arraybuffer"));
+  return Buffer.concat(chunks, byteLength);
+}
+
+function toDataUri(buffer: Buffer, contentType: string): string {
+  return `data:${contentType};base64,${buffer.toString("base64")}`;
+}
+
+async function loadBrandAsset(asset: { objectPath: string; contentType: string }): Promise<string> {
+  if (getObjectStorageProvider() === "vercel-blob") {
+    const blob = await getBlob(asset.objectPath, { access: "public" });
+    if (!blob || blob.statusCode !== 200 || !blob.stream) {
+      throw new Error(`Brand asset not found: ${asset.objectPath}`);
+    }
+    return toDataUri(await readBlobStream(blob.stream), asset.contentType);
+  }
+
+  const objectStorageService = new ObjectStorageService();
+  const file = await objectStorageService.searchPublicObject(asset.objectPath);
+  if (!file) {
+    throw new Error(`Brand asset not found: ${asset.objectPath}`);
+  }
+
+  const [buffer] = await file.download();
+  return toDataUri(buffer, asset.contentType);
+}
+
+async function loadBrandAssets(): Promise<BrandAssets> {
+  const [coverJpg, logoPng, backPageJpg] = await Promise.all([
+    loadBrandAsset(BRAND_ASSET_MAP.coverJpg),
+    loadBrandAsset(BRAND_ASSET_MAP.logoPng),
+    loadBrandAsset(BRAND_ASSET_MAP.backPageJpg),
+  ]);
+
+  return { coverJpg, logoPng, backPageJpg };
+}
+
+async function loadObjectStorageBuffer(objectPath: string): Promise<Buffer> {
+  if (getObjectStorageProvider() === "vercel-blob") {
+    const blob = await getBlob(objectPath.replace(/^\/objects\//, ""), { access: "public" });
+    if (!blob || blob.statusCode !== 200 || !blob.stream) {
+      throw new Error(`Object not found: ${objectPath}`);
+    }
+    return readBlobStream(blob.stream);
+  }
+
+  const objectStorageService = new ObjectStorageService();
+  const objectFile = await objectStorageService.getObjectEntityFile(objectPath);
+  const [buffer] = await objectFile.download();
+  return buffer;
+}
+
+async function loadImageBuffer(src: string): Promise<{ buffer: Buffer; contentType: string }> {
+  if (src.startsWith("data:")) {
+    const [header, payload] = src.split(",", 2);
+    const contentType = header.match(/^data:([^;]+)/)?.[1] || "application/octet-stream";
+    return { buffer: Buffer.from(payload || "", "base64"), contentType };
+  }
+
+  if (src.startsWith("/objects/")) {
+    const buffer = await loadObjectStorageBuffer(src);
+    return { buffer, contentType: "application/octet-stream" };
+  }
+
+  if (/^https?:\/\//i.test(src)) {
+    const response = await fetch(src, { headers: { Accept: "image/*" } });
+    if (!response.ok) {
+      throw new Error(`Failed to fetch image: ${response.status}`);
+    }
+    const contentType = response.headers.get("content-type") || "application/octet-stream";
+    return { buffer: Buffer.from(await response.arrayBuffer()), contentType };
+  }
+
+  const buffer = await loadObjectStorageBuffer(src);
+  return { buffer, contentType: "application/octet-stream" };
+}
+
+async function normalizeImageToDataUrlServer(src: string): Promise<PdfImage> {
+  const { buffer, contentType } = await loadImageBuffer(src);
+  const usePng = contentType.toLowerCase().includes("png") || contentType.toLowerCase().includes("gif");
+  const format: PdfImage["format"] = usePng ? "PNG" : "JPEG";
+  let pipeline = sharp(buffer, { animated: false }).rotate().resize({
+    width: PDF_MAX_IMAGE_DIMENSION,
+    height: PDF_MAX_IMAGE_DIMENSION,
+    fit: "inside",
+    withoutEnlargement: true,
+  });
+
+  if (format === "PNG") {
+    pipeline = pipeline.png();
+  } else {
+    pipeline = pipeline.flatten({ background: "#ffffff" }).jpeg({ quality: PDF_JPEG_QUALITY });
+  }
+
+  const output = await pipeline.toBuffer();
+  return {
+    dataUrl: toDataUri(output, format === "PNG" ? "image/png" : "image/jpeg"),
+    format,
+  };
+}
+
+async function blobToPdfPayload(blob: Blob): Promise<{ base64: string; sha256: string }> {
+  const buffer = Buffer.from(await blob.arrayBuffer());
   return {
     base64: buffer.toString("base64"),
     sha256: createHash("sha256").update(buffer).digest("hex"),
   };
-};
-
-const createPdf = (title: string): jsPDF => {
-  const pdf = new jsPDF({ unit: "mm", format: "letter" });
-  pdf.setFont("helvetica", "bold");
-  pdf.setFontSize(18);
-  pdf.text(title, 20, 20);
-  pdf.setDrawColor(40);
-  pdf.line(20, 25, 195, 25);
-  pdf.setFont("helvetica", "normal");
-  pdf.setFontSize(10);
-  pdf.setTextColor(30);
-  return pdf;
-};
-
-function buildContractPdf(quote: any, totals: any) {
-  const pdf = createPdf("Contract");
-  let y = 35;
-  const quoteNumber = getQuoteNumber(quote);
-  const rows = [
-    ["Project", quote.projectName || "Project"],
-    ["Quote", quoteNumber || String(quote.id)],
-    ["Customer", getCustomerName(quote)],
-    ["Jobsite", getJobsiteAddress(quote) || "Not provided"],
-    ["Generated", new Date().toLocaleDateString("en-US")],
-    ["Contract Value", currency.format(parseDecimal(totals?.total, 0))],
-  ];
-
-  for (const [label, value] of rows) {
-    pdf.setFont("helvetica", "bold");
-    pdf.text(`${label}:`, 20, y);
-    pdf.setFont("helvetica", "normal");
-    y = addWrappedText(pdf, String(value), 55, y, 135) + 2;
-  }
-
-  const contractText = [quote.notes, quote.customContractTerms || quote.contractTemplate?.terms]
-    .filter((part) => typeof part === "string" && part.trim())
-    .join("\n\n");
-
-  if (contractText) {
-    y = ensureSpace(pdf, y, 30);
-    pdf.setFont("helvetica", "bold");
-    pdf.text("Contract Notes", 20, y);
-    y += 7;
-    pdf.setFont("helvetica", "normal");
-    y = addWrappedText(pdf, contractText, 20, y, 175) + 4;
-  }
-
-  y = ensureSpace(pdf, y, 24);
-  pdf.setFont("helvetica", "bold");
-  pdf.text("Sold Scope", 20, y);
-  y += 7;
-  pdf.setFont("helvetica", "normal");
-  for (const item of quote.lineItems || []) {
-    y = ensureSpace(pdf, y, 14);
-    const line = `${parseDecimal(item.quantity, 1)} x ${item.description}${item.sku ? ` (${item.sku})` : ""} - ${currency.format(getLineTotal(item, quote))}`;
-    y = addWrappedText(pdf, line, 20, y, 175) + 2;
-  }
-
-  return toPdfBase64(pdf);
 }
 
-function buildBomPdf(quote: any) {
-  const pdf = createPdf("Bill of Materials");
-  let y = 35;
-  pdf.text(`Project: ${quote.projectName || "Project"}`, 20, y);
-  y += 6;
-  pdf.text(`Quote: ${getQuoteNumber(quote) || String(quote.id)}`, 20, y);
-  y += 10;
-
-  for (const item of quote.lineItems || []) {
-    y = ensureSpace(pdf, y, 18);
-    const parts = [
-      item.sku ? `SKU: ${item.sku}` : null,
-      item.manufacturer ? `Manufacturer: ${item.manufacturer}` : null,
-      `Qty: ${parseDecimal(item.quantity, 1)}`,
-      `Unit: ${item.unit || "ea"}`,
-    ].filter(Boolean);
-    y = addWrappedText(pdf, item.description || "Line item", 20, y, 175);
-    pdf.setTextColor(90);
-    y = addWrappedText(pdf, parts.join(" | "), 24, y, 170) + 3;
-    pdf.setTextColor(30);
-  }
-
-  return toPdfBase64(pdf);
-}
-
-const createSourceDocumentKey = (
-  quote: any,
-  kind: HandoffDocumentKind,
-): string => `EDG-QUOTING:quote:${quote.id}:${kind}`;
-
-export function buildOperationsDocuments(quote: any, totals: any): HandoffDocument[] {
+export async function buildOperationsDocuments(quote: any): Promise<HandoffDocument[]> {
   const quoteNumber = getQuoteNumber(quote);
   const quoteId = String(quote.id);
   const filenameQuotePart = sanitizeFilenamePart(quoteNumber || quoteId, "Quote");
+  const groups = await storage.getGroupsByQuoteId(Number(quote.id));
+  const coverPhoto = await storage.getQuoteCoverPhoto(Number(quote.id));
+  const productRenderings = await storage.getQuoteProductRenderings(Number(quote.id));
+  const quoteForPdf = {
+    ...quote,
+    coverPhoto,
+    productRenderings,
+  };
+  const brandAssets = await loadBrandAssets();
 
-  const contract = buildContractPdf(quote, totals);
-  const bom = buildBomPdf(quote);
+  const [contractPayload, bomPayload] = await Promise.all([
+    generateSignedPDF({
+      quote: quoteForPdf,
+      includeImages: quote.esigIncludeImages ?? false,
+      includePricing: quote.esigIncludePricing ?? true,
+      includeContract: quote.esigIncludeContract ?? true,
+      groups,
+      brandAssets,
+      normalizeImage: normalizeImageToDataUrlServer,
+    }).then(blobToPdfPayload),
+    generateBomPDF({
+      quote: quoteForPdf,
+      groups,
+      brandLogoDataUrl: brandAssets.logoPng,
+    }).then(blobToPdfPayload),
+  ]);
 
   return [
     {
@@ -207,18 +215,19 @@ export function buildOperationsDocuments(quote: any, totals: any): HandoffDocume
       type: "Contract",
       fileName: `Quote-${filenameQuotePart}-Contract.pdf`,
       contentType: "application/pdf",
-      contentBase64: contract.base64,
-      contentSha256: contract.sha256,
+      contentBase64: contractPayload.base64,
+      contentSha256: contractPayload.sha256,
       sourceDocumentKey: createSourceDocumentKey(quote, "contract"),
       sourceQuoteId: quoteId,
       sourceQuoteNumber: quoteNumber,
       visibility: "internal",
       metadata: {
-        generatedFrom: "rainmaker_quote",
+        generatedFrom: "rainmaker_signed_quote_pdf",
         quoteVersion: quote.versionNumber ?? null,
         customerSignedAt: quote.clientSignedAt ?? null,
         companySignedAt: quote.companySignedAt ?? null,
         documentFingerprint: quote.signatureAuditTrail?.documentFingerprint ?? null,
+        sourceRenderer: "generateSignedPDF",
       },
     },
     {
@@ -226,16 +235,17 @@ export function buildOperationsDocuments(quote: any, totals: any): HandoffDocume
       type: "Bill of Materials",
       fileName: `Quote-${filenameQuotePart}-BOM.pdf`,
       contentType: "application/pdf",
-      contentBase64: bom.base64,
-      contentSha256: bom.sha256,
+      contentBase64: bomPayload.base64,
+      contentSha256: bomPayload.sha256,
       sourceDocumentKey: createSourceDocumentKey(quote, "bill_of_materials"),
       sourceQuoteId: quoteId,
       sourceQuoteNumber: quoteNumber,
       visibility: "internal",
       metadata: {
-        generatedFrom: "rainmaker_quote",
+        generatedFrom: "rainmaker_bom_pdf",
         quoteVersion: quote.versionNumber ?? null,
         lineItemCount: quote.lineItems?.length ?? 0,
+        sourceRenderer: "generateBomPDF",
       },
     },
   ];

@@ -1,8 +1,10 @@
-import jsPDF from 'jspdf';
+import jsPDFDefault, { jsPDF as jsPDFNamed } from 'jspdf';
 import type { QuoteProductRendering, QuoteWithDetails } from '@shared/schema';
 import { barlowRegularBase64, barlowSemiBoldBase64 } from './fonts';
 import { generateBrandedSequencePDF } from './pdf-branded-sequence';
 import { normalizeImageToDataUrl } from './pdf-image-pipeline';
+
+const JsPDF = jsPDFNamed || jsPDFDefault;
 
 interface PdfGroup {
   id: string;
@@ -16,6 +18,12 @@ interface GenerateSignedPDFOptions {
   includePricing?: boolean;
   includeContract?: boolean;
   groups?: PdfGroup[];
+  brandAssets?: {
+    coverJpg: string;
+    logoPng: string;
+    backPageJpg: string;
+  };
+  normalizeImage?: (src: string) => Promise<{ dataUrl: string; format: 'PNG' | 'JPEG' }>;
 }
 
 /**
@@ -23,10 +31,18 @@ interface GenerateSignedPDFOptions {
  * This is the official legally-binding document for both parties
  */
 export async function generateSignedPDF(options: GenerateSignedPDFOptions): Promise<Blob> {
-  const { quote, includeImages = false, includePricing = true, includeContract = true, groups = [] } = options;
+  const {
+    quote,
+    includeImages = false,
+    includePricing = true,
+    includeContract = true,
+    groups = [],
+    brandAssets,
+    normalizeImage = normalizeImageToDataUrl,
+  } = options;
 
   // Create PDF instance
-  const pdf = new jsPDF({ unit: 'mm', format: 'letter' });
+  const pdf = new JsPDF({ unit: 'mm', format: 'letter' });
 
   // Add custom fonts
   pdf.addFileToVFS('Barlow-Regular.ttf', barlowRegularBase64);
@@ -39,7 +55,7 @@ export async function generateSignedPDF(options: GenerateSignedPDFOptions): Prom
   if (includeImages && quote.productRenderings && quote.productRenderings.length > 0) {
     const imageResults = await Promise.allSettled(
       quote.productRenderings.map(async (rendering: QuoteProductRendering) => {
-        return await normalizeImageToDataUrl(rendering.storageUrl);
+        return await normalizeImage(rendering.storageUrl);
       })
     );
     normalizedImages = imageResults
@@ -69,7 +85,7 @@ export async function generateSignedPDF(options: GenerateSignedPDFOptions): Prom
   let clientLogoDataUrl: string | null = null;
   if (quote.coverPhoto) {
     try {
-      const result = await normalizeImageToDataUrl(quote.coverPhoto.storageUrl);
+      const result = await normalizeImage(quote.coverPhoto.storageUrl);
       clientLogoDataUrl = result.dataUrl;
     } catch (error) {
       console.warn('Failed to load client logo:', error);
@@ -85,7 +101,8 @@ export async function generateSignedPDF(options: GenerateSignedPDFOptions): Prom
     contractText,
     showPricing: includePricing,
     clientLogoDataUrl,
-    groups
+    groups,
+    brandAssets
   });
 
   // Return as blob

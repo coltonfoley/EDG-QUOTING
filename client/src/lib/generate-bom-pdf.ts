@@ -1,8 +1,11 @@
-import jsPDF from 'jspdf';
+import jsPDFDefault, { jsPDF as jsPDFNamed } from 'jspdf';
+import type { jsPDF as JsPDFType } from 'jspdf';
 import type { QuoteWithDetails, LineItem } from '@shared/schema';
 import { barlowRegularBase64, barlowSemiBoldBase64 } from './fonts';
 import { formatCurrency, calculateLineItemTotal } from './utils';
 import { getBrandLogoPNG } from './pdf-brand-assets';
+
+const JsPDF = jsPDFNamed || jsPDFDefault;
 
 interface BomLineItem extends LineItem {
   manufacturer?: string;
@@ -17,6 +20,7 @@ interface PdfGroup {
 interface GenerateBomPDFOptions {
   quote: QuoteWithDetails;
   groups?: PdfGroup[];
+  brandLogoDataUrl?: string;
 }
 
 function parseConfigData(configData: any): { colors?: string } {
@@ -58,7 +62,7 @@ function calculateSellPrice(item: BomLineItem, quoteTariffRate: string | number)
   return { unitSellPrice, lineTotal };
 }
 
-function drawTableHeader(pdf: jsPDF, y: number, margin: number, colWidths: Record<string, number>) {
+function drawTableHeader(pdf: JsPDFType, y: number, margin: number, colWidths: Record<string, number>) {
   const contentW = Object.values(colWidths).reduce((sum, w) => sum + w, 0);
   const headerHeight = 8;
   
@@ -84,11 +88,11 @@ function drawTableHeader(pdf: jsPDF, y: number, margin: number, colWidths: Recor
 }
 
 export async function generateBomPDF(options: GenerateBomPDFOptions): Promise<Blob> {
-  const { quote, groups = [] } = options;
+  const { quote, groups = [], brandLogoDataUrl } = options;
 
-  const BRAND_LOGO_PNG = await getBrandLogoPNG();
+  const BRAND_LOGO_PNG = brandLogoDataUrl || await getBrandLogoPNG();
 
-  const pdf = new jsPDF({ unit: 'mm', format: 'letter' });
+  const pdf = new JsPDF({ unit: 'mm', format: 'letter' });
 
   pdf.addFileToVFS('Barlow-Regular.ttf', barlowRegularBase64);
   pdf.addFont('Barlow-Regular.ttf', 'Barlow-Regular', 'normal');
