@@ -51,5 +51,9 @@ describe("operations payload planning agreement handling", () => {
     ]);
     expect(payload.handoffDocuments[0].contentType).toBe("application/pdf");
     expect(Buffer.from(payload.handoffDocuments[0].contentBase64, "base64").subarray(0, 4).toString()).toBe("%PDF");
+    expect(payload.handoffDocuments.map((document: any) => document.sourceDocumentKey)).toEqual([
+      "EDG-QUOTING:quote:100:contract",
+      "EDG-QUOTING:quote:100:bill_of_materials",
+    ]);
   });
 });

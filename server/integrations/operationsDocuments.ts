@@ -191,8 +191,7 @@ function buildBomPdf(quote: any) {
 const createSourceDocumentKey = (
   quote: any,
   kind: HandoffDocumentKind,
-  contentSha256: string,
-): string => `EDG-QUOTING:quote:${quote.id}:${kind}:${contentSha256.slice(0, 20)}`;
+): string => `EDG-QUOTING:quote:${quote.id}:${kind}`;
 
 export function buildOperationsDocuments(quote: any, totals: any): HandoffDocument[] {
   const quoteNumber = getQuoteNumber(quote);
@@ -210,7 +209,7 @@ export function buildOperationsDocuments(quote: any, totals: any): HandoffDocume
       contentType: "application/pdf",
       contentBase64: contract.base64,
       contentSha256: contract.sha256,
-      sourceDocumentKey: createSourceDocumentKey(quote, "contract", contract.sha256),
+      sourceDocumentKey: createSourceDocumentKey(quote, "contract"),
       sourceQuoteId: quoteId,
       sourceQuoteNumber: quoteNumber,
       visibility: "internal",
@@ -229,7 +228,7 @@ export function buildOperationsDocuments(quote: any, totals: any): HandoffDocume
       contentType: "application/pdf",
       contentBase64: bom.base64,
       contentSha256: bom.sha256,
-      sourceDocumentKey: createSourceDocumentKey(quote, "bill_of_materials", bom.sha256),
+      sourceDocumentKey: createSourceDocumentKey(quote, "bill_of_materials"),
       sourceQuoteId: quoteId,
       sourceQuoteNumber: quoteNumber,
       visibility: "internal",
