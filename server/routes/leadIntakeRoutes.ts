@@ -1,10 +1,13 @@
 import type { Express } from "express";
+import { randomUUID, timingSafeEqual } from "crypto";
+import multer from "multer";
 import { z } from "zod";
 import { storage } from "../storage";
 import { isAuthenticated } from "../replitAuth";
 import { db } from "../db";
-import { accounts, type InsertAccount } from "@shared/schema";
+import { accounts, type InsertAccount, type LeadAttachment } from "@shared/schema";
 import { and, desc, eq, isNotNull, sql } from "drizzle-orm";
+import { ObjectStorageService } from "../objectStorage";
 
 const leadIntakeSchema = z.object({
   email: z.string().email().transform((value) => value.trim().toLowerCase()),
@@ -21,6 +24,13 @@ const leadIntakeSchema = z.object({
 
 type LeadIntakePayload = z.infer<typeof leadIntakeSchema>;
 
+type UploadedLeadAttachmentFile = {
+  originalname: string;
+  mimetype: string;
+  size: number;
+  buffer: Buffer;
+};
+
 const leadStatusSchema = z.enum([
   "new",
   "contacted",
@@ -33,6 +43,108 @@ const leadStatusSchema = z.enum([
 const leadStatusUpdateSchema = z.object({
   status: leadStatusSchema,
 });
+
+const maxLeadAttachmentCount = 4;
+const maxLeadAttachmentBytes = 1 * 1024 * 1024;
+const maxTotalLeadAttachmentBytes = 3.5 * 1024 * 1024;
+const allowedLeadAttachmentTypes = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+]);
+
+const leadAttachmentUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: maxLeadAttachmentBytes,
+    files: maxLeadAttachmentCount,
+  },
+  fileFilter: (_req, file, callback) => {
+    if (!allowedLeadAttachmentTypes.has(file.mimetype)) {
+      return callback(new Error(`${file.originalname} must be a JPG, PNG, or WebP image.`));
+    }
+
+    callback(null, true);
+  },
+});
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function sanitizeAttachmentFilename(filename: string): string {
+  const cleaned = filename
+    .trim()
+    .replace(/[/\\?%*:|"<>]/g, "-")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .slice(0, 120);
+
+  return cleaned || "edg-site-photo.jpg";
+}
+
+function uploadLeadAttachments(req: any, res: any): Promise<void> {
+  const upload = leadAttachmentUpload.array("attachments", maxLeadAttachmentCount);
+
+  return new Promise((resolve, reject) => {
+    upload(req, res, (error) => {
+      if (error) reject(error);
+      else resolve();
+    });
+  });
+}
+
+function getLeadAttachmentSource(value: unknown): string {
+  return typeof value === "string" && value.trim()
+    ? value.trim().slice(0, 255)
+    : "website";
+}
+
+function getLeadAttachmentSubmissionId(value: unknown): string {
+  return typeof value === "string" && value.trim()
+    ? value.trim().slice(0, 255)
+    : randomUUID();
+}
+
+function groupAttachmentsByAccountId<T extends { accountId: number }>(attachments: T[]) {
+  const grouped = new Map<number, T[]>();
+
+  for (const attachment of attachments) {
+    const existing = grouped.get(attachment.accountId) || [];
+    existing.push(attachment);
+    grouped.set(attachment.accountId, existing);
+  }
+
+  return grouped;
+}
+
+function isConfiguredWebsiteApiKey(req: any): boolean {
+  const configuredKey = process.env.RAINMAKER_API_KEY;
+  const authHeader = req.headers.authorization;
+
+  if (!configuredKey || !authHeader?.startsWith("Bearer ")) {
+    return false;
+  }
+
+  const suppliedKey = authHeader.slice("Bearer ".length);
+  const configuredBuffer = Buffer.from(configuredKey);
+  const suppliedBuffer = Buffer.from(suppliedKey);
+
+  return (
+    configuredBuffer.length === suppliedBuffer.length &&
+    timingSafeEqual(configuredBuffer, suppliedBuffer)
+  );
+}
+
+function isLeadAttachmentAuthenticated(req: any, res: any, next: any) {
+  if (req.isAuthenticated?.() || req.apiKeyAuthenticated || isConfiguredWebsiteApiKey(req)) {
+    return next();
+  }
+
+  res.status(401).json({ message: "Unauthorized" });
+}
 
 function accountTypeFromLead(customerType?: string | null): InsertAccount["accountType"] {
   switch ((customerType || "").toLowerCase()) {
@@ -145,7 +257,18 @@ export function registerLeadIntakeRoutes(app: Express) {
         .limit(limit)
         .offset(offset);
 
-      res.json(leads);
+      const attachments = await storage.getLeadAttachmentsForAccounts(
+        leads.map((lead) => lead.id)
+      );
+      const attachmentsByAccountId = groupAttachmentsByAccountId(attachments);
+
+      res.json(
+        leads.map((lead) => ({
+          ...lead,
+          attachments: attachmentsByAccountId.get(lead.id) || [],
+          leadAttachments: attachmentsByAccountId.get(lead.id) || [],
+        }))
+      );
     } catch (error) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({
@@ -192,6 +315,111 @@ export function registerLeadIntakeRoutes(app: Express) {
 
       console.error("Error updating lead status:", error);
       res.status(500).json({ message: "Failed to update lead status" });
+    }
+  });
+
+  app.post("/api/leads/:id/attachments", isLeadAttachmentAuthenticated, async (req: any, res) => {
+    try {
+      const accountId = z.coerce.number().int().positive().parse(req.params.id);
+      const account = await storage.getAccount(accountId);
+
+      if (!account || !account.leadStatus) {
+        return res.status(404).json({
+          success: false,
+          message: "Lead not found",
+        });
+      }
+
+      await uploadLeadAttachments(req, res);
+
+      const files = (req.files || []) as UploadedLeadAttachmentFile[];
+      if (files.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: "No photo attachments were uploaded",
+        });
+      }
+
+      const totalBytes = files.reduce((sum, file) => sum + file.size, 0);
+      if (totalBytes > maxTotalLeadAttachmentBytes) {
+        return res.status(413).json({
+          success: false,
+          message: `Lead photos are limited to ${formatBytes(maxTotalLeadAttachmentBytes)} total.`,
+        });
+      }
+
+      const objectStorageService = new ObjectStorageService();
+      const source = getLeadAttachmentSource(req.body?.source);
+      const submissionId = getLeadAttachmentSubmissionId(req.body?.submissionId);
+      const createdAttachments: LeadAttachment[] = [];
+
+      for (const [index, file] of files.entries()) {
+        const originalName = sanitizeAttachmentFilename(file.originalname);
+        const storedName = `${Date.now()}-${index + 1}-${randomUUID()}-${originalName}`;
+        const objectPath = `lead-attachments/${accountId}/${storedName}`;
+        const uploadedObject = await objectStorageService.uploadPublicObjectEntityBuffer(
+          objectPath,
+          file.buffer,
+          { contentType: file.mimetype }
+        );
+
+        const created = await storage.createLeadAttachment({
+          accountId,
+          submissionId,
+          filename: storedName,
+          originalName,
+          storageUrl: uploadedObject.publicUrl || uploadedObject.objectPath,
+          fileSize: file.size,
+          mimeType: file.mimetype,
+          source,
+          displayOrder: index,
+          isActive: true,
+        });
+
+        createdAttachments.push(created);
+      }
+
+      res.status(201).json({
+        success: true,
+        accountId,
+        leadId: accountId,
+        attachments: createdAttachments,
+      });
+    } catch (error: any) {
+      if (error instanceof multer.MulterError) {
+        const status = error.code === "LIMIT_FILE_SIZE" ? 413 : 400;
+        return res.status(status).json({
+          success: false,
+          message:
+            error.code === "LIMIT_FILE_SIZE"
+              ? `Each lead photo must be ${formatBytes(maxLeadAttachmentBytes)} or smaller.`
+              : error.message,
+        });
+      }
+
+      if (
+        error instanceof Error &&
+        error.message.includes("must be a JPG, PNG, or WebP image")
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: error.message,
+        });
+      }
+
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid lead attachment request",
+          errors: error.errors,
+        });
+      }
+
+      console.error("Lead attachment upload failed:", error);
+      res.status(500).json({
+        success: false,
+        message: error?.message || "Failed to upload lead attachments",
+      });
     }
   });
 
