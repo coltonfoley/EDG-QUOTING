@@ -6,12 +6,6 @@ const checks = [
     expectJsonStatusOk: true,
   },
   {
-    name: "Replit fallback health",
-    url: "https://edgquote.replit.app/health",
-    status: 200,
-    expectJsonStatusOk: true,
-  },
-  {
     name: "Unauthenticated user API",
     url: "https://rainmaker.edgpatioshade.com/api/user",
     status: 401,
