@@ -8,13 +8,13 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Building2, Briefcase, Edit, ChevronLeft, User, FolderPlus, Users, Mail, Phone, ChevronDown, ChevronRight, FileStack, Inbox, FileText, ExternalLink } from "lucide-react";
+import { Building2, Briefcase, Edit, ChevronLeft, User, FolderPlus, Users, Mail, Phone, ChevronDown, ChevronRight, FileStack, Inbox, FileText, ExternalLink, Images } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { AccountForm } from "@/components/forms/account-form";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { Account, PlanningAgreement, Quote, SecondaryContact } from "@shared/schema";
+import type { Account, LeadAttachment, PlanningAgreement, Quote, SecondaryContact } from "@shared/schema";
 import { format } from "date-fns";
 import { getDealStageColor, getDealStageLabel } from "@shared/dealStageConstants";
 
@@ -22,6 +22,8 @@ interface AccountDetails extends Account {
   quotes: Quote[];
   planningAgreements?: (PlanningAgreement & { quote?: Quote })[];
   projectCount: number;
+  attachments?: LeadAttachment[];
+  leadAttachments?: LeadAttachment[];
 }
 
 const planningStatusLabels: Record<string, string> = {
@@ -48,6 +50,20 @@ const planningStatusColors: Record<string, string> = {
   canceled: "border-slate-200 bg-slate-50 text-slate-900",
 };
 
+function getAccountLeadAttachments(account?: AccountDetails) {
+  if (!account) return [];
+  return account.leadAttachments?.length
+    ? account.leadAttachments
+    : account.attachments || [];
+}
+
+function formatAttachmentSize(bytes?: number | null) {
+  if (!bytes) return "";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 export default function AccountDetail() {
   const [match, params] = useRoute("/accounts/:id");
   const accountId = match ? parseInt(params.id) : null;
@@ -62,6 +78,7 @@ export default function AccountDetail() {
     queryKey: [`/api/accounts/${accountId}/details`],
     enabled: isAuthenticated && accountId !== null,
   });
+  const leadAttachments = getAccountLeadAttachments(account);
 
   const handleAccountUpdated = () => {
     setEditAccountOpen(false);
@@ -313,6 +330,44 @@ export default function AccountDetail() {
                   <p className="mt-4 max-w-3xl text-sm leading-6 text-gray-700">
                     {extractLeadMessage(account.leadMessage)}
                   </p>
+                )}
+
+                {leadAttachments.length > 0 && (
+                  <div className="mt-5">
+                    <div className="mb-3 flex items-center gap-2">
+                      <Images className="h-4 w-4 text-edg-teal" />
+                      <p className="text-sm font-semibold text-gray-800">
+                        Site photos ({leadAttachments.length})
+                      </p>
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                      {leadAttachments.map((attachment) => (
+                        <a
+                          key={attachment.id}
+                          href={attachment.storageUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="group overflow-hidden rounded-md border bg-white transition-colors hover:border-edg-teal"
+                        >
+                          <div className="aspect-[4/3] bg-gray-100">
+                            <img
+                              src={attachment.storageUrl}
+                              alt={attachment.originalName}
+                              className="h-full w-full object-cover transition-transform group-hover:scale-105"
+                              loading="lazy"
+                            />
+                          </div>
+                          <div className="flex items-center justify-between gap-2 px-3 py-2 text-xs text-gray-600">
+                            <span className="min-w-0 truncate">{attachment.originalName}</span>
+                            <span className="flex shrink-0 items-center gap-1">
+                              {formatAttachmentSize(attachment.fileSize)}
+                              <ExternalLink className="h-3 w-3" />
+                            </span>
+                          </div>
+                        </a>
+                      ))}
+                    </div>
+                  </div>
                 )}
               </div>
             )}

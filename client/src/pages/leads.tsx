@@ -10,13 +10,15 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
-import type { Account } from "@shared/schema";
+import type { Account, LeadAttachment } from "@shared/schema";
 import {
   Archive,
   CheckCircle2,
   ChevronRight,
   Clock,
+  ExternalLink,
   FolderPlus,
+  Images,
   Inbox,
   Mail,
   MapPin,
@@ -29,6 +31,8 @@ type LeadStatus = "new" | "contacted" | "qualified" | "unresponsive" | "converte
 
 interface LeadAccount extends Account {
   projectCount?: number;
+  attachments?: LeadAttachment[];
+  leadAttachments?: LeadAttachment[];
 }
 
 const LEAD_STATUSES: Array<{ value: "all" | LeadStatus; label: string }> = [
@@ -85,6 +89,19 @@ function extractLeadMessage(message?: string | null) {
   if (!message) return "No message provided.";
   const match = message.match(/Message:\s*([\s\S]*?)(?:\n\nMetadata:|$)/);
   return (match?.[1] || message).trim() || "No message provided.";
+}
+
+function getLeadAttachments(lead: LeadAccount) {
+  return lead.leadAttachments?.length
+    ? lead.leadAttachments
+    : lead.attachments || [];
+}
+
+function formatAttachmentSize(bytes?: number | null) {
+  if (!bytes) return "";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 export default function Leads() {
@@ -237,8 +254,11 @@ export default function Leads() {
               </div>
             ) : (
               <div className="divide-y">
-                {visibleLeads.map((lead) => (
-                  <div key={lead.id} className="grid gap-4 p-5 lg:grid-cols-[minmax(0,1fr)_auto]">
+                {visibleLeads.map((lead) => {
+                  const attachments = getLeadAttachments(lead);
+
+                  return (
+                    <div key={lead.id} className="grid gap-4 p-5 lg:grid-cols-[minmax(0,1fr)_auto]">
                     <div className="min-w-0 space-y-3">
                       <div className="flex flex-wrap items-center gap-2">
                         <Link
@@ -278,11 +298,46 @@ export default function Leads() {
                             {lead.leadProjectType}
                           </span>
                         )}
+                        {attachments.length > 0 && (
+                          <span className="flex items-center gap-1 text-emerald-700">
+                            <Images className="h-4 w-4" />
+                            {attachments.length} photo{attachments.length === 1 ? "" : "s"}
+                          </span>
+                        )}
                       </div>
 
                       <p className="max-w-3xl text-sm leading-6 text-foreground">
                         {extractLeadMessage(lead.leadMessage)}
                       </p>
+
+                      {attachments.length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                          {attachments.slice(0, 4).map((attachment) => (
+                            <a
+                              key={attachment.id}
+                              href={attachment.storageUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              title={[
+                                attachment.originalName,
+                                formatAttachmentSize(attachment.fileSize),
+                              ].filter(Boolean).join(" - ")}
+                              className="group relative block h-16 w-20 overflow-hidden rounded-md border bg-muted"
+                              aria-label={`Open ${attachment.originalName}`}
+                            >
+                              <img
+                                src={attachment.storageUrl}
+                                alt={attachment.originalName}
+                                className="h-full w-full object-cover transition-transform group-hover:scale-105"
+                                loading="lazy"
+                              />
+                              <span className="absolute right-1 top-1 rounded bg-black/70 p-1 text-white opacity-0 transition-opacity group-hover:opacity-100">
+                                <ExternalLink className="h-3 w-3" />
+                              </span>
+                            </a>
+                          ))}
+                        </div>
+                      )}
                     </div>
 
                     <div className="flex flex-col items-stretch gap-2 lg:items-end">
@@ -347,8 +402,9 @@ export default function Leads() {
                       )}
                       </div>
                     </div>
-                  </div>
-                ))}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </CardContent>

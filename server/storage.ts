@@ -1,5 +1,64 @@
-import { accounts, customers, quotes, planningAgreements, planningAgreementEvents, lineItems, groups, products, pricingDefaults, users, apiKeys, contractTemplates, pricingTables, colors, productColors, quoteCoverPhotos, quoteProductRenderings, issueReports, type Account, type Customer, type Quote, type PlanningAgreement, type PlanningAgreementEvent, type LineItem, type Group, type Product, type PricingDefault, type User, type ApiKey, type ContractTemplate, type PricingTable, type Color, type ProductColor, type QuoteCoverPhoto, type QuoteProductRendering, type IssueReport, type InsertAccount, type InsertCustomer, type InsertQuote, type InsertPlanningAgreement, type InsertPlanningAgreementEvent, type InsertLineItem, type InsertGroup, type InsertProduct, type InsertUser, type InsertApiKey, type InsertContractTemplate, type InsertPricingTable, type InsertColor, type InsertProductColor, type InsertQuoteCoverPhoto, type InsertQuoteProductRendering, type InsertIssueReport, type QuoteWithDetails, type ProductWithDetails } from "@shared/schema";
-import { db, ensurePlanningAgreementTables, ensurePricingDefaultsTable, ensureProductCatalogColumns, ensureSignatureAuditColumns, pool } from "./db";
+import {
+  accounts,
+  customers,
+  quotes,
+  planningAgreements,
+  planningAgreementEvents,
+  lineItems,
+  groups,
+  products,
+  pricingDefaults,
+  users,
+  apiKeys,
+  contractTemplates,
+  pricingTables,
+  colors,
+  productColors,
+  quoteCoverPhotos,
+  quoteProductRenderings,
+  leadAttachments,
+  issueReports,
+  type Account,
+  type Customer,
+  type Quote,
+  type PlanningAgreement,
+  type PlanningAgreementEvent,
+  type LineItem,
+  type Group,
+  type Product,
+  type PricingDefault,
+  type User,
+  type ApiKey,
+  type ContractTemplate,
+  type PricingTable,
+  type Color,
+  type ProductColor,
+  type QuoteCoverPhoto,
+  type QuoteProductRendering,
+  type LeadAttachment,
+  type IssueReport,
+  type InsertAccount,
+  type InsertCustomer,
+  type InsertQuote,
+  type InsertPlanningAgreement,
+  type InsertPlanningAgreementEvent,
+  type InsertLineItem,
+  type InsertGroup,
+  type InsertProduct,
+  type InsertUser,
+  type InsertApiKey,
+  type InsertContractTemplate,
+  type InsertPricingTable,
+  type InsertColor,
+  type InsertProductColor,
+  type InsertQuoteCoverPhoto,
+  type InsertQuoteProductRendering,
+  type InsertLeadAttachment,
+  type InsertIssueReport,
+  type QuoteWithDetails,
+  type ProductWithDetails
+} from "@shared/schema";
+import { db, ensureLeadAttachmentTable, ensurePlanningAgreementTables, ensurePricingDefaultsTable, ensureProductCatalogColumns, ensureSignatureAuditColumns, pool } from "./db";
 import { eq, desc, asc, inArray, sql, and, ne, or, ilike } from "drizzle-orm";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
@@ -89,6 +148,9 @@ export interface IStorage {
   deleteAccount(id: number): Promise<boolean>;
   createAccount(account: InsertAccount, options?: { allowDuplicate?: boolean; updateIfExists?: boolean; createPrimaryContact?: boolean }): Promise<Account>;
   updateAccount(id: number, account: Partial<InsertAccount>): Promise<Account | undefined>;
+  getLeadAttachmentsForAccount(accountId: number): Promise<LeadAttachment[]>;
+  getLeadAttachmentsForAccounts(accountIds: number[]): Promise<LeadAttachment[]>;
+  createLeadAttachment(attachment: InsertLeadAttachment): Promise<LeadAttachment>;
   
   // Client methods (unified model - accounts with integrated contact info)
   getClient(id: number): Promise<Account | undefined>;
@@ -777,6 +839,37 @@ export class DatabaseStorage implements IStorage {
     return updated || undefined;
   }
 
+  async getLeadAttachmentsForAccount(accountId: number): Promise<LeadAttachment[]> {
+    await ensureLeadAttachmentTable();
+
+    return await db
+      .select()
+      .from(leadAttachments)
+      .where(and(eq(leadAttachments.accountId, accountId), eq(leadAttachments.isActive, true)))
+      .orderBy(asc(leadAttachments.displayOrder), asc(leadAttachments.uploadedAt));
+  }
+
+  async getLeadAttachmentsForAccounts(accountIds: number[]): Promise<LeadAttachment[]> {
+    if (accountIds.length === 0) return [];
+    await ensureLeadAttachmentTable();
+
+    return await db
+      .select()
+      .from(leadAttachments)
+      .where(and(inArray(leadAttachments.accountId, accountIds), eq(leadAttachments.isActive, true)))
+      .orderBy(asc(leadAttachments.accountId), asc(leadAttachments.displayOrder), asc(leadAttachments.uploadedAt));
+  }
+
+  async createLeadAttachment(attachment: InsertLeadAttachment): Promise<LeadAttachment> {
+    await ensureLeadAttachmentTable();
+
+    const [created] = await db
+      .insert(leadAttachments)
+      .values(attachment)
+      .returning();
+    return created;
+  }
+
   async getAllAccounts(): Promise<Account[]> {
     // Use a single efficient query with proper correlated subqueries
     const allAccountsWithCounts = await db.select({
@@ -829,12 +922,15 @@ export class DatabaseStorage implements IStorage {
       .where(eq(quotes.accountId, id))
       .orderBy(desc(quotes.createdAt));
     const accountPlanningAgreements = await this.getPlanningAgreementsByAccountId(id);
+    const accountLeadAttachments = await this.getLeadAttachmentsForAccount(id);
 
     return {
       ...account,
       quotes: accountQuotes,
       planningAgreements: accountPlanningAgreements,
-      projectCount: accountQuotes.length
+      projectCount: accountQuotes.length,
+      attachments: accountLeadAttachments,
+      leadAttachments: accountLeadAttachments
     };
   }
 

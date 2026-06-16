@@ -88,6 +88,27 @@ export const accounts = pgTable("accounts", {
   index("idx_accounts_qb_customer_id").on(table.qbCustomerId),
 ]);
 
+// Lead attachments - stores website intake photo metadata for Rainmaker leads.
+export const leadAttachments = pgTable("lead_attachments", {
+  id: serial("id").primaryKey(),
+  accountId: integer("account_id").notNull().references(() => accounts.id, { onDelete: "cascade" }),
+  submissionId: text("submission_id"),
+  filename: text("filename").notNull(),
+  originalName: text("original_name").notNull(),
+  storageUrl: text("storage_url").notNull(),
+  fileSize: integer("file_size"),
+  mimeType: text("mime_type").notNull(),
+  source: text("source").notNull().default("website"),
+  displayOrder: integer("display_order").default(0),
+  isActive: boolean("is_active").default(true),
+  uploadedAt: timestamp("uploaded_at").defaultNow(),
+}, (table) => [
+  index("idx_lead_attachments_account_id").on(table.accountId),
+  index("idx_lead_attachments_submission_id").on(table.submissionId),
+  index("idx_lead_attachments_active").on(table.isActive),
+  index("idx_lead_attachments_order").on(table.accountId, table.displayOrder),
+]);
+
 // Aliases for different conceptual uses
 export const customers = accounts; // Legacy alias for backward compatibility
 export const clients = accounts; // New unified client model alias
@@ -732,6 +753,11 @@ export const insertQuoteProductRenderingSchema = createInsertSchema(quoteProduct
   uploadedAt: true,
 });
 
+export const insertLeadAttachmentSchema = createInsertSchema(leadAttachments).omit({
+  id: true,
+  uploadedAt: true,
+});
+
 export const insertIssueReportSchema = createInsertSchema(issueReports).omit({
   id: true,
   createdAt: true,
@@ -769,6 +795,7 @@ export type Color = typeof colors.$inferSelect;
 export type ProductColor = typeof productColors.$inferSelect;
 export type QuoteCoverPhoto = typeof quoteCoverPhotos.$inferSelect;
 export type QuoteProductRendering = typeof quoteProductRenderings.$inferSelect;
+export type LeadAttachment = typeof leadAttachments.$inferSelect;
 export type IssueReport = typeof issueReports.$inferSelect;
 
 export type InsertApiKey = z.infer<typeof insertApiKeySchema>;
@@ -787,6 +814,7 @@ export type InsertColor = z.infer<typeof insertColorSchema>;
 export type InsertProductColor = z.infer<typeof insertProductColorSchema>;
 export type InsertQuoteCoverPhoto = z.infer<typeof insertQuoteCoverPhotoSchema>;
 export type InsertQuoteProductRendering = z.infer<typeof insertQuoteProductRenderingSchema>;
+export type InsertLeadAttachment = z.infer<typeof insertLeadAttachmentSchema>;
 export type InsertIssueReport = z.infer<typeof insertIssueReportSchema>;
 
 export type QuoteWithDetails = Quote & {
@@ -797,6 +825,10 @@ export type QuoteWithDetails = Quote & {
   coverPhoto?: QuoteCoverPhoto; // Cover page image
   productRenderings?: QuoteProductRendering[]; // Visual assets and details
   planningAgreement?: PlanningAgreement;
+};
+
+export type LeadWithAttachments = Account & {
+  attachments?: LeadAttachment[];
 };
 
 // DTO types for API responses that include calculated fields

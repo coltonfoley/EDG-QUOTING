@@ -23,6 +23,7 @@ let signatureAuditColumnsReady: Promise<void> | null = null;
 let productCatalogColumnsReady: Promise<void> | null = null;
 let pricingDefaultsTableReady: Promise<void> | null = null;
 let planningAgreementTablesReady: Promise<void> | null = null;
+let leadAttachmentTableReady: Promise<void> | null = null;
 
 export async function ensureSignatureAuditColumns(): Promise<void> {
   if (!signatureAuditColumnsReady) {
@@ -203,4 +204,35 @@ export async function ensurePlanningAgreementTables(): Promise<void> {
   }
 
   await planningAgreementTablesReady;
+}
+
+export async function ensureLeadAttachmentTable(): Promise<void> {
+  if (!leadAttachmentTableReady) {
+    leadAttachmentTableReady = pool.query(`
+      CREATE TABLE IF NOT EXISTS "lead_attachments" (
+        "id" serial PRIMARY KEY,
+        "account_id" integer NOT NULL REFERENCES "accounts"("id") ON DELETE cascade,
+        "submission_id" text,
+        "filename" text NOT NULL,
+        "original_name" text NOT NULL,
+        "storage_url" text NOT NULL,
+        "file_size" integer,
+        "mime_type" text NOT NULL,
+        "source" text NOT NULL DEFAULT 'website',
+        "display_order" integer DEFAULT 0,
+        "is_active" boolean DEFAULT true,
+        "uploaded_at" timestamp DEFAULT now()
+      );
+
+      CREATE INDEX IF NOT EXISTS "idx_lead_attachments_account_id" ON "lead_attachments" ("account_id");
+      CREATE INDEX IF NOT EXISTS "idx_lead_attachments_submission_id" ON "lead_attachments" ("submission_id");
+      CREATE INDEX IF NOT EXISTS "idx_lead_attachments_active" ON "lead_attachments" ("is_active");
+      CREATE INDEX IF NOT EXISTS "idx_lead_attachments_order" ON "lead_attachments" ("account_id", "display_order");
+    `).then(() => undefined).catch((error) => {
+      leadAttachmentTableReady = null;
+      throw error;
+    });
+  }
+
+  await leadAttachmentTableReady;
 }
