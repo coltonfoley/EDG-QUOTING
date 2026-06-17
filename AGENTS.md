@@ -2,7 +2,7 @@
 
 ## Project
 
-- Real Codex project folder: `/Users/coltonfoley/Documents/Codex Projects/Rainmaker EDG Quoting/EDG-QUOTING`
+- Repository root: this `EDG-QUOTING` repository.
 - Production URL: `https://rainmaker.edgpatioshade.com`
 - Health check: `https://rainmaker.edgpatioshade.com/health`
 - Useful auth check: `https://rainmaker.edgpatioshade.com/api/user`
@@ -12,11 +12,15 @@
 Rainmaker is the sales, lead, quote, proposal, contract, and handoff source of
 truth before a sold job moves to Ops Portal.
 
+Local filesystem paths are not authoritative. On any machine, verify the repo
+root with Git, then treat GitHub, Vercel, and the live production app as the
+source of truth.
+
 ## Safe Update Process
 
 Before making changes:
 
-- Confirm the working folder, branch, and current commit.
+- Confirm the Git repo root, branch, remote, and current commit.
 - Check whether there are existing local edits; preserve unrelated work.
 - Inspect the real quote, lead, contract, PDF, or handoff path before changing behavior.
 - For quote-entry or customer-facing workflows, create a plan first and wait for user approval before writing live data.
@@ -54,4 +58,3 @@ Deployment:
 - Do not call a change live until commit, push, CI, Vercel, live health, and browser proof are reported separately.
 - If the app shows `Loading application...`, check live `/health` and Vercel function logs before assuming a frontend bug.
 - If local-only edits exist, do not mentally group them with pushed or deployed code.
-
