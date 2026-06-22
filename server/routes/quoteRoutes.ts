@@ -21,7 +21,11 @@ import {
   createQuoteSchema,
   CreateQuoteBody,
   signatureTokenParamSchema,
-  submitSignatureSchema
+  submitSignatureSchema,
+  approvalDrawingIdParamSchema,
+  createApprovalDrawingSchema,
+  orderReadyApprovalDrawingSchema,
+  updateApprovalDrawingSchema
 } from "../validation-schemas";
 import multer from "multer";
 import { extractQuoteDataFromImages, extractQuoteDataFromPDF, isOpenAIConfigured } from "../openai";
@@ -29,6 +33,13 @@ import { ObjectStorageService, getObjectStorageProvider } from "../objectStorage
 import { nanoid } from "nanoid";
 import { buildAppUrl } from "../config";
 import { sendQuoteToOperations } from "../integrations/operations";
+import {
+  createDefaultApprovalDrawingData,
+  inferSupportedApprovalDrawingManufacturer,
+  ORDER_APPROVAL_SIGNATURE_CONSENT,
+  quoteNeedsApprovalDrawing,
+  sanitizeQuoteApprovalDrawingForPublic,
+} from "@shared/approvalDrawing";
 
 const quotesQuerySchema = z.object({
   page: z.coerce.number().int().gte(1).optional(),
@@ -245,6 +256,7 @@ function buildPublicSigningQuote(quote: any) {
     companySignedIp: quote.companySignedIp,
     signedDocumentSnapshot: quote.signedDocumentSnapshot,
     signatureAuditTrail: quote.signatureAuditTrail,
+    approvalDrawing: sanitizeQuoteApprovalDrawingForPublic(quote.approvalDrawing),
     esigIncludePricing: quote.esigIncludePricing ?? true,
     esigIncludeImages: quote.esigIncludeImages ?? false,
     esigIncludeContract: quote.esigIncludeContract ?? true,
@@ -273,6 +285,51 @@ function sendArchivedQuoteResponse(res: any, action: string, status = 409) {
     message: `This quote version is archived. Make it the current version before you ${action}.`,
     code: "QUOTE_VERSION_ARCHIVED",
   });
+}
+
+function getActorUserId(req: any): number | null {
+  const userId = req.user?.id;
+  return typeof userId === "number" ? userId : null;
+}
+
+async function freezeReadyApprovalDrawingForQuote(quoteId: number, actorUserId?: number | null) {
+  const drawing = await storage.getQuoteApprovalDrawingByQuoteId(quoteId);
+  if (!drawing) return undefined;
+  if (drawing.status === "signed_locked" && drawing.publicSnapshot) return drawing;
+  if (drawing.status === "signed_locked") {
+    return storage.markQuoteApprovalDrawingSignedLocked(drawing.id, actorUserId);
+  }
+  if (drawing.status === "sent_for_signature" && drawing.publicSnapshot) return drawing;
+  return storage.freezeQuoteApprovalDrawingForSignature(drawing.id, actorUserId);
+}
+
+async function ensurePublicApprovalDrawingSnapshot<T extends { id: number; approvalDrawing?: any }>(
+  quote: T,
+  reloadQuote: () => Promise<T | undefined>,
+): Promise<T> {
+  if (!quote.approvalDrawing) return quote;
+
+  const status = quote.approvalDrawing.status;
+  if (!["ready_for_agreement", "sent_for_signature", "signed_locked"].includes(status)) {
+    const error = new Error("Order approval drawing is not ready for customer review. Please contact EDG for an updated approval link.");
+    (error as any).status = 409;
+    (error as any).code = "APPROVAL_DRAWING_NOT_READY";
+    throw error;
+  }
+
+  if (status === "ready_for_agreement" || !quote.approvalDrawing.publicSnapshot) {
+    await freezeReadyApprovalDrawingForQuote(quote.id, null);
+    quote = await reloadQuote() || quote;
+  }
+
+  if (!quote.approvalDrawing?.publicSnapshot || typeof quote.approvalDrawing.publicSnapshot !== "object") {
+    const error = new Error("Order approval drawing snapshot is not ready. Please contact EDG for an updated approval link.");
+    (error as any).status = 409;
+    (error as any).code = "APPROVAL_DRAWING_SNAPSHOT_NOT_READY";
+    throw error;
+  }
+
+  return quote;
 }
 
 function createDocumentFingerprint(snapshot: unknown): string {
@@ -1434,7 +1491,7 @@ export function registerQuoteRoutes(app: Express) {
         });
       }
 
-      const quote = await storage.getQuote(params.data.id);
+      const quote = await storage.getQuoteWithDetails(params.data.id);
       if (!quote) {
         return res.status(404).json({ message: "Quote not found" });
       }
@@ -1516,7 +1573,7 @@ export function registerQuoteRoutes(app: Express) {
         });
       }
 
-      const quote = await storage.getQuote(params.data.id);
+      const quote = await storage.getQuoteWithDetails(params.data.id);
       if (!quote) {
         return res.status(404).json({ message: "Quote not found" });
       }
@@ -1558,6 +1615,260 @@ export function registerQuoteRoutes(app: Express) {
     }
   });
 
+  app.get("/api/quotes/:id/approval-drawing", isAuthenticated, async (req, res) => {
+    try {
+      const params = idParamSchema.safeParse(req.params);
+      if (!params.success) {
+        return res.status(400).json({
+          message: "Invalid request parameters",
+          errors: params.error.errors
+        });
+      }
+
+      const quote = await storage.getQuoteWithDetails(params.data.id);
+      if (!quote) {
+        return res.status(404).json({ message: "Quote not found" });
+      }
+
+      const drawing = await storage.getQuoteApprovalDrawingByQuoteId(quote.id);
+      res.json(drawing || null);
+    } catch (error) {
+      console.error("Error getting approval drawing:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.post("/api/quotes/:id/approval-drawing", isAuthenticated, async (req, res) => {
+    try {
+      const params = idParamSchema.safeParse(req.params);
+      if (!params.success) {
+        return res.status(400).json({
+          message: "Invalid request parameters",
+          errors: params.error.errors
+        });
+      }
+
+      const body = createApprovalDrawingSchema.safeParse(req.body);
+      if (!body.success) {
+        return res.status(400).json({
+          message: "Invalid approval drawing data",
+          errors: body.error.errors
+        });
+      }
+
+      const quote = await storage.getQuoteWithDetails(params.data.id);
+      if (!quote) {
+        return res.status(404).json({ message: "Quote not found" });
+      }
+
+      if (isArchivedQuoteVersion(quote)) {
+        return sendArchivedQuoteResponse(res, "add an order approval drawing");
+      }
+
+      const existing = await storage.getQuoteApprovalDrawingByQuoteId(quote.id);
+      if (existing) {
+        return res.status(409).json({ message: "This quote already has an approval drawing" });
+      }
+
+      const inferredManufacturer = inferSupportedApprovalDrawingManufacturer(quote.lineItems || []);
+      const actorUserId = getActorUserId(req);
+      const drawing = await storage.createQuoteApprovalDrawing({
+        quoteId: quote.id,
+        quoteFamilyRootId: quote.parentQuoteId || quote.id,
+        drawingType: "louvered_roof_order_approval",
+        status: "draft",
+        manufacturer: body.data.manufacturer || inferredManufacturer,
+        productSystem: body.data.productSystem || null,
+        title: body.data.title || "Order Approval Drawing",
+        revisionLabel: body.data.revisionLabel || null,
+        drawingData: body.data.drawingData || createDefaultApprovalDrawingData(),
+        customerNotes: body.data.customerNotes || null,
+        internalNotes: body.data.internalNotes || null,
+        sourceQuoteOrOrderId: body.data.sourceQuoteOrOrderId || null,
+        sourceDocumentLabel: body.data.sourceDocumentLabel || null,
+        sourceDocumentUrl: body.data.sourceDocumentUrl || null,
+        sourcePreparedBy: body.data.sourcePreparedBy || null,
+        sourcePreparedAt: body.data.sourcePreparedAt || null,
+        orderStatus: "not_reviewed",
+        createdBy: actorUserId,
+        updatedBy: actorUserId,
+      }, actorUserId);
+
+      res.status(201).json(drawing);
+    } catch (error: any) {
+      console.error("Error creating approval drawing:", error);
+      res.status(500).json({ message: error.message || "Internal server error" });
+    }
+  });
+
+  app.patch("/api/quotes/:id/approval-drawing/:drawingId", isAuthenticated, async (req, res) => {
+    try {
+      const params = approvalDrawingIdParamSchema.safeParse(req.params);
+      if (!params.success) {
+        return res.status(400).json({
+          message: "Invalid request parameters",
+          errors: params.error.errors
+        });
+      }
+
+      const body = updateApprovalDrawingSchema.safeParse(req.body);
+      if (!body.success) {
+        return res.status(400).json({
+          message: "Invalid approval drawing data",
+          errors: body.error.errors
+        });
+      }
+
+      const quote = await storage.getQuote(params.data.id);
+      if (!quote) {
+        return res.status(404).json({ message: "Quote not found" });
+      }
+
+      if (isArchivedQuoteVersion(quote)) {
+        return sendArchivedQuoteResponse(res, "edit its order approval drawing");
+      }
+
+      const drawing = await storage.getQuoteApprovalDrawing(params.data.drawingId);
+      if (!drawing || drawing.quoteId !== quote.id) {
+        return res.status(404).json({ message: "Approval drawing not found" });
+      }
+
+      const actorUserId = getActorUserId(req);
+      const updated = await storage.updateQuoteApprovalDrawing(drawing.id, {
+        ...body.data,
+        updatedBy: actorUserId,
+      }, actorUserId);
+      res.json(updated);
+    } catch (error: any) {
+      console.error("Error updating approval drawing:", error);
+      res.status(error.message?.includes("frozen") ? 409 : 500).json({ message: error.message || "Internal server error" });
+    }
+  });
+
+  app.post("/api/quotes/:id/approval-drawing/:drawingId/mark-ready", isAuthenticated, async (req, res) => {
+    try {
+      const params = approvalDrawingIdParamSchema.safeParse(req.params);
+      if (!params.success) {
+        return res.status(400).json({
+          message: "Invalid request parameters",
+          errors: params.error.errors
+        });
+      }
+
+      const quote = await storage.getQuote(params.data.id);
+      const drawing = await storage.getQuoteApprovalDrawing(params.data.drawingId);
+      if (!quote || !drawing || drawing.quoteId !== quote.id) {
+        return res.status(404).json({ message: "Approval drawing not found" });
+      }
+      if (isArchivedQuoteVersion(quote)) {
+        return sendArchivedQuoteResponse(res, "mark its order approval drawing ready");
+      }
+
+      const updated = await storage.markQuoteApprovalDrawingReady(drawing.id, getActorUserId(req));
+      res.json(updated);
+    } catch (error: any) {
+      console.error("Error marking approval drawing ready:", error);
+      res.status(400).json({ message: error.message || "Approval drawing is not ready" });
+    }
+  });
+
+  app.post("/api/quotes/:id/approval-drawing/:drawingId/revision-needed", isAuthenticated, async (req, res) => {
+    try {
+      const params = approvalDrawingIdParamSchema.safeParse(req.params);
+      if (!params.success) {
+        return res.status(400).json({
+          message: "Invalid request parameters",
+          errors: params.error.errors
+        });
+      }
+
+      const quote = await storage.getQuote(params.data.id);
+      const drawing = await storage.getQuoteApprovalDrawing(params.data.drawingId);
+      if (!quote || !drawing || drawing.quoteId !== quote.id) {
+        return res.status(404).json({ message: "Approval drawing not found" });
+      }
+      if (isArchivedQuoteVersion(quote)) {
+        return sendArchivedQuoteResponse(res, "mark its order approval drawing revision-needed");
+      }
+
+      const updated = await storage.markQuoteApprovalDrawingRevisionNeeded(
+        drawing.id,
+        getActorUserId(req),
+        typeof req.body?.reason === "string" ? req.body.reason : null,
+      );
+      res.json(updated);
+    } catch (error: any) {
+      console.error("Error marking approval drawing revision needed:", error);
+      res.status(error.message?.includes("locked") ? 409 : 500).json({ message: error.message || "Internal server error" });
+    }
+  });
+
+  app.post("/api/quotes/:id/approval-drawing/:drawingId/order-reviewed", isAuthenticated, async (req, res) => {
+    try {
+      const params = approvalDrawingIdParamSchema.safeParse(req.params);
+      if (!params.success) {
+        return res.status(400).json({
+          message: "Invalid request parameters",
+          errors: params.error.errors
+        });
+      }
+
+      const quote = await storage.getQuote(params.data.id);
+      const drawing = await storage.getQuoteApprovalDrawing(params.data.drawingId);
+      if (!quote || !drawing || drawing.quoteId !== quote.id) {
+        return res.status(404).json({ message: "Approval drawing not found" });
+      }
+      if (isArchivedQuoteVersion(quote)) {
+        return sendArchivedQuoteResponse(res, "review its order approval drawing");
+      }
+
+      const updated = await storage.markQuoteApprovalDrawingOrderReviewed(drawing.id, getActorUserId(req));
+      res.json(updated);
+    } catch (error) {
+      console.error("Error marking approval drawing reviewed:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.post("/api/quotes/:id/approval-drawing/:drawingId/order-ready", isAuthenticated, async (req, res) => {
+    try {
+      const params = approvalDrawingIdParamSchema.safeParse(req.params);
+      if (!params.success) {
+        return res.status(400).json({
+          message: "Invalid request parameters",
+          errors: params.error.errors
+        });
+      }
+
+      const body = orderReadyApprovalDrawingSchema.safeParse(req.body || {});
+      if (!body.success) {
+        return res.status(400).json({
+          message: "Invalid order-ready data",
+          errors: body.error.errors
+        });
+      }
+
+      const quote = await storage.getQuote(params.data.id);
+      const drawing = await storage.getQuoteApprovalDrawing(params.data.drawingId);
+      if (!quote || !drawing || drawing.quoteId !== quote.id) {
+        return res.status(404).json({ message: "Approval drawing not found" });
+      }
+      if (isArchivedQuoteVersion(quote)) {
+        return sendArchivedQuoteResponse(res, "release its order approval drawing");
+      }
+
+      const updated = await storage.markQuoteApprovalDrawingOrderReady(
+        drawing.id,
+        getActorUserId(req),
+        body.data.overrideReason,
+      );
+      res.json(updated);
+    } catch (error: any) {
+      console.error("Error marking approval drawing order ready:", error);
+      res.status(400).json({ message: error.message || "Approval drawing cannot be released for order" });
+    }
+  });
+
   app.post("/api/quotes/:id/enable-esignature", isAuthenticated, async (req, res) => {
     try {
       const params = idParamSchema.safeParse(req.params);
@@ -1568,7 +1879,7 @@ export function registerQuoteRoutes(app: Express) {
         });
       }
 
-      const quote = await storage.getQuote(params.data.id);
+      const quote = await storage.getQuoteWithDetails(params.data.id);
       if (!quote) {
         return res.status(404).json({ message: "Quote not found" });
       }
@@ -1582,6 +1893,17 @@ export function registerQuoteRoutes(app: Express) {
       const esigIncludePricing = req.body.esigIncludePricing ?? true;
       const esigIncludeImages = req.body.esigIncludeImages ?? false;
       const esigIncludeContract = req.body.esigIncludeContract ?? true;
+
+      if (quote.approvalDrawing && !["ready_for_agreement", "sent_for_signature", "signed_locked"].includes(quote.approvalDrawing.status)) {
+        return res.status(409).json({
+          message: "Order approval drawing exists but is not ready. Mark it ready or create a new quote version before preparing the approval link.",
+          code: "APPROVAL_DRAWING_NOT_READY",
+        });
+      }
+
+      if (quote.approvalDrawing && quote.approvalDrawing.status === "ready_for_agreement") {
+        await freezeReadyApprovalDrawingForQuote(quote.id, getActorUserId(req));
+      }
       
       const updatedQuote = await storage.updateQuote(params.data.id, {
         enableESignature: true,
@@ -1594,7 +1916,9 @@ export function registerQuoteRoutes(app: Express) {
       res.json({ 
         success: true,
         signingToken,
-        signingUrl: `/sign/${signingToken}`
+        signingUrl: `/sign/${signingToken}`,
+        approvalDrawingIncluded: Boolean(quote.approvalDrawing),
+        approvalDrawingRecommended: !quote.approvalDrawing && quoteNeedsApprovalDrawing(quote.lineItems || []),
       });
     } catch (error) {
       console.error("Error enabling e-signature:", error);
@@ -1623,6 +1947,17 @@ export function registerQuoteRoutes(app: Express) {
 
       if (!quote.enableESignature || !quote.signingToken) {
         return res.status(400).json({ message: "E-signature must be enabled first" });
+      }
+
+      if (quote.approvalDrawing && !["ready_for_agreement", "sent_for_signature", "signed_locked"].includes(quote.approvalDrawing.status)) {
+        return res.status(409).json({
+          message: "Order approval drawing exists but is not ready. Mark it ready before sending the approval email.",
+          code: "APPROVAL_DRAWING_NOT_READY",
+        });
+      }
+
+      if (quote.approvalDrawing && quote.approvalDrawing.status === "ready_for_agreement") {
+        await freezeReadyApprovalDrawingForQuote(quote.id, getActorUserId(req));
       }
 
       if (!quote.account?.email) {
@@ -1819,10 +2154,18 @@ export function registerQuoteRoutes(app: Express) {
         return sendArchivedQuoteResponse(res, "review or sign it", 410);
       }
 
-      res.json(buildPublicSigningQuote(quote));
-    } catch (error) {
+      const quoteForPublic = await ensurePublicApprovalDrawingSnapshot(
+        quote,
+        () => storage.getQuoteBySigningToken(params.data.token),
+      );
+
+      res.json(buildPublicSigningQuote(quoteForPublic));
+    } catch (error: any) {
       console.error("Error getting full quote data:", error);
-      res.status(500).json({ message: "Internal server error" });
+      res.status(error.status || 500).json({
+        message: error.message || "Internal server error",
+        code: error.code,
+      });
     }
   });
 
@@ -1864,10 +2207,15 @@ export function registerQuoteRoutes(app: Express) {
         return res.status(409).json({ message: "Company signature has already been recorded" });
       }
 
+      const quoteForSignature = await ensurePublicApprovalDrawingSnapshot(
+        quote,
+        () => storage.getQuoteWithDetails(quote.id),
+      );
+
       const signedAt = new Date();
-      const existingAudit = quote.signatureAuditTrail as any;
-      const snapshot = quote.signedDocumentSnapshot || buildPublicSigningQuote({
-        ...quote,
+      const existingAudit = quoteForSignature.signatureAuditTrail as any;
+      const snapshot = quoteForSignature.signedDocumentSnapshot || buildPublicSigningQuote({
+        ...quoteForSignature,
         companySignatureData: bodyValidation.data.signatureData,
         companySignedAt: signedAt,
         companySignedIp: getClientIp(req),
@@ -1882,12 +2230,12 @@ export function registerQuoteRoutes(app: Express) {
         signedAt: signedAt.toISOString(),
         ipAddress: getClientIp(req),
         userAgent: req.get("user-agent") || null,
-        quoteId: quote.id,
-        quoteNumber: quote.quoteNumber,
+        quoteId: quoteForSignature.id,
+        quoteNumber: quoteForSignature.quoteNumber,
         documentFingerprint,
       };
 
-      await storage.updateQuote(quote.id, {
+      await storage.updateQuote(quoteForSignature.id, {
         companySignatureData: bodyValidation.data.signatureData,
         companySignedAt: signedAt,
         companySignedIp: getClientIp(req),
@@ -1904,9 +2252,12 @@ export function registerQuoteRoutes(app: Express) {
         success: true,
         message: "Company signature captured successfully"
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error submitting company signature:", error);
-      res.status(500).json({ message: "Internal server error" });
+      res.status(error.status || 500).json({
+        message: error.message || "Internal server error",
+        code: error.code,
+      });
     }
   });
 
@@ -1951,10 +2302,15 @@ export function registerQuoteRoutes(app: Express) {
         return res.status(409).json({ message: "Client signature has already been recorded" });
       }
 
+      const quoteForSignature = await ensurePublicApprovalDrawingSnapshot(
+        quote,
+        () => storage.getQuoteBySigningToken(params.data.token),
+      );
+
       const clientIp = getClientIp(req);
       const signedAt = new Date();
       const snapshot = buildPublicSigningQuote({
-        ...quote,
+        ...quoteForSignature,
         clientSignatureData: signatureData,
         clientSignedAt: signedAt,
         clientSignedIp: clientIp,
@@ -1964,18 +2320,20 @@ export function registerQuoteRoutes(app: Express) {
         event: "client_signed",
         signerType: "client",
         signerName: signatureData.name,
-        signerEmail: quote.account?.email || null,
+        signerEmail: quoteForSignature.account?.email || null,
         signedAt: signedAt.toISOString(),
         ipAddress: clientIp,
         userAgent: req.get("user-agent") || null,
-        quoteId: quote.id,
-        quoteNumber: quote.quoteNumber,
+        quoteId: quoteForSignature.id,
+        quoteNumber: quoteForSignature.quoteNumber,
         signingTokenLast6: params.data.token.slice(-6),
-        consentText: "I confirm that I have reviewed this proposal and agree to be legally bound by its terms. I understand that my electronic signature carries the same legal weight as a handwritten signature.",
+        consentText: quoteForSignature.approvalDrawing
+          ? `${ORDER_APPROVAL_SIGNATURE_CONSENT} I understand that my electronic signature carries the same legal weight as a handwritten signature.`
+          : "I confirm that I have reviewed this proposal and agree to be legally bound by its terms. I understand that my electronic signature carries the same legal weight as a handwritten signature.",
         documentFingerprint,
       };
 
-      await storage.updateQuote(quote.id, {
+      await storage.updateQuote(quoteForSignature.id, {
         clientSignatureData: signatureData,
         clientSignedAt: signedAt,
         clientSignedIp: clientIp,
@@ -1983,23 +2341,27 @@ export function registerQuoteRoutes(app: Express) {
         signatureAuditTrail: {
           documentFingerprint,
           entries: [
-            ...((quote.signatureAuditTrail as any)?.entries || []),
+            ...((quoteForSignature.signatureAuditTrail as any)?.entries || []),
             auditEntry,
           ],
         },
       });
 
+      if (quoteForSignature.approvalDrawing) {
+        await storage.markQuoteApprovalDrawingSignedLocked(quoteForSignature.approvalDrawing.id, null);
+      }
+
       // Send confirmation email to client after they sign
       let emailSent = false;
-      if (signerType === 'client' && quote.account?.email) {
+      if (signerType === 'client' && quoteForSignature.account?.email) {
         try {
           const { sendEmail } = await import("../email");
           
-          const customerName = quote.account.firstName 
-            ? `${quote.account.firstName} ${quote.account.lastName || ''}`.trim()
-            : quote.account.name;
+          const customerName = quoteForSignature.account.firstName
+            ? `${quoteForSignature.account.firstName} ${quoteForSignature.account.lastName || ''}`.trim()
+            : quoteForSignature.account.name;
 
-          const downloadUrl = buildAppUrl(`/sign/${quote.signingToken}`, req);
+          const downloadUrl = buildAppUrl(`/sign/${quoteForSignature.signingToken}`, req);
 
           const signedDate = new Date().toLocaleString('en-US', {
             weekday: 'long',
@@ -2038,12 +2400,12 @@ export function registerQuoteRoutes(app: Express) {
                   <table style="width: 100%; font-size: 14px;">
                     <tr>
                       <td style="padding: 5px 0; color: #6b7280;">Document:</td>
-                      <td style="padding: 5px 0; color: #1f2937; font-weight: 600;">${quote.projectName || `Quote #${quote.quoteNumber}`}</td>
+                      <td style="padding: 5px 0; color: #1f2937; font-weight: 600;">${quoteForSignature.projectName || `Quote #${quoteForSignature.quoteNumber}`}</td>
                     </tr>
-                    <tr>
-                      <td style="padding: 5px 0; color: #6b7280;">Quote Number:</td>
-                      <td style="padding: 5px 0; color: #1f2937; font-weight: 600;">#${quote.quoteNumber}</td>
-                    </tr>
+	                    <tr>
+	                      <td style="padding: 5px 0; color: #6b7280;">Quote Number:</td>
+	                      <td style="padding: 5px 0; color: #1f2937; font-weight: 600;">#${quoteForSignature.quoteNumber}</td>
+	                    </tr>
                     <tr>
                       <td style="padding: 5px 0; color: #6b7280;">Signed On:</td>
                       <td style="padding: 5px 0; color: #1f2937; font-weight: 600;">${signedDate}</td>
@@ -2072,14 +2434,14 @@ export function registerQuoteRoutes(app: Express) {
             </html>
           `;
 
-          await sendEmail({
-            to: quote.account.email,
-            subject: `Signature Confirmed: ${quote.projectName || `Quote #${quote.quoteNumber}`}`,
-            htmlBody
-          });
+	          await sendEmail({
+	            to: quoteForSignature.account.email,
+	            subject: `Signature Confirmed: ${quoteForSignature.projectName || `Quote #${quoteForSignature.quoteNumber}`}`,
+	            htmlBody
+	          });
 
-          emailSent = true;
-          console.log(`Signature confirmation email sent to ${quote.account.email}`);
+	          emailSent = true;
+	          console.log(`Signature confirmation email sent to ${quoteForSignature.account.email}`);
         } catch (emailError) {
           console.error("Failed to send signature confirmation email:", emailError);
         }
@@ -2090,9 +2452,12 @@ export function registerQuoteRoutes(app: Express) {
         message: "Signature captured successfully",
         emailSent
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error submitting signature:", error);
-      res.status(500).json({ message: "Internal server error" });
+      res.status(error.status || 500).json({
+        message: error.message || "Internal server error",
+        code: error.code,
+      });
     }
   });
 

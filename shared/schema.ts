@@ -2,6 +2,10 @@ import { pgTable, text, serial, integer, decimal, timestamp, boolean, varchar, j
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { sql } from "drizzle-orm";
+import {
+  quoteApprovalDrawingOrderStatusValues,
+  quoteApprovalDrawingStatusValues,
+} from "./approvalDrawing";
 
 // Session storage table for staff authentication.
 export const sessions = pgTable(
@@ -293,6 +297,48 @@ export const planningAgreementEvents = pgTable("planning_agreement_events", {
 }, (table) => [
   index("idx_planning_agreement_events_agreement_id").on(table.planningAgreementId),
   index("idx_planning_agreement_events_created_at").on(table.createdAt),
+]);
+
+export const quoteApprovalDrawings = pgTable("quote_approval_drawings", {
+  id: serial("id").primaryKey(),
+  quoteId: integer("quote_id").notNull().references((): AnyPgColumn => quotes.id, { onDelete: "cascade" }),
+  quoteFamilyRootId: integer("quote_family_root_id").references((): AnyPgColumn => quotes.id, { onDelete: "set null" }),
+  drawingType: text("drawing_type").notNull().default("louvered_roof_order_approval"),
+  status: text("status").notNull().default("draft"),
+  manufacturer: text("manufacturer"),
+  productSystem: text("product_system"),
+  title: text("title"),
+  revisionLabel: text("revision_label"),
+  copiedFromDrawingId: integer("copied_from_drawing_id").references((): AnyPgColumn => quoteApprovalDrawings.id, { onDelete: "set null" }),
+  drawingData: jsonb("drawing_data").notNull(),
+  publicSnapshot: jsonb("public_snapshot"),
+  customerNotes: text("customer_notes"),
+  internalNotes: text("internal_notes"),
+  sourceQuoteOrOrderId: text("source_quote_or_order_id"),
+  sourceDocumentLabel: text("source_document_label"),
+  sourceDocumentUrl: text("source_document_url"),
+  sourcePreparedBy: text("source_prepared_by"),
+  sourcePreparedAt: timestamp("source_prepared_at"),
+  readyAt: timestamp("ready_at"),
+  sentForSignatureAt: timestamp("sent_for_signature_at"),
+  signedLockedAt: timestamp("signed_locked_at"),
+  orderStatus: text("order_status").notNull().default("not_reviewed"),
+  orderReviewedBy: integer("order_reviewed_by").references(() => users.id, { onDelete: "set null" }),
+  orderReviewedAt: timestamp("order_reviewed_at"),
+  orderReadyBy: integer("order_ready_by").references(() => users.id, { onDelete: "set null" }),
+  orderReadyAt: timestamp("order_ready_at"),
+  orderReadyOverrideReason: text("order_ready_override_reason"),
+  supersededById: integer("superseded_by_id").references((): AnyPgColumn => quoteApprovalDrawings.id, { onDelete: "set null" }),
+  createdBy: integer("created_by").references(() => users.id, { onDelete: "set null" }),
+  updatedBy: integer("updated_by").references(() => users.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_quote_approval_drawings_quote_id").on(table.quoteId),
+  index("idx_quote_approval_drawings_family_root").on(table.quoteFamilyRootId),
+  index("idx_quote_approval_drawings_status").on(table.status),
+  index("idx_quote_approval_drawings_order_status").on(table.orderStatus),
+  index("idx_quote_approval_drawings_copied_from").on(table.copiedFromDrawingId),
 ]);
 
 // Quote cover photos - stores metadata for cover page images
@@ -660,6 +706,43 @@ export const insertPlanningAgreementEventSchema = createInsertSchema(planningAgr
   payload: z.any().optional().nullable(),
 });
 
+export const insertQuoteApprovalDrawingSchema = createInsertSchema(quoteApprovalDrawings).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  quoteId: z.number().int().positive(),
+  quoteFamilyRootId: z.number().int().positive().optional().nullable(),
+  drawingType: z.string().default("louvered_roof_order_approval"),
+  status: z.enum(quoteApprovalDrawingStatusValues).default("draft"),
+  manufacturer: z.string().optional().nullable(),
+  productSystem: z.string().optional().nullable(),
+  title: z.string().optional().nullable(),
+  revisionLabel: z.string().optional().nullable(),
+  copiedFromDrawingId: z.number().int().positive().optional().nullable(),
+  drawingData: z.any(),
+  publicSnapshot: z.any().optional().nullable(),
+  customerNotes: z.string().optional().nullable(),
+  internalNotes: z.string().optional().nullable(),
+  sourceQuoteOrOrderId: z.string().optional().nullable(),
+  sourceDocumentLabel: z.string().optional().nullable(),
+  sourceDocumentUrl: z.string().optional().nullable(),
+  sourcePreparedBy: z.string().optional().nullable(),
+  sourcePreparedAt: planningDateSchema,
+  readyAt: planningDateSchema,
+  sentForSignatureAt: planningDateSchema,
+  signedLockedAt: planningDateSchema,
+  orderStatus: z.enum(quoteApprovalDrawingOrderStatusValues).default("not_reviewed"),
+  orderReviewedBy: z.number().int().positive().optional().nullable(),
+  orderReviewedAt: planningDateSchema,
+  orderReadyBy: z.number().int().positive().optional().nullable(),
+  orderReadyAt: planningDateSchema,
+  orderReadyOverrideReason: z.string().optional().nullable(),
+  supersededById: z.number().int().positive().optional().nullable(),
+  createdBy: z.number().int().positive().optional().nullable(),
+  updatedBy: z.number().int().positive().optional().nullable(),
+});
+
 
 export const insertProductSchema = createInsertSchema(products).omit({
   id: true,
@@ -785,6 +868,7 @@ export type Customer = typeof accounts.$inferSelect; // Legacy alias
 export type Quote = typeof quotes.$inferSelect;
 export type PlanningAgreement = typeof planningAgreements.$inferSelect;
 export type PlanningAgreementEvent = typeof planningAgreementEvents.$inferSelect;
+export type QuoteApprovalDrawing = typeof quoteApprovalDrawings.$inferSelect;
 export type Product = typeof products.$inferSelect;
 export type LineItem = typeof lineItems.$inferSelect;
 export type Group = typeof groups.$inferSelect;
@@ -804,6 +888,7 @@ export type InsertCustomer = z.infer<typeof insertAccountSchema>; // Legacy alia
 export type InsertQuote = z.infer<typeof insertQuoteSchema>;
 export type InsertPlanningAgreement = z.infer<typeof insertPlanningAgreementSchema>;
 export type InsertPlanningAgreementEvent = z.infer<typeof insertPlanningAgreementEventSchema>;
+export type InsertQuoteApprovalDrawing = z.infer<typeof insertQuoteApprovalDrawingSchema>;
 export type InsertProduct = z.infer<typeof insertProductSchema>;
 export type InsertLineItem = z.infer<typeof insertLineItemSchema>;
 export type InsertGroup = z.infer<typeof insertGroupSchema>;
@@ -825,6 +910,7 @@ export type QuoteWithDetails = Quote & {
   coverPhoto?: QuoteCoverPhoto; // Cover page image
   productRenderings?: QuoteProductRendering[]; // Visual assets and details
   planningAgreement?: PlanningAgreement;
+  approvalDrawing?: QuoteApprovalDrawing;
 };
 
 export type LeadWithAttachments = Account & {

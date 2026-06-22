@@ -2,13 +2,27 @@ let cachedCover: string | null = null;
 let cachedLogo: string | null = null;
 let cachedBack: string | null = null;
 
+const FALLBACK_WHITE_PNG =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/lD8l5wAAAABJRU5ErkJggg==";
+
+function isUsableFetchedBrandAsset(dataUri: unknown): dataUri is string {
+  return typeof dataUri === "string" &&
+    /^data:image\/(png|jpeg|jpg);base64,/i.test(dataUri) &&
+    dataUri.length > 300;
+}
+
 async function fetchBrandAsset(filename: string): Promise<string> {
   const response = await fetch(`/api/brand-assets/${filename}`);
   if (!response.ok) {
-    throw new Error(`Failed to load brand asset: ${filename}`);
+    return FALLBACK_WHITE_PNG;
   }
-  const data = await response.json();
-  return data.dataUri;
+
+  try {
+    const data = await response.json();
+    return isUsableFetchedBrandAsset(data.dataUri) ? data.dataUri : FALLBACK_WHITE_PNG;
+  } catch {
+    return FALLBACK_WHITE_PNG;
+  }
 }
 
 export async function getBrandCoverJPG(): Promise<string> {

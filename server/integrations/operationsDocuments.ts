@@ -1,5 +1,13 @@
 import { createHash } from "crypto";
 import { jsPDF } from "jspdf";
+import {
+  formatApprovalDrawingLightLabel,
+  formatApprovalDrawingSideFeatureType,
+  formatDimension,
+  getApprovalDrawingSideFeatures,
+  normalizeApprovalDrawingData,
+  sanitizeQuoteApprovalDrawingForPublic,
+} from "@shared/approvalDrawing";
 
 type HandoffDocumentKind = "contract" | "bill_of_materials";
 
@@ -101,6 +109,52 @@ const addLabeledRow = (pdf: jsPDF, label: string, value: string, y: number): num
   return addWrappedText(pdf, value, 58, y, 132) + 2;
 };
 
+const getApprovalDrawingLines = (quote: any): string[] => {
+  const publicDrawing = sanitizeQuoteApprovalDrawingForPublic(quote.approvalDrawing) as any;
+  if (!publicDrawing) return [];
+
+  const data = normalizeApprovalDrawingData(publicDrawing.drawingData);
+  const sideLines = data.sides.map((side) => {
+    const features = getApprovalDrawingSideFeatures(side);
+    const enclosure = features.length
+      ? features.map((feature) => formatApprovalDrawingSideFeatureType(feature.type)).join(" + ")
+      : "none";
+    const span = formatDimension(side.enclosureSpan || side.length);
+    const height = formatDimension(side.enclosureHeight || side.openingHeight);
+    return `Side ${side.side}: ${enclosure}${span ? `, span ${span}` : ""}${height ? `, height/opening ${height}` : ""}`;
+  });
+
+  return [
+    `${publicDrawing.title || "Order Approval Drawing"}${publicDrawing.revisionLabel ? ` (${publicDrawing.revisionLabel})` : ""}`,
+    `Status: ${publicDrawing.status || "draft"} | Internal order status: ${quote.approvalDrawing?.orderStatus || "not_reviewed"}`,
+    `Manufacturer/System: ${[publicDrawing.manufacturer, publicDrawing.productSystem].filter(Boolean).join(" / ") || "Not specified"}`,
+    `Dimensions: ${formatDimension(data.layout.overallLength) || "not set"} length x ${formatDimension(data.layout.overallProjection) || "not set"} projection/depth`,
+    `Mount/Reference: ${data.layout.mountType}; ${data.orientation.referenceSide} = ${data.orientation.referenceSideLabel || "reference side"}`,
+    `Height: ${formatDimension(data.layout.finishedHeight) || formatDimension(data.layout.clearanceHeight) || "see post labels"}`,
+    `Colors: frame ${data.colors.frameColor || "not set"}; louvers ${data.colors.louverColor || "not set"}${data.colors.postTrimGutterColor ? `; post/trim/gutter ${data.colors.postTrimGutterColor}` : ""}`,
+    ...sideLines,
+    data.lights.length ? `Lights/accessories: ${data.lights.map(formatApprovalDrawingLightLabel).join("; ")}` : "Lights/accessories: none listed",
+    publicDrawing.customerNotes ? `Customer notes: ${publicDrawing.customerNotes}` : "Customer notes: none",
+    publicDrawing.disclaimer || "",
+  ].filter(Boolean);
+};
+
+const addApprovalDrawingSection = (pdf: jsPDF, quote: any, y: number): number => {
+  const lines = getApprovalDrawingLines(quote);
+  if (!lines.length) return y;
+
+  y = ensureSpace(pdf, y, 38);
+  pdf.setFont("helvetica", "bold");
+  pdf.text("Order Approval Drawing", 20, y);
+  y += 7;
+  pdf.setFont("helvetica", "normal");
+  for (const line of lines) {
+    y = ensureSpace(pdf, y, 12);
+    y = addWrappedText(pdf, line, 20, y, 175) + 2;
+  }
+  return y + 2;
+};
+
 const addFooter = (pdf: jsPDF) => {
   const pages = pdf.getNumberOfPages();
   for (let page = 1; page <= pages; page++) {
@@ -151,6 +205,8 @@ const buildProposalPdf = (quote: any, totals?: QuoteTotals) => {
   for (const [label, value] of rows) {
     y = addLabeledRow(pdf, label, String(value), y);
   }
+
+  y = addApprovalDrawingSection(pdf, quote, y + 4);
 
   const contractText = [quote.notes, quote.customContractTerms || quote.contractTemplate?.terms]
     .filter((part) => typeof part === "string" && part.trim())
@@ -203,6 +259,8 @@ const buildBomPdf = (quote: any) => {
   let y = 35;
   y = addLabeledRow(pdf, "Project", quote.projectName || "Project", y);
   y = addLabeledRow(pdf, "Quote", getQuoteNumber(quote) || String(quote.id), y + 4);
+
+  y = addApprovalDrawingSection(pdf, quote, y + 4);
 
   for (const item of quote.lineItems || []) {
     y = ensureSpace(pdf, y, 18);

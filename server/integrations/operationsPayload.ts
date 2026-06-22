@@ -1,3 +1,8 @@
+import {
+  getApprovalDrawingReadiness,
+  sanitizeQuoteApprovalDrawingForPublic,
+} from "@shared/approvalDrawing";
+
 const parseDecimal = (value: unknown, fallback = 0): number => {
   if (typeof value === "number") return Number.isFinite(value) ? value : fallback;
   if (typeof value === "string") {
@@ -103,6 +108,42 @@ export const isPlanningAgreementClearForOps = (planningAgreement: any): boolean 
   return ["paid_active", "delivered", "credited", "waived"].includes(planningAgreement.status);
 };
 
+export const isApprovalDrawingClearForOps = (approvalDrawing: any): boolean => {
+  if (!approvalDrawing) return true;
+  if (approvalDrawing.status !== "signed_locked") return false;
+  if (!approvalDrawing.signedLockedAt) return false;
+  if (!approvalDrawing.publicSnapshot || typeof approvalDrawing.publicSnapshot !== "object") return false;
+  if (approvalDrawing.orderStatus !== "order_ready" && approvalDrawing.orderStatus !== "override_released") return false;
+  const publicDrawing = sanitizeQuoteApprovalDrawingForPublic(approvalDrawing) as any;
+  return getApprovalDrawingReadiness(publicDrawing?.drawingData ?? approvalDrawing.drawingData).ready;
+};
+
+const buildApprovalDrawingSummary = (approvalDrawing: any, signatureAuditTrail: any) => {
+  if (!approvalDrawing) return null;
+  const publicDrawing = sanitizeQuoteApprovalDrawingForPublic(approvalDrawing) as any;
+  const readiness = getApprovalDrawingReadiness(approvalDrawing.drawingData);
+
+  return {
+    id: approvalDrawing.id,
+    quoteId: approvalDrawing.quoteId,
+    status: approvalDrawing.status,
+    orderStatus: approvalDrawing.orderStatus,
+    orderReadyOverrideReason: approvalDrawing.orderReadyOverrideReason ?? null,
+    signedLockedAt: approvalDrawing.signedLockedAt ?? null,
+    orderReviewedAt: approvalDrawing.orderReviewedAt ?? null,
+    orderReadyAt: approvalDrawing.orderReadyAt ?? null,
+    documentFingerprint: signatureAuditTrail?.documentFingerprint ?? null,
+    manufacturer: approvalDrawing.manufacturer ?? null,
+    productSystem: approvalDrawing.productSystem ?? null,
+    title: publicDrawing?.title ?? "Order Approval Drawing",
+    revisionLabel: approvalDrawing.revisionLabel ?? null,
+    drawingData: publicDrawing?.drawingData ?? approvalDrawing.drawingData,
+    customerNotes: approvalDrawing.customerNotes ?? null,
+    disclaimer: publicDrawing?.disclaimer ?? null,
+    readiness,
+  };
+};
+
 type BuildOperationsPayloadOptions = {
   buildDocuments?: (quote: any, totals: ReturnType<typeof calculateQuoteTotals>) => Promise<any[]> | any[];
 };
@@ -136,6 +177,7 @@ export const buildOperationsPayload = async (
         appliedCreditAmount: quote.planningAgreement.appliedCreditAmount,
       }
     : null;
+  const approvalDrawing = buildApprovalDrawingSummary(quote.approvalDrawing, quote.signatureAuditTrail);
 
   return {
     sourceSystem: "EDG-QUOTING",
@@ -155,6 +197,7 @@ export const buildOperationsPayload = async (
       internalNotes: quote.internalNotes,
       totals,
       planningAgreement,
+      approvalDrawing,
       account: quote.account || quote.customer || null,
       lineItems: (quote.lineItems || []).map((item: any) => ({
         id: item.id,

@@ -7,6 +7,7 @@ import { getBrandCoverJPG, getBrandLogoPNG, getBrandBackPagePNG } from './pdf-br
 import {
   drawStandardCover,
   drawProjectDetailsPage,
+  drawApprovalDrawingSection,
   drawRenderingsPages,
   drawLineItemsSection,
   drawContractSection,
@@ -44,10 +45,11 @@ interface BrandedSequenceOptions {
  * Generates a Branded Sequence PDF with fixed page order:
  * 1. Standardized Cover (brand photo + logo)
  * 2. Project Details
- * 3. Gallery (auto-paginate)
- * 4. Line Items (auto-paginate, optional pricing)
- * 5. Contract Terms (auto-paginate)
- * 6. Branded Back Page
+ * 3. Order Approval Drawing, when present
+ * 4. Gallery (auto-paginate)
+ * 5. Line Items (auto-paginate, optional pricing)
+ * 6. Contract Terms (auto-paginate)
+ * 7. Branded Back Page
  */
 export async function generateBrandedSequencePDF(options: BrandedSequenceOptions): Promise<void> {
   const { pdf, company, quote, renderImages, contractText, showPricing, clientLogoDataUrl, groups = [], brandAssets } = options;
@@ -90,7 +92,20 @@ export async function generateBrandedSequencePDF(options: BrandedSequenceOptions
     showPricing
   });
 
-  // 3. Gallery / Renderings (if images provided) (section handles its own page creation)
+  // 3. Order Approval Drawing (if present)
+  if (quote?.approvalDrawing) {
+    drawApprovalDrawingSection(pdf, {
+      quote,
+      logoDataUrl: BRAND_LOGO_PNG,
+      company,
+      margin,
+      contentW,
+      pageW,
+      pageH
+    });
+  }
+
+  // 4. Gallery / Renderings (if images provided) (section handles its own page creation)
   if (renderImages && renderImages.length > 0) {
     await drawRenderingsPages(pdf, {
       images: renderImages,
@@ -103,7 +118,7 @@ export async function generateBrandedSequencePDF(options: BrandedSequenceOptions
     });
   }
 
-  // 4. Line Items Section (if items exist) (section handles its own page creation)
+  // 5. Line Items Section (if items exist) (section handles its own page creation)
   if (quote?.lineItems && quote.lineItems.length > 0) {
     drawLineItemsSection(pdf, {
       quote,
@@ -118,7 +133,7 @@ export async function generateBrandedSequencePDF(options: BrandedSequenceOptions
     });
   }
 
-  // 5. Contract Terms (if contract text provided) (section handles its own page creation)
+  // 6. Contract Terms (if contract text provided) (section handles its own page creation)
   if (contractText && contractText.trim()) {
     drawContractSection(pdf, {
       contractText,
@@ -132,7 +147,7 @@ export async function generateBrandedSequencePDF(options: BrandedSequenceOptions
     });
   }
 
-  // 6. Branded Back Page (section handles its own page creation)
+  // 7. Branded Back Page (section handles its own page creation)
   drawBrandedBackPage(pdf, {
     backPageDataUrl: BRAND_BACK_PAGE_PNG,
     pageW,

@@ -4,6 +4,7 @@ import { useState, Suspense } from "react";
 import { AppHeader } from "@/components/app-header";
 import { QuoteHeader } from "@/components/quote-header";
 import { LineItemsTable } from "@/components/line-items-table";
+import { QuoteApprovalDrawingPanel } from "@/components/quote-approval-drawing-panel";
 import { QuoteSummary } from "@/components/quote-summary";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -13,9 +14,10 @@ import { generateQuoteNumber } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { LoadingSpinner } from "@/components/loading-spinner";
 import { lazyWithReload } from "@/lib/lazy-with-reload";
+import { quoteNeedsApprovalDrawing } from "@shared/approvalDrawing";
 
 const SimpleProposalGenerator = lazyWithReload(() => import("@/components/simple-proposal-generator").then(m => ({ default: m.SimpleProposalGenerator })), "simple-proposal-generator");
-import { Archive, CheckCircle2, Loader2, Copy, History } from "lucide-react";
+import { Archive, CheckCircle2, ClipboardCheck, Copy, FileText, History, Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
@@ -396,6 +398,67 @@ export default function QuoteBuilder() {
     lineItems: [],
   };
   const isArchivedVersion = currentQuote.isLatestVersion === false;
+  const approvalDrawing = currentQuote.approvalDrawing;
+  const approvalDrawingRecommended = quoteNeedsApprovalDrawing(currentQuote.lineItems || []);
+  const showApprovalDrawingStatus = Boolean(!isNewQuote && (approvalDrawing || approvalDrawingRecommended));
+  const approvalDrawingStatusCopy = (() => {
+    if (!approvalDrawing) {
+      return {
+        label: "Not added",
+        detail: "This supported pergola quote should have an order approval drawing before customer approval.",
+        badgeClassName: "bg-amber-100 text-amber-900 hover:bg-amber-100",
+      };
+    }
+
+    if (approvalDrawing.status === "signed_locked" && approvalDrawing.orderStatus === "order_ready") {
+      return {
+        label: "Released for ordering",
+        detail: "Customer-approved drawing is internally order-ready.",
+        badgeClassName: "bg-emerald-100 text-emerald-900 hover:bg-emerald-100",
+      };
+    }
+
+    if (approvalDrawing.status === "signed_locked") {
+      return {
+        label: "Customer approved",
+        detail: "Review and mark order-ready before sending this quote to Ops.",
+        badgeClassName: "bg-emerald-100 text-emerald-900 hover:bg-emerald-100",
+      };
+    }
+
+    if (approvalDrawing.status === "sent_for_signature") {
+      return {
+        label: "Customer link prepared",
+        detail: "Drawing is frozen for signature history and waiting for customer approval.",
+        badgeClassName: "bg-blue-100 text-blue-900 hover:bg-blue-100",
+      };
+    }
+
+    if (approvalDrawing.status === "ready_for_agreement") {
+      return {
+        label: "Ready for customer approval",
+        detail: "The drawing is complete and can be included in the approval link.",
+        badgeClassName: "bg-emerald-100 text-emerald-900 hover:bg-emerald-100",
+      };
+    }
+
+    if (approvalDrawing.status === "revision_needed") {
+      return {
+        label: "Revision needed",
+        detail: "Update the drawing before customer approval or order release.",
+        badgeClassName: "bg-red-100 text-red-900 hover:bg-red-100",
+      };
+    }
+
+    return {
+      label: "Needs details",
+      detail: "Fill dimensions, colors, enclosures, lights, and field verification before approval.",
+      badgeClassName: "bg-amber-100 text-amber-900 hover:bg-amber-100",
+    };
+  })();
+  const scrollToApprovalDrawing = () => {
+    document.getElementById("order-approval-drawing")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -407,6 +470,30 @@ export default function QuoteBuilder() {
           onSave={handleSaveQuote}
           isLoading={createQuoteMutation.isPending || updateQuoteMutation.isPending}
         />
+
+        {showApprovalDrawingStatus && (
+          <Card className="mb-6 border-edg-teal/20 bg-edg-light-teal/30" data-testid="approval-drawing-status-card">
+            <CardContent className="p-4">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <div className="flex items-start gap-3">
+                  <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-white text-edg-teal ring-1 ring-edg-teal/20">
+                    {approvalDrawing ? <ClipboardCheck className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
+                  </div>
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h2 className="text-base font-semibold text-edg-black">Order Approval Drawing</h2>
+                      <Badge className={approvalDrawingStatusCopy.badgeClassName}>{approvalDrawingStatusCopy.label}</Badge>
+                    </div>
+                    <p className="mt-1 text-sm text-muted-foreground">{approvalDrawingStatusCopy.detail}</p>
+                  </div>
+                </div>
+                <Button type="button" variant="outline" onClick={scrollToApprovalDrawing} data-testid="button-jump-approval-drawing">
+                  Review Order Drawing
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Version Control Section */}
         {!isNewQuote && quote && (
@@ -599,6 +686,13 @@ export default function QuoteBuilder() {
           lineItems={currentQuote.lineItems}
           tariffRate={currentQuote.tariffRate || "0"}
         />
+
+        {!isNewQuote && currentQuote.id > 0 && (
+          <QuoteApprovalDrawingPanel
+            quote={currentQuote}
+            isArchivedVersion={isArchivedVersion}
+          />
+        )}
 
         {/* Quote Summary - Show for both new and existing quotes */}
         <QuoteSummary

@@ -24,6 +24,7 @@ let productCatalogColumnsReady: Promise<void> | null = null;
 let pricingDefaultsTableReady: Promise<void> | null = null;
 let planningAgreementTablesReady: Promise<void> | null = null;
 let leadAttachmentTableReady: Promise<void> | null = null;
+let quoteApprovalDrawingTablesReady: Promise<void> | null = null;
 
 export async function ensureSignatureAuditColumns(): Promise<void> {
   if (!signatureAuditColumnsReady) {
@@ -235,4 +236,95 @@ export async function ensureLeadAttachmentTable(): Promise<void> {
   }
 
   await leadAttachmentTableReady;
+}
+
+export async function ensureQuoteApprovalDrawingTables(): Promise<void> {
+  if (!quoteApprovalDrawingTablesReady) {
+    quoteApprovalDrawingTablesReady = pool.query(`
+      CREATE TABLE IF NOT EXISTS "quote_approval_drawings" (
+        "id" serial PRIMARY KEY NOT NULL,
+        "quote_id" integer NOT NULL REFERENCES "quotes"("id") ON DELETE cascade,
+        "quote_family_root_id" integer REFERENCES "quotes"("id") ON DELETE set null,
+        "drawing_type" text DEFAULT 'louvered_roof_order_approval' NOT NULL,
+        "status" text DEFAULT 'draft' NOT NULL,
+        "manufacturer" text,
+        "product_system" text,
+        "title" text,
+        "revision_label" text,
+        "copied_from_drawing_id" integer REFERENCES "quote_approval_drawings"("id") ON DELETE set null,
+        "drawing_data" jsonb NOT NULL,
+        "public_snapshot" jsonb,
+        "customer_notes" text,
+        "internal_notes" text,
+        "source_quote_or_order_id" text,
+        "source_document_label" text,
+        "source_document_url" text,
+        "source_prepared_by" text,
+        "source_prepared_at" timestamp,
+        "ready_at" timestamp,
+        "sent_for_signature_at" timestamp,
+        "signed_locked_at" timestamp,
+        "order_status" text DEFAULT 'not_reviewed' NOT NULL,
+        "order_reviewed_by" integer REFERENCES "users"("id") ON DELETE set null,
+        "order_reviewed_at" timestamp,
+        "order_ready_by" integer REFERENCES "users"("id") ON DELETE set null,
+        "order_ready_at" timestamp,
+        "order_ready_override_reason" text,
+        "superseded_by_id" integer REFERENCES "quote_approval_drawings"("id") ON DELETE set null,
+        "created_by" integer REFERENCES "users"("id") ON DELETE set null,
+        "updated_by" integer REFERENCES "users"("id") ON DELETE set null,
+        "created_at" timestamp DEFAULT now(),
+        "updated_at" timestamp DEFAULT now()
+      );
+
+      ALTER TABLE "quote_approval_drawings" ADD COLUMN IF NOT EXISTS "quote_family_root_id" integer REFERENCES "quotes"("id") ON DELETE set null;
+      ALTER TABLE "quote_approval_drawings" ADD COLUMN IF NOT EXISTS "drawing_type" text DEFAULT 'louvered_roof_order_approval';
+      UPDATE "quote_approval_drawings" SET "drawing_type" = 'louvered_roof_order_approval' WHERE "drawing_type" IS NULL;
+      ALTER TABLE "quote_approval_drawings" ALTER COLUMN "drawing_type" SET DEFAULT 'louvered_roof_order_approval';
+      ALTER TABLE "quote_approval_drawings" ALTER COLUMN "drawing_type" SET NOT NULL;
+      ALTER TABLE "quote_approval_drawings" ADD COLUMN IF NOT EXISTS "status" text DEFAULT 'draft';
+      UPDATE "quote_approval_drawings" SET "status" = 'draft' WHERE "status" IS NULL;
+      ALTER TABLE "quote_approval_drawings" ALTER COLUMN "status" SET DEFAULT 'draft';
+      ALTER TABLE "quote_approval_drawings" ALTER COLUMN "status" SET NOT NULL;
+      ALTER TABLE "quote_approval_drawings" ADD COLUMN IF NOT EXISTS "manufacturer" text;
+      ALTER TABLE "quote_approval_drawings" ADD COLUMN IF NOT EXISTS "product_system" text;
+      ALTER TABLE "quote_approval_drawings" ADD COLUMN IF NOT EXISTS "title" text;
+      ALTER TABLE "quote_approval_drawings" ADD COLUMN IF NOT EXISTS "revision_label" text;
+      ALTER TABLE "quote_approval_drawings" ADD COLUMN IF NOT EXISTS "copied_from_drawing_id" integer REFERENCES "quote_approval_drawings"("id") ON DELETE set null;
+      ALTER TABLE "quote_approval_drawings" ADD COLUMN IF NOT EXISTS "drawing_data" jsonb;
+      UPDATE "quote_approval_drawings" SET "drawing_data" = '{}'::jsonb WHERE "drawing_data" IS NULL;
+      ALTER TABLE "quote_approval_drawings" ALTER COLUMN "drawing_data" SET NOT NULL;
+      ALTER TABLE "quote_approval_drawings" ADD COLUMN IF NOT EXISTS "public_snapshot" jsonb;
+      ALTER TABLE "quote_approval_drawings" ADD COLUMN IF NOT EXISTS "customer_notes" text;
+      ALTER TABLE "quote_approval_drawings" ADD COLUMN IF NOT EXISTS "internal_notes" text;
+      ALTER TABLE "quote_approval_drawings" ADD COLUMN IF NOT EXISTS "source_quote_or_order_id" text;
+      ALTER TABLE "quote_approval_drawings" ADD COLUMN IF NOT EXISTS "source_document_label" text;
+      ALTER TABLE "quote_approval_drawings" ADD COLUMN IF NOT EXISTS "source_document_url" text;
+      ALTER TABLE "quote_approval_drawings" ADD COLUMN IF NOT EXISTS "source_prepared_by" text;
+      ALTER TABLE "quote_approval_drawings" ADD COLUMN IF NOT EXISTS "source_prepared_at" timestamp;
+      ALTER TABLE "quote_approval_drawings" ADD COLUMN IF NOT EXISTS "ready_at" timestamp;
+      ALTER TABLE "quote_approval_drawings" ADD COLUMN IF NOT EXISTS "sent_for_signature_at" timestamp;
+      ALTER TABLE "quote_approval_drawings" ADD COLUMN IF NOT EXISTS "signed_locked_at" timestamp;
+      ALTER TABLE "quote_approval_drawings" ADD COLUMN IF NOT EXISTS "order_status" text DEFAULT 'not_reviewed' NOT NULL;
+      ALTER TABLE "quote_approval_drawings" ADD COLUMN IF NOT EXISTS "order_reviewed_by" integer REFERENCES "users"("id") ON DELETE set null;
+      ALTER TABLE "quote_approval_drawings" ADD COLUMN IF NOT EXISTS "order_reviewed_at" timestamp;
+      ALTER TABLE "quote_approval_drawings" ADD COLUMN IF NOT EXISTS "order_ready_by" integer REFERENCES "users"("id") ON DELETE set null;
+      ALTER TABLE "quote_approval_drawings" ADD COLUMN IF NOT EXISTS "order_ready_at" timestamp;
+      ALTER TABLE "quote_approval_drawings" ADD COLUMN IF NOT EXISTS "order_ready_override_reason" text;
+      ALTER TABLE "quote_approval_drawings" ADD COLUMN IF NOT EXISTS "superseded_by_id" integer REFERENCES "quote_approval_drawings"("id") ON DELETE set null;
+      ALTER TABLE "quote_approval_drawings" ADD COLUMN IF NOT EXISTS "created_by" integer REFERENCES "users"("id") ON DELETE set null;
+      ALTER TABLE "quote_approval_drawings" ADD COLUMN IF NOT EXISTS "updated_by" integer REFERENCES "users"("id") ON DELETE set null;
+
+      CREATE INDEX IF NOT EXISTS "idx_quote_approval_drawings_quote_id" ON "quote_approval_drawings" ("quote_id");
+      CREATE INDEX IF NOT EXISTS "idx_quote_approval_drawings_family_root" ON "quote_approval_drawings" ("quote_family_root_id");
+      CREATE INDEX IF NOT EXISTS "idx_quote_approval_drawings_status" ON "quote_approval_drawings" ("status");
+      CREATE INDEX IF NOT EXISTS "idx_quote_approval_drawings_order_status" ON "quote_approval_drawings" ("order_status");
+      CREATE INDEX IF NOT EXISTS "idx_quote_approval_drawings_copied_from" ON "quote_approval_drawings" ("copied_from_drawing_id");
+    `).then(() => undefined).catch((error) => {
+      quoteApprovalDrawingTablesReady = null;
+      throw error;
+    });
+  }
+
+  await quoteApprovalDrawingTablesReady;
 }

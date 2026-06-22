@@ -2,6 +2,16 @@ import jsPDF from 'jspdf';
 import { ensureSpace, measureAcceptanceBlock } from '@/lib/pdf-utils';
 import { formatCurrency, calculateLineItemTotal, calculateQuoteTotals } from '@/lib/utils';
 import { getImageDimensions, getAspectFitBox, getCenteredOrigin } from '@/lib/pdf-image-pipeline';
+import {
+  formatApprovalDrawingEnclosureType,
+  formatApprovalDrawingLightLabel,
+  formatApprovalDrawingLouverDirection,
+  formatApprovalDrawingSideFeatureType,
+  formatDimension,
+  getApprovalDrawingSideFeatures,
+  normalizeApprovalDrawingData,
+  sanitizeQuoteApprovalDrawingForPublic,
+} from '@shared/approvalDrawing';
 
 const EDG_TEAL = [66, 255, 193] as const;
 
@@ -56,8 +66,15 @@ function drawBrandedFooter(opts: BrandedFooterOpts): void {
   // Add small logo on the left (with more space below the line)
   const logoW = 25;
   const logoH = 10;
-  const logoFormat = detectImageFormat(logoDataUrl);
-  pdf.addImage(logoDataUrl, logoFormat, margin, footerY - logoH + 2, logoW, logoH);
+  if (!isFallbackBrandImage(logoDataUrl)) {
+    const logoFormat = detectImageFormat(logoDataUrl);
+    pdf.addImage(logoDataUrl, logoFormat, margin, footerY - logoH + 2, logoW, logoH);
+  } else {
+    pdf.setFont('Barlow-SemiBold', 'normal');
+    pdf.setFontSize(8);
+    pdf.setTextColor(17, 24, 39);
+    pdf.text(company.name, margin, footerY);
+  }
   
   // Add company info on the right
   pdf.setFont('Barlow-Regular', 'normal');
@@ -115,6 +132,16 @@ interface DrawRenderingsPagesOpts {
   pageH: number;
 }
 
+interface DrawApprovalDrawingSectionOpts {
+  quote: any;
+  logoDataUrl: string;
+  company: { name: string; address: string; phone: string; email: string };
+  margin: number;
+  contentW: number;
+  pageW: number;
+  pageH: number;
+}
+
 interface PdfGroup {
   id: string;
   title: string;
@@ -152,7 +179,29 @@ interface DrawBrandedBackPageOpts {
 }
 
 export function drawStandardCover(pdf: jsPDF, opts: DrawStandardCoverOpts): void {
-  const { coverDataUrl, pageW, pageH } = opts;
+  const { coverDataUrl, company, title, subtitle, pageW, pageH } = opts;
+
+  if (isFallbackBrandImage(coverDataUrl)) {
+    pdf.setFillColor(255, 255, 255);
+    pdf.rect(0, 0, pageW, pageH, 'F');
+    pdf.setDrawColor(...EDG_TEAL);
+    pdf.setLineWidth(1.5);
+    pdf.line(20, 28, pageW - 20, 28);
+    pdf.setFont('Barlow-SemiBold', 'normal');
+    pdf.setFontSize(26);
+    pdf.setTextColor(17, 24, 39);
+    pdf.text(title || 'Project Proposal', 20, 55, { maxWidth: pageW - 40 });
+    pdf.setFont('Barlow-Regular', 'normal');
+    pdf.setFontSize(13);
+    pdf.setTextColor(80, 80, 80);
+    if (subtitle) {
+      pdf.text(subtitle, 20, 68, { maxWidth: pageW - 40 });
+    }
+    pdf.setFontSize(10);
+    pdf.text(company.name, 20, pageH - 32);
+    pdf.text(`${company.phone} | ${company.email}`, 20, pageH - 24);
+    return;
+  }
 
   // Add the cover image as a full-page background
   const format = detectImageFormat(coverDataUrl);
@@ -239,6 +288,188 @@ export async function drawProjectDetailsPage(pdf: jsPDF, opts: DrawProjectDetail
   }
 
   // Add branded footer
+  drawBrandedFooter({ pdf, logoDataUrl, company, pageW, pageH, margin });
+}
+
+export function drawApprovalDrawingSection(pdf: jsPDF, opts: DrawApprovalDrawingSectionOpts): void {
+  const { quote, logoDataUrl, company, margin, contentW, pageW, pageH } = opts;
+  const publicDrawing = sanitizeQuoteApprovalDrawingForPublic(quote.approvalDrawing) as any;
+  if (!publicDrawing) return;
+
+  const data = normalizeApprovalDrawingData(publicDrawing.drawingData);
+  pdf.addPage();
+  let y = margin;
+
+  pdf.setFont('Barlow-SemiBold', 'normal');
+  pdf.setFontSize(18);
+  pdf.setTextColor(0, 0, 0);
+  pdf.text('Order Approval Drawing', margin, y);
+  y += 8;
+
+  pdf.setFont('Barlow-Regular', 'normal');
+  pdf.setFontSize(9);
+  pdf.setTextColor(90, 90, 90);
+  const disclaimer = publicDrawing.disclaimer || 'Order approval layout only. Not permit/shop drawings.';
+  pdf.text(pdf.splitTextToSize(disclaimer, contentW), margin, y);
+  y += 18;
+
+  const drawingX = margin;
+  const drawingY = y;
+  const drawingW = contentW;
+  const drawingH = 95;
+  const length = data.layout.overallLength.inches || data.layout.overallLength.mm || 240;
+  const projection = data.layout.overallProjection.inches || data.layout.overallProjection.mm || 144;
+  const ratio = Math.min(1.8, Math.max(0.65, Math.max(1, length) / Math.max(1, projection)));
+  const boxW = ratio >= 1 ? Math.min(120, drawingW - 30) : 85;
+  const boxH = ratio >= 1 ? Math.max(58, boxW / ratio) : 82;
+  const boxX = drawingX + (drawingW - boxW) / 2;
+  const boxY = drawingY + 8;
+
+  pdf.setDrawColor(25, 25, 25);
+  pdf.setLineWidth(0.8);
+  pdf.rect(boxX, boxY, boxW, boxH);
+  pdf.setDrawColor(210, 210, 210);
+  if (data.layout.louverDirection === 'projection') {
+    for (let x = boxX + 6; x < boxX + boxW; x += 7) {
+      pdf.line(x, boxY, x, boxY + boxH);
+    }
+  } else {
+    for (let lineY = boxY + 6; lineY < boxY + boxH; lineY += 7) {
+      pdf.line(boxX, lineY, boxX + boxW, lineY);
+    }
+  }
+
+  const sideRows = new Map(data.sides.map((side) => [side.side, side]));
+  const drawSide = (side: 'A' | 'B' | 'C' | 'D', x1: number, y1: number, x2: number, y2: number, labelX: number, labelY: number) => {
+    const isReference = data.orientation.referenceSide === side;
+    pdf.setLineWidth(isReference ? 2.1 : 0.7);
+    pdf.setLineDashPattern([], 0);
+    pdf.setDrawColor(isReference ? 20 : 148, isReference ? 20 : 163, isReference ? 20 : 184);
+    pdf.line(x1, y1, x2, y2);
+    pdf.setLineDashPattern([], 0);
+    pdf.setFont('Barlow-SemiBold', 'normal');
+    pdf.setFontSize(8);
+    pdf.setTextColor(30, 30, 30);
+    pdf.text(side, labelX, labelY, { align: 'center' });
+  };
+
+  drawSide('A', boxX, boxY, boxX + boxW, boxY, boxX + boxW / 2, boxY - 3);
+  drawSide('B', boxX + boxW, boxY, boxX + boxW, boxY + boxH, boxX + boxW + 5, boxY + boxH / 2);
+  drawSide('C', boxX + boxW, boxY + boxH, boxX, boxY + boxH, boxX + boxW / 2, boxY + boxH + 6);
+  drawSide('D', boxX, boxY + boxH, boxX, boxY, boxX - 5, boxY + boxH / 2);
+
+  const getFeatureColor = (type: string): [number, number, number] => {
+    if (type === 'motorized_screen') return [37, 99, 235];
+    if (type === 'lumon_glass_wall') return [8, 145, 178];
+    if (type === 'other') return [124, 58, 237];
+    return [17, 24, 39];
+  };
+  const drawSideFeature = (side: 'A' | 'B' | 'C' | 'D', feature: any, index: number) => {
+    const offset = 8 + index * 4;
+    const line =
+      side === 'A'
+        ? [boxX + 4, boxY + offset, boxX + boxW - 4, boxY + offset]
+        : side === 'B'
+          ? [boxX + boxW - offset, boxY + 4, boxX + boxW - offset, boxY + boxH - 4]
+          : side === 'C'
+            ? [boxX + 4, boxY + boxH - offset, boxX + boxW - 4, boxY + boxH - offset]
+            : [boxX + offset, boxY + 4, boxX + offset, boxY + boxH - 4];
+    const [r, g, b] = getFeatureColor(feature.type);
+    pdf.setDrawColor(r, g, b);
+    pdf.setLineWidth(1.1);
+    pdf.setLineDashPattern(feature.type === 'motorized_screen' ? [2.5, 1.8] : [], 0);
+    pdf.line(line[0], line[1], line[2], line[3]);
+    pdf.setLineDashPattern([], 0);
+  };
+  for (const side of data.sides) {
+    getApprovalDrawingSideFeatures(side).forEach((feature, index) => drawSideFeature(side.side, feature, index));
+  }
+
+  const perimeterLed = data.lights.find((light) => light.type === 'led_strip' && /perimeter|around|border|edge/i.test(light.location || ''));
+  if (perimeterLed) {
+    pdf.setDrawColor(245, 158, 11);
+    pdf.setLineWidth(1.4);
+    pdf.rect(boxX + 4, boxY + 4, boxW - 8, boxH - 8);
+    pdf.setFont('Barlow-Regular', 'normal');
+    pdf.setFontSize(6.5);
+    pdf.setTextColor(90, 90, 90);
+    pdf.text(formatApprovalDrawingLightLabel(perimeterLed), boxX + 6, boxY + 10);
+  }
+
+  pdf.setFillColor(17, 24, 39);
+  for (const post of data.posts) {
+    const px = boxX + post.x * boxW;
+    const py = boxY + post.y * boxH;
+    pdf.rect(px - 1.7, py - 1.7, 3.4, 3.4, 'F');
+    pdf.setFont('Barlow-Regular', 'normal');
+    pdf.setFontSize(6.5);
+    pdf.setTextColor(60, 60, 60);
+    pdf.text(`${post.label}${post.height?.display ? ` ${post.height.display}` : ''}`, px + 3, py - 2);
+  }
+
+  y = drawingY + drawingH + 14;
+  const colW = contentW / 2 - 5;
+  const details = [
+    ['Dimensions', `${formatDimension(data.layout.overallLength) || 'Not set'} length x ${formatDimension(data.layout.overallProjection) || 'Not set'} projection/depth`],
+    ['Mount / Reference', `${data.layout.mountType}; ${data.orientation.referenceSide} = ${data.orientation.referenceSideLabel || 'reference side'}`],
+    ['Height', formatDimension(data.layout.finishedHeight) || formatDimension(data.layout.clearanceHeight) || 'See post labels'],
+    ['Colors / Louvers', `Frame ${data.colors.frameColor || 'not set'}; louvers ${data.colors.louverColor || 'not set'}; ${formatApprovalDrawingLouverDirection(data.layout.louverDirection)}${data.colors.postTrimGutterColor ? `; post/trim/gutter ${data.colors.postTrimGutterColor}` : ''}`],
+  ];
+
+  pdf.setFontSize(9);
+  details.forEach(([label, value], index) => {
+    const x = index % 2 === 0 ? margin : margin + colW + 10;
+    const rowY = y + Math.floor(index / 2) * 15;
+    pdf.setFont('Barlow-SemiBold', 'normal');
+    pdf.setTextColor(20, 20, 20);
+    pdf.text(label, x, rowY);
+    pdf.setFont('Barlow-Regular', 'normal');
+    pdf.setTextColor(70, 70, 70);
+    pdf.text(pdf.splitTextToSize(String(value), colW), x, rowY + 5);
+  });
+  y += 35;
+
+  pdf.setFont('Barlow-SemiBold', 'normal');
+  pdf.setTextColor(20, 20, 20);
+  pdf.text('Side Schedule', margin, y);
+  y += 6;
+  pdf.setFont('Barlow-Regular', 'normal');
+  pdf.setTextColor(70, 70, 70);
+  for (const side of data.sides) {
+    const sideFeatures = getApprovalDrawingSideFeatures(side);
+    const enclosure = sideFeatures.length
+      ? sideFeatures.map((feature) => formatApprovalDrawingSideFeatureType(feature.type)).join(' + ')
+      : formatApprovalDrawingEnclosureType("none");
+    const span = formatDimension(side.enclosureSpan || side.length);
+    const height = formatDimension(side.enclosureHeight || side.openingHeight);
+    const text = `Side ${side.side}: ${side.label || ''} - ${enclosure}${span ? `, span ${span}` : ''}${height ? `, height/opening ${height}` : ''}`;
+    pdf.text(pdf.splitTextToSize(text, contentW), margin, y);
+    y += 6;
+  }
+
+  if (data.lights.length > 0) {
+    y += 2;
+    pdf.setFont('Barlow-SemiBold', 'normal');
+    pdf.setTextColor(20, 20, 20);
+    pdf.text('Lights / Accessories', margin, y);
+    y += 6;
+    pdf.setFont('Barlow-Regular', 'normal');
+    pdf.setTextColor(70, 70, 70);
+    pdf.text(pdf.splitTextToSize(data.lights.map(formatApprovalDrawingLightLabel).join('; '), contentW), margin, y);
+    y += 12;
+  }
+
+  if (publicDrawing.customerNotes) {
+    y += 2;
+    pdf.setFont('Barlow-SemiBold', 'normal');
+    pdf.setTextColor(20, 20, 20);
+    pdf.text('Customer Notes', margin, y);
+    y += 6;
+    pdf.setFont('Barlow-Regular', 'normal');
+    pdf.setTextColor(70, 70, 70);
+    pdf.text(pdf.splitTextToSize(publicDrawing.customerNotes, contentW), margin, y);
+  }
+
   drawBrandedFooter({ pdf, logoDataUrl, company, pageW, pageH, margin });
 }
 
@@ -533,6 +764,10 @@ export async function drawRenderingsPages(pdf: jsPDF, opts: DrawRenderingsPagesO
 function detectImageFormat(dataUrl: string): 'PNG' | 'JPEG' {
   if (dataUrl.startsWith('data:image/png')) return 'PNG';
   return 'JPEG';
+}
+
+function isFallbackBrandImage(dataUrl: string): boolean {
+  return /^data:image\/(png|jpeg|jpg);base64,/i.test(dataUrl) && dataUrl.length < 200;
 }
 
 export function drawLineItemsSection(pdf: jsPDF, opts: DrawLineItemsSectionOpts): void {
@@ -1043,9 +1278,26 @@ export function drawContractSection(pdf: jsPDF, opts: DrawContractSectionOpts): 
 }
 
 export function drawBrandedBackPage(pdf: jsPDF, opts: DrawBrandedBackPageOpts): void {
-  const { backPageDataUrl, pageW, pageH } = opts;
+  const { backPageDataUrl, pageW, pageH, margin } = opts;
 
   pdf.addPage();
+
+  if (isFallbackBrandImage(backPageDataUrl)) {
+    pdf.setFillColor(255, 255, 255);
+    pdf.rect(0, 0, pageW, pageH, 'F');
+    pdf.setDrawColor(...EDG_TEAL);
+    pdf.setLineWidth(1.2);
+    pdf.line(margin, pageH / 2 - 12, pageW - margin, pageH / 2 - 12);
+    pdf.setFont('Barlow-SemiBold', 'normal');
+    pdf.setFontSize(20);
+    pdf.setTextColor(17, 24, 39);
+    pdf.text('Thank you', pageW / 2, pageH / 2, { align: 'center' });
+    pdf.setFont('Barlow-Regular', 'normal');
+    pdf.setFontSize(11);
+    pdf.setTextColor(80, 80, 80);
+    pdf.text('EDG Patio & Shade', pageW / 2, pageH / 2 + 10, { align: 'center' });
+    return;
+  }
 
   // Display the custom back page image full-page
   const format = detectImageFormat(backPageDataUrl);

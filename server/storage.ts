@@ -4,6 +4,7 @@ import {
   quotes,
   planningAgreements,
   planningAgreementEvents,
+  quoteApprovalDrawings,
   lineItems,
   groups,
   products,
@@ -23,6 +24,7 @@ import {
   type Quote,
   type PlanningAgreement,
   type PlanningAgreementEvent,
+  type QuoteApprovalDrawing,
   type LineItem,
   type Group,
   type Product,
@@ -42,6 +44,7 @@ import {
   type InsertQuote,
   type InsertPlanningAgreement,
   type InsertPlanningAgreementEvent,
+  type InsertQuoteApprovalDrawing,
   type InsertLineItem,
   type InsertGroup,
   type InsertProduct,
@@ -58,7 +61,7 @@ import {
   type QuoteWithDetails,
   type ProductWithDetails
 } from "@shared/schema";
-import { db, ensureLeadAttachmentTable, ensurePlanningAgreementTables, ensurePricingDefaultsTable, ensureProductCatalogColumns, ensureSignatureAuditColumns, pool } from "./db";
+import { db, ensureLeadAttachmentTable, ensurePlanningAgreementTables, ensurePricingDefaultsTable, ensureProductCatalogColumns, ensureQuoteApprovalDrawingTables, ensureSignatureAuditColumns, pool } from "./db";
 import { eq, desc, asc, inArray, sql, and, ne, or, ilike } from "drizzle-orm";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
@@ -66,6 +69,11 @@ import connectPg from "connect-pg-simple";
 import session from "express-session";
 import { calculateCostFromMsrpAndDiscount, deriveProductCostFields } from "@shared/pricing";
 import { applySundanceSkuDefault } from "./sundanceSku";
+import {
+  createDefaultApprovalDrawingData,
+  getApprovalDrawingReadiness,
+  sanitizeQuoteApprovalDrawingForPublic,
+} from "@shared/approvalDrawing";
 
 const scryptAsync = promisify(scrypt);
 
@@ -136,6 +144,7 @@ const getQuoteFamilyRootId = (quote: Pick<Quote, "id" | "parentQuoteId">): numbe
 };
 
 type PlanningAgreementUpdate = Partial<InsertPlanningAgreement>;
+type QuoteApprovalDrawingUpdate = Partial<InsertQuoteApprovalDrawing>;
 
 export interface IStorage {
   // Account methods (formerly customer methods)
@@ -189,6 +198,19 @@ export interface IStorage {
   createPlanningAgreement(planningAgreement: InsertPlanningAgreement, actorUserId?: number | null): Promise<PlanningAgreement>;
   updatePlanningAgreement(id: number, planningAgreement: PlanningAgreementUpdate, actorUserId?: number | null, eventType?: InsertPlanningAgreementEvent["eventType"], payload?: Record<string, unknown>): Promise<PlanningAgreement | undefined>;
   createPlanningAgreementEvent(event: InsertPlanningAgreementEvent): Promise<PlanningAgreementEvent>;
+
+  // Quote approval drawing methods
+  getQuoteApprovalDrawing(id: number): Promise<QuoteApprovalDrawing | undefined>;
+  getQuoteApprovalDrawingByQuoteId(quoteId: number): Promise<QuoteApprovalDrawing | undefined>;
+  createQuoteApprovalDrawing(drawing: InsertQuoteApprovalDrawing, actorUserId?: number | null): Promise<QuoteApprovalDrawing>;
+  updateQuoteApprovalDrawing(id: number, drawing: QuoteApprovalDrawingUpdate, actorUserId?: number | null): Promise<QuoteApprovalDrawing | undefined>;
+  markQuoteApprovalDrawingReady(id: number, actorUserId?: number | null): Promise<QuoteApprovalDrawing | undefined>;
+  freezeQuoteApprovalDrawingForSignature(id: number, actorUserId?: number | null): Promise<QuoteApprovalDrawing | undefined>;
+  markQuoteApprovalDrawingSignedLocked(id: number, actorUserId?: number | null): Promise<QuoteApprovalDrawing | undefined>;
+  markQuoteApprovalDrawingRevisionNeeded(id: number, actorUserId?: number | null, reason?: string | null): Promise<QuoteApprovalDrawing | undefined>;
+  markQuoteApprovalDrawingOrderReviewed(id: number, actorUserId?: number | null): Promise<QuoteApprovalDrawing | undefined>;
+  markQuoteApprovalDrawingOrderReady(id: number, actorUserId?: number | null, overrideReason?: string | null): Promise<QuoteApprovalDrawing | undefined>;
+  copyQuoteApprovalDrawingToVersion(sourceQuoteId: number, targetQuoteId: number, actorUserId?: number | null): Promise<QuoteApprovalDrawing | undefined>;
   
   // Quote versioning methods
   getQuoteVersions(quoteId: number): Promise<QuoteWithDetails[]>;
@@ -1064,7 +1086,10 @@ export class DatabaseStorage implements IStorage {
       [contractTemplate] = await db.select().from(contractTemplates).where(eq(contractTemplates.id, quote.contractTemplateId));
     }
 
-    const planningAgreement = await this.getPlanningAgreementByQuoteFamilyRootId(getQuoteFamilyRootId(quote));
+    const [planningAgreement, approvalDrawing] = await Promise.all([
+      this.getPlanningAgreementByQuoteFamilyRootId(getQuoteFamilyRootId(quote)),
+      this.getQuoteApprovalDrawingByQuoteId(quote.id),
+    ]);
 
     return {
       ...quote,
@@ -1073,6 +1098,7 @@ export class DatabaseStorage implements IStorage {
       lineItems: quoteLineItems,
       contractTemplate,
       planningAgreement,
+      approvalDrawing,
     };
   }
 
@@ -1148,7 +1174,10 @@ export class DatabaseStorage implements IStorage {
       [contractTemplate] = await db.select().from(contractTemplates).where(eq(contractTemplates.id, quote.contractTemplateId));
     }
 
-    const planningAgreement = await this.getPlanningAgreementByQuoteFamilyRootId(getQuoteFamilyRootId(quote));
+    const [planningAgreement, approvalDrawing] = await Promise.all([
+      this.getPlanningAgreementByQuoteFamilyRootId(getQuoteFamilyRootId(quote)),
+      this.getQuoteApprovalDrawingByQuoteId(quote.id),
+    ]);
 
     return {
       ...quote,
@@ -1157,6 +1186,7 @@ export class DatabaseStorage implements IStorage {
       lineItems: quoteLineItems,
       contractTemplate,
       planningAgreement,
+      approvalDrawing,
     };
   }
 
@@ -1203,7 +1233,7 @@ export class DatabaseStorage implements IStorage {
       )
     );
 
-    const [accountsList, contractTemplatesList, lineItemRows, planningAgreementRows] = await Promise.all([
+    const [accountsList, contractTemplatesList, lineItemRows, planningAgreementRows, approvalDrawingRows] = await Promise.all([
       accountIds.length
         ? db.select().from(accounts).where(inArray(accounts.id, accountIds))
         : Promise.resolve([] as Account[]),
@@ -1244,6 +1274,7 @@ export class DatabaseStorage implements IStorage {
             .where(inArray(planningAgreements.quoteFamilyRootId, quoteFamilyRootIds))
             .orderBy(desc(planningAgreements.createdAt))
         : Promise.resolve([] as PlanningAgreement[]),
+      this.getQuoteApprovalDrawingsByQuoteIds(quoteIds),
     ]);
 
     const accountMap = new Map(accountsList.map(account => [account.id, account]));
@@ -1252,6 +1283,12 @@ export class DatabaseStorage implements IStorage {
     for (const agreement of planningAgreementRows) {
       if (agreement.quoteFamilyRootId && !planningAgreementMap.has(agreement.quoteFamilyRootId)) {
         planningAgreementMap.set(agreement.quoteFamilyRootId, agreement);
+      }
+    }
+    const approvalDrawingMap = new Map<number, QuoteApprovalDrawing>();
+    for (const drawing of approvalDrawingRows) {
+      if (!approvalDrawingMap.has(drawing.quoteId)) {
+        approvalDrawingMap.set(drawing.quoteId, drawing);
       }
     }
 
@@ -1293,6 +1330,7 @@ export class DatabaseStorage implements IStorage {
         : undefined;
       const quoteLineItems = lineItemsByQuoteId.get(quote.id) ?? [];
       const planningAgreement = planningAgreementMap.get(getQuoteFamilyRootId(quote));
+      const approvalDrawing = approvalDrawingMap.get(quote.id);
 
       return {
         ...quote,
@@ -1301,6 +1339,7 @@ export class DatabaseStorage implements IStorage {
         lineItems: quoteLineItems,
         contractTemplate,
         planningAgreement,
+        approvalDrawing,
       };
     });
 
@@ -1619,6 +1658,348 @@ export class DatabaseStorage implements IStorage {
     return created;
   }
 
+  private async getQuoteApprovalDrawingsByQuoteIds(quoteIds: number[]): Promise<QuoteApprovalDrawing[]> {
+    if (quoteIds.length === 0) return [];
+    await ensureQuoteApprovalDrawingTables();
+    return db
+      .select()
+      .from(quoteApprovalDrawings)
+      .where(and(
+        inArray(quoteApprovalDrawings.quoteId, quoteIds),
+        ne(quoteApprovalDrawings.status, "superseded")
+      ))
+      .orderBy(asc(quoteApprovalDrawings.quoteId), desc(quoteApprovalDrawings.createdAt), desc(quoteApprovalDrawings.id));
+  }
+
+  private async markApprovalDrawingRevisionNeededForQuote(quoteId: number, reason: string): Promise<void> {
+    await ensureQuoteApprovalDrawingTables();
+    const now = new Date();
+    const note = `Revision needed: ${reason}`;
+    await db
+      .update(quoteApprovalDrawings)
+      .set({
+        status: "revision_needed",
+        orderStatus: "blocked",
+        publicSnapshot: null,
+        internalNotes: sql`concat_ws(E'\n', ${quoteApprovalDrawings.internalNotes}, ${note})`,
+        updatedAt: now,
+      })
+      .where(and(
+        eq(quoteApprovalDrawings.quoteId, quoteId),
+        inArray(quoteApprovalDrawings.status, ["ready_for_agreement", "sent_for_signature"])
+      ));
+
+    await db
+      .update(quoteApprovalDrawings)
+      .set({
+        orderStatus: "blocked",
+        orderReadyBy: null,
+        orderReadyAt: null,
+        orderReadyOverrideReason: null,
+        internalNotes: sql`concat_ws(E'\n', ${quoteApprovalDrawings.internalNotes}, ${note})`,
+        updatedAt: now,
+      })
+      .where(and(
+        eq(quoteApprovalDrawings.quoteId, quoteId),
+        eq(quoteApprovalDrawings.status, "signed_locked")
+      ));
+  }
+
+  async getQuoteApprovalDrawing(id: number): Promise<QuoteApprovalDrawing | undefined> {
+    await ensureQuoteApprovalDrawingTables();
+    const [drawing] = await db
+      .select()
+      .from(quoteApprovalDrawings)
+      .where(eq(quoteApprovalDrawings.id, id))
+      .limit(1);
+    return drawing || undefined;
+  }
+
+  async getQuoteApprovalDrawingByQuoteId(quoteId: number): Promise<QuoteApprovalDrawing | undefined> {
+    const [drawing] = await this.getQuoteApprovalDrawingsByQuoteIds([quoteId]);
+    return drawing || undefined;
+  }
+
+  async createQuoteApprovalDrawing(
+    insertDrawing: InsertQuoteApprovalDrawing,
+    actorUserId?: number | null,
+  ): Promise<QuoteApprovalDrawing> {
+    await ensureQuoteApprovalDrawingTables();
+    const quote = await this.getQuote(insertDrawing.quoteId);
+    if (!quote) {
+      throw new Error("Quote not found for approval drawing");
+    }
+
+    const [drawing] = await db
+      .insert(quoteApprovalDrawings)
+      .values({
+        ...insertDrawing,
+        quoteFamilyRootId: insertDrawing.quoteFamilyRootId ?? getQuoteFamilyRootId(quote),
+        drawingData: insertDrawing.drawingData ?? createDefaultApprovalDrawingData(),
+        title: insertDrawing.title || "Order Approval Drawing",
+        status: insertDrawing.status || "draft",
+        orderStatus: insertDrawing.orderStatus || "not_reviewed",
+        createdBy: insertDrawing.createdBy ?? actorUserId ?? null,
+        updatedBy: insertDrawing.updatedBy ?? actorUserId ?? null,
+        updatedAt: new Date(),
+      })
+      .returning();
+    return drawing;
+  }
+
+  async updateQuoteApprovalDrawing(
+    id: number,
+    updateData: QuoteApprovalDrawingUpdate,
+    actorUserId?: number | null,
+  ): Promise<QuoteApprovalDrawing | undefined> {
+    await ensureQuoteApprovalDrawingTables();
+    const existing = await this.getQuoteApprovalDrawing(id);
+    if (!existing) return undefined;
+
+    if (existing.status === "signed_locked" || existing.status === "sent_for_signature" || existing.sentForSignatureAt || existing.signedLockedAt) {
+      throw new Error("Approval drawing is frozen for signature. Create a new quote version or revision before editing.");
+    }
+
+    const [updated] = await db
+      .update(quoteApprovalDrawings)
+      .set({
+        ...updateData,
+        publicSnapshot: null,
+        updatedBy: actorUserId ?? updateData.updatedBy ?? existing.updatedBy ?? null,
+        updatedAt: new Date(),
+      })
+      .where(eq(quoteApprovalDrawings.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async markQuoteApprovalDrawingReady(id: number, actorUserId?: number | null): Promise<QuoteApprovalDrawing | undefined> {
+    await ensureQuoteApprovalDrawingTables();
+    const existing = await this.getQuoteApprovalDrawing(id);
+    if (!existing) return undefined;
+    if (existing.status === "signed_locked" || existing.sentForSignatureAt || existing.signedLockedAt) {
+      throw new Error("Approval drawing is frozen for signature. Create a new quote version or revision before marking ready.");
+    }
+
+    const readiness = getApprovalDrawingReadiness(existing.drawingData);
+    if (!readiness.ready) {
+      throw new Error(`Approval drawing is missing: ${readiness.missing.join(", ")}`);
+    }
+
+    const [updated] = await db
+      .update(quoteApprovalDrawings)
+      .set({
+        status: "ready_for_agreement",
+        readyAt: new Date(),
+        publicSnapshot: null,
+        orderStatus: "not_reviewed",
+        updatedBy: actorUserId ?? existing.updatedBy ?? null,
+        updatedAt: new Date(),
+      })
+      .where(eq(quoteApprovalDrawings.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async freezeQuoteApprovalDrawingForSignature(id: number, actorUserId?: number | null): Promise<QuoteApprovalDrawing | undefined> {
+    await ensureQuoteApprovalDrawingTables();
+    const existing = await this.getQuoteApprovalDrawing(id);
+    if (!existing) return undefined;
+
+    if (existing.status === "signed_locked") {
+      return existing;
+    }
+
+    if (existing.status !== "ready_for_agreement" && existing.status !== "sent_for_signature") {
+      throw new Error("Approval drawing must be ready before preparing it for signature.");
+    }
+
+    const sentAt = existing.sentForSignatureAt || new Date();
+    const snapshot = sanitizeQuoteApprovalDrawingForPublic({
+      ...existing,
+      status: "sent_for_signature",
+      sentForSignatureAt: sentAt,
+    });
+
+    const [updated] = await db
+      .update(quoteApprovalDrawings)
+      .set({
+        status: "sent_for_signature",
+        sentForSignatureAt: sentAt instanceof Date ? sentAt : new Date(sentAt),
+        publicSnapshot: snapshot,
+        updatedBy: actorUserId ?? existing.updatedBy ?? null,
+        updatedAt: new Date(),
+      })
+      .where(eq(quoteApprovalDrawings.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async markQuoteApprovalDrawingSignedLocked(id: number, actorUserId?: number | null): Promise<QuoteApprovalDrawing | undefined> {
+    await ensureQuoteApprovalDrawingTables();
+    const existing = await this.getQuoteApprovalDrawing(id);
+    if (!existing) return undefined;
+
+    const publicSnapshot = existing.publicSnapshot || sanitizeQuoteApprovalDrawingForPublic({
+      ...existing,
+      status: "signed_locked",
+      signedLockedAt: new Date(),
+    });
+
+    const [updated] = await db
+      .update(quoteApprovalDrawings)
+      .set({
+        status: "signed_locked",
+        signedLockedAt: existing.signedLockedAt || new Date(),
+        publicSnapshot,
+        updatedBy: actorUserId ?? existing.updatedBy ?? null,
+        updatedAt: new Date(),
+      })
+      .where(eq(quoteApprovalDrawings.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async markQuoteApprovalDrawingRevisionNeeded(
+    id: number,
+    actorUserId?: number | null,
+    reason?: string | null,
+  ): Promise<QuoteApprovalDrawing | undefined> {
+    await ensureQuoteApprovalDrawingTables();
+    const existing = await this.getQuoteApprovalDrawing(id);
+    if (!existing) return undefined;
+
+    if (existing.status === "signed_locked") {
+      throw new Error("Signed approval drawings are locked. Create a new quote version before revising.");
+    }
+
+    const note = reason?.trim()
+      ? `Revision needed: ${reason.trim()}`
+      : "Revision needed.";
+
+    const [updated] = await db
+      .update(quoteApprovalDrawings)
+      .set({
+        status: "revision_needed",
+        orderStatus: "blocked",
+        publicSnapshot: null,
+        internalNotes: sql`concat_ws(E'\n', ${quoteApprovalDrawings.internalNotes}, ${note})`,
+        updatedBy: actorUserId ?? existing.updatedBy ?? null,
+        updatedAt: new Date(),
+      })
+      .where(eq(quoteApprovalDrawings.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async markQuoteApprovalDrawingOrderReviewed(id: number, actorUserId?: number | null): Promise<QuoteApprovalDrawing | undefined> {
+    await ensureQuoteApprovalDrawingTables();
+    const existing = await this.getQuoteApprovalDrawing(id);
+    if (!existing) return undefined;
+
+    const [updated] = await db
+      .update(quoteApprovalDrawings)
+      .set({
+        orderStatus: "reviewed",
+        orderReviewedBy: actorUserId ?? existing.orderReviewedBy ?? null,
+        orderReviewedAt: new Date(),
+        updatedBy: actorUserId ?? existing.updatedBy ?? null,
+        updatedAt: new Date(),
+      })
+      .where(eq(quoteApprovalDrawings.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async markQuoteApprovalDrawingOrderReady(
+    id: number,
+    actorUserId?: number | null,
+    overrideReason?: string | null,
+  ): Promise<QuoteApprovalDrawing | undefined> {
+    await ensureQuoteApprovalDrawingTables();
+    const existing = await this.getQuoteApprovalDrawing(id);
+    if (!existing) return undefined;
+
+    const useOverride = typeof overrideReason === "string" && overrideReason.trim().length > 0;
+    if (existing.status !== "signed_locked") {
+      throw new Error("Approval drawing must be customer signed before it can be order-ready.");
+    }
+
+    const readiness = getApprovalDrawingReadiness(existing.drawingData);
+    if (!useOverride && !readiness.ready) {
+      throw new Error(`Approval drawing is missing: ${readiness.missing.join(", ")}`);
+    }
+
+    if (!useOverride && existing.status === "revision_needed") {
+      throw new Error("Approval drawing needs revision before order release.");
+    }
+
+    const [updated] = await db
+      .update(quoteApprovalDrawings)
+      .set({
+        orderStatus: useOverride ? "override_released" : "order_ready",
+        orderReviewedBy: actorUserId ?? existing.orderReviewedBy ?? null,
+        orderReviewedAt: existing.orderReviewedAt || new Date(),
+        orderReadyBy: actorUserId ?? existing.orderReadyBy ?? null,
+        orderReadyAt: new Date(),
+        orderReadyOverrideReason: useOverride ? overrideReason!.trim() : null,
+        updatedBy: actorUserId ?? existing.updatedBy ?? null,
+        updatedAt: new Date(),
+      })
+      .where(eq(quoteApprovalDrawings.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async copyQuoteApprovalDrawingToVersion(
+    sourceQuoteId: number,
+    targetQuoteId: number,
+    actorUserId?: number | null,
+  ): Promise<QuoteApprovalDrawing | undefined> {
+    await ensureQuoteApprovalDrawingTables();
+    const source = await this.getQuoteApprovalDrawingByQuoteId(sourceQuoteId);
+    if (!source) return undefined;
+    const targetQuote = await this.getQuote(targetQuoteId);
+    if (!targetQuote) return undefined;
+
+    const [copy] = await db
+      .insert(quoteApprovalDrawings)
+      .values({
+        quoteId: targetQuoteId,
+        quoteFamilyRootId: getQuoteFamilyRootId(targetQuote),
+        drawingType: source.drawingType,
+        status: "draft",
+        manufacturer: source.manufacturer,
+        productSystem: source.productSystem,
+        title: source.title,
+        revisionLabel: source.revisionLabel,
+        copiedFromDrawingId: source.id,
+        drawingData: source.drawingData,
+        publicSnapshot: null,
+        customerNotes: source.customerNotes,
+        internalNotes: source.internalNotes,
+        sourceQuoteOrOrderId: source.sourceQuoteOrOrderId,
+        sourceDocumentLabel: source.sourceDocumentLabel,
+        sourceDocumentUrl: source.sourceDocumentUrl,
+        sourcePreparedBy: source.sourcePreparedBy,
+        sourcePreparedAt: source.sourcePreparedAt,
+        readyAt: null,
+        sentForSignatureAt: null,
+        signedLockedAt: null,
+        orderStatus: "not_reviewed",
+        orderReviewedBy: null,
+        orderReviewedAt: null,
+        orderReadyBy: null,
+        orderReadyAt: null,
+        orderReadyOverrideReason: null,
+        createdBy: actorUserId ?? null,
+        updatedBy: actorUserId ?? null,
+        updatedAt: new Date(),
+      })
+      .returning();
+    return copy || undefined;
+  }
+
   // Quote versioning methods
   async getQuoteVersions(quoteId: number): Promise<QuoteWithDetails[]> {
     // Get the quote to determine if it's a parent or a version
@@ -1653,6 +2034,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createQuoteVersion(originalQuoteId: number): Promise<Quote> {
+    await ensureQuoteApprovalDrawingTables();
     return await db.transaction(async (tx) => {
       // Get the original quote
       const [originalQuote] = await tx.select().from(quotes).where(eq(quotes.id, originalQuoteId));
@@ -1805,6 +2187,51 @@ export class DatabaseStorage implements IStorage {
           isActive: rendering.isActive,
         });
       }
+
+      const [sourceDrawing] = await tx
+        .select()
+        .from(quoteApprovalDrawings)
+        .where(and(
+          eq(quoteApprovalDrawings.quoteId, originalQuoteId),
+          ne(quoteApprovalDrawings.status, "superseded")
+        ))
+        .orderBy(desc(quoteApprovalDrawings.createdAt), desc(quoteApprovalDrawings.id))
+        .limit(1);
+
+      if (sourceDrawing) {
+        await tx.insert(quoteApprovalDrawings).values({
+          quoteId: newQuote.id,
+          quoteFamilyRootId: getQuoteFamilyRootId(newQuote),
+          drawingType: sourceDrawing.drawingType,
+          status: "draft",
+          manufacturer: sourceDrawing.manufacturer,
+          productSystem: sourceDrawing.productSystem,
+          title: sourceDrawing.title,
+          revisionLabel: sourceDrawing.revisionLabel,
+          copiedFromDrawingId: sourceDrawing.id,
+          drawingData: sourceDrawing.drawingData,
+          publicSnapshot: null,
+          customerNotes: sourceDrawing.customerNotes,
+          internalNotes: sourceDrawing.internalNotes,
+          sourceQuoteOrOrderId: sourceDrawing.sourceQuoteOrOrderId,
+          sourceDocumentLabel: sourceDrawing.sourceDocumentLabel,
+          sourceDocumentUrl: sourceDrawing.sourceDocumentUrl,
+          sourcePreparedBy: sourceDrawing.sourcePreparedBy,
+          sourcePreparedAt: sourceDrawing.sourcePreparedAt,
+          readyAt: null,
+          sentForSignatureAt: null,
+          signedLockedAt: null,
+          orderStatus: "not_reviewed",
+          orderReviewedBy: null,
+          orderReviewedAt: null,
+          orderReadyBy: null,
+          orderReadyAt: null,
+          orderReadyOverrideReason: null,
+          createdBy: null,
+          updatedBy: null,
+          updatedAt: new Date(),
+        });
+      }
       
       return newQuote;
     });
@@ -1866,41 +2293,61 @@ export class DatabaseStorage implements IStorage {
       .insert(lineItems)
       .values(insertLineItem)
       .returning();
+    await this.markApprovalDrawingRevisionNeededForQuote(insertLineItem.quoteId, "line item added after drawing readiness");
     return lineItem;
   }
 
   async updateLineItem(id: number, lineItemData: Partial<InsertLineItem>): Promise<LineItem | undefined> {
+    const existing = await this.getLineItem(id);
     const [updated] = await db
       .update(lineItems)
       .set(lineItemData)
       .where(eq(lineItems.id, id))
       .returning();
+    if (updated && existing) {
+      await this.markApprovalDrawingRevisionNeededForQuote(existing.quoteId, "line item changed after drawing readiness");
+    }
     return updated || undefined;
   }
 
   async deleteLineItem(id: number): Promise<boolean> {
+    const existing = await this.getLineItem(id);
     const result = await db.delete(lineItems).where(eq(lineItems.id, id));
+    if ((result.rowCount || 0) > 0 && existing) {
+      await this.markApprovalDrawingRevisionNeededForQuote(existing.quoteId, "line item removed after drawing readiness");
+    }
     return (result.rowCount || 0) > 0;
   }
 
   async deleteLineItemsByQuoteId(quoteId: number): Promise<boolean> {
     await db.delete(lineItems).where(eq(lineItems.quoteId, quoteId));
+    await this.markApprovalDrawingRevisionNeededForQuote(quoteId, "line items cleared after drawing readiness");
     return true;
   }
 
   async bulkDeleteLineItems(ids: number[]): Promise<number> {
     if (ids.length === 0) return 0;
+    const existingRows = await db.select().from(lineItems).where(inArray(lineItems.id, ids));
+    const quoteIds = Array.from(new Set(existingRows.map((item) => item.quoteId)));
     const result = await db.delete(lineItems).where(inArray(lineItems.id, ids));
+    for (const quoteId of quoteIds) {
+      await this.markApprovalDrawingRevisionNeededForQuote(quoteId, "line items removed after drawing readiness");
+    }
     return result.rowCount || 0;
   }
 
   async bulkUpdateLineItems(ids: number[], updates: Partial<InsertLineItem>): Promise<number> {
     if (ids.length === 0) return 0;
+    const existingRows = await db.select().from(lineItems).where(inArray(lineItems.id, ids));
+    const quoteIds = Array.from(new Set(existingRows.map((item) => item.quoteId)));
     const result = await db
       .update(lineItems)
       .set(updates)
       .where(inArray(lineItems.id, ids))
       .returning();
+    for (const quoteId of quoteIds) {
+      await this.markApprovalDrawingRevisionNeededForQuote(quoteId, "line items changed after drawing readiness");
+    }
     return result.length;
   }
 
@@ -1933,6 +2380,7 @@ export class DatabaseStorage implements IStorage {
           ));
       }
     });
+    await this.markApprovalDrawingRevisionNeededForQuote(quoteId, "line item order changed after drawing readiness");
   }
 
   // Group methods

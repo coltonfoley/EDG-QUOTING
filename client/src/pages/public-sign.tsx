@@ -16,7 +16,9 @@ import jsPDF from 'jspdf';
 import { barlowRegularBase64, barlowSemiBoldBase64 } from '@/lib/fonts';
 import { generateBrandedSequencePDF } from '@/lib/pdf-branded-sequence';
 import { normalizeImageToDataUrl } from '@/lib/pdf-image-pipeline';
+import { ORDER_APPROVAL_SIGNATURE_CONSENT } from '@shared/approvalDrawing';
 import { generateSignedPDF, downloadSignedPDF } from '@/lib/generate-signed-pdf';
+import { QuoteApprovalDrawingPreview } from '@/components/quote-approval-drawing-preview';
 import type { QuoteWithDetails } from '@shared/schema';
 import { cn } from '@/lib/utils';
 import edgLogoPath from '@assets/Logo_Full_Color_Black_1766097629382.png';
@@ -53,6 +55,20 @@ interface SigningQuoteData {
       signedAt?: string;
       documentFingerprint?: string;
     }>;
+  } | null;
+  approvalDrawing?: {
+    id?: number;
+    status?: string | null;
+    title?: string | null;
+    manufacturer?: string | null;
+    productSystem?: string | null;
+    revisionLabel?: string | null;
+    drawingData?: unknown;
+    customerNotes?: string | null;
+    disclaimer?: string | null;
+    readyAt?: string | null;
+    sentForSignatureAt?: string | null;
+    signedLockedAt?: string | null;
   } | null;
   esigIncludePricing?: boolean;
   esigIncludeImages?: boolean;
@@ -145,6 +161,65 @@ function StepIndicator({ currentStep, isComplete }: { currentStep: SigningStep; 
   );
 }
 
+function ProposalPreviewFallback({
+  quoteData,
+  pdfPreviewError,
+  isGeneratingPdf,
+  onRetry,
+}: {
+  quoteData: SigningQuoteData;
+  pdfPreviewError: string | null;
+  isGeneratingPdf: boolean;
+  onRetry: () => void;
+}) {
+  return (
+    <div className="h-full min-h-[500px] overflow-auto bg-white p-5">
+      <div className="mx-auto max-w-4xl space-y-5">
+        <Alert className="border-amber-200 bg-amber-50">
+          <AlertTriangle className="h-4 w-4 text-amber-700" />
+          <AlertDescription className="text-amber-900">
+            The PDF preview is not available right now, but the approval details below are available for review before signing.
+          </AlertDescription>
+        </Alert>
+
+        {quoteData.approvalDrawing ? (
+          <section className="space-y-3">
+            <div>
+              <Badge variant="outline" className="border-edg-teal/30 bg-edg-light-teal text-edg-dark-teal">Order Approval Drawing</Badge>
+              <h2 className="mt-2 text-2xl font-semibold text-edg-black">
+                Review the ordering layout
+              </h2>
+              <p className="mt-1 text-sm text-edg-grey">
+                This is the layout, dimensions, colors, and selected options EDG will use for order release. It is not a permit, engineering, sealed, or manufacturer shop drawing.
+              </p>
+            </div>
+            <QuoteApprovalDrawingPreview drawingData={quoteData.approvalDrawing.drawingData} />
+            {quoteData.approvalDrawing.customerNotes && (
+              <div className="rounded-md border border-edg-teal/10 bg-edg-light-grey p-4 text-sm">
+                <div className="font-semibold text-edg-black">Customer notes / exclusions</div>
+                <p className="mt-1 text-edg-grey">{quoteData.approvalDrawing.customerNotes}</p>
+              </div>
+            )}
+          </section>
+        ) : (
+          <section className="rounded-md border border-edg-teal/10 bg-edg-light-grey p-4">
+            <h2 className="text-lg font-semibold text-edg-black">Proposal Summary</h2>
+            <p className="mt-1 text-sm text-edg-grey">
+              Review the quote information above before approving.
+            </p>
+          </section>
+        )}
+
+        {pdfPreviewError && (
+          <Button variant="outline" onClick={onRetry} disabled={isGeneratingPdf}>
+            Try PDF Preview Again
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function CompanyHeader() {
   return (
     <div className="bg-edg-black text-edg-white border-b-4 border-edg-brand-teal py-3 px-6 shadow-lg">
@@ -224,6 +299,7 @@ export default function PublicSignPage() {
   const token = params.token as string;
   const [signature, setSignature] = useState<SignatureData | null>(null);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [pdfPreviewError, setPdfPreviewError] = useState<string | null>(null);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [currentStep, setCurrentStep] = useState<SigningStep>('review');
   const [hasAgreed, setHasAgreed] = useState(false);
@@ -303,6 +379,7 @@ export default function PublicSignPage() {
     if (!quoteData) return;
 
     setIsGeneratingPdf(true);
+    setPdfPreviewError(null);
     try {
       const pdf = new jsPDF({
         unit: 'mm',
@@ -360,12 +437,7 @@ export default function PublicSignPage() {
       const url = URL.createObjectURL(blob);
       setPdfUrl(url);
     } catch (error) {
-      console.error('Error generating PDF preview:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to generate PDF preview',
-        variant: 'destructive'
-      });
+      setPdfPreviewError(error instanceof Error ? error.message : 'Document preview could not be generated.');
     } finally {
       setIsGeneratingPdf(false);
     }
@@ -476,6 +548,7 @@ export default function PublicSignPage() {
   const isAlreadySigned = !!quoteData?.clientSignedAt;
   const canSign = signature && hasAgreed && !isAlreadySigned && !signMutation.isPending;
   const showPricing = quoteData?.esigIncludePricing ?? true;
+  const hasApprovalDrawing = Boolean(quoteData?.approvalDrawing);
 
   if (isLoading) {
     return (
@@ -571,6 +644,12 @@ export default function PublicSignPage() {
                       {(signedTimestamp || new Date(quoteData.clientSignedAt!)).toLocaleString()}
                     </span>
                   </div>
+                  {hasApprovalDrawing && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Order Approval Drawing</span>
+                      <span className="font-medium">Included</span>
+                    </div>
+                  )}
                 </div>
                 {quoteData.signatureAuditTrail?.documentFingerprint && (
                   <div className="mt-3 rounded-md bg-white p-3 text-xs text-edg-grey">
@@ -668,6 +747,28 @@ export default function PublicSignPage() {
                 </div>
               </div>
             )}
+            {!isFullscreen && quoteData.approvalDrawing?.drawingData && (
+              <div className="max-w-7xl mx-auto w-full px-4 pb-4">
+                <section className="rounded-lg border border-edg-teal/20 bg-white p-3 shadow-sm sm:p-5">
+                  <Badge variant="outline" className="w-fit border-edg-teal/30 bg-edg-light-teal text-edg-dark-teal">Order Approval Drawing</Badge>
+                  <div className="mt-3 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(360px,0.95fr)] lg:items-start">
+                    <div>
+                      <h2 className="text-xl font-semibold text-edg-black">Review the ordering layout</h2>
+                      <p className="mt-2 text-sm leading-relaxed text-edg-grey">
+                        Confirm the dimensions, colors, selected options, and layout EDG will use for order release. This is not a permit, engineering, sealed, or manufacturer shop drawing.
+                      </p>
+                      {quoteData.approvalDrawing.customerNotes && (
+                        <div className="mt-4 rounded-md border border-edg-teal/10 bg-edg-light-grey p-3 text-sm text-edg-grey">
+                          <div className="font-semibold text-edg-black">Customer notes / exclusions</div>
+                          <p className="mt-1">{quoteData.approvalDrawing.customerNotes}</p>
+                        </div>
+                      )}
+                    </div>
+                    <QuoteApprovalDrawingPreview drawingData={quoteData.approvalDrawing.drawingData} />
+                  </div>
+                </section>
+              </div>
+            )}
             <div className={cn(
               "flex-1 bg-edg-black/10 relative",
               isFullscreen && "fixed inset-0 z-50"
@@ -699,13 +800,12 @@ export default function PublicSignPage() {
                   title="Proposal Preview"
                 />
               ) : (
-                <div className="flex items-center justify-center h-full min-h-[70vh]">
-                  <Alert className="max-w-md">
-                    <AlertDescription>
-                      Document preview not available. Please try refreshing the page.
-                    </AlertDescription>
-                  </Alert>
-                </div>
+                <ProposalPreviewFallback
+                  quoteData={quoteData}
+                  pdfPreviewError={pdfPreviewError}
+                  isGeneratingPdf={isGeneratingPdf}
+                  onRetry={generatePdfPreview}
+                />
               )}
             </div>
 
@@ -767,8 +867,13 @@ export default function PublicSignPage() {
                         title="Proposal Preview"
                       />
                     ) : (
-                      <div className="h-[400px] bg-edg-light-grey rounded-lg flex items-center justify-center">
-                        <LoadingSpinner text="Loading..." />
+                      <div className="h-[400px] overflow-auto rounded-lg border bg-edg-light-grey">
+                        <ProposalPreviewFallback
+                          quoteData={quoteData}
+                          pdfPreviewError={pdfPreviewError}
+                          isGeneratingPdf={isGeneratingPdf}
+                          onRetry={generatePdfPreview}
+                        />
                       </div>
                     )}
                   </CardContent>
@@ -804,7 +909,9 @@ export default function PublicSignPage() {
                         data-testid="checkbox-agree-terms"
                       />
                       <Label htmlFor="agree-terms" className="text-sm leading-relaxed cursor-pointer text-edg-black">
-                        I confirm that I have reviewed this proposal and agree to be legally bound by its terms. I understand that my electronic signature carries the same legal weight as a handwritten signature.
+                        {hasApprovalDrawing
+                          ? `${ORDER_APPROVAL_SIGNATURE_CONSENT} I understand that my electronic signature carries the same legal weight as a handwritten signature.`
+                          : "I confirm that I have reviewed this proposal and agree to be legally bound by its terms. I understand that my electronic signature carries the same legal weight as a handwritten signature."}
                       </Label>
                     </div>
 

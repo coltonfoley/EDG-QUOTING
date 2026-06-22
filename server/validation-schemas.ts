@@ -4,6 +4,7 @@ import {
   insertCustomerSchema as baseCustomerSchema,
   insertQuoteSchema as baseQuoteSchema,
   insertPlanningAgreementSchema as basePlanningAgreementSchema,
+  insertQuoteApprovalDrawingSchema as baseQuoteApprovalDrawingSchema,
   insertLineItemSchema as baseLineItemSchema,
   insertGroupSchema as baseGroupSchema,
   insertProductSchema as baseProductSchema,
@@ -35,6 +36,11 @@ export const accountIdParamSchema = z.object({
 
 export const planningAgreementIdParamSchema = z.object({
   id: z.string().regex(/^\d+$/, "Planning agreement ID must be a valid positive integer").transform(val => parseInt(val))
+});
+
+export const approvalDrawingIdParamSchema = z.object({
+  id: z.string().regex(/^\d+$/, "Quote ID must be a valid positive integer").transform(val => parseInt(val)),
+  drawingId: z.string().regex(/^\d+$/, "Approval drawing ID must be a valid positive integer").transform(val => parseInt(val))
 });
 
 // Enhanced Account validation
@@ -460,6 +466,52 @@ export const sendPlanningAgreementEmailSchema = z.object({
 
 export const planningAgreementSignatureTokenParamSchema = z.object({
   token: z.string().min(16, "Token is required").max(128, "Token is too long"),
+});
+
+const optionalApprovalText = (max = 5000) => z.preprocess(
+  (value) => value === "" ? null : value,
+  z.string().max(max, "Text is too long").optional().nullable()
+);
+
+const approvalDrawingDateSchema = z.preprocess(
+  (value) => value === "" ? null : value,
+  z.coerce.date().optional().nullable()
+);
+
+export const approvalDrawingPayloadSchema = baseQuoteApprovalDrawingSchema.pick({
+  manufacturer: true,
+  productSystem: true,
+  title: true,
+  revisionLabel: true,
+  drawingData: true,
+  customerNotes: true,
+  internalNotes: true,
+  sourceQuoteOrOrderId: true,
+  sourceDocumentLabel: true,
+  sourceDocumentUrl: true,
+  sourcePreparedBy: true,
+  sourcePreparedAt: true,
+}).extend({
+  manufacturer: optionalApprovalText(255),
+  productSystem: optionalApprovalText(255),
+  title: optionalApprovalText(255),
+  revisionLabel: optionalApprovalText(100),
+  drawingData: z.any().optional(),
+  customerNotes: optionalApprovalText(5000),
+  internalNotes: optionalApprovalText(5000),
+  sourceQuoteOrOrderId: optionalApprovalText(255),
+  sourceDocumentLabel: optionalApprovalText(255),
+  sourceDocumentUrl: optionalApprovalText(1000),
+  sourcePreparedBy: optionalApprovalText(255),
+  sourcePreparedAt: approvalDrawingDateSchema,
+});
+
+export const createApprovalDrawingSchema = approvalDrawingPayloadSchema;
+
+export const updateApprovalDrawingSchema = approvalDrawingPayloadSchema.partial();
+
+export const orderReadyApprovalDrawingSchema = z.object({
+  overrideReason: z.string().min(1, "Override reason is required").max(1000, "Override reason is too long").optional().nullable(),
 });
 
 // Enhanced LineItem validation

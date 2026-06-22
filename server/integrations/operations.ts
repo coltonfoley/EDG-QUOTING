@@ -1,5 +1,5 @@
 import { storage } from "../storage";
-import { buildOperationsPayload, isPlanningAgreementClearForOps } from "./operationsPayload";
+import { buildOperationsPayload, isApprovalDrawingClearForOps, isPlanningAgreementClearForOps } from "./operationsPayload";
 
 type OperationsImportData = {
   imported?: boolean;
@@ -84,18 +84,6 @@ export async function sendQuoteToOperations(
   quoteId: number,
   options: { dryRun?: boolean } = {},
 ): Promise<OperationsImportResult> {
-  const importUrl = getOperationsImportUrl();
-  const token = process.env.OPERATIONS_IMPORT_TOKEN?.trim();
-
-  if (!importUrl || !token) {
-    return {
-      success: false,
-      skipped: true,
-      status: 503,
-      message: "Operations import is not configured. Set OPERATIONS_IMPORT_URL or OPERATIONS_BASE_URL, plus OPERATIONS_IMPORT_TOKEN.",
-    };
-  }
-
   const quote = await storage.getQuoteWithDetails(quoteId);
   if (!quote) {
     return { success: false, status: 404, message: `Quote ${quoteId} was not found.` };
@@ -117,6 +105,29 @@ export async function sendQuoteToOperations(
       data: {
         planningAgreement: quote.planningAgreement,
       },
+    };
+  }
+
+  if (!isApprovalDrawingClearForOps(quote.approvalDrawing)) {
+    return {
+      success: false,
+      status: 400,
+      message: "Confirm the signed order approval drawing is internally order-ready before sending this quote to Ops.",
+      data: {
+        approvalDrawing: quote.approvalDrawing,
+      },
+    };
+  }
+
+  const importUrl = getOperationsImportUrl();
+  const token = process.env.OPERATIONS_IMPORT_TOKEN?.trim();
+
+  if (!importUrl || !token) {
+    return {
+      success: false,
+      skipped: true,
+      status: 503,
+      message: "Operations import is not configured. Set OPERATIONS_IMPORT_URL or OPERATIONS_BASE_URL, plus OPERATIONS_IMPORT_TOKEN.",
     };
   }
 

@@ -17,6 +17,7 @@ import type { QuoteWithDetails, ContractTemplate } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
 import { SignatureCanvas, SignatureData } from "@/components/signature-canvas";
 import { ESignatureOptionsModal } from "@/components/esignature-options-modal";
+import { quoteNeedsApprovalDrawing } from "@shared/approvalDrawing";
 
 interface QuoteSummaryProps {
   quote: QuoteWithDetails;
@@ -359,6 +360,11 @@ export function QuoteSummary({ quote, onUpdateQuote, onGenerateProposal, isPrepa
   const isArchivedVersion = quote.isLatestVersion === false;
   const planningAgreement = quote.planningAgreement;
   const planningAgreementClear = !planningAgreement || ["paid_active", "delivered", "credited", "waived"].includes(planningAgreement.status);
+  const approvalDrawing = quote.approvalDrawing;
+  const approvalDrawingBlocksSigning = Boolean(
+    approvalDrawing && !["ready_for_agreement", "sent_for_signature", "signed_locked"].includes(approvalDrawing.status)
+  );
+  const approvalDrawingRecommended = !approvalDrawing && quoteNeedsApprovalDrawing(quote.lineItems || []);
   const planningCreditAmount = planningAgreement?.status === "credited"
     ? Math.max(0, Number(planningAgreement.appliedCreditAmount || 0))
     : 0;
@@ -720,6 +726,22 @@ export function QuoteSummary({ quote, onUpdateQuote, onGenerateProposal, isPrepa
                 </AlertDescription>
               </Alert>
             )}
+            {approvalDrawingBlocksSigning && (
+              <Alert className="border-red-200 bg-red-50">
+                <AlertCircle className="h-4 w-4 text-red-700" />
+                <AlertDescription className="text-red-900">
+                  The order approval drawing exists but is not ready. Mark it ready before preparing or sending the customer approval link.
+                </AlertDescription>
+              </Alert>
+            )}
+            {approvalDrawingRecommended && (
+              <Alert className="border-amber-200 bg-amber-50">
+                <AlertCircle className="h-4 w-4 text-amber-700" />
+                <AlertDescription className="text-amber-900">
+                  This quote appears to include a supported pergola system. Add an order approval drawing before signature when exact dimensions/options need customer approval.
+                </AlertDescription>
+              </Alert>
+            )}
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
                 <Label htmlFor="enable-esignature" className="text-sm font-medium">
@@ -828,7 +850,7 @@ export function QuoteSummary({ quote, onUpdateQuote, onGenerateProposal, isPrepa
 
                 <Button
                   onClick={handleSigningLinkClick}
-                  disabled={isArchivedVersion || generateSigningLinkMutation.isPending || !!(quote.clientSignedAt && quote.companySignedAt)}
+                  disabled={isArchivedVersion || approvalDrawingBlocksSigning || generateSigningLinkMutation.isPending || !!(quote.clientSignedAt && quote.companySignedAt)}
                   className="w-full"
                   data-testid="button-send-for-signature"
                 >
