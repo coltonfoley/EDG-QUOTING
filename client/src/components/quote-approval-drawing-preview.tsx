@@ -77,6 +77,12 @@ export function QuoteApprovalDrawingPreview({ drawingData, compact = false }: Qu
   const boxH = ratio >= 1 ? Math.max(116, boxW / ratio) : 190;
   const originX = (360 - boxW) / 2;
   const originY = 78;
+  const postHalfSize = 5;
+  const lengthStartX = originX - postHalfSize;
+  const lengthEndX = originX + boxW + postHalfSize;
+  const projectionStartY = originY - postHalfSize;
+  const projectionEndY = originY + boxH + postHalfSize;
+  const projectionDimensionX = originX + boxW + 20;
   const sideMap = new Map(data.sides.map((side) => [side.side, side]));
   const lengthLabel = formatDimension(data.layout.overallLength) || "Length";
   const projectionLabel = formatDimension(data.layout.overallProjection) || "Projection/depth";
@@ -144,15 +150,15 @@ export function QuoteApprovalDrawingPreview({ drawingData, compact = false }: Qu
           Customer approval only. Not permit or shop drawings.
         </text>
 
-        <line x1={originX} y1={originY - 17} x2={originX + boxW} y2={originY - 17} stroke="#64748b" strokeWidth="1.2" markerEnd="url(#arrow)" />
-        <line x1={originX + boxW} y1={originY - 17} x2={originX} y2={originY - 17} stroke="#64748b" strokeWidth="1.2" markerEnd="url(#arrow)" />
+        <line x1={lengthStartX} y1={originY - 17} x2={lengthEndX} y2={originY - 17} stroke="#64748b" strokeWidth="1.2" markerEnd="url(#arrow)" />
+        <line x1={lengthEndX} y1={originY - 17} x2={lengthStartX} y2={originY - 17} stroke="#64748b" strokeWidth="1.2" markerEnd="url(#arrow)" />
         <text x={originX + boxW / 2} y={originY - 24} textAnchor="middle" className="fill-slate-700 text-[10px] font-semibold">
           Length {lengthLabel}
         </text>
 
-        <line x1={originX + boxW + 20} y1={originY} x2={originX + boxW + 20} y2={originY + boxH} stroke="#64748b" strokeWidth="1.2" markerEnd="url(#arrow)" />
-        <line x1={originX + boxW + 20} y1={originY + boxH} x2={originX + boxW + 20} y2={originY} stroke="#64748b" strokeWidth="1.2" markerEnd="url(#arrow)" />
-        <text x={originX + boxW + 31} y={originY + boxH / 2} className="fill-slate-700 text-[9px] font-semibold" transform={`rotate(90 ${originX + boxW + 31} ${originY + boxH / 2})`}>
+        <line x1={projectionDimensionX} y1={projectionStartY} x2={projectionDimensionX} y2={projectionEndY} stroke="#64748b" strokeWidth="1.2" markerEnd="url(#arrow)" />
+        <line x1={projectionDimensionX} y1={projectionEndY} x2={projectionDimensionX} y2={projectionStartY} stroke="#64748b" strokeWidth="1.2" markerEnd="url(#arrow)" />
+        <text x={projectionDimensionX + 11} y={originY + boxH / 2} className="fill-slate-700 text-[9px] font-semibold" transform={`rotate(90 ${projectionDimensionX + 11} ${originY + boxH / 2})`}>
           Projection {projectionLabel}
         </text>
 
