@@ -3,7 +3,7 @@ import { randomUUID, timingSafeEqual } from "crypto";
 import multer from "multer";
 import { z } from "zod";
 import { storage } from "../storage";
-import { isAuthenticated } from "../replitAuth";
+import { isAuthenticated } from "../auth";
 import { db } from "../db";
 import { accounts, type InsertAccount, type LeadAttachment } from "@shared/schema";
 import { and, desc, eq, isNotNull, sql } from "drizzle-orm";

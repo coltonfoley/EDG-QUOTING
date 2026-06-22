@@ -28,7 +28,6 @@ npm run deploy:prod -- --dry-run
 The deploy script automatically verifies:
 
 - `https://rainmaker.edgpatioshade.com/health` returns `200`
-- `https://edgquote.replit.app/health` returns `200`
 - unauthenticated `/api/user` returns `401`
 - a missing legacy `/quote-images/*` path returns `404`, not `500`
 
@@ -52,5 +51,3 @@ Then verify:
 ```bash
 npm run deploy:prod:verify
 ```
-
-Keep Replit online as fallback until the confidence window is complete.

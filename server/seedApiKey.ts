@@ -1,6 +1,6 @@
 import { randomBytes } from 'crypto';
 import { storage } from './storage';
-import { hashApiKey } from './replitAuth';
+import { hashApiKey } from './auth';
 import { db } from './db';
 
 async function generateApiKey() {

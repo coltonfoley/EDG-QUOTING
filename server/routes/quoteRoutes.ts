@@ -4,9 +4,7 @@ import { z } from "zod";
 import { db } from "../db";
 import { quotes as quotesTable, type InsertQuote } from "@shared/schema";
 import { eq, sql } from "drizzle-orm";
-import { isAuthenticated } from "../replitAuth";
-import fs from "fs";
-import path from "path";
+import { isAuthenticated } from "../auth";
 import crypto from "crypto";
 import {
   insertQuoteSchema,
@@ -25,7 +23,7 @@ import {
 } from "../validation-schemas";
 import multer from "multer";
 import { extractQuoteDataFromImages, extractQuoteDataFromPDF, isOpenAIConfigured } from "../openai";
-import { ObjectStorageService, getObjectStorageProvider } from "../objectStorage";
+import { ObjectStorageService } from "../objectStorage";
 import { nanoid } from "nanoid";
 import { buildAppUrl } from "../config";
 import { sendQuoteToOperations } from "../integrations/operations";
@@ -73,41 +71,25 @@ async function readUploadedQuotePdfBuffer(objectPath: string): Promise<{
   contentType?: string;
 }> {
   const objectStorageService = new ObjectStorageService();
-
-  if (getObjectStorageProvider() === "vercel-blob") {
-    const metadata = await objectStorageService.getPublicObjectEntityMetadata(objectPath);
-    if (!metadata.publicUrl) {
-      throw new Error("Uploaded PDF URL was not available.");
-    }
-
-    const response = await fetch(metadata.publicUrl);
-    if (!response.ok) {
-      throw new Error(`Failed to download uploaded PDF: ${response.status} ${response.statusText}`);
-    }
-
-    const buffer = Buffer.from(await response.arrayBuffer());
-    return {
-      buffer,
-      size: metadata.size ?? buffer.length,
-      contentType: metadata.contentType,
-    };
+  const metadata = await objectStorageService.getPublicObjectEntityMetadata(objectPath);
+  if (!metadata.publicUrl) {
+    throw new Error("Uploaded PDF URL was not available.");
   }
 
-  const objectFile = await objectStorageService.getObjectEntityFile(objectPath);
-  const [metadata] = await objectFile.getMetadata();
-  const [buffer] = await objectFile.download();
+  const response = await fetch(metadata.publicUrl);
+  if (!response.ok) {
+    throw new Error(`Failed to download uploaded PDF: ${response.status} ${response.statusText}`);
+  }
+
+  const buffer = Buffer.from(await response.arrayBuffer());
   return {
     buffer,
-    size: Number(metadata.size || buffer.length),
+    size: metadata.size ?? buffer.length,
     contentType: metadata.contentType,
   };
 }
 
 async function cleanupTemporaryQuotePdf(objectPath: string): Promise<void> {
-  if (getObjectStorageProvider() !== "vercel-blob") {
-    return;
-  }
-
   try {
     const { del } = await import("@vercel/blob");
     await del(objectPath);
@@ -717,15 +699,6 @@ export function registerQuoteRoutes(app: Express) {
         maximumSizeInBytes: maxFileSize,
         cacheControlMaxAge: 60 * 60,
       });
-
-      if (uploadTarget.provider === "replit") {
-        return res.json({
-          uploadMode: uploadTarget.uploadMode,
-          uploadUrl: uploadTarget.uploadUrl,
-          objectPath: uploadTarget.objectPath,
-          maxFileSize,
-        });
-      }
 
       res.json({
         uploadMode: uploadTarget.uploadMode,
@@ -1631,11 +1604,12 @@ export function registerQuoteRoutes(app: Express) {
 
       const { sendEmail } = await import("../email");
 
-      // Load logo for email
-      const logoPath = path.join(process.cwd(), 'attached_assets', 'Logo_Full_Color_Black_1766097629382.png');
       let logoBase64 = '';
       try {
-        logoBase64 = fs.readFileSync(logoPath).toString('base64');
+        const logoResponse = await fetch(buildAppUrl('/api/brand-assets/brand-logo.png?raw=1', req));
+        if (logoResponse.ok) {
+          logoBase64 = Buffer.from(await logoResponse.arrayBuffer()).toString('base64');
+        }
       } catch (e) {
         console.warn('Could not load logo for email:', e);
       }

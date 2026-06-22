@@ -74,7 +74,6 @@ writeFileSync(
         { src: "^/health$", dest: "/api/index?__path=%2Fhealth", check: true },
         { src: "^/api$", dest: "/api/index?__path=%2Fapi", check: true },
         { src: "^/api(?:/(.*))$", dest: "/api/index?__path=%2Fapi%2F$1", check: true },
-        { src: "^/objects(?:/(.*))$", dest: "/api/index?__path=%2Fobjects%2F$1", check: true },
         { src: "^/quote-images(?:/(.*))$", dest: "/api/index?__path=%2Fquote-images%2F$1", check: true },
         { src: "^(?:/(.*))$", dest: "/index.html", check: true },
       ],

@@ -75,7 +75,7 @@ requireVars(["DATABASE_URL", "SESSION_SECRET"], "The app needs these before it c
 if (isProduction) {
   requireOneOf(["APP_BASE_URL", "VERCEL_URL"], "Production email links and redirects need the public app URL.");
 } else if (!has("APP_BASE_URL")) {
-  warnings.push("APP_BASE_URL is not set. Local links will fall back to Replit/localhost behavior.");
+  warnings.push("APP_BASE_URL is not set. Local links will fall back to localhost behavior.");
 }
 
 if (isProduction && has("APP_BASE_URL") && value("APP_BASE_URL").includes("localhost")) {
@@ -97,15 +97,9 @@ if (googleAuthEnabled) {
   warnings.push("Google Workspace sign-in is not configured. Password login remains available.");
 }
 
-const storageProvider = allowValue("OBJECT_STORAGE_PROVIDER", ["replit", "vercel-blob"], "replit");
+const storageProvider = allowValue("OBJECT_STORAGE_PROVIDER", ["vercel-blob"], "vercel-blob");
 
-if (storageProvider === "replit") {
-  requireVars(
-    ["PRIVATE_OBJECT_DIR", "PUBLIC_OBJECT_SEARCH_PATHS"],
-    "Replit object storage needs the private bucket path and public search paths."
-  );
-  warnings.push("OBJECT_STORAGE_PROVIDER is still replit. Use vercel-blob for the Vercel storage target.");
-} else if (storageProvider === "vercel-blob") {
+if (storageProvider === "vercel-blob") {
   requireVars(["BLOB_READ_WRITE_TOKEN"], "Vercel Blob uploads need the project Blob token.");
 }
 

@@ -13,14 +13,6 @@ function withHttpsIfNeeded(domainOrUrl?: string | null): string | undefined {
   return `https://${normalized}`;
 }
 
-function getReplitBaseUrl(): string | undefined {
-  const primaryDomain = process.env.REPLIT_DOMAINS?.split(",")
-    .map((domain) => domain.trim())
-    .find(Boolean);
-
-  return withHttpsIfNeeded(primaryDomain) || withHttpsIfNeeded(process.env.REPLIT_DEV_DOMAIN);
-}
-
 function getRequestBaseUrl(req: Request): string {
   const origin = normalizeBaseUrl(req.get("origin"));
   if (origin) return origin;
@@ -52,9 +44,6 @@ export function getAppBaseUrl(req?: Request): string {
   const vercelUrl = withHttpsIfNeeded(process.env.VERCEL_URL);
   if (vercelUrl) return vercelUrl;
 
-  const replitUrl = getReplitBaseUrl();
-  if (replitUrl) return replitUrl;
-
   if (req) return getRequestBaseUrl(req);
 
   return `http://localhost:${getServerPort()}`;
@@ -69,11 +58,6 @@ export function getAllowedOrigins(): string[] {
   const origins = new Set<string>();
 
   origins.add(getAppBaseUrl());
-
-  for (const domain of process.env.REPLIT_DOMAINS?.split(",") || []) {
-    const origin = withHttpsIfNeeded(domain);
-    if (origin) origins.add(origin);
-  }
 
   for (const origin of process.env.ADDITIONAL_ALLOWED_ORIGINS?.split(",") || []) {
     const normalized = withHttpsIfNeeded(origin);

@@ -1,5 +1,5 @@
 import type { Express } from "express";
-import { isAuthenticated } from "../replitAuth";
+import { isAuthenticated } from "../auth";
 import { storage } from "../storage";
 import type { ChatCompletionMessageParam, ChatCompletionTool } from "openai/resources/chat/completions";
 import { isActiveStage, isWonStage, isFinalStage, getDealStageLabel } from "@shared/dealStageConstants";

@@ -20,7 +20,6 @@ const NotFound = lazyWithReload(() => import("@/pages/not-found"), "not-found");
 const Quotes = lazyWithReload(() => import("@/pages/quotes"), "quotes");
 const QuoteBuilder = lazyWithReload(() => import("@/pages/quote-builder"), "quote-builder");
 const Products = lazyWithReload(() => import("@/pages/products"), "products");
-const Landing = lazyWithReload(() => import("@/pages/landing"), "landing");
 const Home = lazyWithReload(() => import("@/pages/home"), "home");
 const Leads = lazyWithReload(() => import("@/pages/leads"), "leads");
 const AuthPage = lazyWithReload(() => import("@/pages/auth-page"), "auth-page");

@@ -4,7 +4,7 @@ import { z } from "zod";
 import { db, ensureProductCatalogColumns } from "../db";
 import { products, insertColorSchema, insertProductColorSchema } from "@shared/schema";
 import { ilike, and } from "drizzle-orm";
-import { isAuthenticated } from "../replitAuth";
+import { isAuthenticated } from "../auth";
 import {
   insertProductSchema,
   insertPricingTableSchema,

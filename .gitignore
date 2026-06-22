@@ -1,10 +1,13 @@
 node_modules
+node_modules*/
 dist
+dist/
 .DS_Store
 server/public
 vite.config.ts.*
 *.tar.gz
 .vercel
+.vercel/
 .playwright-cli/
 output/
 

@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { z } from "zod";
-import { setupAuth, isAuthenticated, sanitizeUser } from "./replitAuth";
+import { setupAuth, isAuthenticated, sanitizeUser } from "./auth";
 import {
   insertContractTemplateSchema,
   createUserSchema,
@@ -158,7 +158,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Admin access required" });
       }
 
-      const provider = process.env.OBJECT_STORAGE_PROVIDER || "replit";
+      const provider = process.env.OBJECT_STORAGE_PROVIDER || "vercel-blob";
       if (provider !== "vercel-blob") {
         return res.json({
           provider,
@@ -246,7 +246,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Invalid data", errors: validated.error.errors });
       }
 
-      const { comparePasswords } = await import("./replitAuth");
+      const { comparePasswords } = await import("./auth");
       const isValid = await comparePasswords(validated.data.currentPassword, user.password);
       if (!isValid) {
         return res.status(400).json({ message: "Current password is incorrect" });

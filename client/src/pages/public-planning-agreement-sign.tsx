@@ -18,7 +18,8 @@ import {
   generatePlanningAgreementPDF,
   type PlanningAgreementPublicData,
 } from "@/lib/generate-planning-agreement-pdf";
-import edgLogoPath from "@assets/Logo_Full_Color_Black_1766097629382.png";
+
+const edgLogoPath = "/api/brand-assets/brand-logo.png?raw=1";
 
 type SigningStep = "review" | "sign" | "complete";
 

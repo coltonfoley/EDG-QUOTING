@@ -742,11 +742,6 @@ export const imageProxySchema = z.object({
   url: z.string().url("Invalid URL format")
     .refine(val => {
       try {
-        // For internal /objects/ paths, allow only relative paths that start with /objects/
-        if (val.startsWith('/objects/')) {
-          return true;
-        }
-        
         const url = new URL(val);
         
         // Only allow HTTPS protocol
@@ -779,22 +774,7 @@ export const imageProxySchema = z.object({
           return false;
         }
         
-        // Only allow specific Replit storage domains
-        const allowedHosts = [
-          'storage.replit.com'
-        ];
-        
-        // For external URLs, check allowed hosts or .replit.dev subdomains
-        if (allowedHosts.includes(hostname)) {
-          return true;
-        }
-        
-        // Also allow .replit.dev subdomains (for deployed apps)
-        if (hostname.endsWith('.replit.dev')) {
-          return true;
-        }
-
-        // Allow EDG-owned Vercel Blob public storage after the Replit exit.
+        // Allow EDG-owned Vercel Blob public storage.
         if (hostname.endsWith('.public.blob.vercel-storage.com')) {
           return true;
         }

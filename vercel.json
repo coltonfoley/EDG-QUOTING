@@ -21,10 +21,6 @@
       "destination": "/api/index?__path=/api/$1"
     },
     {
-      "source": "/objects/(.*)",
-      "destination": "/api/index?__path=/objects/$1"
-    },
-    {
       "source": "/quote-images/(.*)",
       "destination": "/api/index?__path=/quote-images/$1"
     },

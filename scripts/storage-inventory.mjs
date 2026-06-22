@@ -1,5 +1,23 @@
-import "dotenv/config";
+import { existsSync, readFileSync } from "node:fs";
 import { Pool } from "@neondatabase/serverless";
+import dotenv from "dotenv";
+
+for (const fileName of [
+  ".env",
+  ".env.local",
+  ".env.production",
+  ".env.production.local",
+  ".env.codex-rainmaker-production.local",
+]) {
+  if (!existsSync(fileName)) continue;
+
+  const parsed = dotenv.parse(readFileSync(fileName));
+  for (const [key, value] of Object.entries(parsed)) {
+    if (!process.env[key]) {
+      process.env[key] = value;
+    }
+  }
+}
 
 if (!process.env.DATABASE_URL) {
   console.error("DATABASE_URL is required to inventory Rainmaker storage references.");
@@ -34,6 +52,18 @@ const storageQueries = [
       FROM quote_product_renderings;
     `,
   },
+  {
+    label: "lead_attachments",
+    sql: `
+      SELECT
+        COUNT(*)::int AS total,
+        COUNT(*) FILTER (WHERE is_active IS TRUE)::int AS active,
+        COUNT(*) FILTER (WHERE storage_url LIKE '/objects/%')::int AS object_paths,
+        COUNT(*) FILTER (WHERE storage_url LIKE 'http://%' OR storage_url LIKE 'https://%')::int AS absolute_urls,
+        COUNT(*) FILTER (WHERE storage_url IS NULL OR storage_url = '')::int AS missing
+      FROM lead_attachments;
+    `,
+  },
 ];
 
 const sampleQueries = [
@@ -52,6 +82,16 @@ const sampleQueries = [
     sql: `
       SELECT id, quote_id, filename, storage_url
       FROM quote_product_renderings
+      WHERE is_active IS TRUE
+      ORDER BY uploaded_at DESC NULLS LAST, id DESC
+      LIMIT 10;
+    `,
+  },
+  {
+    label: "lead_attachments",
+    sql: `
+      SELECT id, account_id, filename, storage_url
+      FROM lead_attachments
       WHERE is_active IS TRUE
       ORDER BY uploaded_at DESC NULLS LAST, id DESC
       LIMIT 10;
@@ -89,7 +129,8 @@ try {
       }
 
       for (const row of rows) {
-        console.log(`- #${row.id} quote ${row.quote_id}: ${row.filename} -> ${row.storage_url}`);
+        const owner = row.quote_id ? `quote ${row.quote_id}` : `account ${row.account_id}`;
+        console.log(`- #${row.id} ${owner}: ${row.filename} -> ${row.storage_url}`);
       }
     }
   } else {

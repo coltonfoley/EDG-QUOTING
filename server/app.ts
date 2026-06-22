@@ -33,7 +33,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<{
         defaultSrc: ["'self'"],
         scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://maps.googleapis.com"],
         styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-        imgSrc: ["'self'", "data:", "blob:", "https:", "*.replit.dev", "*.replit.app"],
+        imgSrc: ["'self'", "data:", "blob:", "https:"],
         fontSrc: ["'self'", "https://fonts.gstatic.com"],
         connectSrc: ["'self'", "https://maps.googleapis.com", "https://api.openai.com", "wss:", "ws:"],
         frameSrc: ["'self'"],

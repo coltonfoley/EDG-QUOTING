@@ -14,7 +14,6 @@ import { getProxiedImageUrl } from '@/lib/image-utils';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import type { QuoteWithDetails, QuoteCoverPhoto, QuoteProductRendering } from '@shared/schema';
 import jsPDF from 'jspdf';
-import logoPath from '@assets/Logo_Full Color_Black_1758731429139.png';
 import { barlowRegularBase64, barlowSemiBoldBase64 } from '@/lib/fonts';
 import { generateBrandedSequencePDF } from '@/lib/pdf-branded-sequence';
 import { normalizeImageToDataUrl } from '@/lib/pdf-image-pipeline';
@@ -478,36 +477,6 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
       };
     }
   }, [open, includeCoverPage, coverPhoto]);
-
-  // Helper function to load the logo
-  const loadLogo = async (): Promise<{ dataUrl: string; width: number; height: number } | null> => {
-    try {
-      return new Promise((resolve, reject) => {
-        const img = document.createElement('img') as HTMLImageElement;
-        img.onload = () => {
-          // Create canvas to convert logo to data URL
-          const canvas = document.createElement('canvas');
-          const ctx = canvas.getContext('2d');
-          
-          canvas.width = img.width;
-          canvas.height = img.height;
-          
-          if (ctx) {
-            ctx.drawImage(img, 0, 0);
-            const dataUrl = canvas.toDataURL('image/png');
-            resolve({ dataUrl, width: img.width, height: img.height });
-          } else {
-            reject(new Error('Failed to get canvas context'));
-          }
-        };
-        img.onerror = () => reject(new Error('Failed to load logo'));
-        img.src = logoPath;
-      });
-    } catch (error) {
-      console.warn('Could not load logo:', error);
-      return null;
-    }
-  };
 
   const generatePDF = async () => {
     setIsGenerating(true);
