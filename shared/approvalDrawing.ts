@@ -21,6 +21,7 @@ export type ApprovalDrawingSide = "A" | "B" | "C" | "D";
 export type ApprovalDrawingSideFeatureType =
   | "motorized_screen"
   | "sliding_privacy_wall"
+  | "glass_wall"
   | "lumon_glass_wall"
   | "other";
 
@@ -96,6 +97,7 @@ export type LouveredRoofApprovalDrawingData = {
       | { type: "none" }
       | { type: "motorized_screen"; label?: string; color?: string }
       | { type: "sliding_privacy_wall"; label?: string; color?: string }
+      | { type: "glass_wall"; label?: string }
       | { type: "lumon_glass_wall"; label?: string }
       | { type: "other"; label: string };
     features?: ApprovalDrawingSideFeature[];
@@ -172,18 +174,20 @@ function normalizeSideFeature(
   side: ApprovalDrawingSide,
   index: number,
 ): ApprovalDrawingSideFeature | null {
+  const type = feature.type === "lumon_glass_wall" ? "glass_wall" : feature.type;
+
   if (
-    feature.type !== "motorized_screen" &&
-    feature.type !== "sliding_privacy_wall" &&
-    feature.type !== "lumon_glass_wall" &&
-    feature.type !== "other"
+    type !== "motorized_screen" &&
+    type !== "sliding_privacy_wall" &&
+    type !== "glass_wall" &&
+    type !== "other"
   ) {
     return null;
   }
 
   return {
-    id: String(feature.id || `${side}-${feature.type}-${index + 1}`),
-    type: feature.type,
+    id: String(feature.id || `${side}-${type}-${index + 1}`),
+    type,
     label: feature.label,
     color: feature.color,
     span: feature.span,
@@ -213,7 +217,7 @@ function legacyEnclosureFromFeatures(features: ApprovalDrawingSideFeature[]): Lo
   if (first.type === "other") return { type: "other", label: first.label || "Other" };
   if (first.type === "motorized_screen") return { type: "motorized_screen", label: first.label, color: first.color };
   if (first.type === "sliding_privacy_wall") return { type: "sliding_privacy_wall", label: first.label, color: first.color };
-  return { type: "lumon_glass_wall", label: first.label };
+  return { type: "glass_wall", label: first.label };
 }
 
 function normalizeSide(
@@ -401,8 +405,9 @@ export function formatApprovalDrawingEnclosureType(type?: string | null): string
       return "Motorized screen";
     case "sliding_privacy_wall":
       return "Sliding privacy wall";
+    case "glass_wall":
     case "lumon_glass_wall":
-      return "Lumon glass wall";
+      return "Glass wall";
     case "other":
       return "Other enclosure";
     case "none":

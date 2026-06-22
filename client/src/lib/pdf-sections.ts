@@ -360,7 +360,7 @@ export function drawApprovalDrawingSection(pdf: jsPDF, opts: DrawApprovalDrawing
 
   const getFeatureColor = (type: string): [number, number, number] => {
     if (type === 'motorized_screen') return [37, 99, 235];
-    if (type === 'lumon_glass_wall') return [8, 145, 178];
+    if (type === 'glass_wall' || type === 'lumon_glass_wall') return [8, 145, 178];
     if (type === 'other') return [124, 58, 237];
     return [17, 24, 39];
   };

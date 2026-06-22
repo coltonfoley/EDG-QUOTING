@@ -20,6 +20,7 @@ type QuoteApprovalDrawingPreviewProps = {
 const sideFeatureStroke: Record<string, string> = {
   motorized_screen: "#2563eb",
   sliding_privacy_wall: "#111827",
+  glass_wall: "#0891b2",
   lumon_glass_wall: "#0891b2",
   other: "#7c3aed",
 };

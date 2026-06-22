@@ -3,6 +3,7 @@ import {
   createDefaultApprovalDrawingData,
   formatApprovalDrawingLightLabel,
   formatApprovalDrawingLouverDirection,
+  formatApprovalDrawingSideFeatureType,
   getApprovalDrawingSideFeatures,
   getApprovalDrawingReadiness,
   inferSupportedApprovalDrawingManufacturer,
@@ -112,7 +113,7 @@ describe("approval drawing readiness", () => {
           enclosureHeight: { display: "8 ft 6 in" },
           features: [
             { id: "b-screen", type: "motorized_screen" },
-            { id: "b-glass", type: "lumon_glass_wall" },
+            { id: "b-glass", type: "glass_wall" },
           ],
         },
       ],
@@ -124,7 +125,7 @@ describe("approval drawing readiness", () => {
     expect(sideB).toBeDefined();
     expect(getApprovalDrawingSideFeatures(sideB!)).toEqual(expect.arrayContaining([
       expect.objectContaining({ type: "motorized_screen" }),
-      expect.objectContaining({ type: "lumon_glass_wall" }),
+      expect.objectContaining({ type: "glass_wall" }),
     ]));
     expect(parsedLight).toEqual(expect.objectContaining({
       side: "B",
@@ -132,6 +133,26 @@ describe("approval drawing readiness", () => {
       quantity: 2,
     }));
     expect(formatApprovalDrawingLightLabel(parsedLight)).toBe("Side B - 2 Spot lights");
+  });
+
+  it("normalizes old manufacturer-specific glass wall values to generic customer language", () => {
+    const normalized = normalizeApprovalDrawingData(createDefaultApprovalDrawingData({
+      sides: [
+        {
+          side: "C",
+          enclosure: { type: "lumon_glass_wall" },
+          features: [{ id: "legacy-glass", type: "lumon_glass_wall" }],
+        },
+      ],
+    }));
+    const sideC = normalized.sides.find((side) => side.side === "C");
+
+    expect(sideC?.enclosure).toEqual(expect.objectContaining({ type: "glass_wall" }));
+    expect(getApprovalDrawingSideFeatures(sideC!)).toEqual([
+      expect.objectContaining({ type: "glass_wall" }),
+    ]);
+    expect(formatApprovalDrawingSideFeatureType("lumon_glass_wall")).toBe("Glass wall");
+    expect(formatApprovalDrawingSideFeatureType("glass_wall")).toBe("Glass wall");
   });
 
   it("normalizes invalid post coordinates before rendering", () => {

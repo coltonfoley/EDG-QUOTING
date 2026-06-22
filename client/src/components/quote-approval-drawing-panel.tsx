@@ -53,7 +53,7 @@ const sides: ApprovalDrawingSide[] = ["A", "B", "C", "D"];
 const sideFeatureTypes: ApprovalDrawingSideFeatureType[] = [
   "motorized_screen",
   "sliding_privacy_wall",
-  "lumon_glass_wall",
+  "glass_wall",
   "other",
 ];
 

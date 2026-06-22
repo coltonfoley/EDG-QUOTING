@@ -13,7 +13,7 @@ His requested information:
 - Column/post height called out on the columns.
 - Frame color.
 - Louver color.
-- Side wall/enclosure choices, including motorized screen, sliding privacy wall, and Lumon glass wall.
+- Side wall/enclosure choices, including motorized screen, sliding privacy wall, and glass wall.
 - Lights/accessories.
 - Customer signature should approve the exact dimensions/options so EDG can order immediately.
 - Ideally this should appear automatically for Sundance, Brustor, and Azenco/Sango-style pergola products and flow into the install agreement/signing package.

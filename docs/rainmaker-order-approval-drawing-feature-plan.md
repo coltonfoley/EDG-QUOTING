@@ -68,9 +68,7 @@ These sources support the field set Jacob described:
   - https://azenco-outdoor.com/r-blade/
   - https://azenco-outdoor.com/pergolas/
   - https://azenco-outdoor.com/custom-pergola-drawings/
-- Lumon describes patio glazing/glass systems and sliding/retractable glass wall choices. For Rainmaker, this should be captured as an enclosure type on a side, not as a separate drawing engine.
-  - https://lumon.com/us/
-  - https://lumon.com/ca/inspiration/blog/retractable-or-sliding-glass-walls-for-patio-which-is-right-for-my-home/
+- Glass wall options should be captured generically as an enclosure type on a side, not as a manufacturer-specific drawing engine or vendor-branded option.
 
 Conclusion: a universal top-down approval drawing can cover the shared approval-level facts across Sundance, Brustor, and Azenco without becoming a manufacturer-specific configurator.
 
@@ -227,7 +225,7 @@ type LouveredRoofApprovalDrawingData = {
       | { type: "none" }
       | { type: "motorized_screen"; label?: string; color?: string }
       | { type: "sliding_privacy_wall"; label?: string; color?: string }
-      | { type: "lumon_glass_wall"; label?: string }
+      | { type: "glass_wall"; label?: string }
       | { type: "other"; label: string };
     notes?: string;
   }>;
@@ -373,7 +371,7 @@ Visual style:
 - Post heights as small callouts near posts.
 - Motorized screen as dashed side line.
 - Sliding privacy wall as thicker segmented side line.
-- Lumon/glass wall as blue-tinted line with glass label.
+- Glass wall as blue-tinted line with glass label.
 - Lights as dots/short strips with labels.
 - Louver direction as subtle arrows.
 - Legend at bottom.
@@ -656,8 +654,8 @@ These should be answered before implementation or during Phase 2 polish:
 - Should "length" and "projection/depth" use EDG's preferred terms on the customer PDF?
 - Should the drawing block be required before sending any Sundance/Brustor/Azenco quote for signature, or should it only warn?
 - Who is allowed to mark field verified, order reviewed, and order ready?
-- Which source fields from the real Sundance/Brustor/Azenco/Lumon order packets should be required before `order_ready`?
-- Should Lumon glass be a first-class enclosure type in the UI from day one, or an "other enclosure" label in MVP?
+- Which source fields from the real Sundance/Brustor/Azenco order packets should be required before `order_ready`?
+- Should glass wall be a first-class enclosure type in the UI from day one, or an "other enclosure" label in MVP?
 
 ## Recommended MVP Decision
 
