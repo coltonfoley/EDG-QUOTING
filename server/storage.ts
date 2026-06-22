@@ -1930,10 +1930,6 @@ export class DatabaseStorage implements IStorage {
       throw new Error(`Approval drawing is missing: ${readiness.missing.join(", ")}`);
     }
 
-    if (!useOverride && existing.status === "revision_needed") {
-      throw new Error("Approval drawing needs revision before order release.");
-    }
-
     const [updated] = await db
       .update(quoteApprovalDrawings)
       .set({
