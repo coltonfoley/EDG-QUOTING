@@ -74,6 +74,7 @@ import {
   getApprovalDrawingReadiness,
   sanitizeQuoteApprovalDrawingForPublic,
 } from "@shared/approvalDrawing";
+import { appendQuoteApprovalDrawingInternalNoteSql } from "./approvalDrawingSql";
 
 const scryptAsync = promisify(scrypt);
 
@@ -1675,13 +1676,14 @@ export class DatabaseStorage implements IStorage {
     await ensureQuoteApprovalDrawingTables();
     const now = new Date();
     const note = `Revision needed: ${reason}`;
+    const internalNotes = appendQuoteApprovalDrawingInternalNoteSql(note);
     await db
       .update(quoteApprovalDrawings)
       .set({
         status: "revision_needed",
         orderStatus: "blocked",
         publicSnapshot: null,
-        internalNotes: sql`concat_ws(E'\n', ${quoteApprovalDrawings.internalNotes}, ${note})`,
+        internalNotes,
         updatedAt: now,
       })
       .where(and(
@@ -1696,7 +1698,7 @@ export class DatabaseStorage implements IStorage {
         orderReadyBy: null,
         orderReadyAt: null,
         orderReadyOverrideReason: null,
-        internalNotes: sql`concat_ws(E'\n', ${quoteApprovalDrawings.internalNotes}, ${note})`,
+        internalNotes,
         updatedAt: now,
       })
       .where(and(
@@ -1883,7 +1885,7 @@ export class DatabaseStorage implements IStorage {
         status: "revision_needed",
         orderStatus: "blocked",
         publicSnapshot: null,
-        internalNotes: sql`concat_ws(E'\n', ${quoteApprovalDrawings.internalNotes}, ${note})`,
+        internalNotes: appendQuoteApprovalDrawingInternalNoteSql(note),
         updatedBy: actorUserId ?? existing.updatedBy ?? null,
         updatedAt: new Date(),
       })

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { PgDialect } from "drizzle-orm/pg-core";
 import {
   createDefaultApprovalDrawingData,
   formatApprovalDrawingLightLabel,
@@ -15,6 +16,7 @@ import {
   buildOperationsPayload,
   isApprovalDrawingClearForOps,
 } from "../integrations/operationsPayload";
+import { appendQuoteApprovalDrawingInternalNoteSql } from "../approvalDrawingSql";
 
 const completeApprovalDrawingData = () => createDefaultApprovalDrawingData({
   layout: {
@@ -240,5 +242,21 @@ describe("approval drawing Ops handoff", () => {
       manufacturer: "Azenco",
       readiness: { ready: true, missing: [] },
     }));
+  });
+});
+
+describe("approval drawing SQL helpers", () => {
+  it("casts appended internal notes to text for Postgres parameter inference", () => {
+    const dialect = new PgDialect();
+    const query = dialect.sqlToQuery(
+      appendQuoteApprovalDrawingInternalNoteSql("Revision needed: line item changed after drawing readiness"),
+    );
+
+    expect(query.sql).toContain("::text");
+    expect(query.sql).not.toContain("concat_ws");
+    expect(query.params).toEqual([
+      "Revision needed: line item changed after drawing readiness",
+      "Revision needed: line item changed after drawing readiness",
+    ]);
   });
 });
