@@ -508,6 +508,7 @@ export class MemStorage {
       companySignedIp: (insertQuote.companySignedIp as string | null) || null,
       signedDocumentSnapshot: insertQuote.signedDocumentSnapshot || null,
       signatureAuditTrail: insertQuote.signatureAuditTrail || null,
+      esigIncludeApprovalDrawing: (insertQuote.esigIncludeApprovalDrawing as boolean) || false,
       qbEstimateId: null,
       qbSyncStatus: null,
       qbSyncedAt: null,
@@ -582,6 +583,7 @@ export class MemStorage {
       companySignedIp: null,
       signedDocumentSnapshot: null,
       signatureAuditTrail: null,
+      esigIncludeApprovalDrawing: false,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -2105,6 +2107,7 @@ export class DatabaseStorage implements IStorage {
         companySignedIp: null,
         signedDocumentSnapshot: null,
         signatureAuditTrail: null,
+        esigIncludeApprovalDrawing: false,
         qbEstimateId: null,
         qbSyncStatus: null,
         qbSyncedAt: null,

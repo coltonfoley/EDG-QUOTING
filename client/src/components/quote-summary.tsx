@@ -106,6 +106,9 @@ export function QuoteSummary({ quote, onUpdateQuote, onGenerateProposal, isPrepa
       const includeImages = fullQuote.esigIncludeImages ?? false;
       const includePricing = fullQuote.esigIncludePricing ?? true;
       const includeContract = fullQuote.esigIncludeContract ?? true;
+      const signedSnapshot = fullQuote.signedDocumentSnapshot as any;
+      const includeApprovalDrawing = fullQuote.esigIncludeApprovalDrawing === true
+        || Boolean(signedSnapshot?.approvalDrawing && signedSnapshot.esigIncludeApprovalDrawing !== false);
       
       const { generateSignedPDF, downloadSignedPDF } = await import("@/lib/generate-signed-pdf");
       const pdfBlob = await generateSignedPDF({ 
@@ -113,6 +116,7 @@ export function QuoteSummary({ quote, onUpdateQuote, onGenerateProposal, isPrepa
         includeImages,
         includePricing,
         includeContract,
+        includeApprovalDrawing,
         groups
       });
       downloadSignedPDF(pdfBlob, fullQuote);
@@ -362,7 +366,9 @@ export function QuoteSummary({ quote, onUpdateQuote, onGenerateProposal, isPrepa
   const planningAgreementClear = !planningAgreement || ["paid_active", "delivered", "credited", "waived"].includes(planningAgreement.status);
   const approvalDrawing = quote.approvalDrawing;
   const approvalDrawingBlocksSigning = Boolean(
-    approvalDrawing && !["ready_for_agreement", "sent_for_signature", "signed_locked"].includes(approvalDrawing.status)
+    quote.esigIncludeApprovalDrawing === true
+      && approvalDrawing
+      && !["ready_for_agreement", "sent_for_signature", "signed_locked"].includes(approvalDrawing.status)
   );
   const approvalDrawingRecommended = !approvalDrawing && quoteNeedsApprovalDrawing(quote.lineItems || []);
   const planningCreditAmount = planningAgreement?.status === "credited"
@@ -730,7 +736,7 @@ export function QuoteSummary({ quote, onUpdateQuote, onGenerateProposal, isPrepa
               <Alert className="border-red-200 bg-red-50">
                 <AlertCircle className="h-4 w-4 text-red-700" />
                 <AlertDescription className="text-red-900">
-                  The order approval drawing exists but is not ready. Mark it ready before preparing or sending the customer approval link.
+                  The order approval drawing is selected for the approval package but is not ready. Mark it ready or exclude it before sending the customer approval link.
                 </AlertDescription>
               </Alert>
             )}
@@ -850,7 +856,7 @@ export function QuoteSummary({ quote, onUpdateQuote, onGenerateProposal, isPrepa
 
                 <Button
                   onClick={handleSigningLinkClick}
-                  disabled={isArchivedVersion || approvalDrawingBlocksSigning || generateSigningLinkMutation.isPending || !!(quote.clientSignedAt && quote.companySignedAt)}
+                  disabled={isArchivedVersion || generateSigningLinkMutation.isPending || !!(quote.clientSignedAt && quote.companySignedAt)}
                   className="w-full"
                   data-testid="button-send-for-signature"
                 >

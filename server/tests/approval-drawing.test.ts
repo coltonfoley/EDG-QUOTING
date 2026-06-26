@@ -212,6 +212,7 @@ describe("approval drawing Ops handoff", () => {
       discount: "0",
       shipping: "0",
       tariffRate: "0",
+      esigIncludeApprovalDrawing: true,
       signatureAuditTrail: { documentFingerprint: "abc123" },
       approvalDrawing: signedOrderReadyDrawing,
       lineItems: [
@@ -242,6 +243,26 @@ describe("approval drawing Ops handoff", () => {
       manufacturer: "Azenco",
       readiness: { ready: true, missing: [] },
     }));
+  });
+
+  it("omits approval drawing details from the Ops payload when the approval package excludes it", async () => {
+    const payload = await buildOperationsPayload({
+      id: 100,
+      quoteNumber: "Q-APPROVAL-2",
+      projectName: "Approval Drawing Excluded Test",
+      taxRate: "0",
+      discount: "0",
+      shipping: "0",
+      tariffRate: "0",
+      esigIncludeApprovalDrawing: false,
+      signatureAuditTrail: { documentFingerprint: "abc123" },
+      approvalDrawing: signedOrderReadyDrawing,
+      lineItems: [],
+    }, true, {
+      buildDocuments: async () => [],
+    }) as any;
+
+    expect(payload.quote.approvalDrawing).toBeNull();
   });
 });
 

@@ -188,6 +188,7 @@ function calculatePublicLineTotal(item: any, quote: any): number {
 }
 
 function buildPublicSigningQuote(quote: any) {
+  const includeApprovalDrawing = shouldIncludeApprovalDrawingInPackage(quote);
   const publicLineItems = (quote.lineItems || []).map((item: any) => {
     const quantity = Math.max(0, parseMoney(item.quantity));
     const lineTotal = calculatePublicLineTotal(item, quote);
@@ -256,24 +257,44 @@ function buildPublicSigningQuote(quote: any) {
     companySignedIp: quote.companySignedIp,
     signedDocumentSnapshot: quote.signedDocumentSnapshot,
     signatureAuditTrail: quote.signatureAuditTrail,
-    approvalDrawing: sanitizeQuoteApprovalDrawingForPublic(quote.approvalDrawing),
     esigIncludePricing: quote.esigIncludePricing ?? true,
     esigIncludeImages: quote.esigIncludeImages ?? false,
     esigIncludeContract: quote.esigIncludeContract ?? true,
+    esigIncludeApprovalDrawing: includeApprovalDrawing,
+    approvalDrawing: includeApprovalDrawing
+      ? sanitizeQuoteApprovalDrawingForPublic(quote.approvalDrawing)
+      : null,
   };
 
-  return quote.signedDocumentSnapshot
-    ? {
-        ...(quote.signedDocumentSnapshot as object),
-        clientSignatureData: quote.clientSignatureData,
-        clientSignedAt: quote.clientSignedAt,
-        clientSignedIp: quote.clientSignedIp,
-        companySignatureData: quote.companySignatureData,
-        companySignedAt: quote.companySignedAt,
-        companySignedIp: quote.companySignedIp,
-        signatureAuditTrail: quote.signatureAuditTrail,
-      }
-    : publicQuote;
+  if (quote.signedDocumentSnapshot) {
+    const snapshot = quote.signedDocumentSnapshot as Record<string, any>;
+    const snapshotIncludesApprovalDrawing = signedSnapshotIncludesApprovalDrawing(snapshot);
+
+    return {
+      ...snapshot,
+      approvalDrawing: snapshotIncludesApprovalDrawing ? snapshot.approvalDrawing : null,
+      esigIncludeApprovalDrawing: snapshotIncludesApprovalDrawing,
+      clientSignatureData: quote.clientSignatureData,
+      clientSignedAt: quote.clientSignedAt,
+      clientSignedIp: quote.clientSignedIp,
+      companySignatureData: quote.companySignatureData,
+      companySignedAt: quote.companySignedAt,
+      companySignedIp: quote.companySignedIp,
+      signatureAuditTrail: quote.signatureAuditTrail,
+    };
+  }
+
+  return publicQuote;
+}
+
+function shouldIncludeApprovalDrawingInPackage(quote: any): boolean {
+  return Boolean(quote?.esigIncludeApprovalDrawing === true && quote?.approvalDrawing);
+}
+
+function signedSnapshotIncludesApprovalDrawing(snapshot: Record<string, any>): boolean {
+  if (snapshot.esigIncludeApprovalDrawing === false) return false;
+  if (snapshot.esigIncludeApprovalDrawing === true) return Boolean(snapshot.approvalDrawing);
+  return Boolean(snapshot.approvalDrawing);
 }
 
 function isArchivedQuoteVersion(quote: { isLatestVersion?: boolean | null }): boolean {
@@ -307,7 +328,7 @@ async function ensurePublicApprovalDrawingSnapshot<T extends { id: number; appro
   quote: T,
   reloadQuote: () => Promise<T | undefined>,
 ): Promise<T> {
-  if (!quote.approvalDrawing) return quote;
+  if (!shouldIncludeApprovalDrawingInPackage(quote)) return quote;
 
   const status = quote.approvalDrawing.status;
   if (!["ready_for_agreement", "sent_for_signature", "signed_locked"].includes(status)) {
@@ -1893,15 +1914,23 @@ export function registerQuoteRoutes(app: Express) {
       const esigIncludePricing = req.body.esigIncludePricing ?? true;
       const esigIncludeImages = req.body.esigIncludeImages ?? false;
       const esigIncludeContract = req.body.esigIncludeContract ?? true;
+      const esigIncludeApprovalDrawing = req.body.esigIncludeApprovalDrawing === true;
 
-      if (quote.approvalDrawing && !["ready_for_agreement", "sent_for_signature", "signed_locked"].includes(quote.approvalDrawing.status)) {
+      if (esigIncludeApprovalDrawing && !quote.approvalDrawing) {
+        return res.status(400).json({
+          message: "Add an order approval drawing before including it in the approval package.",
+          code: "APPROVAL_DRAWING_NOT_FOUND",
+        });
+      }
+
+      if (esigIncludeApprovalDrawing && quote.approvalDrawing && !["ready_for_agreement", "sent_for_signature", "signed_locked"].includes(quote.approvalDrawing.status)) {
         return res.status(409).json({
           message: "Order approval drawing exists but is not ready. Mark it ready or create a new quote version before preparing the approval link.",
           code: "APPROVAL_DRAWING_NOT_READY",
         });
       }
 
-      if (quote.approvalDrawing && quote.approvalDrawing.status === "ready_for_agreement") {
+      if (esigIncludeApprovalDrawing && quote.approvalDrawing && quote.approvalDrawing.status === "ready_for_agreement") {
         await freezeReadyApprovalDrawingForQuote(quote.id, getActorUserId(req));
       }
       
@@ -1910,14 +1939,15 @@ export function registerQuoteRoutes(app: Express) {
         signingToken,
         esigIncludePricing,
         esigIncludeImages,
-        esigIncludeContract
+        esigIncludeContract,
+        esigIncludeApprovalDrawing,
       });
 
       res.json({ 
         success: true,
         signingToken,
         signingUrl: `/sign/${signingToken}`,
-        approvalDrawingIncluded: Boolean(quote.approvalDrawing),
+        approvalDrawingIncluded: Boolean(esigIncludeApprovalDrawing && quote.approvalDrawing),
         approvalDrawingRecommended: !quote.approvalDrawing && quoteNeedsApprovalDrawing(quote.lineItems || []),
       });
     } catch (error) {
@@ -1949,14 +1979,16 @@ export function registerQuoteRoutes(app: Express) {
         return res.status(400).json({ message: "E-signature must be enabled first" });
       }
 
-      if (quote.approvalDrawing && !["ready_for_agreement", "sent_for_signature", "signed_locked"].includes(quote.approvalDrawing.status)) {
+      const includeApprovalDrawing = shouldIncludeApprovalDrawingInPackage(quote);
+
+      if (includeApprovalDrawing && !["ready_for_agreement", "sent_for_signature", "signed_locked"].includes(quote.approvalDrawing.status)) {
         return res.status(409).json({
           message: "Order approval drawing exists but is not ready. Mark it ready before sending the approval email.",
           code: "APPROVAL_DRAWING_NOT_READY",
         });
       }
 
-      if (quote.approvalDrawing && quote.approvalDrawing.status === "ready_for_agreement") {
+      if (includeApprovalDrawing && quote.approvalDrawing.status === "ready_for_agreement") {
         await freezeReadyApprovalDrawingForQuote(quote.id, getActorUserId(req));
       }
 
@@ -2123,7 +2155,8 @@ export function registerQuoteRoutes(app: Express) {
         companySignedAt: quote.companySignedAt,
         esigIncludePricing: quote.esigIncludePricing ?? true,
         esigIncludeImages: quote.esigIncludeImages ?? false,
-        esigIncludeContract: quote.esigIncludeContract ?? true
+        esigIncludeContract: quote.esigIncludeContract ?? true,
+        esigIncludeApprovalDrawing: shouldIncludeApprovalDrawingInPackage(quote),
       });
     } catch (error) {
       console.error("Error getting signature info:", error);
@@ -2327,7 +2360,7 @@ export function registerQuoteRoutes(app: Express) {
         quoteId: quoteForSignature.id,
         quoteNumber: quoteForSignature.quoteNumber,
         signingTokenLast6: params.data.token.slice(-6),
-        consentText: quoteForSignature.approvalDrawing
+        consentText: shouldIncludeApprovalDrawingInPackage(quoteForSignature)
           ? `${ORDER_APPROVAL_SIGNATURE_CONSENT} I understand that my electronic signature carries the same legal weight as a handwritten signature.`
           : "I confirm that I have reviewed this proposal and agree to be legally bound by its terms. I understand that my electronic signature carries the same legal weight as a handwritten signature.",
         documentFingerprint,
@@ -2347,7 +2380,7 @@ export function registerQuoteRoutes(app: Express) {
         },
       });
 
-      if (quoteForSignature.approvalDrawing) {
+      if (shouldIncludeApprovalDrawingInPackage(quoteForSignature)) {
         await storage.markQuoteApprovalDrawingSignedLocked(quoteForSignature.approvalDrawing.id, null);
       }
 

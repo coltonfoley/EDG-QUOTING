@@ -177,7 +177,9 @@ export const buildOperationsPayload = async (
         appliedCreditAmount: quote.planningAgreement.appliedCreditAmount,
       }
     : null;
-  const approvalDrawing = buildApprovalDrawingSummary(quote.approvalDrawing, quote.signatureAuditTrail);
+  const approvalDrawing = quote.esigIncludeApprovalDrawing === true
+    ? buildApprovalDrawingSummary(quote.approvalDrawing, quote.signatureAuditTrail)
+    : null;
 
   return {
     sourceSystem: "EDG-QUOTING",

@@ -206,7 +206,9 @@ const buildProposalPdf = (quote: any, totals?: QuoteTotals) => {
     y = addLabeledRow(pdf, label, String(value), y);
   }
 
-  y = addApprovalDrawingSection(pdf, quote, y + 4);
+  if (quote.esigIncludeApprovalDrawing === true) {
+    y = addApprovalDrawingSection(pdf, quote, y + 4);
+  }
 
   const contractText = [quote.notes, quote.customContractTerms || quote.contractTemplate?.terms]
     .filter((part) => typeof part === "string" && part.trim())

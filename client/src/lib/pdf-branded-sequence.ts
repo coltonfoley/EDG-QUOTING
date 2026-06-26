@@ -32,6 +32,7 @@ interface BrandedSequenceOptions {
   renderImages: Array<{ dataUrl: string; format: 'PNG' | 'JPEG' }>;
   contractText: string;
   showPricing: boolean;
+  includeApprovalDrawing?: boolean;
   clientLogoDataUrl: string | null;
   groups?: PdfGroup[];
   brandAssets?: {
@@ -45,14 +46,14 @@ interface BrandedSequenceOptions {
  * Generates a Branded Sequence PDF with fixed page order:
  * 1. Standardized Cover (brand photo + logo)
  * 2. Project Details
- * 3. Order Approval Drawing, when present
+ * 3. Order Approval Drawing, when included
  * 4. Gallery (auto-paginate)
  * 5. Line Items (auto-paginate, optional pricing)
  * 6. Contract Terms (auto-paginate)
  * 7. Branded Back Page
  */
 export async function generateBrandedSequencePDF(options: BrandedSequenceOptions): Promise<void> {
-  const { pdf, company, quote, renderImages, contractText, showPricing, clientLogoDataUrl, groups = [], brandAssets } = options;
+  const { pdf, company, quote, renderImages, contractText, showPricing, includeApprovalDrawing = quote?.esigIncludeApprovalDrawing === true, clientLogoDataUrl, groups = [], brandAssets } = options;
 
   const [BRAND_COVER_JPG, BRAND_LOGO_PNG, BRAND_BACK_PAGE_PNG] = brandAssets
     ? [brandAssets.coverJpg, brandAssets.logoPng, brandAssets.backPageJpg]
@@ -92,8 +93,8 @@ export async function generateBrandedSequencePDF(options: BrandedSequenceOptions
     showPricing
   });
 
-  // 3. Order Approval Drawing (if present)
-  if (quote?.approvalDrawing) {
+  // 3. Order Approval Drawing (if included)
+  if (includeApprovalDrawing && quote?.approvalDrawing) {
     drawApprovalDrawingSection(pdf, {
       quote,
       logoDataUrl: BRAND_LOGO_PNG,

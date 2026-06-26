@@ -326,6 +326,7 @@ export default function QuoteBuilder() {
     esigIncludePricing: true,
     esigIncludeImages: false,
     esigIncludeContract: true,
+    esigIncludeApprovalDrawing: false,
     qbEstimateId: null,
     qbSyncStatus: null,
     qbSyncedAt: null,

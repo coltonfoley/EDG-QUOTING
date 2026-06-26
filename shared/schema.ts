@@ -174,6 +174,7 @@ export const quotes = pgTable("quotes", {
   esigIncludePricing: boolean("esig_include_pricing").default(true), // show pricing in signed PDF
   esigIncludeImages: boolean("esig_include_images").default(false), // include product renderings in signed PDF
   esigIncludeContract: boolean("esig_include_contract").default(true), // include contract terms in signed PDF
+  esigIncludeApprovalDrawing: boolean("esig_include_approval_drawing").default(false), // include order approval drawing in signed PDF
   // Legacy accounting sync fields retained so drizzle push does not drop production data.
   qbEstimateId: text("qb_estimate_id"),
   qbSyncStatus: text("qb_sync_status"), // null, 'pending', 'synced', 'error'
@@ -641,6 +642,7 @@ export const insertQuoteSchema = createInsertSchema(quotes).omit({
   companySignedIp: z.string().optional().nullable(),
   signedDocumentSnapshot: z.any().optional().nullable(),
   signatureAuditTrail: z.any().optional().nullable(),
+  esigIncludeApprovalDrawing: z.boolean().optional().default(false),
 });
 
 const planningMoneySchema = z.union([z.string(), z.number()]).transform(val => typeof val === 'string' ? val : val.toString());

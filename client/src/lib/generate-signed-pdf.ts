@@ -17,6 +17,7 @@ interface GenerateSignedPDFOptions {
   includeImages?: boolean;
   includePricing?: boolean;
   includeContract?: boolean;
+  includeApprovalDrawing?: boolean;
   groups?: PdfGroup[];
   brandAssets?: {
     coverJpg: string;
@@ -36,6 +37,8 @@ export async function generateSignedPDF(options: GenerateSignedPDFOptions): Prom
     includeImages = false,
     includePricing = true,
     includeContract = true,
+    includeApprovalDrawing = quote.esigIncludeApprovalDrawing === true
+      || Boolean((quote.signedDocumentSnapshot as any)?.approvalDrawing && (quote.signedDocumentSnapshot as any)?.esigIncludeApprovalDrawing !== false),
     groups = [],
     brandAssets,
     normalizeImage = normalizeImageToDataUrl,
@@ -100,6 +103,7 @@ export async function generateSignedPDF(options: GenerateSignedPDFOptions): Prom
     renderImages: normalizedImages,
     contractText,
     showPricing: includePricing,
+    includeApprovalDrawing,
     clientLogoDataUrl,
     groups,
     brandAssets

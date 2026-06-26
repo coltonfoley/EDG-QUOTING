@@ -39,6 +39,13 @@ export function ESignatureOptionsModal({ quote, open, onOpenChange, onSuccess }:
   // Initialize with stored preferences from the quote (or defaults)
   const [showPricing, setShowPricing] = useState(quote.esigIncludePricing ?? true);
   const [includeImages, setIncludeImages] = useState(quote.esigIncludeImages ?? false);
+  const approvalDrawingReadyForPackage = Boolean(
+    quote.approvalDrawing
+      && ["ready_for_agreement", "sent_for_signature", "signed_locked"].includes(quote.approvalDrawing.status || "")
+  );
+  const [includeApprovalDrawing, setIncludeApprovalDrawing] = useState(
+    approvalDrawingReadyForPackage && (quote.esigIncludeApprovalDrawing ?? false)
+  );
   
   const [tempProductRenderings, setTempProductRenderings] = useState<UploadedFile[]>([]);
   const [persistentProductRenderings, setPersistentProductRenderings] = useState<QuoteProductRendering[]>([]);
@@ -56,9 +63,10 @@ export function ESignatureOptionsModal({ quote, open, onOpenChange, onSuccess }:
     if (open) {
       setShowPricing(quote.esigIncludePricing ?? true);
       setIncludeImages(quote.esigIncludeImages ?? false);
+      setIncludeApprovalDrawing(approvalDrawingReadyForPackage && (quote.esigIncludeApprovalDrawing ?? false));
       setIncludeContract(quote.esigIncludeContract ?? hasContractData);
     }
-  }, [open, quote.esigIncludePricing, quote.esigIncludeImages, quote.esigIncludeContract, hasContractData]);
+  }, [open, quote.esigIncludePricing, quote.esigIncludeImages, quote.esigIncludeApprovalDrawing, quote.esigIncludeContract, approvalDrawingReadyForPackage, hasContractData]);
 
   const { data: existingProductRenderings, isLoading: loadingRenderings } = useQuery<QuoteProductRendering[]>({
     queryKey: [`/api/quotes/${quote.id}/product-renderings`],
@@ -104,6 +112,7 @@ export function ESignatureOptionsModal({ quote, open, onOpenChange, onSuccess }:
       const response = await apiRequest('POST', `/api/quotes/${quote.id}/enable-esignature`, {
         esigIncludePricing: showPricing,
         esigIncludeImages: includeImages,
+        esigIncludeApprovalDrawing: approvalDrawingReadyForPackage && includeApprovalDrawing,
         esigIncludeContract: includeContract,
       });
       return response.json();
@@ -255,6 +264,24 @@ export function ESignatureOptionsModal({ quote, open, onOpenChange, onSuccess }:
                   data-testid="switch-esig-include-images"
                 />
               </div>
+
+              {quote.approvalDrawing && (
+                <div className="flex items-center justify-between">
+                  <div className="flex flex-col pr-4">
+                    <Label htmlFor="include-approval-drawing">Include Order Approval Drawing</Label>
+                    {!approvalDrawingReadyForPackage && (
+                      <span className="text-xs text-gray-500 mt-1">Drawing is not ready for customer approval</span>
+                    )}
+                  </div>
+                  <Switch
+                    id="include-approval-drawing"
+                    checked={approvalDrawingReadyForPackage && includeApprovalDrawing}
+                    onCheckedChange={setIncludeApprovalDrawing}
+                    disabled={!approvalDrawingReadyForPackage}
+                    data-testid="switch-esig-include-approval-drawing"
+                  />
+                </div>
+              )}
             </CardContent>
           </Card>
 

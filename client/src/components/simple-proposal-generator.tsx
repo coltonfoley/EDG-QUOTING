@@ -596,6 +596,7 @@ export function SimpleProposalGenerator({ quote, open, onOpenChange }: SimplePro
         renderImages: normalizedImages,
         contractText,
         showPricing,
+        includeApprovalDrawing: quote.esigIncludeApprovalDrawing === true,
         clientLogoDataUrl,
         groups: groups.map((g: any) => ({ id: g.id, title: g.title, position: g.position }))
       });

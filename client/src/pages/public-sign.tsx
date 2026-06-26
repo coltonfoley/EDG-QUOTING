@@ -73,6 +73,7 @@ interface SigningQuoteData {
   esigIncludePricing?: boolean;
   esigIncludeImages?: boolean;
   esigIncludeContract?: boolean;
+  esigIncludeApprovalDrawing?: boolean;
 }
 
 type SigningStep = 'review' | 'sign' | 'complete';
@@ -172,6 +173,8 @@ function ProposalPreviewFallback({
   isGeneratingPdf: boolean;
   onRetry: () => void;
 }) {
+  const hasIncludedApprovalDrawing = Boolean(quoteData.esigIncludeApprovalDrawing && quoteData.approvalDrawing);
+
   return (
     <div className="h-full min-h-[500px] overflow-auto bg-white p-5">
       <div className="mx-auto max-w-4xl space-y-5">
@@ -182,7 +185,7 @@ function ProposalPreviewFallback({
           </AlertDescription>
         </Alert>
 
-        {quoteData.approvalDrawing ? (
+        {hasIncludedApprovalDrawing ? (
           <section className="space-y-3">
             <div>
               <Badge variant="outline" className="border-edg-teal/30 bg-edg-light-teal text-edg-dark-teal">Order Approval Drawing</Badge>
@@ -193,11 +196,11 @@ function ProposalPreviewFallback({
                 This is the layout, dimensions, colors, and selected options EDG will use for order release. It is not a permit, engineering, sealed, or manufacturer shop drawing.
               </p>
             </div>
-            <QuoteApprovalDrawingPreview drawingData={quoteData.approvalDrawing.drawingData} />
-            {quoteData.approvalDrawing.customerNotes && (
+            <QuoteApprovalDrawingPreview drawingData={quoteData.approvalDrawing?.drawingData} />
+            {quoteData.approvalDrawing?.customerNotes && (
               <div className="rounded-md border border-edg-teal/10 bg-edg-light-grey p-4 text-sm">
                 <div className="font-semibold text-edg-black">Customer notes / exclusions</div>
-                <p className="mt-1 text-edg-grey">{quoteData.approvalDrawing.customerNotes}</p>
+                <p className="mt-1 text-edg-grey">{quoteData.approvalDrawing?.customerNotes}</p>
               </div>
             )}
           </section>
@@ -430,6 +433,7 @@ export default function PublicSignPage() {
         renderImages,
         contractText,
         showPricing,
+        includeApprovalDrawing: quoteData.esigIncludeApprovalDrawing === true,
         clientLogoDataUrl: null
       });
 
@@ -493,12 +497,14 @@ export default function PublicSignPage() {
       const includeImages = fullQuote.esigIncludeImages ?? false;
       const includePricing = fullQuote.esigIncludePricing ?? true;
       const includeContract = fullQuote.esigIncludeContract ?? true;
+      const includeApprovalDrawing = fullQuote.esigIncludeApprovalDrawing === true;
       
       const pdfBlob = await generateSignedPDF({ 
         quote: fullQuote, 
         includeImages,
         includePricing,
         includeContract,
+        includeApprovalDrawing,
         groups
       });
       
@@ -548,7 +554,7 @@ export default function PublicSignPage() {
   const isAlreadySigned = !!quoteData?.clientSignedAt;
   const canSign = signature && hasAgreed && !isAlreadySigned && !signMutation.isPending;
   const showPricing = quoteData?.esigIncludePricing ?? true;
-  const hasApprovalDrawing = Boolean(quoteData?.approvalDrawing);
+  const hasApprovalDrawing = Boolean(quoteData?.esigIncludeApprovalDrawing && quoteData?.approvalDrawing);
 
   if (isLoading) {
     return (
@@ -747,7 +753,7 @@ export default function PublicSignPage() {
                 </div>
               </div>
             )}
-            {!isFullscreen && quoteData.approvalDrawing?.drawingData && (
+            {!isFullscreen && hasApprovalDrawing && quoteData.approvalDrawing?.drawingData && (
               <div className="max-w-7xl mx-auto w-full px-4 pb-4">
                 <section className="rounded-lg border border-edg-teal/20 bg-white p-3 shadow-sm sm:p-5">
                   <Badge variant="outline" className="w-fit border-edg-teal/30 bg-edg-light-teal text-edg-dark-teal">Order Approval Drawing</Badge>
@@ -757,14 +763,14 @@ export default function PublicSignPage() {
                       <p className="mt-2 text-sm leading-relaxed text-edg-grey">
                         Confirm the dimensions, colors, selected options, and layout EDG will use for order release. This is not a permit, engineering, sealed, or manufacturer shop drawing.
                       </p>
-                      {quoteData.approvalDrawing.customerNotes && (
+                      {quoteData.approvalDrawing?.customerNotes && (
                         <div className="mt-4 rounded-md border border-edg-teal/10 bg-edg-light-grey p-3 text-sm text-edg-grey">
                           <div className="font-semibold text-edg-black">Customer notes / exclusions</div>
-                          <p className="mt-1">{quoteData.approvalDrawing.customerNotes}</p>
+                          <p className="mt-1">{quoteData.approvalDrawing?.customerNotes}</p>
                         </div>
                       )}
                     </div>
-                    <QuoteApprovalDrawingPreview drawingData={quoteData.approvalDrawing.drawingData} />
+                    <QuoteApprovalDrawingPreview drawingData={quoteData.approvalDrawing?.drawingData} />
                   </div>
                 </section>
               </div>

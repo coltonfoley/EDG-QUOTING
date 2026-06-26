@@ -108,7 +108,7 @@ export async function sendQuoteToOperations(
     };
   }
 
-  if (!isApprovalDrawingClearForOps(quote.approvalDrawing)) {
+  if (quote.esigIncludeApprovalDrawing === true && !isApprovalDrawingClearForOps(quote.approvalDrawing)) {
     return {
       success: false,
       status: 400,

@@ -429,7 +429,7 @@ export function QuoteHeader({ quote, onSave, isLoading }: QuoteHeaderProps) {
   const approvalDrawing = quote?.approvalDrawing;
   const supportedPergolaWithoutDrawing = Boolean(!approvalDrawing && quote?.lineItems && quoteNeedsApprovalDrawing(quote.lineItems));
   const approvalDrawingBlocksOps = Boolean(
-    approvalDrawing && (
+    quote?.esigIncludeApprovalDrawing === true && approvalDrawing && (
       approvalDrawing.status !== "signed_locked" ||
       (approvalDrawing.orderStatus !== "order_ready" && approvalDrawing.orderStatus !== "override_released")
     )

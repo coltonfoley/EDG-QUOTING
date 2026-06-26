@@ -32,6 +32,7 @@ export async function ensureSignatureAuditColumns(): Promise<void> {
       ALTER TABLE "quotes" ADD COLUMN IF NOT EXISTS "internal_notes" text;
       ALTER TABLE "quotes" ADD COLUMN IF NOT EXISTS "signed_document_snapshot" jsonb;
       ALTER TABLE "quotes" ADD COLUMN IF NOT EXISTS "signature_audit_trail" jsonb;
+      ALTER TABLE "quotes" ADD COLUMN IF NOT EXISTS "esig_include_approval_drawing" boolean DEFAULT false;
     `).then(() => undefined);
   }
 
