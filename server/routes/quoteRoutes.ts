@@ -742,6 +742,7 @@ export function registerQuoteRoutes(app: Express) {
         shipping: baseQuoteData.shipping ?? "0",
         isShippingTaxable: false,
         dealStage: baseQuoteData.dealStage ?? "new_lead",
+        esigIncludeApprovalDrawing: false,
       };
       
       const quote = await storage.createQuote(quoteData);
@@ -1169,7 +1170,8 @@ export function registerQuoteRoutes(app: Express) {
             discount: '0',
             shipping: '0',
             isShippingTaxable: false,
-            dealStage: 'new_lead' as const
+            dealStage: 'new_lead' as const,
+            esigIncludeApprovalDrawing: false
           };
 
           const newQuote = await storage.createQuote(quoteData);
@@ -1259,7 +1261,8 @@ export function registerQuoteRoutes(app: Express) {
               discount: '0',
               shipping: '0',
               isShippingTaxable: false,
-              dealStage: 'new_lead' as const
+              dealStage: 'new_lead' as const,
+              esigIncludeApprovalDrawing: false
             };
 
             const newQuote = await storage.createQuote(quoteData);
@@ -1979,16 +1982,18 @@ export function registerQuoteRoutes(app: Express) {
         return res.status(400).json({ message: "E-signature must be enabled first" });
       }
 
-      const includeApprovalDrawing = shouldIncludeApprovalDrawingInPackage(quote);
+      const approvalDrawingForPackage = shouldIncludeApprovalDrawingInPackage(quote)
+        ? quote.approvalDrawing
+        : null;
 
-      if (includeApprovalDrawing && !["ready_for_agreement", "sent_for_signature", "signed_locked"].includes(quote.approvalDrawing.status)) {
+      if (approvalDrawingForPackage && !["ready_for_agreement", "sent_for_signature", "signed_locked"].includes(approvalDrawingForPackage.status)) {
         return res.status(409).json({
           message: "Order approval drawing exists but is not ready. Mark it ready before sending the approval email.",
           code: "APPROVAL_DRAWING_NOT_READY",
         });
       }
 
-      if (includeApprovalDrawing && quote.approvalDrawing.status === "ready_for_agreement") {
+      if (approvalDrawingForPackage?.status === "ready_for_agreement") {
         await freezeReadyApprovalDrawingForQuote(quote.id, getActorUserId(req));
       }
 
@@ -2380,8 +2385,12 @@ export function registerQuoteRoutes(app: Express) {
         },
       });
 
-      if (shouldIncludeApprovalDrawingInPackage(quoteForSignature)) {
-        await storage.markQuoteApprovalDrawingSignedLocked(quoteForSignature.approvalDrawing.id, null);
+      const approvalDrawingForPackage = shouldIncludeApprovalDrawingInPackage(quoteForSignature)
+        ? quoteForSignature.approvalDrawing
+        : null;
+
+      if (approvalDrawingForPackage) {
+        await storage.markQuoteApprovalDrawingSignedLocked(approvalDrawingForPackage.id, null);
       }
 
       // Send confirmation email to client after they sign
