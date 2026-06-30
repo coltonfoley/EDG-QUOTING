@@ -101,7 +101,7 @@ export async function sendQuoteToOperations(
     return {
       success: false,
       status: 400,
-      message: "Confirm or waive the Design + Planning Agreement before sending this quote to Ops.",
+      message: "Resolve the existing planning agreement before sending this quote to Ops.",
       data: {
         planningAgreement: quote.planningAgreement,
       },
@@ -112,7 +112,7 @@ export async function sendQuoteToOperations(
     return {
       success: false,
       status: 400,
-      message: "Confirm the signed order approval drawing is internally order-ready before sending this quote to Ops.",
+      message: "Resolve the existing order approval drawing before sending this quote to Ops.",
       data: {
         approvalDrawing: quote.approvalDrawing,
       },

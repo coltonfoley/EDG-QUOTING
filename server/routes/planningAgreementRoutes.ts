@@ -9,7 +9,6 @@ import {
   accountIdParamSchema,
   applyPlanningAgreementCreditSchema,
   confirmPlanningAgreementPaymentSchema,
-  createPlanningAgreementSchema,
   idParamSchema,
   markPlanningAgreementDeliveredSchema,
   markPlanningAgreementSignedSchema,
@@ -307,34 +306,10 @@ export function registerPlanningAgreementRoutes(app: Express) {
         return res.status(400).json(getRequestErrors(params.error.errors));
       }
 
-      const body = createPlanningAgreementSchema.safeParse(req.body);
-      if (!body.success) {
-        return res.status(400).json(getRequestErrors(body.error.errors));
-      }
-
-      const quote = await storage.getQuote(params.data.id);
-      if (!quote) {
-        return res.status(404).json({ message: "Quote not found" });
-      }
-
-      const existingAgreement = await storage.getPlanningAgreementByQuoteId(quote.id);
-      if (existingAgreement) {
-        return res.status(409).json({
-          message: "This quote family already has a Design + Planning Agreement.",
-          planningAgreement: existingAgreement,
-        });
-      }
-
-      const agreement = await storage.createPlanningAgreement({
-        ...body.data,
-        status: "required",
-        quoteId: quote.id,
-        quoteFamilyRootId: quote.parentQuoteId || quote.id,
-        accountId: quote.accountId,
-        appliedCreditAmount: "0",
-      }, getActorUserId(req));
-
-      res.status(201).json(agreement);
+      res.status(410).json({
+        message: "Design + Planning Agreement creation has been removed from the quote workflow.",
+        code: "PLANNING_AGREEMENT_REMOVED",
+      });
     } catch (error) {
       console.error("Error creating planning agreement:", error);
       res.status(500).json({ message: "Failed to create planning agreement" });

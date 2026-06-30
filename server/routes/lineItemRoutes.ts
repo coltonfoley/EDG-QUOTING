@@ -15,48 +15,6 @@ import {
 } from "../validation-schemas";
 import { nanoid } from "nanoid";
 import { calculateCustomerLineTotal, resolveProductCost } from "@shared/pricing";
-import {
-  createDefaultApprovalDrawingData,
-  inferSupportedApprovalDrawingManufacturer,
-} from "@shared/approvalDrawing";
-
-async function ensureTrustedCatalogApprovalDrawing(
-  quote: any,
-  candidates: Array<{ productId?: number | null; manufacturer?: string | null; description?: string | null; name?: string | null }>,
-  actorUserId?: number | null,
-) {
-  if (!quote?.id) return;
-
-  const trustedItems = candidates
-    .filter((item) => item.productId)
-    .map((item) => ({
-      manufacturer: item.manufacturer || null,
-      description: item.description || item.name || null,
-    }));
-  const manufacturer = inferSupportedApprovalDrawingManufacturer(trustedItems);
-
-  if (!manufacturer) return;
-
-  try {
-    const existing = await storage.getQuoteApprovalDrawingByQuoteId(quote.id);
-    if (existing) return;
-
-    await storage.createQuoteApprovalDrawing({
-      quoteId: quote.id,
-      quoteFamilyRootId: quote.parentQuoteId || quote.id,
-      drawingType: "louvered_roof_order_approval",
-      status: "draft",
-      orderStatus: "not_reviewed",
-      manufacturer,
-      productSystem: null,
-      title: "Order Approval Drawing",
-      drawingData: createDefaultApprovalDrawingData(),
-      internalNotes: `Auto-created by Rainmaker after adding a trusted ${manufacturer} catalog product.`,
-    }, actorUserId);
-  } catch (error) {
-    console.warn("Could not auto-create order approval drawing:", error);
-  }
-}
 
 /**
  * Server-side calculation verification utility
@@ -253,11 +211,6 @@ export function registerLineItemRoutes(app: Express) {
       }
       
       const lineItem = await storage.createLineItem(lineItemData);
-      await ensureTrustedCatalogApprovalDrawing(quote, [{
-        productId: lineItem.productId,
-        manufacturer: (lineItem as any).manufacturer || (req.body as any).manufacturer || null,
-        description: lineItem.description,
-      }], req.user?.id ?? null);
       res.status(201).json(lineItem);
     } catch (error) {
 
@@ -696,12 +649,6 @@ export function registerLineItemRoutes(app: Express) {
           configData: item.configData ? JSON.stringify(item.configData) : undefined,
         });
       }
-
-      await ensureTrustedCatalogApprovalDrawing(await storage.getQuote(quoteId), items.map((item) => ({
-        productId: item.productId,
-        manufacturer: item.productSnapshot?.manufacturer || null,
-        description: item.productSnapshot?.name || null,
-      })), req.user?.id ?? null);
 
       res.status(201).json({ 
         success: true, 

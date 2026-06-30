@@ -23,7 +23,6 @@ import {
   signatureTokenParamSchema,
   submitSignatureSchema,
   approvalDrawingIdParamSchema,
-  createApprovalDrawingSchema,
   orderReadyApprovalDrawingSchema,
   updateApprovalDrawingSchema
 } from "../validation-schemas";
@@ -34,10 +33,7 @@ import { nanoid } from "nanoid";
 import { buildAppUrl } from "../config";
 import { sendQuoteToOperations } from "../integrations/operations";
 import {
-  createDefaultApprovalDrawingData,
-  inferSupportedApprovalDrawingManufacturer,
   ORDER_APPROVAL_SIGNATURE_CONSENT,
-  quoteNeedsApprovalDrawing,
   sanitizeQuoteApprovalDrawingForPublic,
 } from "@shared/approvalDrawing";
 
@@ -1672,53 +1668,10 @@ export function registerQuoteRoutes(app: Express) {
         });
       }
 
-      const body = createApprovalDrawingSchema.safeParse(req.body);
-      if (!body.success) {
-        return res.status(400).json({
-          message: "Invalid approval drawing data",
-          errors: body.error.errors
-        });
-      }
-
-      const quote = await storage.getQuoteWithDetails(params.data.id);
-      if (!quote) {
-        return res.status(404).json({ message: "Quote not found" });
-      }
-
-      if (isArchivedQuoteVersion(quote)) {
-        return sendArchivedQuoteResponse(res, "add an order approval drawing");
-      }
-
-      const existing = await storage.getQuoteApprovalDrawingByQuoteId(quote.id);
-      if (existing) {
-        return res.status(409).json({ message: "This quote already has an approval drawing" });
-      }
-
-      const inferredManufacturer = inferSupportedApprovalDrawingManufacturer(quote.lineItems || []);
-      const actorUserId = getActorUserId(req);
-      const drawing = await storage.createQuoteApprovalDrawing({
-        quoteId: quote.id,
-        quoteFamilyRootId: quote.parentQuoteId || quote.id,
-        drawingType: "louvered_roof_order_approval",
-        status: "draft",
-        manufacturer: body.data.manufacturer || inferredManufacturer,
-        productSystem: body.data.productSystem || null,
-        title: body.data.title || "Order Approval Drawing",
-        revisionLabel: body.data.revisionLabel || null,
-        drawingData: body.data.drawingData || createDefaultApprovalDrawingData(),
-        customerNotes: body.data.customerNotes || null,
-        internalNotes: body.data.internalNotes || null,
-        sourceQuoteOrOrderId: body.data.sourceQuoteOrOrderId || null,
-        sourceDocumentLabel: body.data.sourceDocumentLabel || null,
-        sourceDocumentUrl: body.data.sourceDocumentUrl || null,
-        sourcePreparedBy: body.data.sourcePreparedBy || null,
-        sourcePreparedAt: body.data.sourcePreparedAt || null,
-        orderStatus: "not_reviewed",
-        createdBy: actorUserId,
-        updatedBy: actorUserId,
-      }, actorUserId);
-
-      res.status(201).json(drawing);
+      res.status(410).json({
+        message: "Order approval drawing creation has been removed from the quote workflow.",
+        code: "APPROVAL_DRAWING_REMOVED",
+      });
     } catch (error: any) {
       console.error("Error creating approval drawing:", error);
       res.status(500).json({ message: error.message || "Internal server error" });
@@ -1917,25 +1870,7 @@ export function registerQuoteRoutes(app: Express) {
       const esigIncludePricing = req.body.esigIncludePricing ?? true;
       const esigIncludeImages = req.body.esigIncludeImages ?? false;
       const esigIncludeContract = req.body.esigIncludeContract ?? true;
-      const esigIncludeApprovalDrawing = req.body.esigIncludeApprovalDrawing === true;
-
-      if (esigIncludeApprovalDrawing && !quote.approvalDrawing) {
-        return res.status(400).json({
-          message: "Add an order approval drawing before including it in the approval package.",
-          code: "APPROVAL_DRAWING_NOT_FOUND",
-        });
-      }
-
-      if (esigIncludeApprovalDrawing && quote.approvalDrawing && !["ready_for_agreement", "sent_for_signature", "signed_locked"].includes(quote.approvalDrawing.status)) {
-        return res.status(409).json({
-          message: "Order approval drawing exists but is not ready. Mark it ready or create a new quote version before preparing the approval link.",
-          code: "APPROVAL_DRAWING_NOT_READY",
-        });
-      }
-
-      if (esigIncludeApprovalDrawing && quote.approvalDrawing && quote.approvalDrawing.status === "ready_for_agreement") {
-        await freezeReadyApprovalDrawingForQuote(quote.id, getActorUserId(req));
-      }
+      const esigIncludeApprovalDrawing = false;
       
       const updatedQuote = await storage.updateQuote(params.data.id, {
         enableESignature: true,
@@ -1950,8 +1885,7 @@ export function registerQuoteRoutes(app: Express) {
         success: true,
         signingToken,
         signingUrl: `/sign/${signingToken}`,
-        approvalDrawingIncluded: Boolean(esigIncludeApprovalDrawing && quote.approvalDrawing),
-        approvalDrawingRecommended: !quote.approvalDrawing && quoteNeedsApprovalDrawing(quote.lineItems || []),
+        approvalDrawingIncluded: false,
       });
     } catch (error) {
       console.error("Error enabling e-signature:", error);

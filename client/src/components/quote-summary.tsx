@@ -17,7 +17,6 @@ import type { QuoteWithDetails, ContractTemplate } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
 import { SignatureCanvas, SignatureData } from "@/components/signature-canvas";
 import { ESignatureOptionsModal } from "@/components/esignature-options-modal";
-import { quoteNeedsApprovalDrawing } from "@shared/approvalDrawing";
 
 interface QuoteSummaryProps {
   quote: QuoteWithDetails;
@@ -25,6 +24,45 @@ interface QuoteSummaryProps {
   onGenerateProposal?: () => void;
   isPreparingProposal?: boolean;
 }
+
+const planningAgreementStatusLabels: Record<string, string> = {
+  required: "Required",
+  sent: "Sent",
+  signed_awaiting_payment: "Signed, awaiting payment",
+  paid_active: "Paid / active",
+  delivered: "Delivered",
+  credited: "Credited",
+  waived: "Waived",
+  expired: "Expired",
+  canceled: "Canceled",
+};
+
+const approvalDrawingStatusLabels: Record<string, string> = {
+  draft: "Draft",
+  ready_for_agreement: "Ready for customer approval",
+  sent_for_signature: "Customer link prepared",
+  signed_locked: "Customer approved",
+  revision_needed: "Revision needed",
+};
+
+const approvalDrawingOrderStatusLabels: Record<string, string> = {
+  not_reviewed: "Not reviewed for ordering",
+  reviewed: "Reviewed",
+  order_ready: "Order ready",
+  override_released: "Released by override",
+};
+
+const formatShortDate = (value?: string | Date | null) => {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toLocaleDateString();
+};
+
+const formatDateDetail = (label: string, value?: string | Date | null) => {
+  const date = formatShortDate(value);
+  return date ? ` · ${label} ${date}` : "";
+};
 
 export function QuoteSummary({ quote, onUpdateQuote, onGenerateProposal, isPreparingProposal = false }: QuoteSummaryProps) {
   const [localTaxRate, setLocalTaxRate] = useState<string | null>(null);
@@ -363,14 +401,7 @@ export function QuoteSummary({ quote, onUpdateQuote, onGenerateProposal, isPrepa
   const signatureAudit = quote.signatureAuditTrail as { documentFingerprint?: string; entries?: Array<{ signerName?: string; signedAt?: string }> } | null;
   const isArchivedVersion = quote.isLatestVersion === false;
   const planningAgreement = quote.planningAgreement;
-  const planningAgreementClear = !planningAgreement || ["paid_active", "delivered", "credited", "waived"].includes(planningAgreement.status);
   const approvalDrawing = quote.approvalDrawing;
-  const approvalDrawingBlocksSigning = Boolean(
-    quote.esigIncludeApprovalDrawing === true
-      && approvalDrawing
-      && !["ready_for_agreement", "sent_for_signature", "signed_locked"].includes(approvalDrawing.status)
-  );
-  const approvalDrawingRecommended = !approvalDrawing && quoteNeedsApprovalDrawing(quote.lineItems || []);
   const planningCreditAmount = planningAgreement?.status === "credited"
     ? Math.max(0, Number(planningAgreement.appliedCreditAmount || 0))
     : 0;
@@ -724,27 +755,33 @@ export function QuoteSummary({ quote, onUpdateQuote, onGenerateProposal, isPrepa
                 </AlertDescription>
               </Alert>
             )}
-            {!planningAgreementClear && (
-              <Alert className="border-amber-200 bg-amber-50">
-                <AlertCircle className="h-4 w-4 text-amber-700" />
-                <AlertDescription className="text-amber-900">
-                  Confirm or waive the Design + Planning Agreement before preparing the final proposal.
-                </AlertDescription>
-              </Alert>
-            )}
-            {approvalDrawingBlocksSigning && (
-              <Alert className="border-red-200 bg-red-50">
-                <AlertCircle className="h-4 w-4 text-red-700" />
-                <AlertDescription className="text-red-900">
-                  The order approval drawing is selected for the approval package but is not ready. Mark it ready or exclude it before sending the customer approval link.
-                </AlertDescription>
-              </Alert>
-            )}
-            {approvalDrawingRecommended && (
-              <Alert className="border-amber-200 bg-amber-50">
-                <AlertCircle className="h-4 w-4 text-amber-700" />
-                <AlertDescription className="text-amber-900">
-                  This quote appears to include a supported pergola system. Add an order approval drawing before signature when exact dimensions/options need customer approval.
+            {(planningAgreement || approvalDrawing) && (
+              <Alert className="border-slate-200 bg-slate-50">
+                <FileText className="h-4 w-4 text-slate-700" />
+                <AlertDescription className="space-y-2 text-slate-800">
+                  <div className="font-medium text-slate-950">Existing quote records</div>
+                  <div className="text-xs text-slate-600">
+                    Preserved for history. New Design + Planning agreements and order approval drawings are no longer created from this quote workflow.
+                  </div>
+                  <div className="space-y-1 text-xs">
+                    {planningAgreement && (
+                      <div>
+                        <span className="font-medium">Design + Planning:</span>{" "}
+                        {planningAgreementStatusLabels[planningAgreement.status] || planningAgreement.status}
+                        {planningAgreement.amount ? ` · ${formatCurrency(planningAgreement.amount)}` : ""}
+                        {formatDateDetail("Signed", planningAgreement.customerSignedAt)}
+                        {formatDateDetail("Paid", planningAgreement.paymentConfirmedAt)}
+                      </div>
+                    )}
+                    {approvalDrawing && (
+                      <div>
+                        <span className="font-medium">Order Approval Drawing:</span>{" "}
+                        {approvalDrawing.title || "Existing drawing"} · {approvalDrawingStatusLabels[approvalDrawing.status] || approvalDrawing.status}
+                        {approvalDrawing.orderStatus ? ` · ${approvalDrawingOrderStatusLabels[approvalDrawing.orderStatus] || approvalDrawing.orderStatus}` : ""}
+                        {quote.esigIncludeApprovalDrawing ? " · Included in historical approval package" : ""}
+                      </div>
+                    )}
+                  </div>
                 </AlertDescription>
               </Alert>
             )}
@@ -902,7 +939,7 @@ export function QuoteSummary({ quote, onUpdateQuote, onGenerateProposal, isPrepa
               {onGenerateProposal && (
                 <Button
                   onClick={onGenerateProposal}
-                  disabled={isArchivedVersion || !planningAgreementClear || isPreparingProposal || quote.lineItems.length === 0}
+                  disabled={isArchivedVersion || isPreparingProposal || quote.lineItems.length === 0}
                   variant="outline"
                   className="w-full border-edg-black text-edg-black hover:bg-edg-black hover:text-white"
                   data-testid="button-generate-proposal"
