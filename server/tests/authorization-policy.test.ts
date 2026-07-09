@@ -56,4 +56,31 @@ describe("authorization policy", () => {
     expect(planningRoutes).toContain('"payment_confirmed"');
     expect(planningRoutes).toContain("paymentConfirmedBy: actorUserId");
   });
+
+  it("requires authentication before customer email actions", () => {
+    const quoteRoutes = source("server/routes/quoteRoutes.ts");
+    const planningRoutes = source("server/routes/planningAgreementRoutes.ts");
+
+    expect(quoteRoutes).toContain('app.post("/api/quotes/:id/send-signature-email", isAuthenticated');
+    expect(planningRoutes).toContain('app.post("/api/planning-agreements/:id/send-signature-email", isAuthenticated');
+    expect(planningRoutes).toContain('app.post("/api/planning-agreements/:id/send", isAuthenticated');
+  });
+
+  it("protects storage mutation and proxy routes", () => {
+    const imageRoutes = source("server/routes/imageRoutes.ts");
+    const quoteRoutes = source("server/routes/quoteRoutes.ts");
+
+    expect(imageRoutes).toContain('app.post("/api/images/upload-url", isAuthenticated');
+    expect(imageRoutes).toContain('app.post("/api/images/finalize-upload", isAuthenticated');
+    expect(imageRoutes).toContain('app.get("/api/image-proxy", isAuthenticated');
+    expect(quoteRoutes).toContain('app.post("/api/quotes/:quoteId/cover-photos", isAuthenticated');
+    expect(quoteRoutes).toContain('app.post("/api/quotes/:quoteId/product-renderings", isAuthenticated');
+  });
+
+  it("rate limits public signing and issue-report surfaces", () => {
+    const appSource = source("server/app.ts");
+    expect(appSource).toContain('app.use("/api/signatures", publicActionLimiter)');
+    expect(appSource).toContain('app.use("/api/planning-agreement-signatures", publicActionLimiter)');
+    expect(appSource).toContain('app.use("/api/issue-reports", issueReportLimiter)');
+  });
 });
