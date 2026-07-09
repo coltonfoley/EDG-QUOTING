@@ -47,6 +47,30 @@ describe("authorization policy", () => {
     expect(accountRoutes).toContain('app.delete("/api/clients/:id", isAuthenticated, requireAdmin');
   });
 
+  it("applies the central admin guard to privileged settings and import routes", () => {
+    const appRoutes = source("server/routes.ts");
+
+    expect(appRoutes).toContain("app.put('/api/pricing-defaults/sundance', isAuthenticated, requireAdmin");
+    expect(appRoutes).toContain("app.get('/api/storage/usage', isAuthenticated, requireAdmin");
+    expect(appRoutes).toContain("app.get('/api/admin/users', isAuthenticated, requireAdmin");
+    expect(appRoutes).toContain("app.put('/api/admin/users/:id', isAuthenticated, requireAdmin");
+    expect(appRoutes).toContain("app.delete('/api/admin/users/:id', isAuthenticated, requireAdmin");
+    expect(appRoutes).toContain("app.post('/api/admin/import-csv-products', isAuthenticated, requireAdmin");
+    expect(appRoutes).toContain("app.post('/api/admin/analyze-price-sheet', isAuthenticated, requireAdmin");
+    expect(appRoutes).toContain("app.post('/api/admin/import-products-ai', isAuthenticated, requireAdmin");
+    expect(appRoutes).toContain("app.post('/api/admin/bulk-update-products', isAuthenticated, requireAdmin");
+  });
+
+  it("limits contract-template administration to administrators", () => {
+    const appRoutes = source("server/routes.ts");
+
+    expect(appRoutes).toContain("app.get('/api/contract-templates', isAuthenticated, requireAdmin");
+    expect(appRoutes).toContain("app.get('/api/contract-templates/:id', isAuthenticated, requireAdmin");
+    expect(appRoutes).toContain("app.post('/api/contract-templates', isAuthenticated, requireAdmin");
+    expect(appRoutes).toContain("app.put('/api/contract-templates/:id', isAuthenticated, requireAdmin");
+    expect(appRoutes).toContain("app.delete('/api/contract-templates/:id', isAuthenticated, requireAdmin");
+  });
+
   it("keeps payment and Ops actions authenticated and auditable", () => {
     const quoteRoutes = source("server/routes/quoteRoutes.ts");
     const planningRoutes = source("server/routes/planningAgreementRoutes.ts");

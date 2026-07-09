@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { z } from "zod";
-import { setupAuth, isAuthenticated, sanitizeUser } from "./auth";
+import { setupAuth, isAuthenticated, requireAdmin, sanitizeUser } from "./auth";
 import {
   insertContractTemplateSchema,
   updateUserSchema,
@@ -104,7 +104,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put('/api/pricing-defaults/sundance', isAuthenticated, async (req: any, res) => {
+  app.put('/api/pricing-defaults/sundance', isAuthenticated, requireAdmin, async (req: any, res) => {
     try {
       const currentUser = await storage.getUser(req.user?.id);
       if (currentUser?.role !== 'admin') {
@@ -149,7 +149,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/storage/usage', isAuthenticated, async (req: any, res) => {
+  app.get('/api/storage/usage', isAuthenticated, requireAdmin, async (req: any, res) => {
     try {
       const currentUser = await storage.getUser(req.user?.id);
       if (currentUser?.role !== 'admin') {
@@ -221,7 +221,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerLineItemRoutes(app);
   registerProductRoutes(app);
 
-  app.get('/api/admin/users', isAuthenticated, async (req: any, res) => {
+  app.get('/api/admin/users', isAuthenticated, requireAdmin, async (req: any, res) => {
     try {
       const currentUser = await storage.getUser(req.user?.id);
       if (currentUser?.role !== 'admin') {
@@ -236,7 +236,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put('/api/admin/users/:id', isAuthenticated, async (req: any, res) => {
+  app.put('/api/admin/users/:id', isAuthenticated, requireAdmin, async (req: any, res) => {
     try {
       const currentUser = await storage.getUser(req.user?.id);
       if (currentUser?.role !== 'admin') {
@@ -272,7 +272,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete('/api/admin/users/:id', isAuthenticated, async (req: any, res) => {
+  app.delete('/api/admin/users/:id', isAuthenticated, requireAdmin, async (req: any, res) => {
     try {
       const currentUser = await storage.getUser(req.user?.id);
       if (currentUser?.role !== 'admin') {
@@ -292,7 +292,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/admin/import-csv-products', isAuthenticated, async (req: any, res) => {
+  app.post('/api/admin/import-csv-products', isAuthenticated, requireAdmin, async (req: any, res) => {
     try {
       const currentUser = await storage.getUser(req.user?.id);
       if (currentUser?.role !== 'admin') {
@@ -426,7 +426,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     },
   });
 
-  app.post('/api/admin/analyze-price-sheet', isAuthenticated, (req: any, res: any, next: any) => {
+  app.post('/api/admin/analyze-price-sheet', isAuthenticated, requireAdmin, (req: any, res: any, next: any) => {
     aiUpload.single('file')(req, res, (err: any) => {
       if (err) {
         if (err.code === 'LIMIT_FILE_SIZE') {
@@ -476,7 +476,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/admin/import-products-ai', isAuthenticated, (req: any, res: any, next: any) => {
+  app.post('/api/admin/import-products-ai', isAuthenticated, requireAdmin, (req: any, res: any, next: any) => {
     aiUpload.single('file')(req, res, (err: any) => {
       if (err) {
         if (err.code === 'LIMIT_FILE_SIZE') {
@@ -563,7 +563,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/admin/bulk-update-products', isAuthenticated, async (req: any, res) => {
+  app.post('/api/admin/bulk-update-products', isAuthenticated, requireAdmin, async (req: any, res) => {
     try {
       const currentUser = await storage.getUser(req.user?.id);
       if (currentUser?.role !== 'admin') {
@@ -595,7 +595,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/contract-templates', isAuthenticated, async (req: any, res) => {
+  app.get('/api/contract-templates', isAuthenticated, requireAdmin, async (req: any, res) => {
     try {
       const currentUser = await storage.getUser(req.user?.id);
       if (currentUser?.role !== 'admin') {
@@ -610,7 +610,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/contract-templates/:id', isAuthenticated, async (req: any, res) => {
+  app.get('/api/contract-templates/:id', isAuthenticated, requireAdmin, async (req: any, res) => {
     try {
       const currentUser = await storage.getUser(req.user?.id);
       if (currentUser?.role !== 'admin') {
@@ -629,7 +629,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/contract-templates', isAuthenticated, async (req: any, res) => {
+  app.post('/api/contract-templates', isAuthenticated, requireAdmin, async (req: any, res) => {
     try {
       const currentUser = await storage.getUser(req.user?.id);
       if (currentUser?.role !== 'admin') {
@@ -645,7 +645,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put('/api/contract-templates/:id', isAuthenticated, async (req: any, res) => {
+  app.put('/api/contract-templates/:id', isAuthenticated, requireAdmin, async (req: any, res) => {
     try {
       const currentUser = await storage.getUser(req.user?.id);
       if (currentUser?.role !== 'admin') {
@@ -667,7 +667,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete('/api/contract-templates/:id', isAuthenticated, async (req: any, res) => {
+  app.delete('/api/contract-templates/:id', isAuthenticated, requireAdmin, async (req: any, res) => {
     try {
       const currentUser = await storage.getUser(req.user?.id);
       if (currentUser?.role !== 'admin') {
