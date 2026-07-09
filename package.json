@@ -23,6 +23,7 @@
     "deploy:prod:verify": "node scripts/verify-production-deploy.mjs",
     "deploy:prod:logs": "npx vercel@latest logs rainmaker.edgpatioshade.com --scope edgpatioshade --since 30m --status-code 500 --no-follow --expand",
     "storage:inventory": "node scripts/storage-inventory.mjs",
+    "assets:audit": "node scripts/audit-attached-assets.mjs",
     "storage:migrate-to-blob": "node scripts/migrate-quote-images-to-blob.mjs",
     "storage:migrate-brand-assets-to-blob": "node scripts/migrate-brand-assets-to-blob.mjs",
     "db:ensure-lead-fields": "node scripts/ensure-lead-fields.mjs",
