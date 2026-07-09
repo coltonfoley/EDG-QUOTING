@@ -24,6 +24,15 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Scan tracked files for secrets
+        run: npm run secrets:audit
+
+      - name: Reject high-severity dependency advisories
+        run: npm audit --audit-level=high
+
+      - name: Run safety tests
+        run: npm test
+
       - name: Type-check
         run: npm run check
 
