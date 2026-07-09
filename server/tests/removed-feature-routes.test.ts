@@ -6,6 +6,8 @@ const mockStorage = vi.hoisted(() => ({
   getQuoteWithDetails: vi.fn(),
   updateQuote: vi.fn(),
 }));
+const mockSendQuoteToOperations = vi.hoisted(() => vi.fn());
+const mockSendEmail = vi.hoisted(() => vi.fn());
 
 vi.mock("../auth", () => ({
   isAuthenticated: (_req: any, _res: any, next: any) => next(),
@@ -18,6 +20,14 @@ vi.mock("../storage", () => ({
 
 vi.mock("../db", () => ({
   db: {},
+}));
+
+vi.mock("../integrations/operations", () => ({
+  sendQuoteToOperations: mockSendQuoteToOperations,
+}));
+
+vi.mock("../email", () => ({
+  sendEmail: mockSendEmail,
 }));
 
 import { registerPlanningAgreementRoutes } from "../routes/planningAgreementRoutes";
@@ -35,6 +45,8 @@ describe("removed quote feature routes", () => {
   beforeEach(() => {
     mockStorage.getQuoteWithDetails.mockReset();
     mockStorage.updateQuote.mockReset();
+    mockSendQuoteToOperations.mockReset();
+    mockSendEmail.mockReset();
   });
 
   it("rejects new Design + Planning Agreement creation", async () => {
@@ -91,5 +103,45 @@ describe("removed quote feature routes", () => {
       success: true,
       approvalDrawingIncluded: false,
     }));
+  });
+
+  it("does not send an archived quote to Ops", async () => {
+    mockStorage.getQuoteWithDetails.mockResolvedValue({
+      id: 123,
+      isLatestVersion: false,
+    });
+
+    const response = await request(makeApp())
+      .post("/api/quotes/123/send-to-ops")
+      .send({ dryRun: false })
+      .expect(409);
+
+    expect(response.body).toEqual({
+      message: "This quote version is archived. Make it the current version before you send it to Ops.",
+      code: "QUOTE_VERSION_ARCHIVED",
+    });
+    expect(mockSendQuoteToOperations).not.toHaveBeenCalled();
+  });
+
+  it("does not email an archived quote to a customer", async () => {
+    mockStorage.getQuoteWithDetails.mockResolvedValue({
+      id: 123,
+      isLatestVersion: false,
+      enableESignature: true,
+      signingToken: "archived-signing-token",
+      account: { email: "customer@example.com" },
+    });
+
+    const response = await request(makeApp())
+      .post("/api/quotes/123/send-signature-email")
+      .send({ personalizedMessage: "Please review." })
+      .expect(409);
+
+    expect(response.body).toEqual({
+      message: "This quote version is archived. Make it the current version before you send it for customer approval.",
+      code: "QUOTE_VERSION_ARCHIVED",
+    });
+    expect(mockSendEmail).not.toHaveBeenCalled();
+    expect(mockStorage.updateQuote).not.toHaveBeenCalled();
   });
 });
