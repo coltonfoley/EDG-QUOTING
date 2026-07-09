@@ -111,7 +111,7 @@ BLOB_READ_WRITE_TOKEN=vercel_blob_test_token \
 EMAIL_PROVIDER=google-workspace-gmail \
 GOOGLE_WORKSPACE_EMAIL_FROM=sales@edgpatioshade.com \
 GOOGLE_WORKSPACE_EMAIL_REPLY_TO=sales@edgpatioshade.com \
-GOOGLE_SERVICE_ACCOUNT_KEY='{"client_email":"service@example.iam.gserviceaccount.com","private_key":"-----BEGIN PRIVATE KEY-----\\n...\\n-----END PRIVATE KEY-----\\n"}' \
+GOOGLE_SERVICE_ACCOUNT_KEY='{"client_email":"service@example.iam.gserviceaccount.com","private_key":"<private-key-pem>"}' \
 RAINMAKER_API_KEY=rainmaker_test_key \
 VITE_GOOGLE_PLACES_API_KEY=places_test_key \
 npm run env:check

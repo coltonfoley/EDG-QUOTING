@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { readFileSync, statSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 
 const root = process.cwd();
@@ -11,7 +11,9 @@ const trackedFiles = execFileSync("git", ["ls-files", "-z"], { cwd: root })
   .toString("utf8")
   .split("\0")
   .filter(Boolean);
-const assetFiles = trackedFiles.filter((file) => file.startsWith("attached_assets/"));
+const trackedAssetFiles = trackedFiles.filter((file) => file.startsWith("attached_assets/"));
+const missingTrackedAssets = trackedAssetFiles.filter((file) => !existsSync(path.join(root, file)));
+const assetFiles = trackedAssetFiles.filter((file) => existsSync(path.join(root, file)));
 const sourceFiles = trackedFiles.filter((file) =>
   !file.startsWith("attached_assets/") &&
   /\.(?:ts|tsx|js|mjs|cjs|json|html|md|css)$/.test(file),
@@ -64,6 +66,7 @@ const extensionCounts = Object.fromEntries(
 
 const report = {
   fileCount: assets.length,
+  missingTrackedAssets,
   totalBytes: assets.reduce((sum, asset) => sum + asset.bytes, 0),
   referencedFiles: assets.filter((asset) => asset.referenced).map((asset) => asset.file),
   unreferencedCount: assets.filter((asset) => !asset.referenced).length,
