@@ -1,14 +1,31 @@
-import { afterAll, describe, it, expect } from "vitest";
-import { storage } from "../storage";
-import { pool } from "../db";
+import { afterAll, beforeAll, describe, it, expect } from "vitest";
 import type { InsertQuote } from "@shared/schema";
 import { nanoid } from "nanoid";
 
-afterAll(async () => {
-  await pool.end();
+const testDatabaseUrl = process.env.TEST_DATABASE_URL;
+const databaseWritesEnabled = process.env.ALLOW_DATABASE_TEST_WRITES === "true";
+const isSeparateFromConfiguredDatabase = Boolean(
+  testDatabaseUrl && (!process.env.DATABASE_URL || testDatabaseUrl !== process.env.DATABASE_URL),
+);
+const shouldRunDatabaseTests = Boolean(
+  testDatabaseUrl && databaseWritesEnabled && isSeparateFromConfiguredDatabase,
+);
+
+let storage: typeof import("../storage").storage;
+let pool: typeof import("../db").pool | undefined;
+
+beforeAll(async () => {
+  if (!shouldRunDatabaseTests) return;
+  process.env.DATABASE_URL = testDatabaseUrl!;
+  ({ storage } = await import("../storage"));
+  ({ pool } = await import("../db"));
 });
 
-describe("Quote Storage Layer", () => {
+afterAll(async () => {
+  await pool?.end();
+});
+
+describe.skipIf(!shouldRunDatabaseTests)("Quote Storage Layer", () => {
   describe("createQuote", () => {
     it("should create a new quote with minimal data", async () => {
       const quoteData: InsertQuote = {
