@@ -1,5 +1,5 @@
-import { google } from "googleapis";
-import { JWT } from "google-auth-library";
+import { gmail } from "@googleapis/gmail";
+import { JWT, OAuth2Client } from "google-auth-library";
 import type { InlineAttachment, SendEmailParams } from "./email";
 
 function requireEnv(name: string): string {
@@ -165,10 +165,10 @@ function getGmailClient() {
       subject: fromEmail,
     });
 
-    return google.gmail({ version: "v1", auth: jwtClient });
+    return gmail({ version: "v1", auth: jwtClient });
   }
 
-  const oauth2Client = new google.auth.OAuth2(
+  const oauth2Client = new OAuth2Client(
     requireEnv("GOOGLE_WORKSPACE_CLIENT_ID"),
     requireEnv("GOOGLE_WORKSPACE_CLIENT_SECRET")
   );
@@ -177,7 +177,7 @@ function getGmailClient() {
     refresh_token: requireEnv("GOOGLE_WORKSPACE_REFRESH_TOKEN"),
   });
 
-  return google.gmail({ version: "v1", auth: oauth2Client });
+  return gmail({ version: "v1", auth: oauth2Client });
 }
 
 export async function sendGoogleWorkspaceEmail(params: SendEmailParams) {
