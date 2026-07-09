@@ -91,7 +91,7 @@ export const SortableLineItemRow = memo(function SortableLineItemRow({
   const currentMarkupValue = parseFloat(getCurrentValue(item.id, 'markupValue')) || 0;
   const currentMarkupType = getCurrentValue(item.id, 'markupType') || 'percentage';
   const currentQuantity = parseFloat(getCurrentValue(item.id, 'quantity')) || 0;
-  
+
   // Calculate price (cost + markup)
   let price = currentCost;
   if (currentMarkupType === 'percentage') {
@@ -99,7 +99,7 @@ export const SortableLineItemRow = memo(function SortableLineItemRow({
   } else {
     price = currentCost + currentMarkupValue;
   }
-  
+
   // Calculate margin (profit amount)
   const marginAmount = calculateLineItemMargin(
     currentQuantity,
@@ -111,7 +111,7 @@ export const SortableLineItemRow = memo(function SortableLineItemRow({
     tariffRate,
     item.isTariffApplicable || false
   );
-  
+
   // Calculate total
   const total = calculateLineItemTotal(
     currentQuantity,
@@ -183,7 +183,7 @@ export const SortableLineItemRow = memo(function SortableLineItemRow({
                       data-testid={`color-badge-${item.id}-${idx}`}
                       title={hasAvailableColors ? `Click to change color` : color.name}
                     >
-                      <div 
+                      <div
                         className="w-3 h-3 rounded-full border border-border"
                         style={{ backgroundColor: color.hexCode }}
                       />
@@ -197,8 +197,8 @@ export const SortableLineItemRow = memo(function SortableLineItemRow({
                   ))}
                   {colorDropdownOpen && hasAvailableColors && (
                     <>
-                      <div 
-                        className="fixed inset-0 z-40" 
+                      <div
+                        className="fixed inset-0 z-40"
                         onClick={() => setColorDropdownOpen(false)}
                       />
                       <div className="absolute top-full left-0 mt-1 z-50 bg-popover border border-border rounded-md shadow-md p-1 min-w-[140px]">
@@ -216,8 +216,8 @@ export const SortableLineItemRow = memo(function SortableLineItemRow({
                               data-testid={`color-option-${item.id}-${pc.color.id}`}
                               onClick={(e) => {
                                 e.stopPropagation();
-                                const freshConfigData = item.configData 
-                                  ? (typeof item.configData === 'string' ? JSON.parse(item.configData) : item.configData) 
+                                const freshConfigData = item.configData
+                                  ? (typeof item.configData === 'string' ? JSON.parse(item.configData) : item.configData)
                                   : {};
                                 const updatedConfigData = {
                                   ...freshConfigData,
@@ -238,7 +238,7 @@ export const SortableLineItemRow = memo(function SortableLineItemRow({
                                 setColorDropdownOpen(false);
                               }}
                             >
-                              <div 
+                              <div
                                 className="w-4 h-4 rounded-full border border-border flex-shrink-0"
                                 style={{ backgroundColor: pc.color.hexCode }}
                               />
@@ -324,7 +324,7 @@ export const SortableLineItemRow = memo(function SortableLineItemRow({
                       const cost = parseFloat(getCurrentValue(item.id, 'unitPrice'));
                       const discountAmount = retail - cost;
                       const discountPercent = retail > 0 ? (discountAmount / retail * 100).toFixed(1) : 0;
-                      return discountAmount > 0 
+                      return discountAmount > 0
                         ? `${formatCurrency(discountAmount)} (${discountPercent}%)`
                         : 'No supplier discount';
                     })()}
@@ -375,8 +375,8 @@ export const SortableLineItemRow = memo(function SortableLineItemRow({
             onValueChange={(value) => {
               handleFieldChange(item.id, "markupType", value);
               // Immediately save to server (unlike inputs, Select doesn't trigger blur)
-              updateLineItemMutation.mutate({ 
-                id: item.id, 
+              updateLineItemMutation.mutate({
+                id: item.id,
                 data: { markupType: value },
                 skipInvalidation: false
               });
@@ -419,8 +419,8 @@ export const SortableLineItemRow = memo(function SortableLineItemRow({
             title={item.isTaxable !== false ? "Included in sales tax" : "Excluded from sales tax"}
             checked={item.isTaxable !== false}
             onCheckedChange={(checked) => {
-              updateLineItemMutation.mutate({ 
-                id: item.id, 
+              updateLineItemMutation.mutate({
+                id: item.id,
                 data: { isTaxable: checked === true },
                 skipInvalidation: false
               });
@@ -438,8 +438,8 @@ export const SortableLineItemRow = memo(function SortableLineItemRow({
             title={item.isTariffApplicable ? "Tariff applies to this line" : "Tariff does not apply to this line"}
             checked={!!item.isTariffApplicable}
             onCheckedChange={(checked) => {
-              updateLineItemMutation.mutate({ 
-                id: item.id, 
+              updateLineItemMutation.mutate({
+                id: item.id,
                 data: { isTariffApplicable: checked === true },
                 skipInvalidation: false
               });
