@@ -4,7 +4,7 @@ import { z } from "zod";
 import { db } from "../db";
 import { quotes as quotesTable, type InsertQuote } from "@shared/schema";
 import { eq, sql } from "drizzle-orm";
-import { isAuthenticated } from "../auth";
+import { isAuthenticated, requireAdmin } from "../auth";
 import fs from "fs";
 import path from "path";
 import crypto from "crypto";
@@ -1535,7 +1535,7 @@ export function registerQuoteRoutes(app: Express) {
     }
   });
 
-  app.delete("/api/quotes/:id", isAuthenticated, async (req, res) => {
+  app.delete("/api/quotes/:id", isAuthenticated, requireAdmin, async (req, res) => {
     try {
       const params = idParamSchema.safeParse(req.params);
       if (!params.success) {

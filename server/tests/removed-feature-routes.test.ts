@@ -9,6 +9,7 @@ const mockStorage = vi.hoisted(() => ({
 
 vi.mock("../auth", () => ({
   isAuthenticated: (_req: any, _res: any, next: any) => next(),
+  requireAdmin: (_req: any, _res: any, next: any) => next(),
 }));
 
 vi.mock("../storage", () => ({

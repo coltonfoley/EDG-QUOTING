@@ -286,3 +286,10 @@ export function isAuthenticated(req: any, res: any, next: any) {
   }
   res.status(401).json({ message: "Unauthorized" });
 }
+
+export function requireAdmin(req: any, res: any, next: any) {
+  if (req.user?.role === "admin") {
+    return next();
+  }
+  res.status(403).json({ message: "Admin access required" });
+}

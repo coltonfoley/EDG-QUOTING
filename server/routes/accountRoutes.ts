@@ -4,7 +4,7 @@ import { z } from "zod";
 import { db } from "../db";
 import { accounts, quotes } from "@shared/schema";
 import { or, ilike, sql, desc } from "drizzle-orm";
-import { isAuthenticated } from "../auth";
+import { isAuthenticated, requireAdmin } from "../auth";
 import {
   insertAccountSchema,
   insertCustomerSchema,
@@ -163,7 +163,7 @@ export function registerAccountRoutes(app: Express) {
     }
   });
 
-  app.delete("/api/accounts/:id", isAuthenticated, async (req, res) => {
+  app.delete("/api/accounts/:id", isAuthenticated, requireAdmin, async (req, res) => {
     try {
       const params = idParamSchema.safeParse(req.params);
       if (!params.success) {
@@ -503,7 +503,7 @@ export function registerAccountRoutes(app: Express) {
     }
   });
 
-  app.delete("/api/clients/:id", isAuthenticated, async (req, res) => {
+  app.delete("/api/clients/:id", isAuthenticated, requireAdmin, async (req, res) => {
     try {
       const params = idParamSchema.safeParse(req.params);
       if (!params.success) {
