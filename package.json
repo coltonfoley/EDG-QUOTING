@@ -27,6 +27,7 @@
     "storage:migrate-brand-assets-to-blob": "node scripts/migrate-brand-assets-to-blob.mjs",
     "db:ensure-lead-fields": "node scripts/ensure-lead-fields.mjs",
     "db:ensure-lead-attachments": "node scripts/ensure-lead-attachments.mjs",
+    "db:audit:schema": "node scripts/audit-database-schema.mjs",
     "db:push": "drizzle-kit push"
   },
   "dependencies": {
