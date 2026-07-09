@@ -58,7 +58,7 @@ type PublicObjectEntityMetadata = UploadedObjectEntity & {
 };
 
 export function getObjectStorageProvider(): ObjectStorageProvider {
-  const provider = (process.env.OBJECT_STORAGE_PROVIDER || "replit").trim();
+  const provider = (process.env.OBJECT_STORAGE_PROVIDER || "vercel-blob").trim();
 
   if (provider === "replit" || provider === "vercel-blob") {
     return provider;

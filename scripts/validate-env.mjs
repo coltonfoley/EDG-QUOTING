@@ -75,7 +75,7 @@ requireVars(["DATABASE_URL", "SESSION_SECRET"], "The app needs these before it c
 if (isProduction) {
   requireOneOf(["APP_BASE_URL", "VERCEL_URL"], "Production email links and redirects need the public app URL.");
 } else if (!has("APP_BASE_URL")) {
-  warnings.push("APP_BASE_URL is not set. Local links will fall back to Replit/localhost behavior.");
+  warnings.push("APP_BASE_URL is not set. Local links will fall back to localhost behavior.");
 }
 
 if (isProduction && has("APP_BASE_URL") && value("APP_BASE_URL").includes("localhost")) {
@@ -96,7 +96,7 @@ if (googleAuthEnabled) {
   }
 }
 
-const storageProvider = allowValue("OBJECT_STORAGE_PROVIDER", ["replit", "vercel-blob"], "replit");
+const storageProvider = allowValue("OBJECT_STORAGE_PROVIDER", ["replit", "vercel-blob"], "vercel-blob");
 
 if (storageProvider === "replit") {
   requireVars(
@@ -132,7 +132,7 @@ if (emailProvider === "google-workspace-gmail") {
 }
 
 warnMissing("RAINMAKER_API_KEY", "Website lead intake and scripts/smoke-lead-intake.mjs need it.");
-warnMissing("OPENAI_API_KEY", "AI assistant, AI product import, and PDF quote extraction will stay unavailable without it.");
+warnMissing("OPENAI_API_KEY", "AI product import and PDF quote extraction will stay unavailable without it.");
 warnMissing("VITE_GOOGLE_PLACES_API_KEY", "Address autocomplete will be limited without it.");
 
 const operationsImportConfigured = has("OPERATIONS_IMPORT_TOKEN") && (has("OPERATIONS_IMPORT_URL") || has("OPERATIONS_BASE_URL"));

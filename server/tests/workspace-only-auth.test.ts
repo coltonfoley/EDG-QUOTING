@@ -59,4 +59,14 @@ describe("Workspace-only human authentication", () => {
     expect(appSource).not.toContain("*.replit.app");
     expect(appSource).toContain('express.json({ limit: "10mb" })');
   });
+
+  it("defaults object storage to Vercel Blob instead of a retired Replit runtime", () => {
+    const objectStorageSource = source("server/objectStorage.ts");
+    const routesSource = source("server/routes.ts");
+    const envCheckSource = source("scripts/validate-env.mjs");
+
+    expect(objectStorageSource).toContain('process.env.OBJECT_STORAGE_PROVIDER || "vercel-blob"');
+    expect(routesSource).toContain('process.env.OBJECT_STORAGE_PROVIDER || "vercel-blob"');
+    expect(envCheckSource).toContain('["replit", "vercel-blob"], "vercel-blob"');
+  });
 });

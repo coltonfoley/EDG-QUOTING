@@ -156,7 +156,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Admin access required" });
       }
 
-      const provider = process.env.OBJECT_STORAGE_PROVIDER || "replit";
+      const provider = process.env.OBJECT_STORAGE_PROVIDER || "vercel-blob";
       if (provider !== "vercel-blob") {
         return res.json({
           provider,
