@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiRequest } from "@/lib/queryClient";
 import type { Product } from "@shared/schema";
+import { readSpreadsheetRows, spreadsheetRowsToRecords } from "@shared/spreadsheet";
 
 interface PricingTableUploaderProps {
   productId: number;
@@ -353,12 +354,10 @@ export function PricingTableUploader({ productId, onUploadComplete }: PricingTab
         return;
       }
 
-      const XLSX = await import("xlsx");
       const buffer = await selectedFile.arrayBuffer();
-      const workbook = XLSX.read(buffer, { type: "array" });
-      const sheetName = workbook.SheetNames[0];
-      const sheet = workbook.Sheets[sheetName];
-      const jsonData = XLSX.utils.sheet_to_json(sheet);
+      const format = selectedFile.name.toLowerCase().endsWith(".csv") ? "csv" : "excel";
+      const rows = await readSpreadsheetRows(buffer, format);
+      const jsonData = spreadsheetRowsToRecords(rows);
 
       if (jsonData.length === 0) {
         setErrors(["File appears to be empty"]);

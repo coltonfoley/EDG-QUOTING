@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Upload, FileSpreadsheet, AlertCircle, CheckCircle, ArrowRight, Download, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { readSpreadsheetRows, spreadsheetRowsToRecords, spreadsheetRowsToCsv } from "@shared/spreadsheet";
 
 interface CSVRow {
   [key: string]: string | number;
@@ -95,12 +96,10 @@ export function CSVProductImporter() {
     setIsParsing(true);
 
     try {
-      const XLSX = await import("xlsx");
       const buffer = await selectedFile.arrayBuffer();
-      const workbook = XLSX.read(buffer, { type: "array" });
-      const sheetName = workbook.SheetNames[0];
-      const sheet = workbook.Sheets[sheetName];
-      const jsonData = XLSX.utils.sheet_to_json(sheet) as CSVRow[];
+      const format = selectedFile.name.toLowerCase().endsWith(".csv") ? "csv" : "excel";
+      const rows = await readSpreadsheetRows(buffer, format);
+      const jsonData = spreadsheetRowsToRecords(rows) as CSVRow[];
 
       if (jsonData.length === 0) {
         setErrors(["File appears to be empty"]);
@@ -287,16 +286,20 @@ export function CSVProductImporter() {
   };
 
   const downloadSampleCSV = async () => {
-    const XLSX = await import("xlsx");
     const sampleData = [
 	      { 'Product Name': 'Example Product 1', 'Category': 'Materials', 'Manufacturer MSRP': '100.00', 'EDG Cost': '70.00', 'Unit': 'each' },
 	      { 'Product Name': 'Example Product 2', 'Category': 'Labor', 'Manufacturer MSRP': '150.00', 'EDG Cost': '100.00', 'Unit': 'hour' },
     ];
-    
-    const ws = XLSX.utils.json_to_sheet(sampleData);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Products");
-    XLSX.writeFile(wb, "sample_products.csv");
+
+    const headers = Object.keys(sampleData[0]);
+    const rows = [headers, ...sampleData.map((row) => headers.map((header) => row[header as keyof typeof row]))];
+    const blob = new Blob([spreadsheetRowsToCsv(rows)], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "sample_products.csv";
+    link.click();
+    URL.revokeObjectURL(url);
   };
 
   return (

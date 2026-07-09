@@ -4,6 +4,7 @@ import crypto from "crypto";
 import fs from "fs";
 import path from "path";
 import os from "os";
+import { readSpreadsheetRows, spreadsheetRowsToCsv } from "@shared/spreadsheet";
 
 let openai: OpenAI | null = null;
 
@@ -582,10 +583,7 @@ export async function analyzePriceSheetColumns(
 ): Promise<{ detectedColumns: DetectedColumn[]; detectedManufacturer: string | null; totalRows: number } | null> {
   if (fileType === 'pdf') return null;
 
-  const XLSX = await import('xlsx');
-  const workbook = XLSX.read(fileBuffer, { type: 'buffer' });
-  const sheet = workbook.Sheets[workbook.SheetNames[0]];
-  const rows: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+  const rows = await readSpreadsheetRows(fileBuffer, fileType === 'csv' ? 'csv' : 'excel');
   if (!rows || rows.length === 0) return null;
 
   const result = parseStructuredPriceSheet(rows);
@@ -616,13 +614,8 @@ export async function extractProductsFromPriceSheet(
 
     onProgress?.({ phase: 'reading', current: 0, total: 1, productsFound: 0 });
 
-    const XLSX = await import('xlsx');
-    const workbook = XLSX.read(fileBuffer, { type: 'buffer' });
-    const sheetName = workbook.SheetNames[0];
-    const sheet = workbook.Sheets[sheetName];
-
-    const rows: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
-    const fullText = XLSX.utils.sheet_to_csv(sheet);
+    const rows = await readSpreadsheetRows(fileBuffer, fileType === 'csv' ? 'csv' : 'excel');
+    const fullText = spreadsheetRowsToCsv(rows);
 
     if (!rows || rows.length === 0) {
       return { products: [], detectedManufacturer: null };
