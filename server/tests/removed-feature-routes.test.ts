@@ -3,8 +3,11 @@ import request from "supertest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockStorage = vi.hoisted(() => ({
+  getPlanningAgreement: vi.fn(),
   getQuoteWithDetails: vi.fn(),
+  getQuoteBySigningToken: vi.fn(),
   updateQuote: vi.fn(),
+  updatePlanningAgreement: vi.fn(),
 }));
 const mockSendQuoteToOperations = vi.hoisted(() => vi.fn());
 const mockSendEmail = vi.hoisted(() => vi.fn());
@@ -44,7 +47,10 @@ const makeApp = () => {
 describe("removed quote feature routes", () => {
   beforeEach(() => {
     mockStorage.getQuoteWithDetails.mockReset();
+    mockStorage.getQuoteBySigningToken.mockReset();
+    mockStorage.getPlanningAgreement.mockReset();
     mockStorage.updateQuote.mockReset();
+    mockStorage.updatePlanningAgreement.mockReset();
     mockSendQuoteToOperations.mockReset();
     mockSendEmail.mockReset();
   });
@@ -143,5 +149,67 @@ describe("removed quote feature routes", () => {
     });
     expect(mockSendEmail).not.toHaveBeenCalled();
     expect(mockStorage.updateQuote).not.toHaveBeenCalled();
+  });
+
+  it("does not overwrite an existing customer signature", async () => {
+    mockStorage.getQuoteBySigningToken.mockResolvedValue({
+      id: 123,
+      isLatestVersion: true,
+      enableESignature: true,
+      clientSignedAt: new Date("2026-01-01T12:00:00.000Z"),
+    });
+
+    const response = await request(makeApp())
+      .post("/api/signatures/existing-signature-token/sign")
+      .send({
+        signerType: "client",
+        signatureData: {
+          type: "type",
+          imageData: "signed-by-customer",
+          name: "Existing Customer",
+        },
+      })
+      .expect(409);
+
+    expect(response.body).toEqual({ message: "Client signature has already been recorded" });
+    expect(mockStorage.updateQuote).not.toHaveBeenCalled();
+    expect(mockSendEmail).not.toHaveBeenCalled();
+  });
+
+  it("does not reconfirm or overwrite a recorded payment", async () => {
+    mockStorage.getPlanningAgreement.mockResolvedValue({
+      id: 88,
+      status: "paid_active",
+      amount: "1500.00",
+      paymentConfirmedAt: new Date("2026-01-02T12:00:00.000Z"),
+    });
+
+    const response = await request(makeApp())
+      .post("/api/planning-agreements/88/confirm-payment")
+      .send({ verified: true, paymentMethod: "check", paymentReference: "duplicate" })
+      .expect(409);
+
+    expect(response.body).toEqual({
+      message: "Payment has already been confirmed for this planning agreement.",
+    });
+    expect(mockStorage.updatePlanningAgreement).not.toHaveBeenCalled();
+  });
+
+  it("does not mark unpaid planning work delivered", async () => {
+    mockStorage.getPlanningAgreement.mockResolvedValue({
+      id: 88,
+      status: "signed_awaiting_payment",
+      paymentConfirmedAt: null,
+    });
+
+    const response = await request(makeApp())
+      .post("/api/planning-agreements/88/mark-delivered")
+      .send({})
+      .expect(409);
+
+    expect(response.body).toEqual({
+      message: "Confirm payment before marking planning work delivered.",
+    });
+    expect(mockStorage.updatePlanningAgreement).not.toHaveBeenCalled();
   });
 });

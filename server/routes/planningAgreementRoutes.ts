@@ -45,6 +45,7 @@ const tierLabels: Record<string, string> = {
 };
 
 const terminalAgreementStatuses = new Set(["waived", "canceled", "expired"]);
+const paymentFinalizedAgreementStatuses = new Set(["paid_active", "delivered", "credited"]);
 type PlanningAgreementStatus = NonNullable<InsertPlanningAgreementEvent["toStatus"]>;
 
 function escapeHtml(text: string): string {
@@ -777,6 +778,14 @@ export function registerPlanningAgreementRoutes(app: Express) {
         return res.status(404).json({ message: "Planning agreement not found" });
       }
 
+      if (terminalAgreementStatuses.has(agreement.status)) {
+        return res.status(409).json({ message: "Payment cannot be confirmed for an inactive planning agreement." });
+      }
+
+      if (agreement.paymentConfirmedAt || paymentFinalizedAgreementStatuses.has(agreement.status)) {
+        return res.status(409).json({ message: "Payment has already been confirmed for this planning agreement." });
+      }
+
       const actorUserId = getActorUserId(req);
       const confirmedAt = body.data.paymentConfirmedAt ?? new Date();
       const updatedAgreement = await storage.updatePlanningAgreement(
@@ -852,6 +861,15 @@ export function registerPlanningAgreementRoutes(app: Express) {
       const body = markPlanningAgreementDeliveredSchema.safeParse(req.body ?? {});
       if (!body.success) {
         return res.status(400).json(getRequestErrors(body.error.errors));
+      }
+
+      const currentAgreement = await storage.getPlanningAgreement(params.data.id);
+      if (!currentAgreement) {
+        return res.status(404).json({ message: "Planning agreement not found" });
+      }
+
+      if (currentAgreement.status !== "paid_active" || !currentAgreement.paymentConfirmedAt) {
+        return res.status(409).json({ message: "Confirm payment before marking planning work delivered." });
       }
 
       const actorUserId = getActorUserId(req);
