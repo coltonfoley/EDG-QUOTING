@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -68,5 +68,10 @@ describe("Workspace-only human authentication", () => {
     expect(objectStorageSource).toContain('process.env.OBJECT_STORAGE_PROVIDER || "vercel-blob"');
     expect(routesSource).toContain('process.env.OBJECT_STORAGE_PROVIDER || "vercel-blob"');
     expect(envCheckSource).toContain('["replit", "vercel-blob"], "vercel-blob"');
+  });
+
+  it("does not retain Replit workspace configuration", () => {
+    expect(existsSync(resolve(process.cwd(), ".replit"))).toBe(false);
+    expect(existsSync(resolve(process.cwd(), "replit.md"))).toBe(false);
   });
 });
