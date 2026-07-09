@@ -82,19 +82,18 @@ if (isProduction && has("APP_BASE_URL") && value("APP_BASE_URL").includes("local
   errors.push("APP_BASE_URL points at localhost in production.");
 }
 
-const googleAuthEnabled = has("GOOGLE_AUTH_CLIENT_ID") || has("GOOGLE_AUTH_CLIENT_SECRET");
+const googleAuthEnabled = has("GOOGLE_AUTH_CLIENT_ID") && has("GOOGLE_AUTH_CLIENT_SECRET");
+requireVars(
+  ["GOOGLE_AUTH_CLIENT_ID", "GOOGLE_AUTH_CLIENT_SECRET"],
+  "Google Workspace is Rainmaker's only human sign-in method."
+);
+
 if (googleAuthEnabled) {
-  requireVars(
-    ["GOOGLE_AUTH_CLIENT_ID", "GOOGLE_AUTH_CLIENT_SECRET"],
-    "Google Workspace sign-in needs OAuth client credentials."
-  );
 
   const allowedDomain = value("GOOGLE_AUTH_ALLOWED_DOMAINS", value("GOOGLE_AUTH_ALLOWED_DOMAIN", "edgpatioshade.com"));
   if (!allowedDomain.includes("edgpatioshade.com")) {
     warnings.push("GOOGLE_AUTH_ALLOWED_DOMAIN(S) does not include edgpatioshade.com.");
   }
-} else {
-  warnings.push("Google Workspace sign-in is not configured. Password login remains available.");
 }
 
 const storageProvider = allowValue("OBJECT_STORAGE_PROVIDER", ["replit", "vercel-blob"], "replit");

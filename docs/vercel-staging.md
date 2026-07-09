@@ -96,7 +96,6 @@ staff login from environment variables instead of using the legacy hardcoded dev
 admin:
 
 ```bash
-ADMIN_ENV_FILE=.vercel/.env.preview.local npm run db:create-admin
 ```
 
 To verify the Vercel-target variable set without real secrets, this shape should

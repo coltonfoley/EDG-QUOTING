@@ -13,7 +13,6 @@ const requiredScripts = [
   "vercel:bundle-function",
   "storage:inventory",
   "storage:migrate-to-blob",
-  "db:create-admin",
 ];
 
 const requiredFiles = [

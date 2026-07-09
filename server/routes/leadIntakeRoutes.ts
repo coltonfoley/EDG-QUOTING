@@ -3,7 +3,7 @@ import { randomUUID, timingSafeEqual } from "crypto";
 import multer from "multer";
 import { z } from "zod";
 import { storage } from "../storage";
-import { isAuthenticated } from "../replitAuth";
+import { isAuthenticated } from "../auth";
 import { db } from "../db";
 import { accounts, type InsertAccount, type LeadAttachment } from "@shared/schema";
 import { and, desc, eq, isNotNull, sql } from "drizzle-orm";
@@ -146,7 +146,7 @@ function isConfiguredWebsiteApiKey(req: any): boolean {
 }
 
 function isLeadAttachmentAuthenticated(req: any, res: any, next: any) {
-  if (req.isAuthenticated?.() || req.apiKeyAuthenticated || isConfiguredWebsiteApiKey(req)) {
+  if (req.isAuthenticated?.() || isConfiguredWebsiteApiKey(req)) {
     return next();
   }
 
@@ -458,9 +458,9 @@ export function registerLeadIntakeRoutes(app: Express) {
     }
   });
 
-  app.post("/api/leads/intake", isAuthenticated, async (req: any, res) => {
+  app.post("/api/leads/intake", isLeadAttachmentAuthenticated, async (req: any, res) => {
     try {
-      if (!req.apiKeyAuthenticated) {
+      if (!isConfiguredWebsiteApiKey(req)) {
         return res.status(403).json({
           success: false,
           message: "Lead intake requires API key authentication",

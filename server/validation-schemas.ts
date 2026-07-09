@@ -744,34 +744,25 @@ export const insertPricingTableSchema = basePricingTableSchema.extend({
     }, "Base price must be between 0 and 10,000,000")
 });
 
-// User authentication validation
-export const createUserSchema = baseUserSchema.extend({
+export const updateUserSchema = baseUserSchema.pick({
+  username: true,
+  email: true,
+  firstName: true,
+  lastName: true,
+  role: true,
+}).partial().extend({
   username: z.string()
     .min(3, "Username must be at least 3 characters")
     .max(50, "Username is too long")
-    .regex(/^[a-zA-Z0-9_-]+$/, "Username can only contain letters, numbers, underscores, and hyphens"),
-  password: z.string()
-    .min(8, "Password must be at least 8 characters")
-    .max(128, "Password is too long")
-    .regex(/[A-Z]/, "Password must contain at least one uppercase letter")
-    .regex(/[a-z]/, "Password must contain at least one lowercase letter")
-    .regex(/[0-9]/, "Password must contain at least one number"),
-  email: z.string().email("Invalid email format").max(255, "Email is too long").optional(),
-  firstName: z.string().max(100, "First name is too long").optional(),
-  lastName: z.string().max(100, "Last name is too long").optional(),
-  role: z.enum(['admin', 'user'], {
-    errorMap: () => ({ message: "Role must be either 'admin' or 'user'" })
-  }).optional()
-});
-
-export const updateUserSchema = createUserSchema.partial().extend({
-  password: z.string()
-    .min(8, "Password must be at least 8 characters")
-    .max(128, "Password is too long")
-    .regex(/[A-Z]/, "Password must contain at least one uppercase letter")
-    .regex(/[a-z]/, "Password must contain at least one lowercase letter")
-    .regex(/[0-9]/, "Password must contain at least one number")
-    .optional()
+    .regex(/^[a-zA-Z0-9_.-]+$/, "Username contains unsupported characters")
+    .optional(),
+  email: z.string()
+    .email("Invalid email format")
+    .max(255, "Email is too long")
+    .refine((email) => email.toLowerCase().endsWith("@edgpatioshade.com"), {
+      message: "Use an EDG Google Workspace email address",
+    })
+    .optional(),
 });
 
 // File upload validation

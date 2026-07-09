@@ -3,7 +3,7 @@ import crypto from "crypto";
 import { nanoid } from "nanoid";
 import type { Account, InsertPlanningAgreementEvent, PlanningAgreement, QuoteWithDetails } from "@shared/schema";
 import { storage } from "../storage";
-import { isAuthenticated } from "../replitAuth";
+import { isAuthenticated } from "../auth";
 import { buildAppUrl } from "../config";
 import {
   accountIdParamSchema,

@@ -4,7 +4,7 @@ import { z } from "zod";
 import { db } from "../db";
 import { accounts, quotes } from "@shared/schema";
 import { or, ilike, sql, desc } from "drizzle-orm";
-import { isAuthenticated } from "../replitAuth";
+import { isAuthenticated } from "../auth";
 import {
   insertAccountSchema,
   insertCustomerSchema,

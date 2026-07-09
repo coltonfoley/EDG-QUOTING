@@ -25,7 +25,6 @@
     "storage:migrate-brand-assets-to-blob": "node scripts/migrate-brand-assets-to-blob.mjs",
     "db:ensure-lead-fields": "node scripts/ensure-lead-fields.mjs",
     "db:ensure-lead-attachments": "node scripts/ensure-lead-attachments.mjs",
-    "db:create-admin": "tsx scripts/create-admin-user.ts",
     "db:push": "drizzle-kit push"
   },
   "dependencies": {
@@ -114,7 +113,6 @@
     "openai": "^5.11.0",
     "openid-client": "^6.6.2",
     "passport": "^0.7.0",
-    "passport-local": "^1.0.0",
     "pdf-parse": "^1.1.1",
     "pdfjs-dist": "^5.4.149",
     "puppeteer": "^24.22.2",
@@ -139,8 +137,6 @@
     "zod-validation-error": "^3.4.0"
   },
   "devDependencies": {
-    "@replit/vite-plugin-cartographer": "^0.2.7",
-    "@replit/vite-plugin-runtime-error-modal": "^0.0.3",
     "@tailwindcss/typography": "^0.5.15",
     "@tailwindcss/vite": "^4.1.3",
     "@types/connect-pg-simple": "^7.0.3",
@@ -148,7 +144,6 @@
     "@types/express-session": "^1.18.2",
     "@types/node": "20.16.11",
     "@types/passport": "^1.0.17",
-    "@types/passport-local": "^1.0.38",
     "@types/react": "^18.3.11",
     "@types/react-dom": "^18.3.1",
     "@types/ws": "^8.5.13",

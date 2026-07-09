@@ -4,7 +4,7 @@ import { z } from "zod";
 import { db } from "../db";
 import { quotes as quotesTable, type InsertQuote } from "@shared/schema";
 import { eq, sql } from "drizzle-orm";
-import { isAuthenticated } from "../replitAuth";
+import { isAuthenticated } from "../auth";
 import fs from "fs";
 import path from "path";
 import crypto from "crypto";

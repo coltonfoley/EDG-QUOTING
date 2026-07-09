@@ -1,6 +1,6 @@
 import type { Express } from "express";
 import { get as getBlob, list as listBlobs } from "@vercel/blob";
-import { isAuthenticated } from "../replitAuth";
+import { isAuthenticated } from "../auth";
 import {
   ObjectStorageService,
   ObjectNotFoundError,

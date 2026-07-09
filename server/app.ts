@@ -31,9 +31,9 @@ export async function createApp(options: CreateAppOptions = {}): Promise<{
     contentSecurityPolicy: isProduction ? {
       directives: {
         defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://maps.googleapis.com"],
+        scriptSrc: ["'self'", "'unsafe-inline'", "https://maps.googleapis.com"],
         styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-        imgSrc: ["'self'", "data:", "blob:", "https:", "*.replit.dev", "*.replit.app"],
+        imgSrc: ["'self'", "data:", "blob:", "https:"],
         fontSrc: ["'self'", "https://fonts.gstatic.com"],
         connectSrc: ["'self'", "https://maps.googleapis.com", "https://api.openai.com", "wss:", "ws:"],
         frameSrc: ["'self'"],
@@ -70,11 +70,10 @@ export async function createApp(options: CreateAppOptions = {}): Promise<{
     standardHeaders: true,
     legacyHeaders: false,
   });
-  app.use("/api/login", authLimiter);
-  app.use("/api/register", authLimiter);
+  app.use("/api/auth/google", authLimiter);
 
-  app.use(express.json({ limit: "100mb" }));
-  app.use(express.urlencoded({ extended: false, limit: "100mb" }));
+  app.use(express.json({ limit: "10mb" }));
+  app.use(express.urlencoded({ extended: false, limit: "10mb" }));
 
   app.use((req, res, next) => {
     const start = Date.now();

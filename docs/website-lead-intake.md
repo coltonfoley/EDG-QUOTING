@@ -59,9 +59,9 @@ Successful response:
 
 `POST /api/leads/:id/attachments`
 
-Authentication accepts a signed-in Rainmaker session, a stored Rainmaker API key,
-or the same configured `RAINMAKER_API_KEY` used by the website lead intake
-endpoint. The request is `multipart/form-data` with up to four `attachments`
+Authentication accepts a signed-in Rainmaker session or the same configured
+`RAINMAKER_API_KEY` used by the website lead intake endpoint. The request is
+`multipart/form-data` with up to four `attachments`
 files. Supported file types are JPG, PNG, and WebP. Each image should already be
 compressed to 1 MB or less, and the total upload should stay under 3.5 MB.
 
@@ -97,9 +97,8 @@ The app also ensures the table at runtime before reading or writing attachments.
 
 ## Website Environment
 
-Generate a Rainmaker API key from the Rainmaker environment with the existing
-`server/seedApiKey.ts` helper, then store the printed key in the website
-environment as `RAINMAKER_API_KEY`.
+Generate a dedicated random bearer key and store the same value as
+`RAINMAKER_API_KEY` in Rainmaker and the website environment.
 
 Set these on the website deployment:
 

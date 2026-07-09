@@ -7,7 +7,7 @@ const mockStorage = vi.hoisted(() => ({
   updateQuote: vi.fn(),
 }));
 
-vi.mock("../replitAuth", () => ({
+vi.mock("../auth", () => ({
   isAuthenticated: (_req: any, _res: any, next: any) => next(),
 }));
 

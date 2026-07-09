@@ -2,10 +2,9 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { z } from "zod";
-import { setupAuth, isAuthenticated, sanitizeUser } from "./replitAuth";
+import { setupAuth, isAuthenticated, sanitizeUser } from "./auth";
 import {
   insertContractTemplateSchema,
-  createUserSchema,
   updateUserSchema,
   idParamSchema,
   bulkUpdateProductsSchema,
@@ -19,7 +18,6 @@ import { registerQuoteRoutes } from "./routes/quoteRoutes";
 import { registerLineItemRoutes } from "./routes/lineItemRoutes";
 import { registerProductRoutes } from "./routes/productRoutes";
 import { registerImageRoutes } from "./routes/imageRoutes";
-import { registerAIAssistantRoutes } from "./routes/aiAssistantRoutes";
 import { registerLeadIntakeRoutes } from "./routes/leadIntakeRoutes";
 import { registerPlanningAgreementRoutes } from "./routes/planningAgreementRoutes";
 import { deriveProductCostFields } from "@shared/pricing";
@@ -222,43 +220,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerQuoteRoutes(app);
   registerLineItemRoutes(app);
   registerProductRoutes(app);
-  registerAIAssistantRoutes(app);
-
-  app.put('/api/user/change-password', isAuthenticated, async (req: any, res) => {
-    try {
-      const user = await storage.getUser(req.user?.id);
-      if (!user) {
-        return res.status(404).json({ message: "User not found" });
-      }
-
-      const schema = z.object({
-        currentPassword: z.string().min(1, "Current password is required"),
-        newPassword: z.string()
-          .min(8, "Password must be at least 8 characters")
-          .max(128, "Password is too long")
-          .regex(/[A-Z]/, "Password must contain at least one uppercase letter")
-          .regex(/[a-z]/, "Password must contain at least one lowercase letter")
-          .regex(/[0-9]/, "Password must contain at least one number"),
-      });
-
-      const validated = schema.safeParse(req.body);
-      if (!validated.success) {
-        return res.status(400).json({ message: "Invalid data", errors: validated.error.errors });
-      }
-
-      const { comparePasswords } = await import("./replitAuth");
-      const isValid = await comparePasswords(validated.data.currentPassword, user.password);
-      if (!isValid) {
-        return res.status(400).json({ message: "Current password is incorrect" });
-      }
-
-      await storage.updateUser(user.id, { password: validated.data.newPassword });
-      res.json({ message: "Password updated successfully" });
-    } catch (error) {
-      console.error("Error changing password:", error);
-      res.status(500).json({ message: "Failed to change password" });
-    }
-  });
 
   app.get('/api/admin/users', isAuthenticated, async (req: any, res) => {
     try {
@@ -272,34 +233,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching users:", error);
       res.status(500).json({ message: "Failed to fetch users" });
-    }
-  });
-
-  app.post('/api/admin/users', isAuthenticated, async (req: any, res) => {
-    try {
-      const currentUser = await storage.getUser(req.user?.id);
-      if (currentUser?.role !== 'admin') {
-        return res.status(403).json({ message: "Admin access required" });
-      }
-
-      const validatedData = createUserSchema.safeParse(req.body);
-      if (!validatedData.success) {
-        return res.status(400).json({ 
-          message: "Invalid user data", 
-          errors: validatedData.error.errors 
-        });
-      }
-
-      const existingUser = await storage.getUserByUsername(validatedData.data.username);
-      if (existingUser) {
-        return res.status(400).json({ message: "Username already exists" });
-      }
-
-      const user = await storage.createUser(validatedData.data);
-      res.status(201).json(sanitizeUser(user));
-    } catch (error) {
-      console.error("Error creating user:", error);
-      res.status(500).json({ message: "Failed to create user" });
     }
   });
 
