@@ -24,6 +24,7 @@ let productCatalogColumnsReady: Promise<void> | null = null;
 let pricingDefaultsTableReady: Promise<void> | null = null;
 let planningAgreementTablesReady: Promise<void> | null = null;
 let leadAttachmentTableReady: Promise<void> | null = null;
+let leadIntakeSubmissionTableReady: Promise<void> | null = null;
 let quoteApprovalDrawingTablesReady: Promise<void> | null = null;
 
 export async function ensureSignatureAuditColumns(): Promise<void> {
@@ -237,6 +238,31 @@ export async function ensureLeadAttachmentTable(): Promise<void> {
   }
 
   await leadAttachmentTableReady;
+}
+
+export async function ensureLeadIntakeSubmissionTable(): Promise<void> {
+  if (!leadIntakeSubmissionTableReady) {
+    leadIntakeSubmissionTableReady = pool.query(`
+      CREATE TABLE IF NOT EXISTS "lead_intake_submissions" (
+        "id" serial PRIMARY KEY,
+        "submission_id" text NOT NULL,
+        "payload_hash" text NOT NULL,
+        "account_id" integer REFERENCES "accounts"("id") ON DELETE SET NULL,
+        "created_at" timestamp DEFAULT now(),
+        "completed_at" timestamp
+      );
+
+      CREATE UNIQUE INDEX IF NOT EXISTS "lead_intake_submissions_submission_id_key"
+        ON "lead_intake_submissions" ("submission_id");
+      CREATE INDEX IF NOT EXISTS "idx_lead_intake_submissions_account_id"
+        ON "lead_intake_submissions" ("account_id");
+    `).then(() => undefined).catch((error) => {
+      leadIntakeSubmissionTableReady = null;
+      throw error;
+    });
+  }
+
+  await leadIntakeSubmissionTableReady;
 }
 
 export async function ensureQuoteApprovalDrawingTables(): Promise<void> {

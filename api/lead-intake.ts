@@ -4,6 +4,12 @@ import { z } from "zod";
 import { sql } from "drizzle-orm";
 import { db } from "../server/db";
 import { accounts, type InsertAccount } from "../shared/schema";
+import {
+  createIdempotentLead,
+  type LeadIntakeDatabase,
+  LeadIntakeIdempotencyError,
+  resolveLeadIntakeSubmissionId,
+} from "../server/leadIntakeIdempotency";
 
 const leadIntakeSchema = z.object({
   email: z.string().email().transform((value) => value.trim().toLowerCase()),
@@ -16,6 +22,7 @@ const leadIntakeSchema = z.object({
   source: z.string().trim().max(255).optional().nullable(),
   customerType: z.string().trim().max(100).optional().nullable(),
   metadata: z.record(z.unknown()).optional().nullable(),
+  idempotencyKey: z.string().trim().min(1).max(160).optional(),
 });
 
 type LeadIntakePayload = z.infer<typeof leadIntakeSchema>;
@@ -113,15 +120,18 @@ function mapLeadToAccount(lead: LeadIntakePayload): InsertAccount {
   };
 }
 
-async function upsertLead(accountData: InsertAccount) {
-  const [existingAccount] = await db
+async function upsertLead(
+  accountData: InsertAccount,
+  database: LeadIntakeDatabase = db
+) {
+  const [existingAccount] = await database
     .select()
     .from(accounts)
     .where(sql`LOWER(${accounts.email}) = ${accountData.email.toLowerCase()}`)
     .limit(1);
 
   if (existingAccount) {
-    const [updatedAccount] = await db
+    const [updatedAccount] = await database
       .update(accounts)
       .set({ ...accountData, updatedAt: new Date() })
       .where(sql`${accounts.id} = ${existingAccount.id}`)
@@ -130,7 +140,7 @@ async function upsertLead(accountData: InsertAccount) {
     return updatedAccount || existingAccount;
   }
 
-  const [newAccount] = await db
+  const [newAccount] = await database
     .insert(accounts)
     .values(accountData)
     .returning();
@@ -151,16 +161,33 @@ export async function handleLeadIntake(req: IncomingMessage, res: ServerResponse
   try {
     const body = await readJsonBody(req);
     const lead = leadIntakeSchema.parse(body);
-    const account = await upsertLead(mapLeadToAccount(lead));
+    const submissionId = resolveLeadIntakeSubmissionId({
+      headerValue: req.headers["idempotency-key"],
+      bodyValue: lead.idempotencyKey,
+      metadataValue: lead.metadata,
+    });
+    const { account, replayed } = await createIdempotentLead({
+      submissionId,
+      lead,
+      createLead: (database) => upsertLead(mapLeadToAccount(lead), database),
+    });
 
-    return sendJson(res, 201, {
+    return sendJson(res, replayed ? 200 : 201, {
       success: true,
       leadId: account.id,
       accountId: account.id,
       leadStatus: account.leadStatus || "new",
       createdQuote: false,
+      replayed,
     });
   } catch (error) {
+    if (error instanceof LeadIntakeIdempotencyError) {
+      return sendJson(res, error.status, {
+        success: false,
+        message: error.message,
+      });
+    }
+
     if (error instanceof z.ZodError) {
       return sendJson(res, 400, {
         success: false,

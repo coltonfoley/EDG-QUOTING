@@ -8,6 +8,12 @@ import { db } from "../db";
 import { accounts, type InsertAccount, type LeadAttachment } from "@shared/schema";
 import { and, desc, eq, isNotNull, sql } from "drizzle-orm";
 import { ObjectStorageService } from "../objectStorage";
+import {
+  createIdempotentLead,
+  type LeadIntakeDatabase,
+  LeadIntakeIdempotencyError,
+  resolveLeadIntakeSubmissionId,
+} from "../leadIntakeIdempotency";
 
 const leadIntakeSchema = z.object({
   email: z.string().email().transform((value) => value.trim().toLowerCase()),
@@ -20,6 +26,7 @@ const leadIntakeSchema = z.object({
   source: z.string().trim().max(255).optional().nullable(),
   customerType: z.string().trim().max(100).optional().nullable(),
   metadata: z.record(z.unknown()).optional().nullable(),
+  idempotencyKey: z.string().trim().min(1).max(160).optional(),
 });
 
 type LeadIntakePayload = z.infer<typeof leadIntakeSchema>;
@@ -202,6 +209,34 @@ function mapLeadToAccount(lead: LeadIntakePayload): InsertAccount {
     leadMessage: buildLeadNotes(lead),
     leadReceivedAt: new Date(),
   };
+}
+
+async function upsertLead(
+  accountData: InsertAccount,
+  database: LeadIntakeDatabase = db
+) {
+  const [existingAccount] = await database
+    .select()
+    .from(accounts)
+    .where(sql`LOWER(${accounts.email}) = ${accountData.email.toLowerCase()}`)
+    .limit(1);
+
+  if (existingAccount) {
+    const [updatedAccount] = await database
+      .update(accounts)
+      .set({ ...accountData, updatedAt: new Date() })
+      .where(sql`${accounts.id} = ${existingAccount.id}`)
+      .returning();
+
+    return updatedAccount || existingAccount;
+  }
+
+  const [newAccount] = await database
+    .insert(accounts)
+    .values(accountData)
+    .returning();
+
+  return newAccount;
 }
 
 export function registerLeadIntakeRoutes(app: Express) {
@@ -433,21 +468,34 @@ export function registerLeadIntakeRoutes(app: Express) {
       }
 
       const lead = leadIntakeSchema.parse(req.body);
-
-      const account = await storage.createAccount(mapLeadToAccount(lead), {
-        allowDuplicate: false,
-        updateIfExists: true,
-        createPrimaryContact: false,
+      const submissionId = resolveLeadIntakeSubmissionId({
+        headerValue: req.headers["idempotency-key"],
+        bodyValue: lead.idempotencyKey,
+        metadataValue: lead.metadata,
       });
 
-      res.status(201).json({
+      const { account, replayed } = await createIdempotentLead({
+        submissionId,
+        lead,
+        createLead: (database) => upsertLead(mapLeadToAccount(lead), database),
+      });
+
+      res.status(replayed ? 200 : 201).json({
         success: true,
         leadId: account.id,
         accountId: account.id,
         leadStatus: account.leadStatus || "new",
         createdQuote: false,
+        replayed,
       });
     } catch (error) {
+      if (error instanceof LeadIntakeIdempotencyError) {
+        return res.status(error.status).json({
+          success: false,
+          message: error.message,
+        });
+      }
+
       if (error instanceof z.ZodError) {
         return res.status(400).json({
           success: false,

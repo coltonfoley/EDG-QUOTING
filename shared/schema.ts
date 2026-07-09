@@ -113,6 +113,21 @@ export const leadAttachments = pgTable("lead_attachments", {
   index("idx_lead_attachments_order").on(table.accountId, table.displayOrder),
 ]);
 
+// Website intake submissions make client retries safe without treating a lead's
+// email address as a request id. The row is created before account upsert and
+// records the resulting account once the request succeeds.
+export const leadIntakeSubmissions = pgTable("lead_intake_submissions", {
+  id: serial("id").primaryKey(),
+  submissionId: text("submission_id").notNull(),
+  payloadHash: text("payload_hash").notNull(),
+  accountId: integer("account_id").references(() => accounts.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at").defaultNow(),
+  completedAt: timestamp("completed_at"),
+}, (table) => [
+  uniqueIndex("lead_intake_submissions_submission_id_key").on(table.submissionId),
+  index("idx_lead_intake_submissions_account_id").on(table.accountId),
+]);
+
 // Aliases for different conceptual uses
 export const customers = accounts; // Legacy alias for backward compatibility
 export const clients = accounts; // New unified client model alias
@@ -882,6 +897,7 @@ export type ProductColor = typeof productColors.$inferSelect;
 export type QuoteCoverPhoto = typeof quoteCoverPhotos.$inferSelect;
 export type QuoteProductRendering = typeof quoteProductRenderings.$inferSelect;
 export type LeadAttachment = typeof leadAttachments.$inferSelect;
+export type LeadIntakeSubmission = typeof leadIntakeSubmissions.$inferSelect;
 export type IssueReport = typeof issueReports.$inferSelect;
 
 export type InsertApiKey = z.infer<typeof insertApiKeySchema>;
