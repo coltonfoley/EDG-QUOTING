@@ -12,7 +12,7 @@ import type { Color, LineItem, ProductColor } from "@shared/schema";
 type CalculateLineItemMargin = typeof import("@/lib/utils").calculateLineItemMargin;
 type CalculateLineItemTotal = typeof import("@/lib/utils").calculateLineItemTotal;
 
-function HeaderHelp({ label, children }: { label: string; children: React.ReactNode }) {
+export function HeaderHelp({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <TooltipProvider>
       <Tooltip>

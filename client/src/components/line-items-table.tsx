@@ -35,7 +35,7 @@ import {
   type Group 
 } from './group-components';
 import { ProductConfigurator } from './product-configurator';
-import { SortableLineItemRow } from './sortable-line-item-row';
+import { HeaderHelp, SortableLineItemRow } from './sortable-line-item-row';
 
 interface LineItemsTableProps {
   quoteId: number;
