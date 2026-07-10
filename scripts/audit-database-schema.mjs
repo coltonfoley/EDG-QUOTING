@@ -13,11 +13,22 @@ const declaredTables = Array.from(
 const migrationFiles = readdirSync(path.join(root, "migrations"))
   .filter((name) => name.endsWith(".sql"))
   .sort();
+const manifest = JSON.parse(
+  readFileSync(path.join(root, "migrations/manifest.json"), "utf8"),
+);
+const manifestMigrations = manifest.migrations;
+const manifestMigrationSet = new Set(manifestMigrations);
+const migrationsMissingFromManifest = migrationFiles.filter(
+  (name) => !manifestMigrationSet.has(name),
+);
+const manifestFilesMissingFromDisk = manifestMigrations.filter(
+  (name) => !migrationFiles.includes(name),
+);
 const journal = JSON.parse(
   readFileSync(path.join(root, "migrations/meta/_journal.json"), "utf8"),
 );
 const journalTags = new Set(journal.entries.map((entry) => entry.tag));
-const unjournaledMigrations = migrationFiles.filter(
+const notInLegacyDrizzleJournal = migrationFiles.filter(
   (name) => !journalTags.has(name.replace(/\.sql$/, "")),
 );
 
@@ -38,8 +49,12 @@ const report = {
     declaredTableCount: declaredTables.length,
     declaredTables,
     migrationFileCount: migrationFiles.length,
+    manifestVersion: manifest.version,
+    manifestEntryCount: manifestMigrations.length,
+    migrationsMissingFromManifest,
+    manifestFilesMissingFromDisk,
     journalEntryCount: journal.entries.length,
-    unjournaledMigrations,
+    notInLegacyDrizzleJournal,
     duplicateMigrationPrefixes: duplicatePrefixes,
   },
   database: null,
@@ -106,6 +121,10 @@ if (process.env.DATABASE_URL) {
 
 console.log(JSON.stringify(report, null, 2));
 
-if (unjournaledMigrations.length || duplicatePrefixes.length) {
+if (
+  migrationsMissingFromManifest.length ||
+  manifestFilesMissingFromDisk.length ||
+  duplicatePrefixes.length
+) {
   process.exitCode = 2;
 }

@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "migrations": [
+    "0000_lowly_anthem.sql",
+    "0001_remove_image_fields_from_quotes.sql",
+    "0002_proposal_templates.sql",
+    "0003_add_rich_content_fields.sql",
+    "0004_rename_customers_to_accounts.sql",
+    "0005_add_quote_image_tables.sql",
+    "0006_add_account_lead_fields.sql",
+    "0007_add_signature_audit_snapshot.sql",
+    "0008_add_product_catalog_fields.sql",
+    "0009_add_pricing_defaults.sql",
+    "0010_add_product_cost_price.sql",
+    "0011_add_product_sku.sql",
+    "0012_backfill_sundance_product_skus.sql",
+    "0013_add_quote_internal_notes.sql",
+    "0014_add_planning_agreements.sql",
+    "0015_add_planning_agreement_signing.sql",
+    "0016_add_lead_attachments.sql",
+    "0017_add_quote_approval_drawings.sql",
+    "0018_add_esig_approval_drawing_preference.sql",
+    "0019_add_lead_intake_submissions.sql",
+    "0020_add_missing_application_tables.sql",
+    "0021_reconcile_application_columns.sql",
+    "0022_add_manufacturer_discounts.sql"
+  ]
+}
