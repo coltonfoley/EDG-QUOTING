@@ -35,7 +35,9 @@ export async function createApp(options: CreateAppOptions = {}): Promise<{
         styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
         imgSrc: ["'self'", "data:", "blob:", "https:"],
         fontSrc: ["'self'", "https://fonts.gstatic.com"],
-        connectSrc: ["'self'", "https://maps.googleapis.com", "https://api.openai.com", "wss:", "ws:"],
+        // OpenAI requests run server-side; the retired browser AI chat must not
+        // retain a client-side network permission for the provider.
+        connectSrc: ["'self'", "https://maps.googleapis.com", "wss:", "ws:"],
         frameSrc: ["'self'"],
         objectSrc: ["'none'"],
         upgradeInsecureRequests: [],

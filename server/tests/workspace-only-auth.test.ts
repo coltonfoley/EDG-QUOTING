@@ -57,6 +57,7 @@ describe("Workspace-only human authentication", () => {
     expect(authSource).toContain("sameSite: 'lax'");
     expect(appSource).not.toContain("'unsafe-eval'");
     expect(appSource).not.toContain("*.replit.app");
+    expect(appSource).not.toContain("https://api.openai.com");
     expect(appSource).toContain('express.json({ limit: "10mb" })');
   });
 
