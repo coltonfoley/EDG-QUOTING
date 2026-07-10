@@ -20,8 +20,8 @@ Keep one authoritative Git branch (`main`), remove reachable private-key materia
 - [x] Complete pre-cleanup Git bundle created and verified.
 - [x] Inventory local branches, remote branches, linked worktrees, and open pull requests.
 - [x] Confirm which branch tip contains the authoritative application state.
-- [ ] Rewrite the authoritative history in an isolated clone.
-- [ ] Validate zero valid private keys, clean Git integrity, tests, type-check, build, asset audit, migration restore, and dependency audit.
+- [x] Rewrite the authoritative history in an isolated clone.
+- [x] Validate zero valid private keys, clean Git integrity, tests, type-check, build, asset audit, migration restore, and dependency audit.
 - [ ] Update GitHub `main` to the validated cleaned history.
 - [ ] Delete obsolete GitHub branches after the new `main` is healthy.
 - [ ] Remove obsolete local branches and stale worktree registrations.
@@ -34,7 +34,11 @@ Keep one authoritative Git branch (`main`), remove reachable private-key materia
 - Candidate commits ahead of local `main`: `47`
 - Verified backup: `Rainmaker Data Archive/EDG-QUOTING-before-history-cleanup-2026-07-09-2009.bundle`
 - Backup SHA-256: `7490177f283ff6563801fde93ee321105ee19440c14541b8b42b6fb83799274a`
+- Final full pre-rewrite backup: `Rainmaker Data Archive/EDG-QUOTING-full-pre-rewrite-2026-07-09-2015.bundle`
+- Final backup SHA-256: `e788fd0a84cc0f2a754fa31c177dac103bee71d34895b138b07210d7736cea5b`
 - Disposable rewrite result: `0` valid private keys, `0` missing Git objects, Git integrity passed.
+- Cleaned authoritative branch: `main` at `aa83ab9` before the evidence-log commit.
+- Cleaned local validation: 96 tests passed; type-check, production build, current secret audit, history secret audit, asset audit, migration audit, Git integrity, and production dependency audit passed.
 - GitHub default branch: `main`; branch protection is not configured.
 - Open pull requests: PR `#11` only (`codex/rainmaker-replit-cleanup` -> `main`).
 - Branch containment: all local branches except `codex/rainmaker-replit-cleanup` are ancestors of the authoritative candidate.
@@ -47,3 +51,5 @@ Keep one authoritative Git branch (`main`), remove reachable private-key materia
 - 2026-07-09: Created this tracker before changing branches or remote history.
 - 2026-07-09: Confirmed GitHub `main` is the default branch, CI is active, and only obsolete PR #11 remains open.
 - 2026-07-09: Selected `codex/rainmaker-security-stabilization` as the authoritative tree; all other work remains recoverable from the verified bundle.
+- 2026-07-09: Rewrote the authoritative history in `/tmp/edg-quoting-clean-main`, removed all three valid private-key blobs, and collapsed the clone to one `main` branch.
+- 2026-07-09: Completed the full local validation gate on the cleaned branch; all required checks passed.
