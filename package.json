@@ -25,6 +25,7 @@
     "storage:inventory": "node scripts/storage-inventory.mjs",
     "assets:audit": "node scripts/audit-attached-assets.mjs",
     "secrets:audit": "node scripts/audit-secrets.mjs",
+    "secrets:audit:history": "node scripts/audit-git-history-private-keys.mjs",
     "storage:migrate-to-blob": "node scripts/migrate-quote-images-to-blob.mjs",
     "storage:migrate-brand-assets-to-blob": "node scripts/migrate-brand-assets-to-blob.mjs",
     "db:ensure-lead-fields": "node scripts/ensure-lead-fields.mjs",
