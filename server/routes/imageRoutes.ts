@@ -14,6 +14,51 @@ import {
   imageProxySchema
 } from "../validation-schemas";
 
+const MAX_IMAGE_PROXY_BYTES = 25 * 1024 * 1024;
+
+class ImageProxyPayloadTooLargeError extends Error {
+  constructor() {
+    super("Image proxy response exceeds the maximum allowed size.");
+    this.name = "ImageProxyPayloadTooLargeError";
+  }
+}
+
+async function readResponseBufferWithLimit(response: Response, maxBytes: number): Promise<Buffer> {
+  const contentLength = Number(response.headers.get("content-length") || 0);
+  if (contentLength > maxBytes) {
+    throw new ImageProxyPayloadTooLargeError();
+  }
+
+  if (!response.body) {
+    const buffer = Buffer.from(await response.arrayBuffer());
+    if (buffer.byteLength > maxBytes) {
+      throw new ImageProxyPayloadTooLargeError();
+    }
+    return buffer;
+  }
+
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      totalBytes += value.byteLength;
+      if (totalBytes > maxBytes) {
+        await reader.cancel();
+        throw new ImageProxyPayloadTooLargeError();
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  return Buffer.concat(chunks, totalBytes);
+}
+
 export function registerImageRoutes(app: Express) {
   // Get upload URL for image uploads
   app.post("/api/images/upload-url", isAuthenticated, async (req, res) => {
@@ -322,7 +367,7 @@ export function registerImageRoutes(app: Express) {
       }
       
       // Get the image data as buffer
-      const buffer = await response.arrayBuffer();
+      const buffer = await readResponseBufferWithLimit(response, MAX_IMAGE_PROXY_BYTES);
       const contentType = response.headers.get('content-type') || 'application/octet-stream';
       
       console.log(`✅ Successfully proxied image: ${imageUrl} (${buffer.byteLength} bytes, ${contentType})`);
@@ -333,10 +378,13 @@ export function registerImageRoutes(app: Express) {
       res.setHeader('Access-Control-Allow-Origin', '*');
       res.setHeader('Cache-Control', 'public, max-age=3600'); // Cache for 1 hour
       
-      res.send(Buffer.from(buffer));
+      res.send(buffer);
       
     } catch (error) {
       console.error("❌ Image proxy error:", error);
+      if (error instanceof ImageProxyPayloadTooLargeError) {
+        return res.status(413).json({ message: "Image response is too large" });
+      }
       res.status(500).json({ message: "Failed to proxy image" });
     }
   });
