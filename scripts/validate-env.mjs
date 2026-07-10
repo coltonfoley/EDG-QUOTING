@@ -103,7 +103,11 @@ if (storageProvider === "replit") {
     ["PRIVATE_OBJECT_DIR", "PUBLIC_OBJECT_SEARCH_PATHS"],
     "Replit object storage needs the private bucket path and public search paths."
   );
-  warnings.push("OBJECT_STORAGE_PROVIDER is still replit. Use vercel-blob for the Vercel storage target.");
+  if (isProduction) {
+    errors.push("OBJECT_STORAGE_PROVIDER=replit is not allowed in production. Use Vercel Blob.");
+  } else {
+    warnings.push("OBJECT_STORAGE_PROVIDER is explicitly set to the legacy Replit compatibility provider.");
+  }
 } else if (storageProvider === "vercel-blob") {
   requireVars(["BLOB_READ_WRITE_TOKEN"], "Vercel Blob uploads need the project Blob token.");
 }

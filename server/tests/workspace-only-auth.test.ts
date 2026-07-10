@@ -68,6 +68,7 @@ describe("Workspace-only human authentication", () => {
     expect(objectStorageSource).toContain('process.env.OBJECT_STORAGE_PROVIDER || "vercel-blob"');
     expect(routesSource).toContain('process.env.OBJECT_STORAGE_PROVIDER || "vercel-blob"');
     expect(envCheckSource).toContain('["replit", "vercel-blob"], "vercel-blob"');
+    expect(envCheckSource).toContain('OBJECT_STORAGE_PROVIDER=replit is not allowed in production');
   });
 
   it("does not retain Replit workspace configuration", () => {
