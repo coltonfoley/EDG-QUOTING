@@ -1,5 +1,6 @@
 import type { Express } from "express";
 import { get as getBlob, list as listBlobs } from "@vercel/blob";
+import rateLimit from "express-rate-limit";
 import { isAuthenticated } from "../auth";
 import {
   ObjectStorageService,
@@ -60,6 +61,17 @@ async function readResponseBufferWithLimit(response: Response, maxBytes: number)
 }
 
 export function registerImageRoutes(app: Express) {
+  const publicImageLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 120,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { message: "Too many image requests, please try again later." },
+  });
+
+  app.use("/quote-images", publicImageLimiter);
+  app.use("/api/brand-assets", publicImageLimiter);
+
   // Get upload URL for image uploads
   app.post("/api/images/upload-url", isAuthenticated, async (req, res) => {
     try {
