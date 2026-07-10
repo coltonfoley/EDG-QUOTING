@@ -1,4 +1,5 @@
-import { Storage, File } from "@google-cloud/storage";
+import { createRequire } from "node:module";
+import type { File, Storage } from "@google-cloud/storage";
 import { head, put } from "@vercel/blob";
 import { Response } from "express";
 import { randomUUID } from "crypto";
@@ -11,6 +12,7 @@ import {
 } from "./objectAcl";
 
 const REPLIT_SIDECAR_ENDPOINT = "http://127.0.0.1:1106";
+const require = createRequire(import.meta.url);
 
 export type ObjectStorageProvider = "replit" | "vercel-blob";
 
@@ -70,7 +72,8 @@ export function getObjectStorageProvider(): ObjectStorageProvider {
 }
 
 function createReplitObjectStorageClient(): Storage {
-  return new Storage({
+  const { Storage: GoogleStorage } = require("@google-cloud/storage") as typeof import("@google-cloud/storage");
+  return new GoogleStorage({
     credentials: {
       audience: "replit",
       subject_token_type: "access_token",
@@ -89,9 +92,15 @@ function createReplitObjectStorageClient(): Storage {
   });
 }
 
-// Legacy Replit/GCS-compatible client. New code should prefer ObjectStorageService
-// methods so Vercel Blob can be supported without touching route handlers.
-export const objectStorageClient = createReplitObjectStorageClient();
+// Legacy compatibility client. It is loaded only when a legacy storage route is
+// actually called; Vercel Blob requests do not initialize the GCS client.
+let legacyObjectStorageClient: Storage | undefined;
+export const objectStorageClient = {
+  bucket(bucketName: string) {
+    legacyObjectStorageClient ??= createReplitObjectStorageClient();
+    return legacyObjectStorageClient.bucket(bucketName);
+  },
+};
 
 export class ObjectNotFoundError extends Error {
   constructor() {
