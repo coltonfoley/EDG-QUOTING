@@ -500,7 +500,7 @@ async function signReplitObjectURL({
   return signedURL;
 }
 
-function normalizeObjectEntityId(objectId: string): string {
+export function normalizeObjectEntityId(objectId: string): string {
   const normalizedObjectId = objectId.replace(/^\/+/, "");
 
   if (!normalizedObjectId || normalizedObjectId.includes("..")) {
@@ -510,7 +510,7 @@ function normalizeObjectEntityId(objectId: string): string {
   return normalizedObjectId;
 }
 
-function normalizeVercelBlobLocator(rawPath: string): string {
+export function normalizeVercelBlobLocator(rawPath: string): string {
   if (/^https?:\/\//i.test(rawPath)) {
     return rawPath;
   }
