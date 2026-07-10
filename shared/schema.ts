@@ -38,16 +38,6 @@ export const users = pgTable("users", {
 });
 
 // API Keys table for app-to-app authentication
-export const apiKeys = pgTable("api_keys", {
-  id: serial("id").primaryKey(),
-  name: text("name").notNull(), // Descriptive name for the key (e.g., "Internal App")
-  keyHash: text("key_hash").notNull().unique(), // Bcrypt hash of the API key
-  createdAt: timestamp("created_at").defaultNow(),
-  lastUsedAt: timestamp("last_used_at"), // Track usage for monitoring
-}, (table) => [
-  index("idx_api_keys_key_hash").on(table.keyHash),
-]);
-
 // Accounts table (formerly customers) - represents business entities
 // Enhanced with client fields (firstName, lastName) to support unified client model
 export const accounts = pgTable("accounts", {
@@ -871,15 +861,7 @@ export const insertIssueReportSchema = createInsertSchema(issueReports).omit({
   assignedTo: z.number().optional().nullable(),
 });
 
-export const insertApiKeySchema = createInsertSchema(apiKeys).omit({
-  id: true,
-  createdAt: true,
-  lastUsedAt: true,
-});
-
-
 // Type exports
-export type ApiKey = typeof apiKeys.$inferSelect;
 export type Account = typeof accounts.$inferSelect;
 export type Customer = typeof accounts.$inferSelect; // Legacy alias
 export type Quote = typeof quotes.$inferSelect;
@@ -900,7 +882,6 @@ export type LeadAttachment = typeof leadAttachments.$inferSelect;
 export type LeadIntakeSubmission = typeof leadIntakeSubmissions.$inferSelect;
 export type IssueReport = typeof issueReports.$inferSelect;
 
-export type InsertApiKey = z.infer<typeof insertApiKeySchema>;
 export type InsertAccount = z.infer<typeof insertAccountSchema>;
 export type InsertCustomer = z.infer<typeof insertAccountSchema>; // Legacy alias
 export type InsertQuote = z.infer<typeof insertQuoteSchema>;

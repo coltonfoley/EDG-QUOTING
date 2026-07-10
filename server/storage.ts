@@ -10,7 +10,6 @@ import {
   products,
   pricingDefaults,
   users,
-  apiKeys,
   contractTemplates,
   pricingTables,
   colors,
@@ -30,7 +29,6 @@ import {
   type Product,
   type PricingDefault,
   type User,
-  type ApiKey,
   type ContractTemplate,
   type PricingTable,
   type Color,
@@ -49,7 +47,6 @@ import {
   type InsertGroup,
   type InsertProduct,
   type InsertUser,
-  type InsertApiKey,
   type InsertContractTemplate,
   type InsertPricingTable,
   type InsertColor,
@@ -319,11 +316,6 @@ export interface IStorage {
   // Authorization methods for security
   validateLineItemsOwnership(lineItemIds: number[], userId: any): Promise<{ isValid: boolean; quoteId?: number }>;
   validateQuoteOwnership(quoteId: number, userId: any): Promise<boolean>;
-
-  // API key methods for app-to-app authentication
-  createApiKey(apiKey: { name: string; keyHash: string }): Promise<any>;
-  getApiKeyByHash(keyHash: string): Promise<any | undefined>;
-  updateApiKeyLastUsed(id: number): Promise<void>;
 
 }
 
@@ -2757,23 +2749,6 @@ export class DatabaseStorage implements IStorage {
   async deleteIssueReport(id: number): Promise<boolean> {
     const result = await db.delete(issueReports).where(eq(issueReports.id, id));
     return (result.rowCount || 0) > 0;
-  }
-
-  // API key methods
-  async createApiKey(apiKey: { name: string; keyHash: string }): Promise<ApiKey> {
-    const [newKey] = await db.insert(apiKeys).values(apiKey).returning();
-    return newKey;
-  }
-
-  async getApiKeyByHash(keyHash: string): Promise<ApiKey | undefined> {
-    const [key] = await db.select().from(apiKeys).where(eq(apiKeys.keyHash, keyHash));
-    return key || undefined;
-  }
-
-  async updateApiKeyLastUsed(id: number): Promise<void> {
-    await db.update(apiKeys)
-      .set({ lastUsedAt: new Date() })
-      .where(eq(apiKeys.id, id));
   }
 
 }
