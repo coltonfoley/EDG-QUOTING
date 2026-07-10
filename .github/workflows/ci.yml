@@ -27,6 +27,12 @@ jobs:
       - name: Scan tracked files for secrets
         run: npm run secrets:audit
 
+      - name: Audit attached assets
+        run: npm run assets:audit
+
+      - name: Audit migration manifest
+        run: npm run db:audit:schema
+
       - name: Reject high-severity dependency advisories
         run: npm audit --audit-level=high
 
