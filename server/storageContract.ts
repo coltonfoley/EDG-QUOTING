@@ -196,7 +196,9 @@ export interface IStorage {
 
   // Quote image methods
   getQuoteCoverPhoto(quoteId: number): Promise<QuoteCoverPhoto | undefined>;
+  getQuoteCoverPhotoById(id: number): Promise<QuoteCoverPhoto | undefined>;
   getQuoteProductRenderings(quoteId: number): Promise<QuoteProductRendering[]>;
+  getQuoteProductRenderingById(id: number): Promise<QuoteProductRendering | undefined>;
   createQuoteCoverPhoto(photo: InsertQuoteCoverPhoto): Promise<QuoteCoverPhoto>;
   createQuoteProductRendering(rendering: InsertQuoteProductRendering): Promise<QuoteProductRendering>;
   updateQuoteCoverPhoto(id: number, photo: Partial<InsertQuoteCoverPhoto>): Promise<QuoteCoverPhoto | undefined>;
@@ -217,4 +219,3 @@ export interface IStorage {
   validateQuoteOwnership(quoteId: number, userId: any): Promise<boolean>;
 
 }
-

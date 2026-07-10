@@ -2470,12 +2470,30 @@ export class DatabaseStorage implements IStorage {
     return photo || undefined;
   }
 
+  async getQuoteCoverPhotoById(id: number): Promise<QuoteCoverPhoto | undefined> {
+    const [photo] = await db
+      .select()
+      .from(quoteCoverPhotos)
+      .where(eq(quoteCoverPhotos.id, id))
+      .limit(1);
+    return photo || undefined;
+  }
+
   async getQuoteProductRenderings(quoteId: number): Promise<QuoteProductRendering[]> {
     return await db
       .select()
       .from(quoteProductRenderings)
       .where(and(eq(quoteProductRenderings.quoteId, quoteId), eq(quoteProductRenderings.isActive, true)))
       .orderBy(quoteProductRenderings.displayOrder, quoteProductRenderings.uploadedAt);
+  }
+
+  async getQuoteProductRenderingById(id: number): Promise<QuoteProductRendering | undefined> {
+    const [rendering] = await db
+      .select()
+      .from(quoteProductRenderings)
+      .where(eq(quoteProductRenderings.id, id))
+      .limit(1);
+    return rendering || undefined;
   }
 
   async createQuoteCoverPhoto(photo: InsertQuoteCoverPhoto): Promise<QuoteCoverPhoto> {

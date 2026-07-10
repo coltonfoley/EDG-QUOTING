@@ -371,7 +371,14 @@ export function registerLineItemRoutes(app: Express) {
           errors: params.error.errors 
         });
       }
-      
+      const lineItem = await storage.getLineItem(params.data.id);
+      if (!lineItem) {
+        return res.status(404).json({ message: "Line item not found" });
+      }
+      if (!(await storage.validateQuoteOwnership(lineItem.quoteId, req.user?.id))) {
+        return res.status(403).json({ message: "Unauthorized: You don't have access to this quote" });
+      }
+
       const deleted = await storage.deleteLineItem(params.data.id);
       if (!deleted) {
         return res.status(404).json({ message: "Line item not found" });
@@ -499,6 +506,14 @@ export function registerLineItemRoutes(app: Express) {
           message: "Invalid request parameters",
           errors: params.error.errors
         });
+      }
+
+      const group = await storage.getGroup(params.data.groupId);
+      if (!group) {
+        return res.status(404).json({ message: "Group not found" });
+      }
+      if (!(await storage.validateQuoteOwnership(group.quoteId, req.user?.id))) {
+        return res.status(403).json({ message: "Unauthorized: You don't have access to this quote" });
       }
 
       const deleted = await storage.deleteGroup(params.data.groupId);

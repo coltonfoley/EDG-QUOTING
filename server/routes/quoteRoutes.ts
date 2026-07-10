@@ -2530,6 +2530,14 @@ export function registerQuoteRoutes(app: Express) {
         });
       }
 
+      const photo = await storage.getQuoteCoverPhotoById(params.data.imageId);
+      if (!photo) {
+        return res.status(404).json({ message: "Cover photo not found" });
+      }
+      if (!(await storage.validateQuoteOwnership(photo.quoteId, req.user?.id))) {
+        return res.status(403).json({ message: "Unauthorized: You don't have access to this quote" });
+      }
+
       const deleted = await storage.deleteQuoteCoverPhoto(params.data.imageId);
       if (!deleted) {
         return res.status(404).json({ message: "Cover photo not found" });
@@ -2550,6 +2558,14 @@ export function registerQuoteRoutes(app: Express) {
           message: "Invalid request parameters", 
           errors: params.error.errors 
         });
+      }
+
+      const rendering = await storage.getQuoteProductRenderingById(params.data.imageId);
+      if (!rendering) {
+        return res.status(404).json({ message: "Visual asset not found" });
+      }
+      if (!(await storage.validateQuoteOwnership(rendering.quoteId, req.user?.id))) {
+        return res.status(403).json({ message: "Unauthorized: You don't have access to this quote" });
       }
 
       const deleted = await storage.deleteQuoteProductRendering(params.data.imageId);

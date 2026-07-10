@@ -4,10 +4,19 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockStorage = vi.hoisted(() => ({
   getPlanningAgreement: vi.fn(),
+  getLineItem: vi.fn(),
+  getGroup: vi.fn(),
   getQuoteWithDetails: vi.fn(),
   getQuoteBySigningToken: vi.fn(),
+  getQuoteCoverPhotoById: vi.fn(),
+  getQuoteProductRenderingById: vi.fn(),
+  validateQuoteOwnership: vi.fn(),
   updateQuote: vi.fn(),
   updatePlanningAgreement: vi.fn(),
+  deleteLineItem: vi.fn(),
+  deleteGroup: vi.fn(),
+  deleteQuoteCoverPhoto: vi.fn(),
+  deleteQuoteProductRendering: vi.fn(),
 }));
 const mockSendQuoteToOperations = vi.hoisted(() => vi.fn());
 const mockSendEmail = vi.hoisted(() => vi.fn());
@@ -35,12 +44,14 @@ vi.mock("../email", () => ({
 
 import { registerPlanningAgreementRoutes } from "../routes/planningAgreementRoutes";
 import { registerQuoteRoutes } from "../routes/quoteRoutes";
+import { registerLineItemRoutes } from "../routes/lineItemRoutes";
 
 const makeApp = () => {
   const app = express();
   app.use(express.json());
   registerPlanningAgreementRoutes(app);
   registerQuoteRoutes(app);
+  registerLineItemRoutes(app);
   return app;
 };
 
@@ -49,8 +60,17 @@ describe("removed quote feature routes", () => {
     mockStorage.getQuoteWithDetails.mockReset();
     mockStorage.getQuoteBySigningToken.mockReset();
     mockStorage.getPlanningAgreement.mockReset();
+    mockStorage.getLineItem.mockReset();
+    mockStorage.getGroup.mockReset();
+    mockStorage.getQuoteCoverPhotoById.mockReset();
+    mockStorage.getQuoteProductRenderingById.mockReset();
+    mockStorage.validateQuoteOwnership.mockReset();
     mockStorage.updateQuote.mockReset();
     mockStorage.updatePlanningAgreement.mockReset();
+    mockStorage.deleteLineItem.mockReset();
+    mockStorage.deleteGroup.mockReset();
+    mockStorage.deleteQuoteCoverPhoto.mockReset();
+    mockStorage.deleteQuoteProductRendering.mockReset();
     mockSendQuoteToOperations.mockReset();
     mockSendEmail.mockReset();
   });
@@ -211,5 +231,38 @@ describe("removed quote feature routes", () => {
       message: "Confirm payment before marking planning work delivered.",
     });
     expect(mockStorage.updatePlanningAgreement).not.toHaveBeenCalled();
+  });
+
+  it("blocks direct line-item deletion without quote ownership", async () => {
+    mockStorage.getLineItem.mockResolvedValue({ id: 7, quoteId: 55 });
+    mockStorage.validateQuoteOwnership.mockResolvedValue(false);
+
+    await request(makeApp())
+      .delete("/api/line-items/7")
+      .expect(403);
+
+    expect(mockStorage.deleteLineItem).not.toHaveBeenCalled();
+  });
+
+  it("blocks group deletion without quote ownership", async () => {
+    mockStorage.getGroup.mockResolvedValue({ id: "group-7", quoteId: 55 });
+    mockStorage.validateQuoteOwnership.mockResolvedValue(false);
+
+    await request(makeApp())
+      .delete("/api/groups/group-7")
+      .expect(403);
+
+    expect(mockStorage.deleteGroup).not.toHaveBeenCalled();
+  });
+
+  it("blocks quote-image deletion without quote ownership", async () => {
+    mockStorage.getQuoteCoverPhotoById.mockResolvedValue({ id: 7, quoteId: 55 });
+    mockStorage.validateQuoteOwnership.mockResolvedValue(false);
+
+    await request(makeApp())
+      .delete("/api/quote-images/cover-photo/7")
+      .expect(403);
+
+    expect(mockStorage.deleteQuoteCoverPhoto).not.toHaveBeenCalled();
   });
 });
