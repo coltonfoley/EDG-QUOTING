@@ -24,7 +24,7 @@ Repository state checked before planning and again after cleanup:
 
 - Repo root: `/Users/coltonfoley/Documents/Codex Projects/Rainmaker EDG Quoting/EDG-QUOTING`
 - Remote: `https://github.com/coltonfoley/EDG-QUOTING.git`
-- Branch during latest review: `codex/rainmaker-replit-cleanup`
+- Branch during latest review: `codex/rainmaker-security-stabilization`
 - Commit during latest review: `b25f8594a20b6e7117c91cdd9efb9ec3971fd9c7`
 - Worktree after cleanup: only this plan doc was untracked.
 - Node engine is `22.x` in `package.json`.
