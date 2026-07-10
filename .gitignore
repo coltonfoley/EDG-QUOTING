@@ -13,3 +13,9 @@ output/
 .env.*
 !.env.example
 .env*.local
+
+# Never track private-key material or certificate bundles.
+*.pem
+*.key
+*.p8
+*.p12
