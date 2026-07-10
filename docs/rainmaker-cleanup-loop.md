@@ -22,10 +22,10 @@ Keep one authoritative Git branch (`main`), remove reachable private-key materia
 - [x] Confirm which branch tip contains the authoritative application state.
 - [x] Rewrite the authoritative history in an isolated clone.
 - [x] Validate zero valid private keys, clean Git integrity, tests, type-check, build, asset audit, migration restore, and dependency audit.
-- [ ] Update GitHub `main` to the validated cleaned history.
-- [ ] Delete obsolete GitHub branches after the new `main` is healthy.
-- [ ] Remove obsolete local branches and stale worktree registrations.
-- [ ] Verify GitHub Actions, Vercel Ready, live health, live auth, and relevant browser workflows.
+- [x] Update GitHub `main` to the validated cleaned history.
+- [x] Delete obsolete GitHub branches after the new `main` is healthy.
+- [x] Remove obsolete local branches and stale worktree registrations.
+- [x] Verify GitHub Actions, Vercel Ready, live health, live auth, and relevant browser workflows.
 
 ## Evidence
 
@@ -39,6 +39,15 @@ Keep one authoritative Git branch (`main`), remove reachable private-key materia
 - Disposable rewrite result: `0` valid private keys, `0` missing Git objects, Git integrity passed.
 - Cleaned authoritative branch: `main` at `aa83ab9` before the evidence-log commit.
 - Cleaned local validation: 96 tests passed; type-check, production build, current secret audit, history secret audit, asset audit, migration audit, Git integrity, and production dependency audit passed.
+- Published cleaned commit: `dcf798a0038b789e653a9a7a880b9b5f2469439c`.
+- GitHub Actions: CI run `29065676704` passed every gate.
+- Vercel production deployment: `rainmaker-5gwfxpf3u-edgpatioshade.vercel.app` reached `Ready`.
+- Live API verification: `/health` returned `200`, unauthenticated `/api/user` returned `401`, and a missing quote image returned `404`.
+- Live auth verification: `/api/auth/google/status` returned `{"enabled":true}`.
+- Live CSP verification: scripts allow only self and Google Maps; unsafe eval, unsafe inline scripts, retired Replit origins, OpenAI browser access, and unrestricted WebSockets are absent.
+- Live browser verification: only “Continue with Google Workspace” is present; there are zero password/text login fields and no AI assistant UI.
+- Final branch state: one local branch (`main`), one GitHub branch (`main`), one local worktree, and zero open pull requests.
+- Final reachable-history audit: zero valid private keys and zero missing Git objects.
 - GitHub default branch: `main`; branch protection is not configured.
 - Open pull requests: PR `#11` only (`codex/rainmaker-replit-cleanup` -> `main`).
 - Branch containment: all local branches except `codex/rainmaker-replit-cleanup` are ancestors of the authoritative candidate.
@@ -53,3 +62,6 @@ Keep one authoritative Git branch (`main`), remove reachable private-key materia
 - 2026-07-09: Selected `codex/rainmaker-security-stabilization` as the authoritative tree; all other work remains recoverable from the verified bundle.
 - 2026-07-09: Rewrote the authoritative history in `/tmp/edg-quoting-clean-main`, removed all three valid private-key blobs, and collapsed the clone to one `main` branch.
 - 2026-07-09: Completed the full local validation gate on the cleaned branch; all required checks passed.
+- 2026-07-09: Force-updated GitHub `main` with an exact lease, then confirmed CI and the resulting Vercel production deployment passed.
+- 2026-07-09: Closed superseded PR #11 and deleted every remote branch except `main`.
+- 2026-07-09: Aligned the workspace to cleaned `main`, deleted all obsolete local branches, pruned stale worktrees, expired old reflogs, garbage-collected unreachable history, and revalidated zero reachable private keys.
