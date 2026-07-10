@@ -56,6 +56,7 @@ describe("Workspace-only human authentication", () => {
     expect(authSource).toContain("SESSION_SECRET is required in production");
     expect(authSource).toContain("sameSite: 'lax'");
     expect(appSource).not.toContain("'unsafe-eval'");
+    expect(appSource).toContain('scriptSrc: ["\'self\'", "https://maps.googleapis.com"]');
     expect(appSource).not.toContain("*.replit.app");
     expect(appSource).not.toContain("https://api.openai.com");
     expect(appSource).toContain('express.json({ limit: "10mb" })');

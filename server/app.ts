@@ -31,13 +31,13 @@ export async function createApp(options: CreateAppOptions = {}): Promise<{
     contentSecurityPolicy: isProduction ? {
       directives: {
         defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", "'unsafe-inline'", "https://maps.googleapis.com"],
+        scriptSrc: ["'self'", "https://maps.googleapis.com"],
         styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
         imgSrc: ["'self'", "data:", "blob:", "https:"],
         fontSrc: ["'self'", "https://fonts.gstatic.com"],
         // OpenAI requests run server-side; the retired browser AI chat must not
         // retain a client-side network permission for the provider.
-        connectSrc: ["'self'", "https://maps.googleapis.com", "wss:", "ws:"],
+        connectSrc: ["'self'", "https://maps.googleapis.com"],
         frameSrc: ["'self'"],
         objectSrc: ["'none'"],
         upgradeInsecureRequests: [],
