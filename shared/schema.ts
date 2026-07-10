@@ -523,7 +523,8 @@ export const lineItems = pgTable("line_items", {
   index("idx_line_items_group_position").on(table.groupId, table.position),
 ]);
 
-// Issue reports table for user feedback and bug tracking
+// Legacy issue-report records are retained for data preservation. The application
+// no longer exposes a UI or API for this retired feature.
 export const issueReports = pgTable("issue_reports", {
   id: serial("id").primaryKey(),
   userId: integer("user_id"), // optional reference to users table
@@ -848,19 +849,6 @@ export const insertLeadAttachmentSchema = createInsertSchema(leadAttachments).om
   uploadedAt: true,
 });
 
-export const insertIssueReportSchema = createInsertSchema(issueReports).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-  resolvedAt: true,
-}).extend({
-  status: z.enum(["open", "in_progress", "resolved", "closed"]).default("open"),
-  priority: z.enum(["low", "medium", "high", "critical"]).default("medium"),
-  userEmail: z.string().email().optional().nullable(),
-  userId: z.number().optional().nullable(),
-  assignedTo: z.number().optional().nullable(),
-});
-
 // Type exports
 export type Account = typeof accounts.$inferSelect;
 export type Customer = typeof accounts.$inferSelect; // Legacy alias
@@ -880,7 +868,6 @@ export type QuoteCoverPhoto = typeof quoteCoverPhotos.$inferSelect;
 export type QuoteProductRendering = typeof quoteProductRenderings.$inferSelect;
 export type LeadAttachment = typeof leadAttachments.$inferSelect;
 export type LeadIntakeSubmission = typeof leadIntakeSubmissions.$inferSelect;
-export type IssueReport = typeof issueReports.$inferSelect;
 
 export type InsertAccount = z.infer<typeof insertAccountSchema>;
 export type InsertCustomer = z.infer<typeof insertAccountSchema>; // Legacy alias
@@ -899,7 +886,6 @@ export type InsertProductColor = z.infer<typeof insertProductColorSchema>;
 export type InsertQuoteCoverPhoto = z.infer<typeof insertQuoteCoverPhotoSchema>;
 export type InsertQuoteProductRendering = z.infer<typeof insertQuoteProductRenderingSchema>;
 export type InsertLeadAttachment = z.infer<typeof insertLeadAttachmentSchema>;
-export type InsertIssueReport = z.infer<typeof insertIssueReportSchema>;
 
 export type QuoteWithDetails = Quote & {
   account?: Account; // Optional since accountId can be null

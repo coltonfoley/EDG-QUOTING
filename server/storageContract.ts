@@ -9,7 +9,6 @@ import type {
   InsertContractTemplate,
   InsertCustomer,
   InsertGroup,
-  InsertIssueReport,
   InsertLeadAttachment,
   InsertLineItem,
   InsertPlanningAgreement,
@@ -22,7 +21,6 @@ import type {
   InsertQuoteCoverPhoto,
   InsertQuoteProductRendering,
   InsertUser,
-  IssueReport,
   LeadAttachment,
   LineItem,
   PlanningAgreement,
@@ -206,13 +204,6 @@ export interface IStorage {
   deleteQuoteCoverPhoto(id: number): Promise<boolean>;
   deleteQuoteProductRendering(id: number): Promise<boolean>;
   deleteQuoteImagesByQuoteId(quoteId: number): Promise<boolean>;
-
-  // Issue report methods
-  createIssueReport(issueReport: InsertIssueReport): Promise<IssueReport>;
-  getIssueReport(id: number): Promise<IssueReport | undefined>;
-  getAllIssueReports(): Promise<IssueReport[]>;
-  updateIssueReport(id: number, issueReport: Partial<InsertIssueReport>): Promise<IssueReport | undefined>;
-  deleteIssueReport(id: number): Promise<boolean>;
 
   // Authorization methods for security
   validateLineItemsOwnership(lineItemIds: number[], userId: any): Promise<{ isValid: boolean; quoteId?: number }>;

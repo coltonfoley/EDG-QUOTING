@@ -11,7 +11,6 @@ import {
   insertContractTemplateSchema as baseContractTemplateSchema,
   insertPricingTableSchema as basePricingTableSchema,
   insertUserSchema as baseUserSchema,
-  insertIssueReportSchema as baseIssueReportSchema,
   planningAgreementStatusValues,
   planningAgreementTierValues,
   planningAgreementPaymentMethodValues
@@ -1045,23 +1044,6 @@ export const quoteIdParamSchema = z.object({
 
 export const imageIdParamSchema = z.object({
   imageId: z.string().regex(/^\d+$/, "Image ID must be a valid positive integer").transform(val => parseInt(val))
-});
-
-// Enhanced Issue Report validation
-export const insertIssueReportSchema = baseIssueReportSchema.extend({
-  description: z.string().min(1, "Description is required").max(5000, "Description is too long"),
-  userAction: z.string().min(1, "User action is required").max(1000, "User action description is too long"),
-  location: z.string().min(1, "Location is required").max(500, "Location is too long"),
-  userEmail: z.string().email("Invalid email format").max(255, "Email is too long").optional().nullable(),
-  userId: z.number().int().positive("User ID must be a positive integer").optional().nullable(),
-  userAgent: z.string().max(1000, "User agent is too long").optional().nullable(),
-  browserName: z.string().max(100, "Browser name is too long").optional().nullable(),
-  browserVersion: z.string().max(50, "Browser version is too long").optional().nullable(),
-  screenResolution: z.string().max(50, "Screen resolution is too long").optional().nullable(),
-  status: z.enum(["open", "in_progress", "resolved", "closed"]).default("open"),
-  priority: z.enum(["low", "medium", "high", "critical"]).default("medium"),
-  assignedTo: z.number().int().positive("Assigned to must be a positive integer").optional().nullable(),
-  healthMetrics: z.any().optional().nullable()
 });
 
 // E-Signature validation schemas

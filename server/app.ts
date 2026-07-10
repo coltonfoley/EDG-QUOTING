@@ -84,15 +84,6 @@ export async function createApp(options: CreateAppOptions = {}): Promise<{
   app.use("/api/signatures", publicActionLimiter);
   app.use("/api/planning-agreement-signatures", publicActionLimiter);
 
-  const issueReportLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000,
-    max: 20,
-    message: { message: "Too many issue reports, please try again later." },
-    standardHeaders: true,
-    legacyHeaders: false,
-  });
-  app.use("/api/issue-reports", issueReportLimiter);
-
   app.use(express.json({ limit: "10mb" }));
   app.use(express.urlencoded({ extended: false, limit: "10mb" }));
 

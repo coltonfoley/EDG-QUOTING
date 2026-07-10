@@ -17,7 +17,6 @@ import {
   quoteCoverPhotos,
   quoteProductRenderings,
   leadAttachments,
-  issueReports,
   type Account,
   type Customer,
   type Quote,
@@ -36,7 +35,6 @@ import {
   type QuoteCoverPhoto,
   type QuoteProductRendering,
   type LeadAttachment,
-  type IssueReport,
   type InsertAccount,
   type InsertCustomer,
   type InsertQuote,
@@ -54,7 +52,6 @@ import {
   type InsertQuoteCoverPhoto,
   type InsertQuoteProductRendering,
   type InsertLeadAttachment,
-  type InsertIssueReport,
   type QuoteWithDetails,
   type ProductWithDetails
 } from "@shared/schema";
@@ -2567,35 +2564,6 @@ export class DatabaseStorage implements IStorage {
       .where(eq(quoteProductRenderings.quoteId, quoteId));
 
     return ((coverResult.rowCount || 0) + (renderingsResult.rowCount || 0)) > 0;
-  }
-
-  // Issue report methods
-  async createIssueReport(issueReport: InsertIssueReport): Promise<IssueReport> {
-    const [newIssueReport] = await db.insert(issueReports).values(issueReport).returning();
-    return newIssueReport;
-  }
-
-  async getIssueReport(id: number): Promise<IssueReport | undefined> {
-    const [issueReport] = await db.select().from(issueReports).where(eq(issueReports.id, id));
-    return issueReport || undefined;
-  }
-
-  async getAllIssueReports(): Promise<IssueReport[]> {
-    const reports = await db.select().from(issueReports).orderBy(desc(issueReports.createdAt));
-    return reports;
-  }
-
-  async updateIssueReport(id: number, issueReport: Partial<InsertIssueReport>): Promise<IssueReport | undefined> {
-    const [updated] = await db.update(issueReports)
-      .set({ ...issueReport, updatedAt: new Date() })
-      .where(eq(issueReports.id, id))
-      .returning();
-    return updated || undefined;
-  }
-
-  async deleteIssueReport(id: number): Promise<boolean> {
-    const result = await db.delete(issueReports).where(eq(issueReports.id, id));
-    return (result.rowCount || 0) > 0;
   }
 
 }

@@ -101,10 +101,12 @@ describe("authorization policy", () => {
     expect(quoteRoutes).toContain('app.post("/api/quotes/:quoteId/product-renderings", isAuthenticated');
   });
 
-  it("rate limits public signing and issue-report surfaces", () => {
+  it("rate limits public signing surfaces and keeps retired issue reporting unavailable", () => {
     const appSource = source("server/app.ts");
     expect(appSource).toContain('app.use("/api/signatures", publicActionLimiter)');
     expect(appSource).toContain('app.use("/api/planning-agreement-signatures", publicActionLimiter)');
-    expect(appSource).toContain('app.use("/api/issue-reports", issueReportLimiter)');
+    expect(appSource).not.toContain('"/api/issue-reports"');
+    expect(source("server/routes.ts")).not.toContain("/api/issue-reports");
+    expect(source("client/src/App.tsx")).not.toContain("ReportIssueButton");
   });
 });

@@ -11,7 +11,6 @@ import { LoadingSpinner } from "@/components/loading-spinner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, RefreshCw } from "lucide-react";
-import { ReportIssueButton } from "@/components/report-issue-button";
 import { lazyWithReload } from "@/lib/lazy-with-reload";
 
 const NotFound = lazyWithReload(() => import("@/pages/not-found"), "not-found");
@@ -123,20 +122,6 @@ function Router() {
   );
 }
 
-function InternalUIComponents() {
-  const [location] = useLocation();
-  
-  if (location.startsWith('/sign/')) {
-    return null;
-  }
-  
-  return (
-    <>
-      <ReportIssueButton />
-    </>
-  );
-}
-
 function App() {
   return (
     <ErrorBoundary>
@@ -146,7 +131,6 @@ function App() {
             <GlobalLoadingIndicator />
             <Toaster />
             <Router />
-            <InternalUIComponents />
           </TooltipProvider>
         </AuthProvider>
       </QueryClientProvider>
