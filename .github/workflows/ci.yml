@@ -30,6 +30,9 @@ jobs:
       - name: Reject high-severity dependency advisories
         run: npm audit --audit-level=high
 
+      - name: Require a clean production dependency audit
+        run: npm audit --omit=dev --audit-level=moderate
+
       - name: Run safety tests
         run: npm test
 
