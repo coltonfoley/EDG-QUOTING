@@ -85,4 +85,4 @@ The eight pending migrations are preservation-compatible:
 
 No migration deletes customer/project rows, removes columns/tables, rewrites signed snapshots, changes current-version flags, or deletes stored assets. Foreign-key `ON DELETE` rules describe future parent-deletion behavior; the migrations do not execute those deletions.
 
-Before applying the migrations, create a manual Neon snapshot because the current Free plan's automatic point-in-time history is only six hours. Snapshot creation and production migration/deployment remain separate approval-gated actions.
+Before applying the migrations, create a named Neon child branch from current `main` as the manual restore checkpoint because the current Free plan's automatic point-in-time history is only six hours and has no manual snapshot control. Checkpoint creation and production migration/deployment remain separate approval-gated actions.

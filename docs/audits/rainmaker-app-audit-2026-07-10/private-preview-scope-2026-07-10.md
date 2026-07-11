@@ -59,4 +59,4 @@ This requirement is now complete. The review branch was rebased onto `e3664f7`, 
 
 ## Not authorized by preview approval
 
-A private preview does not authorize production deployment, production migrations, customer email, signature requests, quote changes, stored-data cleanup, Ops calls, or removal of compatibility records. A manual Neon snapshot and separate explicit approval are required before production migrations or deployment.
+A private preview does not authorize production deployment, production migrations, customer email, signature requests, quote changes, stored-data cleanup, Ops calls, or removal of compatibility records. A named Neon child branch from current `main`, created immediately before migration as the manual restore checkpoint, and separate explicit approval are required before production migrations or deployment.

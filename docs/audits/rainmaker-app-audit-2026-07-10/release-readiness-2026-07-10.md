@@ -19,7 +19,7 @@ EDG approved a read-only production preservation check. The linked Vercel projec
 
 Still required:
 
-1. Create a manual Neon snapshot immediately before the approved migration/release; automatic history is limited to six hours.
+1. Create a named Neon child branch from current `main` immediately before the approved migration/release as the manual restore checkpoint; automatic history is limited to six hours and the current plan has no manual snapshot control.
 2. Keep the 11 legacy signed records, 9 no-current historical quote families, and 28 orphan rows/objects unchanged during release. Their ID-level review is complete in `production-record-review-2026-07-10.md`.
 3. A private Blob locator export is required only before any later stored-object cleanup, not before this additive release.
 
@@ -46,8 +46,10 @@ Until those are complete, do not remove the Ops backend/configuration, legacy fi
 
 Preparation is approved. The following actions are not implied by that approval and remain separate stop points:
 
-1. Review and explicitly approve the eight production migrations plus rollback checkpoint.
-2. Merge/release only after a manual Neon snapshot and explicit deployment approval.
+The eight-migration safety and rollback review is documented in [production-migration-review-2026-07-11.md](production-migration-review-2026-07-11.md). Aggregate-only production preflight found valid non-overlapping pricing configuration and an intact historical lead attachment path. The technical review is complete; authorization is not.
+
+1. Explicitly approve the eight production migrations and release scope.
+2. Merge/release only after the named Neon restore-checkpoint branch and explicit deployment approval.
 3. Prove GitHub CI, Vercel `Ready`, live production `/health`, `/ready`, `/api/user`, core quote/lead/signing journeys, and post-release Vercel error/email evidence separately.
 
 No customer email, proposal, signature, quote mutation, Ops handoff, production data write, or deployment was performed while preparing this packet.

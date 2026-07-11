@@ -59,7 +59,10 @@ ALTER TABLE "quotes" ADD COLUMN IF NOT EXISTS "source_inquiry_id" integer;
 DO $$
 BEGIN
   IF NOT EXISTS (
-    SELECT 1 FROM pg_constraint WHERE conname = 'quotes_source_inquiry_id_lead_inquiries_id_fk'
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'quotes_source_inquiry_id_lead_inquiries_id_fk'
+      AND conrelid = 'public.quotes'::regclass
   ) THEN
     ALTER TABLE "quotes"
       ADD CONSTRAINT "quotes_source_inquiry_id_lead_inquiries_id_fk"

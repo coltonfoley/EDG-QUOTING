@@ -67,7 +67,7 @@ Estimates assume focused engineering time and exclude waiting for business revie
 
 ## Phase 0 — Read-only safety and baselines
 
-**Status on 2026-07-10:** external production truth, authenticated core-route rendering, Ops dependency evidence, the transaction-enforced read-only preservation audit, ID-level historical-record review, credential rotation, backup-window verification, preview database isolation, and the local test/build/security baseline are complete. The database-backed quote tests run against an isolated fresh PGlite restore and are included in CI. A five-page fictional signed-PDF fixture and durable admin/sales/public/empty/error/signed browser fixtures are generated and visually baselined. A manual Neon snapshot remains required immediately before an approved migration. See [production-baseline-2026-07-10.md](production-baseline-2026-07-10.md), [production-preservation-report-2026-07-10.md](production-preservation-report-2026-07-10.md), [production-record-review-2026-07-10.md](production-record-review-2026-07-10.md), [preservation-inventory-2026-07-10.md](preservation-inventory-2026-07-10.md), and [test-baseline-2026-07-10.md](test-baseline-2026-07-10.md).
+**Status on 2026-07-11:** external production truth, authenticated core-route rendering, Ops dependency evidence, the transaction-enforced read-only preservation audit, ID-level historical-record review, live pricing/attachment aggregate preflight, credential rotation, backup-window verification, preview database isolation, and the local test/build/security baseline are complete. The database-backed quote tests run against an isolated fresh PGlite restore and are included in CI. A five-page fictional signed-PDF fixture and durable admin/sales/public/empty/error/signed browser fixtures are generated and visually baselined. A named Neon child branch from current `main` remains required immediately before an approved migration as the manual restore checkpoint. See [production-baseline-2026-07-10.md](production-baseline-2026-07-10.md), [production-preservation-report-2026-07-10.md](production-preservation-report-2026-07-10.md), [production-record-review-2026-07-10.md](production-record-review-2026-07-10.md), [production-migration-review-2026-07-11.md](production-migration-review-2026-07-11.md), [preservation-inventory-2026-07-10.md](preservation-inventory-2026-07-10.md), and [test-baseline-2026-07-10.md](test-baseline-2026-07-10.md).
 
 ### 0.1 Confirm production truth
 
@@ -307,7 +307,7 @@ Acceptance:
 
 ### Work package 3B — Make dimensional pricing fail safely
 
-**Status:** complete locally; production pricing validation and rollout not approved.
+**Status:** complete locally and aggregate-preflighted against production read-only. The live configuration contains 912 bands across both configurable products with no missing product table, invalid range, negative price, or inclusive overlap. Production rollout is not approved.
 
 Business decision applied locally: exact supported-range coverage with no tolerance or nearest-band fallback. Any future tolerance requires a separate explicit rule and boundary tests.
 
@@ -352,7 +352,7 @@ Acceptance:
 
 ### Work package 4A — Stop inquiry intake from overwriting accounts
 
-**Status:** complete locally; production preservation counts, backup proof, attachment-reference validation, migration approval, and rollout remain pending.
+**Status:** complete locally and aggregate-preflighted against production read-only. Preservation counts and attachment references are validated: the single active attachment retains its account and Vercel Blob links; its historical submission ID predates the retry ledger and remains preserved through the account compatibility path. A named Neon child branch from current `main` as the manual restore checkpoint, migration approval, and rollout remain pending.
 
 Recommended staged approach:
 
@@ -450,7 +450,7 @@ Acceptance:
 
 ### Work package 5B — Move schema changes out of request paths
 
-**Status:** complete locally. `server/db.ts` contains no DDL; former compatibility helpers perform a cached read-only schema assertion, the migration manifest restores in isolation, `/ready` checks database/schema state, and future production verification requires readiness. The read-only production preservation proof, managed database connection, six-hour PITR window, credential rotation, and preview isolation are complete. A manual snapshot remains required immediately before an approved production migration.
+**Status:** complete locally. `server/db.ts` contains no DDL; former compatibility helpers perform a cached read-only schema assertion, the migration manifest restores in isolation, `/ready` checks database/schema state, and future production verification requires readiness. The read-only production preservation proof, managed database connection, six-hour PITR window, credential rotation, and preview isolation are complete. A named Neon child branch from current `main` remains required immediately before an approved production migration as the manual restore checkpoint.
 
 Scope:
 

@@ -1,8 +1,8 @@
 # Rainmaker improvement-plan completion audit
 
-**Date:** 2026-07-10
-**Scope:** Current local worktree against `IMPROVEMENT-PLAN.md`
-**Verdict:** The planned product-correctness work is substantially implemented and verified locally, the read-only preservation and historical-record reviews are complete, the retired Ops backend is removed locally, and EDG has approved the two-role capability policy plus Vercel-only on-demand error review. The program is not production-complete because manual assistive-technology checks and release authorization remain outstanding.
+**Date:** 2026-07-11
+**Scope:** Release candidate `dc93bc1` plus the current migration-review follow-up against `IMPROVEMENT-PLAN.md`
+**Verdict:** The planned product-correctness work is implemented and verified in the private release candidate, the read-only preservation/historical-record/pricing/attachment reviews are complete, the retired Ops backend is removed from the candidate, and EDG has approved the two-role capability policy plus Vercel-only on-demand error review. The program is not production-complete because manual assistive-technology checks and release authorization remain outstanding.
 
 ## Status definitions
 
@@ -17,7 +17,7 @@
 | Plan area | Status | Evidence | Remaining requirement |
 |---|---|---|---|
 | 0.1 production truth | Complete for the audit snapshot | `production-baseline-2026-07-10.md` | Refresh commit/deployment/health proof immediately before any release. |
-| 0.2 preservation-first data checks | **Complete for additive release; cleanup remains gated** | `production-preservation-report-2026-07-10.md`; `production-record-review-2026-07-10.md`; `preservation-inventory-2026-07-10.md` | Read-only aggregate/ID review, credential rotation, managed connection, and backup-window proof are complete. Create a manual snapshot before migration. Preserve the classified historical records; a private locator export remains required before any later object cleanup. |
+| 0.2 preservation-first data checks | **Complete for additive release; cleanup remains gated** | `production-preservation-report-2026-07-10.md`; `production-record-review-2026-07-10.md`; `preservation-inventory-2026-07-10.md` | Read-only aggregate/ID review, credential rotation, managed connection, and backup-window proof are complete. Create a named child branch from current `main` as the manual restore checkpoint before migration. Preserve the classified historical records; a private locator export remains required before any later object cleanup. |
 | 0.3 dependable test baseline | Complete locally | `test-baseline-2026-07-10.md`; isolated PGlite harness; CI workflow | Neon-specific preflight is optional for ordinary tests but advisable before high-risk production migrations. |
 | 1A dead visible controls | Complete locally | `phase1-ui-cleanup-2026-07-10.md`; synthetic admin/sales/mobile browser fixtures | Production release only. |
 | 1B Ops backend retirement | Complete locally | `phase1b-ops-backend-retirement-2026-07-10.md`; no callable route/integration or active repo configuration remains | Production release and later removal of obsolete Vercel Ops variables. Historical data/compatibility records remain preserved. |
@@ -26,9 +26,9 @@
 | 2B authoritative customer package | Complete locally | `phase2-customer-package-2026-07-10.md`; public-package/snapshot tests; fictional PDF | Approved production release and post-release package comparison. |
 | 2C package consolidation | Complete locally | `phase2-package-consolidation-2026-07-10.md`; removed duplicate generator | Production release only. |
 | 3A catalog/group source identity | Complete locally | `phase3-catalog-source-identity-2026-07-10.md`; migration and database tests | Migration approval and rollout. |
-| 3B exact dimensional pricing | Complete locally | `phase3-dimensional-pricing-2026-07-10.md`; exact-band and transactional-replacement tests | Validate live configuration aggregates read-only before rollout. |
+| 3B exact dimensional pricing | Complete locally and production-preflighted | `phase3-dimensional-pricing-2026-07-10.md`; `production-migration-review-2026-07-11.md`; exact-band and transactional-replacement tests | Read-only production check found 912 bands across both configurable products, with zero missing tables, invalid ranges, negative prices, or inclusive overlaps. Production rollout only. |
 | 3C transactional quote/PDF import | Complete locally | `phase3-transactional-quote-import-2026-07-10.md`; rollback/target/provenance tests; chooser-capable fictional-PDF browser rehearsal | Production rollout only; the rehearsal proves editable values and target/price guards while observing zero `/api/quotes/import-batch` requests. |
-| 4A inquiry history preservation | Complete locally | `phase4-lead-client-workflow-2026-07-10.md`; migration and repeat-inquiry tests | Attachment/reference preservation proof and rollout. |
+| 4A inquiry history preservation | Complete locally and production-preflighted | `phase4-lead-client-workflow-2026-07-10.md`; `production-migration-review-2026-07-11.md`; migration and repeat-inquiry tests | The single active attachment retains its account and Blob references. Its historical submission ID predates the retry ledger and is intentionally preserved; migration `0027` keeps account-level attachment compatibility. Production rollout only. |
 | 4B lead-to-quote conversion | Complete locally | same Phase 4 report; in-app prefill proof; one-inquiry/one-quote transaction test | Production rollout. |
 | 4C account/dashboard truth | Complete locally | same Phase 4 report; browser fixtures and policy tests | Read-only production aggregate comparison after migration. |
 | 4D responsive/accessibility automation | Complete locally | `phase4d-usability-accessibility-2026-07-10.md`; 59 route/viewport states, 14 dialog/theme states, and full keyboard/no-write rehearsals | Keep the gate in CI. |
@@ -49,18 +49,19 @@
 The final local sequence passed:
 
 - TypeScript check.
-- 182 ordinary unit/policy tests, with 47 database cases intentionally skipped in that command. Seven obsolete Ops-only tests were removed with the retired integration.
+- 183 ordinary unit/policy tests, with 47 database cases intentionally skipped in that command. Seven obsolete Ops-only tests were removed with the retired integration.
 - 47 isolated migrated database tests.
 - Production frontend/server/Vercel bundle build; the existing large fonts-chunk warning remains.
 - 59 responsive light/dark/public-edge/forced-colors/zoom-equivalent cases and 14 dialog/theme states with no critical/serious axe violations, document overflow, unnamed sampled focus stops, or theme mismatches, plus keyboard approval/new-quote/existing-edit, fictional product-import, and Sundance insertion proof.
 - Asset audit, secret audit, and patch-format audit.
 - In-app Browser dark-theme inspection of authenticated core routes, compact Products/Pipeline, and light-theme isolation for public signing.
+- Git-connected private preview readiness: `/health` 200, `/ready` 200 with 25 tables and 370 expected columns, and signed-out `/api/user` 401.
 
 No production database, customer record, signature, email, deployment, Ops endpoint, or compatibility record was changed.
 
 ## Exact next gates
 
-1. **Preservation release gate:** the read-only aggregate and ID-level reviews, credential rotation, managed connection, six-hour PITR proof, and historical-record preservation decisions are complete. Create a manual Neon snapshot immediately before an approved migration. A private Blob locator export is required only before any later object cleanup.
+1. **Preservation release gate:** the read-only aggregate and ID-level reviews, live pricing/attachment preflight, credential rotation, managed connection, six-hour PITR proof, and historical-record preservation decisions are complete. Create a named Neon child branch from current `main` immediately before an approved migration as the manual restore checkpoint. A private Blob locator export is required only before any later object cleanup.
 2. **Manual UX gate:** complete a human VoiceOver/NVDA interpretation pass and visual focus/browser-zoom spot checks. Native accessibility-tree signing order, computed focus-indicator checks, the chooser-capable PDF review, full ephemeral keyboard public-approval/new-quote/existing-edit flows, forced-colors, and 200% effective-scale reflow are automated.
 3. **Release gate:** explicitly authorize the intended local change set, migrations, commit/push, CI, Vercel deployment, live `/health`, `/ready`, authenticated `/api/user`, core browser journeys, rollback checkpoint, and post-release error/email review.
 4. **Ops production cleanup gate:** the retired backend/configuration is removed locally. After an approved release proves no callable path remains, remove the obsolete Vercel Ops variables separately. Stored customer/project/legacy records remain untouched.
