@@ -50,6 +50,6 @@ The eight-migration safety and rollback review is documented in [production-migr
 
 1. Explicitly approve the eight production migrations and release scope.
 2. Merge/release only after the named Neon restore-checkpoint branch and explicit deployment approval.
-3. Prove GitHub CI, Vercel `Ready`, live production `/health`, `/ready`, `/api/user`, core quote/lead/signing journeys, and post-release Vercel error/email evidence separately.
+3. Prove GitHub CI, Vercel `Ready`, live production `/health`, `/ready`, `/api/user`, core quote/lead/signing journeys, and post-release Vercel error/email evidence separately. The current production `/ready` falls through to frontend HTML, so the release proof must assert the readiness JSON body and schema counts rather than accepting HTTP 200 alone.
 
 No customer email, proposal, signature, quote mutation, Ops handoff, production data write, or deployment was performed while preparing this packet.

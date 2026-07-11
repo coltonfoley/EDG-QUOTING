@@ -20,6 +20,8 @@ Production has not been migrated or deployed. The remaining hard gates are a nam
 
 The following aggregate-only queries ran in the Neon SQL Editor against the `main` branch and `rainmaker-production` database on 2026-07-11. They did not read customer content, prices, dimensions, filenames, storage URLs, or contact details.
 
+The live baseline was refreshed at 06:56 CDT on 2026-07-11: `/health` returned the expected JSON with HTTP 200 and unauthenticated `/api/user` returned 401. The current production deployment does not yet implement the new readiness route: `/ready` returned the frontend HTML shell with HTTP 200. Post-release verification must therefore assert the JSON body (`status: ready`, `database: ready`, and schema counts), not merely the HTTP status.
+
 ### Pricing configuration
 
 | Check | Result | Release meaning |
@@ -78,7 +80,7 @@ These steps describe the release but do not authorize it.
 4. Apply migrations `0023`–`0030` in manifest order inside one transaction. Any SQL failure must roll back the entire transaction.
 5. Run a schema-only readiness check before deploying application code. Expected application schema: 25 tables and 370 columns.
 6. Deploy the exact approved commit through GitHub-connected Vercel production.
-7. Verify Vercel `Ready`, live `/health`, live `/ready`, authenticated `/api/user`, the signed-out login shell, role visibility, quote loading, and one read-only customer-package comparison.
+7. Verify Vercel `Ready`, live `/health`, live `/ready`, authenticated `/api/user`, the signed-out login shell, role visibility, quote loading, and one read-only customer-package comparison. `/ready` must return readiness JSON with `status: ready`, `database: ready`, and the expected schema counts; frontend HTML with HTTP 200 is a failure.
 8. Review Vercel runtime/error logs and the redacted email reconciliation view. Do not send a test customer email or create a signature to prove the release.
 
 ## Rollback checkpoint
