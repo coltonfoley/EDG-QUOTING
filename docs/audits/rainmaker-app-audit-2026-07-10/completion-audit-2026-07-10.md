@@ -1,8 +1,10 @@
 # Rainmaker improvement-plan completion audit
 
 **Date:** 2026-07-11
-**Scope:** Release candidate `dc93bc1` plus the current migration-review follow-up against `IMPROVEMENT-PLAN.md`
-**Verdict:** The planned product-correctness work is implemented and verified in the private release candidate, the read-only preservation/historical-record/pricing/attachment reviews are complete, the retired Ops backend is removed from the candidate, and EDG has approved the two-role capability policy plus Vercel-only on-demand error review. The program is not production-complete because manual assistive-technology checks and release authorization remain outstanding.
+**Scope:** Production release at merge commit `eb76c6b` against `IMPROVEMENT-PLAN.md`
+**Verdict:** The planned product-correctness work is implemented, migrated, deployed, and verified in production. The preservation/historical-record/pricing/attachment reviews are complete, the retired Ops UI/backend/configuration is removed, the two-role capability policy is live, and Vercel-only error evidence is operating as approved. See [production-release-verification-2026-07-11.md](production-release-verification-2026-07-11.md).
+
+**Production addendum:** Production release proof supersedes the pre-release rollout wording retained in the matrix below. The human VoiceOver/NVDA interpretation and physical browser-zoom spot check remain recommendations; automated keyboard, accessibility-tree, forced-colors, focus, reflow, and zoom-equivalent gates are shipped and passing in CI.
 
 ## Status definitions
 
@@ -42,7 +44,7 @@
 | 5C adoption evidence | Complete for instrumented server events | adoption report plus `phase5-product-workflow-evidence-2026-07-10.md`; minimized event, atomic import/configurator, and admin-summary tests | Product import and Sundance insertion now have authoritative completion points. Weaker client-only clicks remain intentionally unmeasured; counts begin only after deployment. |
 | 5C error reporting | **Operating decision complete** | `phase5-error-reporting-decision-2026-07-10.md` | Vercel-only; Codex reviews on request and during approved releases, with Colton as human escalation/approval owner. This is not autonomous monitoring or proactive alerting. |
 | 5D targeted decomposition | Complete locally | `phase5d-targeted-decomposition-2026-07-10.md`; bounded policy/service modules | Broader splitting is deliberately deferred until a behavior change supplies a stable boundary. |
-| Production release | **Not authorized** | Full local verification passes | Approve preservation audit, migration/release scope, commit/push/CI/Vercel, health/readiness/auth/browser proof, rollback checkpoint, and post-release review. |
+| Production release | **Complete and verified** | `production-release-verification-2026-07-11.md`; merge commit `eb76c6b`; CI run `29152737502`; Vercel deployment `dpl_4vpMnAhvGQuZS1Mt1tFcaCZ8DEcn` | Keep the restore checkpoint through its scheduled expiry and continue preserving classified historical data. |
 
 ## Current verification snapshot
 
@@ -57,15 +59,15 @@ The final local sequence passed:
 - In-app Browser dark-theme inspection of authenticated core routes, compact Products/Pipeline, and light-theme isolation for public signing.
 - Git-connected private preview readiness: `/health` 200, `/ready` 200 with 25 tables and 370 expected columns, and signed-out `/api/user` 401.
 
-No production database, customer record, signature, email, deployment, Ops endpoint, or compatibility record was changed.
+The production schema received only the reviewed additive migrations. No customer record, signature, email, quote/client business content, stored object, or compatibility record was changed or deleted.
 
-## Exact next gates
+## Post-release follow-through
 
-1. **Preservation release gate:** the read-only aggregate and ID-level reviews, live pricing/attachment preflight, credential rotation, managed connection, six-hour PITR proof, and historical-record preservation decisions are complete. Create a named Neon child branch from current `main` immediately before an approved migration as the manual restore checkpoint. A private Blob locator export is required only before any later object cleanup.
-2. **Manual UX gate:** complete a human VoiceOver/NVDA interpretation pass and visual focus/browser-zoom spot checks. Native accessibility-tree signing order, computed focus-indicator checks, the chooser-capable PDF review, full ephemeral keyboard public-approval/new-quote/existing-edit flows, forced-colors, and 200% effective-scale reflow are automated.
-3. **Release gate:** explicitly authorize the intended local change set, migrations, commit/push, CI, Vercel deployment, live `/health`, `/ready`, authenticated `/api/user`, core browser journeys, rollback checkpoint, and post-release error/email review.
-4. **Ops production cleanup gate:** the retired backend/configuration is removed locally. After an approved release proves no callable path remains, remove the obsolete Vercel Ops variables separately. Stored customer/project/legacy records remain untouched.
+1. Keep `release-checkpoint-2026-07-11-5c26af3` until its scheduled 2026-07-18 expiry unless it is needed for incident recovery.
+2. Continue Vercel log review on request and during future approved releases.
+3. Complete a human VoiceOver/NVDA interpretation and physical browser-zoom spot check when convenient; this is a residual validation recommendation, not a missing technical phase.
+4. Require a private locator export and separate authorization before any future stored-object or historical-record cleanup.
 
 ## Completion decision
 
-Do not mark the overall goal complete yet. The local engineering plan has reached a reviewable release candidate, but the program's own completion criteria still require the manual validation gaps and an authorized production proof chain. Those are explicit gates, not reasons to weaken the preservation or no-deploy constraints.
+The technical improvement program and production proof chain are complete. Historical data remains intentionally preserved. The documented human assistive-technology interpretation recommendation may be completed separately without reopening the engineering release.

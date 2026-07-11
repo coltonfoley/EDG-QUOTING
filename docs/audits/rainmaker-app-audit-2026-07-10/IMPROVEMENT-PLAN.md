@@ -1,10 +1,12 @@
 # Rainmaker improvement plan
 
-**Status:** In progress locally; Phases 1–3, Phase 4A–4C, the Phase 4D automated/theme scope, and Phase 5B/5D are complete locally; Phase 5A/5C decisions are complete and manual validation remains; no deployment authorized
+**Status:** Production release complete and verified on 2026-07-11. All planned technical phases are live; preserved historical/compatibility data remains intentionally untouched. Human VoiceOver/NVDA interpretation and a physical browser-zoom spot check remain documented validation recommendations, not unshipped functionality.
 **Created:** 2026-07-10
 **Source audit:** [Rainmaker application audit](./README.md)
 **Planning baseline:** repository commit `154988e0656c3cfe58cac88c6c661f332a912ae3`
 **Estimated program:** 6–9 engineering weeks, delivered as small independently reviewable changes
+
+**Production proof:** [production-release-verification-2026-07-11.md](production-release-verification-2026-07-11.md). Status statements later in this plan describe the pre-release implementation sequence; the production proof supersedes their former rollout gates.
 
 ## Outcome
 
@@ -67,7 +69,7 @@ Estimates assume focused engineering time and exclude waiting for business revie
 
 ## Phase 0 — Read-only safety and baselines
 
-**Status on 2026-07-11:** external production truth, authenticated core-route rendering, Ops dependency evidence, the transaction-enforced read-only preservation audit, ID-level historical-record review, live pricing/attachment aggregate preflight, credential rotation, backup-window verification, preview database isolation, and the local test/build/security baseline are complete. The database-backed quote tests run against an isolated fresh PGlite restore and are included in CI. A five-page fictional signed-PDF fixture and durable admin/sales/public/empty/error/signed browser fixtures are generated and visually baselined. A named Neon child branch from current `main` remains required immediately before an approved migration as the manual restore checkpoint. See [production-baseline-2026-07-10.md](production-baseline-2026-07-10.md), [production-preservation-report-2026-07-10.md](production-preservation-report-2026-07-10.md), [production-record-review-2026-07-10.md](production-record-review-2026-07-10.md), [production-migration-review-2026-07-11.md](production-migration-review-2026-07-11.md), [preservation-inventory-2026-07-10.md](preservation-inventory-2026-07-10.md), and [test-baseline-2026-07-10.md](test-baseline-2026-07-10.md).
+**Status on 2026-07-11:** complete in production. External production truth, authenticated core-route rendering, Ops dependency evidence, the transaction-enforced read-only preservation audit, ID-level historical-record review, live pricing/attachment aggregate preflight, credential rotation, backup-window verification, preview isolation, production restore checkpoint, migrations, deployment, and the local/CI/security baselines are complete. See [production-release-verification-2026-07-11.md](production-release-verification-2026-07-11.md).
 
 ### 0.1 Confirm production truth
 
