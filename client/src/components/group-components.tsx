@@ -2,9 +2,22 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { ChevronDown, ChevronRight, Trash2, Plus, GripVertical } from "lucide-react";
 import { formatCurrency, calculateGroupSubtotal, calculateGroupMargin } from "@/lib/utils";
 import { useDroppable } from '@dnd-kit/core';
+import { useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import type { LineItem } from "@shared/schema";
 
 export interface Group {
@@ -40,9 +53,14 @@ export function GroupHeader({
 }: GroupHeaderProps) {
   const [editTitle, setEditTitle] = useState(group.title);
 
-  const { setNodeRef } = useDroppable({
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: `group-${group.id}`
   });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.6 : 1,
+  };
 
   const groupSubtotal = calculateGroupSubtotal(lineItems);
   const groupMargin = calculateGroupMargin(lineItems);
@@ -65,21 +83,31 @@ export function GroupHeader({
   };
 
   return (
-    <tr ref={setNodeRef} className={`border-b border-gray-300 transition-all duration-200 ${isDropTarget ? 'bg-blue-100 ring-2 ring-blue-400 ring-inset' : 'bg-gray-50'}`} data-testid={`group-header-${group.id}`}>
+    <tr ref={setNodeRef} style={style} className={`border-b border-border transition-all duration-200 ${isDropTarget ? 'bg-blue-100 ring-2 ring-blue-400 ring-inset dark:bg-blue-950/40' : 'bg-muted/50'}`} data-testid={`group-header-${group.id}`}>
       <td colSpan={9} className="px-4 py-3">
         <div className="flex items-center justify-between">
         <div className="flex items-center space-x-3">
           {/* Drag handle */}
-          <div className="cursor-grab hover:cursor-grabbing text-gray-400" data-testid={`group-drag-handle-${group.id}`}>
+          <button
+            type="button"
+            {...attributes}
+            {...listeners}
+            aria-label={`Reorder ${group.title}`}
+            className="cursor-grab hover:cursor-grabbing text-gray-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            data-testid={`group-drag-handle-${group.id}`}
+          >
             <GripVertical className="h-4 w-4" />
-          </div>
+          </button>
           
           {/* Collapse/expand button */}
           <Button
+            type="button"
             variant="ghost"
             size="sm"
             onClick={() => onToggleCollapse(group.id)}
             className="p-0 h-auto"
+            aria-label={`${group.isCollapsed ? "Expand" : "Collapse"} ${group.title}`}
+            aria-expanded={!group.isCollapsed}
             data-testid={`button-toggle-group-${group.id}`}
           >
             {group.isCollapsed ? (
@@ -103,8 +131,10 @@ export function GroupHeader({
               />
             ) : (
               <button
+                type="button"
                 onClick={onStartEdit}
-                className="text-sm font-medium text-gray-900 hover:text-blue-600 transition-colors"
+                className="text-sm font-medium text-foreground transition-colors hover:text-blue-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label={`Rename group ${group.title}`}
                 data-testid={`text-group-title-${group.id}`}
               >
                 {group.title}
@@ -118,21 +148,44 @@ export function GroupHeader({
 
         {/* Group totals and actions */}
         <div className="flex items-center space-x-4">
-          <div className="text-sm text-gray-600" data-testid={`text-group-margin-${group.id}`}>
+          <div className="text-sm text-muted-foreground" data-testid={`text-group-margin-${group.id}`}>
             Margin: {formatCurrency(groupMargin)}
           </div>
-          <div className="text-sm font-medium text-gray-900" data-testid={`text-group-subtotal-${group.id}`}>
+          <div className="text-sm font-medium text-foreground" data-testid={`text-group-subtotal-${group.id}`}>
             Subtotal: {formatCurrency(groupSubtotal)}
           </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => onDeleteGroup(group.id)}
-            className="text-red-600 hover:text-red-700 hover:bg-red-50 p-1"
-            data-testid={`button-delete-group-${group.id}`}
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="text-red-600 hover:text-red-700 hover:bg-red-50 p-1"
+                aria-label={`Delete group ${group.title}`}
+                data-testid={`button-delete-group-${group.id}`}
+              >
+                <Trash2 className="h-4 w-4" aria-hidden="true" />
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete {group.title}?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  The group will be removed. Its {itemCount} {itemCount === 1 ? "item" : "items"} will be preserved as ungrouped quote items.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={() => onDeleteGroup(group.id)}
+                  className="bg-red-600 hover:bg-red-700"
+                  data-testid={`button-confirm-delete-group-${group.id}`}
+                >
+                  Delete Group
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
         </div>
       </td>

@@ -6,7 +6,27 @@ import {
   ExtractedCustomerSchema,
   ExtractedQuoteSchema,
   ExtractedQuoteWithPageRefsSchema,
+  createVisionExtractionCacheKey,
 } from "../openai";
+
+describe("OpenAI vision cache identity", () => {
+  it("uses complete image bytes rather than a shared base64 prefix", () => {
+    const sharedPrefix = Buffer.alloc(128, 7);
+    const firstImage = Buffer.concat([sharedPrefix, Buffer.from("first-tail")]).toString("base64");
+    const secondImage = Buffer.concat([sharedPrefix, Buffer.from("second-tail")]).toString("base64");
+
+    expect(firstImage.slice(0, 100)).toBe(secondImage.slice(0, 100));
+    expect(createVisionExtractionCacheKey([{ index: 0, imageBase64: firstImage }]))
+      .not.toBe(createVisionExtractionCacheKey([{ index: 0, imageBase64: secondImage }]));
+  });
+
+  it("includes page identity and order in the cache key", () => {
+    const imageBase64 = Buffer.from("same-image").toString("base64");
+
+    expect(createVisionExtractionCacheKey([{ index: 0, imageBase64 }]))
+      .not.toBe(createVisionExtractionCacheKey([{ index: 1, imageBase64 }]));
+  });
+});
 
 describe("OpenAI Quote Import Schemas", () => {
   describe("ExtractedProductSchema", () => {

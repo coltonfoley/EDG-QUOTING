@@ -13,8 +13,9 @@ import {
   bulkDeleteSchema,
   bulkUpdateSchema
 } from "../validation-schemas";
-import { nanoid } from "nanoid";
-import { calculateCustomerLineTotal, resolveProductCost } from "@shared/pricing";
+import { sendQuoteSignedLockResponse } from "../quoteLock";
+import { redactedErrorType, validationIssueSummary } from "../redactedLogging";
+import { ConfiguredProductInsertionError, configuredProductInsertionSchema } from "../configuredProductInsertion";
 
 /**
  * Server-side calculation verification utility
@@ -178,11 +179,51 @@ export function registerLineItemRoutes(app: Express) {
         ? Math.max(...itemsInSameGroup.map(item => item.position ?? 0))
         : -1;
 
-      const lineItemData = insertLineItemSchema.parse({ 
+      let lineItemData = insertLineItemSchema.parse({
         ...req.body, 
         quoteId: params.data.quoteId,
         position: maxPosition + 1
       });
+
+      if (lineItemData.productId) {
+        const product = await storage.getProduct(lineItemData.productId);
+        if (!product) {
+          return res.status(400).json({ message: "The selected catalog product no longer exists. Refresh the catalog and choose it again." });
+        }
+        const requestedPriceSource = req.body.priceSource === "dimensional_catalog"
+          ? "dimensional_catalog"
+          : "catalog_cost";
+        lineItemData = {
+          ...lineItemData,
+          sku: product.sku,
+          manufacturer: product.manufacturer,
+          unit: product.unit,
+          priceSource: requestedPriceSource,
+          sourceMetadata: {
+            productSnapshot: {
+              id: product.id,
+              name: product.name,
+              sku: product.sku,
+              manufacturer: product.manufacturer,
+              category: product.category,
+              productType: product.productType,
+              unit: product.unit,
+              retailPrice: product.retailPrice,
+              costPrice: product.costPrice,
+              defaultDiscountType: product.defaultDiscountType,
+              defaultDiscountValue: product.defaultDiscountValue,
+            },
+            configuration: lineItemData.configData || null,
+            enteredUnitPrice: lineItemData.unitPrice,
+          },
+        };
+      } else {
+        lineItemData = {
+          ...lineItemData,
+          priceSource: "manual",
+          sourceMetadata: lineItemData.sourceMetadata || { enteredUnitPrice: lineItemData.unitPrice },
+        };
+      }
       
       // Get quote to access tariff rate for calculation verification
       const quote = await storage.getQuote(params.data.quoteId);
@@ -213,15 +254,13 @@ export function registerLineItemRoutes(app: Express) {
       const lineItem = await storage.createLineItem(lineItemData);
       res.status(201).json(lineItem);
     } catch (error) {
-
+      if (sendQuoteSignedLockResponse(res, error)) return;
       if (error instanceof z.ZodError) {
-        console.error("Line item validation error:", JSON.stringify(error.errors, null, 2));
-        console.error("Request body:", JSON.stringify(req.body, null, 2));
+        console.error("Line item validation failed", validationIssueSummary(error));
         const errorMessages = error.errors.map(e => e.message).join(", ");
         return res.status(400).json({ message: errorMessages || "Invalid line item data", errors: error.errors });
       }
-      console.error("Line item creation error:", error);
-      console.error("Request body:", JSON.stringify(req.body, null, 2));
+      console.error("Line item creation failed", { errorType: redactedErrorType(error) });
       res.status(500).json({ message: "Something went wrong while saving the line item. Please try again." });
     }
   });
@@ -238,20 +277,19 @@ export function registerLineItemRoutes(app: Express) {
         });
       }
 
-      // Authorization check: validate ownership and same quote
-      const ownership = await storage.validateLineItemsOwnership(validatedData.data.ids, req.user?.id);
-      if (!ownership.isValid) {
-        return res.status(403).json({ message: "Unauthorized: You can only delete your own line items from the same quote" });
+      const selection = await storage.validateLineItemSelection(validatedData.data.ids);
+      if (!selection.isValid) {
+        return res.status(400).json({ message: "Line items must exist and belong to the same quote" });
       }
 
-      // Additional quote ownership validation
-      if (ownership.quoteId && !await storage.validateQuoteOwnership(ownership.quoteId, req.user?.id)) {
-        return res.status(403).json({ message: "Unauthorized: You don't have access to this quote" });
+      if (selection.quoteId && !await storage.quoteExists(selection.quoteId)) {
+        return res.status(404).json({ message: "Quote not found" });
       }
 
       const deletedCount = await storage.bulkDeleteLineItems(validatedData.data.ids);
       res.json({ deletedCount });
     } catch (error) {
+      if (sendQuoteSignedLockResponse(res, error)) return;
       console.error("Bulk delete error:", error);
       res.status(500).json({ message: "Internal server error" });
     }
@@ -268,20 +306,19 @@ export function registerLineItemRoutes(app: Express) {
         });
       }
 
-      // Authorization check: validate ownership and same quote
-      const ownership = await storage.validateLineItemsOwnership(validatedData.data.ids, req.user?.id);
-      if (!ownership.isValid) {
-        return res.status(403).json({ message: "Unauthorized: You can only update your own line items from the same quote" });
+      const selection = await storage.validateLineItemSelection(validatedData.data.ids);
+      if (!selection.isValid) {
+        return res.status(400).json({ message: "Line items must exist and belong to the same quote" });
       }
 
-      // Additional quote ownership validation
-      if (ownership.quoteId && !await storage.validateQuoteOwnership(ownership.quoteId, req.user?.id)) {
-        return res.status(403).json({ message: "Unauthorized: You don't have access to this quote" });
+      if (selection.quoteId && !await storage.quoteExists(selection.quoteId)) {
+        return res.status(404).json({ message: "Quote not found" });
       }
 
       const updatedCount = await storage.bulkUpdateLineItems(validatedData.data.ids, validatedData.data.updates);
       res.json({ updatedCount });
     } catch (error) {
+      if (sendQuoteSignedLockResponse(res, error)) return;
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: "Invalid update data", errors: error.errors });
       }
@@ -350,13 +387,13 @@ export function registerLineItemRoutes(app: Express) {
       }
       res.json(lineItem);
     } catch (error) {
+      if (sendQuoteSignedLockResponse(res, error)) return;
       if (error instanceof z.ZodError) {
-        console.error("Line item update validation error:", JSON.stringify(error.errors, null, 2));
-        console.error("Request body:", JSON.stringify(req.body, null, 2));
+        console.error("Line item update validation failed", validationIssueSummary(error));
         const errorMessages = error.errors.map(e => e.message).join(", ");
         return res.status(400).json({ message: errorMessages || "Invalid line item data", errors: error.errors });
       }
-      console.error("Line item update error:", error);
+      console.error("Line item update failed", { errorType: redactedErrorType(error) });
       res.status(500).json({ message: "Something went wrong while updating the line item. Please try again." });
     }
   });
@@ -375,8 +412,8 @@ export function registerLineItemRoutes(app: Express) {
       if (!lineItem) {
         return res.status(404).json({ message: "Line item not found" });
       }
-      if (!(await storage.validateQuoteOwnership(lineItem.quoteId, req.user?.id))) {
-        return res.status(403).json({ message: "Unauthorized: You don't have access to this quote" });
+      if (!(await storage.quoteExists(lineItem.quoteId))) {
+        return res.status(404).json({ message: "Quote not found" });
       }
 
       const deleted = await storage.deleteLineItem(params.data.id);
@@ -385,6 +422,7 @@ export function registerLineItemRoutes(app: Express) {
       }
       res.status(204).send();
     } catch (error) {
+      if (sendQuoteSignedLockResponse(res, error)) return;
       res.status(500).json({ message: "Internal server error" });
     }
   });
@@ -405,6 +443,7 @@ export function registerLineItemRoutes(app: Express) {
 
       res.json({ success: true });
     } catch (error) {
+      if (sendQuoteSignedLockResponse(res, error)) return;
       console.error("Error reordering line items:", error);
       res.status(500).json({ message: "Internal server error" });
     }
@@ -443,6 +482,7 @@ export function registerLineItemRoutes(app: Express) {
       const group = await storage.createGroup(groupData);
       res.status(201).json(group);
     } catch (error) {
+      if (sendQuoteSignedLockResponse(res, error)) return;
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: "Invalid group data", errors: error.errors });
       }
@@ -490,6 +530,7 @@ export function registerLineItemRoutes(app: Express) {
       }
       res.json(group);
     } catch (error) {
+      if (sendQuoteSignedLockResponse(res, error)) return;
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: "Invalid group data", errors: error.errors });
       }
@@ -512,8 +553,8 @@ export function registerLineItemRoutes(app: Express) {
       if (!group) {
         return res.status(404).json({ message: "Group not found" });
       }
-      if (!(await storage.validateQuoteOwnership(group.quoteId, req.user?.id))) {
-        return res.status(403).json({ message: "Unauthorized: You don't have access to this quote" });
+      if (!(await storage.quoteExists(group.quoteId))) {
+        return res.status(404).json({ message: "Quote not found" });
       }
 
       const deleted = await storage.deleteGroup(params.data.groupId);
@@ -522,6 +563,7 @@ export function registerLineItemRoutes(app: Express) {
       }
       res.status(204).send();
     } catch (error) {
+      if (sendQuoteSignedLockResponse(res, error)) return;
       console.error("Error deleting group:", error);
       res.status(500).json({ message: "Internal server error" });
     }
@@ -543,6 +585,7 @@ export function registerLineItemRoutes(app: Express) {
 
       res.json({ success: true });
     } catch (error) {
+      if (sendQuoteSignedLockResponse(res, error)) return;
       console.error("Error reordering groups:", error);
       res.status(500).json({ message: "Internal server error" });
     }
@@ -560,118 +603,34 @@ export function registerLineItemRoutes(app: Express) {
       }
 
       const { quoteId } = params.data;
-      const { items } = req.body as { 
-        items: { 
-          productId: number | null;
-          quantity: number;
-          productSnapshot: any;
-          configData?: any;
-        }[] 
-      };
-
-      if (!items || !Array.isArray(items) || items.length === 0) {
-        return res.status(400).json({ message: "Items array is required" });
-      }
-
-      // Validate that all items have product snapshots with required fields
-      for (const item of items) {
-        if (!item.productSnapshot) {
-          return res.status(400).json({ message: "Product snapshot is required for all items" });
-        }
-        const required = ['name', 'manufacturer', 'retailPrice', 'defaultDiscountType', 'defaultDiscountValue'];
-        for (const field of required) {
-          if (item.productSnapshot[field] === undefined) {
-            return res.status(400).json({ message: `Product snapshot missing required field: ${field}` });
-          }
-        }
-      }
-
-      // Get manufacturer from first product snapshot
-      const manufacturer = items[0].productSnapshot.manufacturer;
-      const isSundanceConfiguration = typeof manufacturer === "string" && manufacturer.trim().toLowerCase() === "sundance";
-      const sundancePricingDefault = isSundanceConfiguration
-        ? await storage.getPricingDefault("sundance")
-        : undefined;
-      const defaultMarkupType = isSundanceConfiguration
-        ? (sundancePricingDefault?.markupType || "percentage")
-        : "percentage";
-      const defaultMarkupValue = isSundanceConfiguration
-        ? (sundancePricingDefault?.markupValue?.toString() || "100")
-        : "0";
-      
-      // Calculate estimated customer total from snapshots for the saved group metadata.
-      const total = items.reduce((sum, item) => {
-        return sum + calculateCustomerLineTotal(
-          item.quantity,
-          resolveProductCost(item.productSnapshot),
-          defaultMarkupType,
-          defaultMarkupValue
-        );
-      }, 0);
-
-      // Get existing groups to determine position
-      const existingGroups = await storage.getGroupsByQuoteId(quoteId);
-      const maxPosition = existingGroups.length > 0 
-        ? Math.max(...existingGroups.map(g => g.position)) 
-        : -1;
-
-      // Create group with full configuration data (manufacturer + product snapshots)
-      const groupId = nanoid();
-      const groupTitle = `${manufacturer} Configuration`;
-      
-      await storage.createGroup({
-        id: groupId,
-        quoteId,
-        title: groupTitle,
-        position: maxPosition + 1,
-        isCollapsed: false,
-        configData: { 
-          manufacturer, 
-          items,
-          configuredAt: new Date().toISOString(),
-          total
-        }
-      });
-
-      // Get existing line items to determine position
-      const existingItems = await storage.getLineItemsByQuoteId(quoteId);
-      const groupItems = existingItems.filter(item => item.groupId === groupId);
-      let itemPosition = groupItems.length;
-
-      // Create line items using product snapshots for historical accuracy
-      for (const item of items) {
-        const snapshot = item.productSnapshot;
-
-        // Quote lines store the historical EDG cost basis in unitPrice.
-        const unitPrice = resolveProductCost(snapshot);
-
-        await storage.createLineItem({
-          quoteId,
-          productId: item.productId,
-          sku: manufacturer === "Sundance" ? (snapshot.sku || snapshot.name) : snapshot.sku,
-          description: snapshot.name,
-          quantity: item.quantity.toString(),
-          retailPrice: snapshot.retailPrice,
-          unitPrice: unitPrice.toFixed(2),
-          // Supplier discount is already included in unitPrice. Sundance then gets the saved margin.
-          markupType: defaultMarkupType,
-          markupValue: defaultMarkupValue,
-          discountType: "percentage",
-          discountValue: "0",
-          isTaxable: true,
-          groupId,
-          position: itemPosition++,
-          configData: item.configData ? JSON.stringify(item.configData) : undefined,
+      const parsed = configuredProductInsertionSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({
+          message: "Configuration data needs attention",
+          errors: parsed.error.issues.map((issue) => ({ path: issue.path, message: issue.message })),
         });
       }
-
-      res.status(201).json({ 
-        success: true, 
-        groupId,
-        message: "Configuration inserted successfully" 
+      const actorUserId = Number((req as any).user?.id);
+      const result = await storage.insertConfiguredProduct(
+        quoteId,
+        parsed.data,
+        Number.isInteger(actorUserId) && actorUserId > 0 ? actorUserId : null,
+      );
+      res.status(result.replayed ? 200 : 201).json({
+        ...result,
+        message: result.replayed
+          ? "Configuration was already inserted"
+          : "Configuration inserted successfully",
       });
     } catch (error) {
-      console.error("Error creating configuration:", error);
+      if (sendQuoteSignedLockResponse(res, error)) return;
+      if (error instanceof ConfiguredProductInsertionError) {
+        return res.status(error.status).json({
+          message: error.message,
+          code: error.code,
+        });
+      }
+      console.error("Configured package insertion failed", { errorType: redactedErrorType(error) });
       res.status(500).json({ message: "Internal server error" });
     }
   });

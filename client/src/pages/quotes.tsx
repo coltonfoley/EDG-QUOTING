@@ -1,7 +1,8 @@
-import { useState, useMemo, useEffect, Suspense } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
 import { AppHeader } from "@/components/app-header";
+import { PageLoadError } from "@/components/error-alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -19,21 +20,16 @@ import { LoadingSpinner } from "@/components/loading-spinner";
 import { QuoteImporter } from "@/components/quote-importer";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { calculateLineItemsValue } from "@/lib/quote-value";
-import { lazyWithReload } from "@/lib/lazy-with-reload";
 import type { QuoteWithDetails } from "@shared/schema";
-
-const SimpleProposalGenerator = lazyWithReload(() => import("@/components/simple-proposal-generator").then(m => ({ default: m.SimpleProposalGenerator })), "simple-proposal-generator");
 
 export default function Quotes() {
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedQuoteForProposal, setSelectedQuoteForProposal] = useState<QuoteWithDetails | null>(null);
-  const [proposalGeneratorOpen, setProposalGeneratorOpen] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const { toast } = useToast();
-  const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const { user, isAuthenticated, isLoading: authLoading } = useAuth();
   const [, navigate] = useLocation();
   
-  const { data: quotes, isLoading, error } = useQuery<QuoteWithDetails[]>({
+  const { data: quotes, isLoading, error, refetch } = useQuery<QuoteWithDetails[]>({
     queryKey: ["/api/quotes"],
     enabled: isAuthenticated,
   });
@@ -168,6 +164,19 @@ export default function Quotes() {
     );
   }
 
+  if (error && !isUnauthorizedError(error as Error)) {
+    return (
+      <div className="min-h-screen bg-background">
+        <AppHeader />
+        <PageLoadError
+          title="Quotes couldn't be loaded"
+          description="Rainmaker could not retrieve the quote list. This is a loading failure, not an empty quote list."
+          onRetry={() => void refetch()}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <AppHeader />
@@ -175,7 +184,7 @@ export default function Quotes() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-8 space-y-4 sm:space-y-0">
           <div>
-            <h2 className="text-3xl font-bold text-edg-black">Project Quotes</h2>
+            <h1 className="text-3xl font-bold text-edg-black">Project Quotes</h1>
             <p className="text-edg-grey mt-2">Manage your patio & shade project estimates</p>
           </div>
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center space-y-3 sm:space-y-0 sm:space-x-4">
@@ -228,7 +237,7 @@ export default function Quotes() {
               <div className="flex items-center">
                 <Users className="h-8 w-8 text-edg-teal" />
                 <div className="ml-4">
-                  <p className="text-sm font-medium text-edg-grey">Active Accounts</p>
+                  <p className="text-sm font-medium text-edg-grey">Active Clients</p>
                   <p className="text-2xl font-bold text-edg-black">{new Set(quotes?.filter(q => q.account).map(q => q.account?.id).filter(Boolean)).size || 0}</p>
                 </div>
               </div>
@@ -249,7 +258,8 @@ export default function Quotes() {
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-edg-grey h-4 w-4" />
                 <Input
-                  placeholder="Search quotes, accounts, projects..."
+                  aria-label="Search quotes"
+                  placeholder="Search quotes, clients, projects..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-10 w-full sm:w-80"
@@ -307,7 +317,7 @@ export default function Quotes() {
                         Quote #
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-edg-grey uppercase tracking-wider">
-                        Account
+                        Client
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-edg-grey uppercase tracking-wider">
                         Project
@@ -415,42 +425,17 @@ export default function Quotes() {
                                 </Button>
                               </Link>
                               
-                              {/* Generate Proposal Button - Only show if quote has line items */}
-                              {quote.lineItems.length > 0 && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={async () => {
-                                    // Fetch fresh quote data with contract template relation
-                                    try {
-                                      const response = await apiRequest('GET', `/api/quotes/${quote.id}`);
-                                      const freshQuote = await response.json();
-                                      setSelectedQuoteForProposal(freshQuote);
-                                      setProposalGeneratorOpen(true);
-                                    } catch (error) {
-                                      toast({
-                                        title: "Error",
-                                        description: "Failed to load quote data",
-                                        variant: "destructive"
-                                      });
-                                    }
-                                  }}
-                                  className="text-blue-600 hover:text-blue-800 hover:bg-blue-50"
-                                  data-testid={`button-generate-proposal-${quote.id}`}
-                                >
-                                  <FileText className="h-4 w-4" />
-                                </Button>
-                              )}
-                              
-                              <AlertDialog>
+                              {user?.role === "admin" && <AlertDialog>
                                 <AlertDialogTrigger asChild>
                                   <Button 
+                                    type="button"
                                     variant="ghost" 
                                     size="sm" 
                                     className="text-red-600 hover:text-red-800 hover:bg-red-50"
+                                    aria-label={`Delete quote ${quote.quoteNumber}`}
                                     data-testid={`button-delete-quote-${quote.id}`}
                                   >
-                                    <Trash2 className="h-4 w-4" />
+                                    <Trash2 className="h-4 w-4" aria-hidden="true" />
                                   </Button>
                                 </AlertDialogTrigger>
                                 <AlertDialogContent>
@@ -475,7 +460,7 @@ export default function Quotes() {
                                     </AlertDialogAction>
                                   </AlertDialogFooter>
                                 </AlertDialogContent>
-                              </AlertDialog>
+                              </AlertDialog>}
                             </div>
                           </td>
                         </tr>
@@ -488,22 +473,6 @@ export default function Quotes() {
           </CardContent>
         </Card>
         
-        {/* Simple Proposal Generator Dialog */}
-        {selectedQuoteForProposal && (
-          <Suspense fallback={null}>
-            <SimpleProposalGenerator
-              quote={selectedQuoteForProposal}
-              open={proposalGeneratorOpen}
-              onOpenChange={(open) => {
-                setProposalGeneratorOpen(open);
-                if (!open) {
-                  setSelectedQuoteForProposal(null);
-                }
-              }}
-            />
-          </Suspense>
-        )}
-
         {/* Quote Importer */}
         <QuoteImporter
           open={importDialogOpen}

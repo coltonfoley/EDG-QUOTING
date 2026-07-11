@@ -14,12 +14,14 @@ export function ThemeToggle() {
       setTheme("light");
     }
   };
+  const nextTheme = theme === "light" ? "dark" : theme === "dark" ? "system" : "light";
 
   return (
     <Button 
       variant="ghost" 
       size="icon" 
       onClick={toggleTheme}
+      aria-label={`Theme: ${theme}. Switch to ${nextTheme}.`}
       data-testid="button-theme-toggle"
       className="hover:bg-muted"
     >
@@ -30,7 +32,7 @@ export function ThemeToggle() {
       ) : (
         <Sun className="h-5 w-5 opacity-50" />
       )}
-      <span className="sr-only">Toggle theme</span>
+      <span className="sr-only">Theme: {theme}. Switch to {nextTheme}.</span>
     </Button>
   );
 }

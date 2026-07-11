@@ -112,3 +112,29 @@ export function InlineError({ error, className = "" }: InlineErrorProps) {
     </div>
   );
 }
+
+export function PageLoadError({
+  title,
+  description,
+  onRetry,
+}: {
+  title: string;
+  description: string;
+  onRetry: () => void;
+}) {
+  return (
+    <main className="mx-auto max-w-3xl px-4 py-12 sm:px-6 lg:px-8">
+      <Alert variant="destructive" role="alert" data-testid="page-load-error">
+        <AlertTriangle className="h-4 w-4" aria-hidden="true" />
+        <AlertTitle>{title}</AlertTitle>
+        <AlertDescription>
+          <p className="mb-4">{description}</p>
+          <Button type="button" size="sm" variant="outline" onClick={onRetry} data-testid="button-retry-page-load">
+            <RefreshCw className="mr-2 h-4 w-4" aria-hidden="true" />
+            Try Again
+          </Button>
+        </AlertDescription>
+      </Alert>
+    </main>
+  );
+}

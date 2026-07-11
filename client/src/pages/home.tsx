@@ -19,26 +19,26 @@ import {
 } from "lucide-react";
 import { Link } from "wouter";
 import { AppHeader } from "@/components/app-header";
+import { PageLoadError } from "@/components/error-alert";
 import { useQuery } from "@tanstack/react-query";
 import { formatCurrency, cn, calculateQuoteTotals } from "@/lib/utils";
 import { calculateLineItemsValue } from "@/lib/quote-value";
 import { format, startOfMonth, endOfMonth, isWithinInterval } from "date-fns";
-import type { QuoteWithDetails, Account } from "@shared/schema";
+import type { Account, QuoteWithDetails } from "@shared/schema";
 import { DEAL_STAGES, getDealStageById, isWonStage, isLostStage, isFinalStage, isActiveStage } from "@shared/dealStageConstants";
 
 
 export default function Home() {
   // Fetch quotes
-  const { data: quotes, isLoading: quotesLoading } = useQuery<QuoteWithDetails[]>({
+  const { data: quotes, isLoading: quotesLoading, error: quotesError, refetch: refetchQuotes } = useQuery<QuoteWithDetails[]>({
     queryKey: ['/api/quotes'],
   });
 
-  // Fetch accounts
-  const { data: accounts, isLoading: accountsLoading } = useQuery<Account[]>({
-    queryKey: ['/api/accounts'],
+  const { data: accountSummary, isLoading: accountsLoading, error: accountsError, refetch: refetchAccounts } = useQuery<{ totalClients: number }>({
+    queryKey: ['/api/accounts/summary'],
   });
 
-  const { data: newLeads, isLoading: leadsLoading } = useQuery<Account[]>({
+  const { data: newLeads, isLoading: leadsLoading, error: leadsError, refetch: refetchLeads } = useQuery<Account[]>({
     queryKey: ['/api/leads', 'new'],
     queryFn: async () => {
       const response = await fetch('/api/leads?status=new&limit=200', {
@@ -54,8 +54,8 @@ export default function Home() {
     return calculateLineItemsValue(quote.lineItems);
   }
 
-  // Calculate quote margin (profit)
-  function calculateQuoteMargin(quote: QuoteWithDetails): number {
+  // Gross markup is customer line revenue minus stored line cost. It is not net profit.
+  function calculateQuoteMarkup(quote: QuoteWithDetails): number {
     const totals = calculateQuoteTotals(
       quote.lineItems,
       quote.taxRate ? parseFloat(quote.taxRate.toString()) : 0,
@@ -67,53 +67,56 @@ export default function Home() {
     return totals.totalMarkup;
   }
 
-  // Calculate metrics
+  const currentQuotes = quotes?.filter((quote) => quote.isLatestVersion !== false) || [];
+
+  // Calculate metrics from one current version per quote family.
   const metrics = {
     newLeads: newLeads?.length || 0,
-    totalAccounts: accounts?.length || 0,
-    activeDeals: quotes?.filter(q => isActiveStage(q.dealStage || 'new_lead')).length || 0,
-    totalDeals: quotes?.length || 0,
-    wonThisMonth: quotes?.filter(q => {
+    totalAccounts: accountSummary?.totalClients || 0,
+    activeDeals: currentQuotes.filter(q => isActiveStage(q.dealStage || 'new_lead')).length,
+    totalDeals: currentQuotes.length,
+    wonThisMonth: currentQuotes.filter(q => {
       if (!isWonStage(q.dealStage || '')) return false;
-      const updatedAt = new Date(q.updatedAt || q.createdAt || '');
+      if (!q.dealStageChangedAt) return false;
+      const wonAt = new Date(q.dealStageChangedAt);
       const start = startOfMonth(new Date());
       const end = endOfMonth(new Date());
-      return isWithinInterval(updatedAt, { start, end });
-    }).length || 0,
-    pipelineValue: quotes?.filter(q => isActiveStage(q.dealStage || 'new_lead')).reduce((sum, quote) => {
+      return isWithinInterval(wonAt, { start, end });
+    }).length,
+    pipelineValue: currentQuotes.filter(q => isActiveStage(q.dealStage || 'new_lead')).reduce((sum, quote) => {
       return sum + calculateQuoteTotal(quote);
-    }, 0) || 0,
-    wonValue: quotes?.filter(q => isWonStage(q.dealStage || '')).reduce((sum, quote) => {
+    }, 0),
+    wonValue: currentQuotes.filter(q => isWonStage(q.dealStage || '')).reduce((sum, quote) => {
       return sum + calculateQuoteTotal(quote);
-    }, 0) || 0,
-    avgDealSize: quotes && quotes.length > 0 
-      ? quotes.reduce((sum, q) => sum + calculateQuoteTotal(q), 0) / quotes.length 
+    }, 0),
+    avgDealSize: currentQuotes.length > 0
+      ? currentQuotes.reduce((sum, q) => sum + calculateQuoteTotal(q), 0) / currentQuotes.length
       : 0,
-    winRate: quotes && quotes.length > 0
-      ? (quotes.filter(q => isWonStage(q.dealStage || '')).length / 
-         quotes.filter(q => isFinalStage(q.dealStage || '')).length) * 100 || 0
+    winRate: currentQuotes.length > 0
+      ? (currentQuotes.filter(q => isWonStage(q.dealStage || '')).length /
+         currentQuotes.filter(q => isFinalStage(q.dealStage || '')).length) * 100 || 0
       : 0,
-    // Margin/Profit metrics
-    totalProfit: quotes?.filter(q => isWonStage(q.dealStage || '')).reduce((sum, quote) => {
-      return sum + calculateQuoteMargin(quote);
-    }, 0) || 0,
-    pipelineProfit: quotes?.filter(q => isActiveStage(q.dealStage || 'new_lead')).reduce((sum, quote) => {
-      return sum + calculateQuoteMargin(quote);
-    }, 0) || 0,
-    profitThisMonth: quotes?.filter(q => {
+    totalMarkup: currentQuotes.filter(q => isWonStage(q.dealStage || '')).reduce((sum, quote) => {
+      return sum + calculateQuoteMarkup(quote);
+    }, 0),
+    pipelineMarkup: currentQuotes.filter(q => isActiveStage(q.dealStage || 'new_lead')).reduce((sum, quote) => {
+      return sum + calculateQuoteMarkup(quote);
+    }, 0),
+    markupThisMonth: currentQuotes.filter(q => {
       if (!isWonStage(q.dealStage || '')) return false;
-      const updatedAt = new Date(q.updatedAt || q.createdAt || '');
+      if (!q.dealStageChangedAt) return false;
+      const wonAt = new Date(q.dealStageChangedAt);
       const start = startOfMonth(new Date());
       const end = endOfMonth(new Date());
-      return isWithinInterval(updatedAt, { start, end });
+      return isWithinInterval(wonAt, { start, end });
     }).reduce((sum, quote) => {
-      return sum + calculateQuoteMargin(quote);
-    }, 0) || 0,
-    avgMarginPercent: quotes && quotes.length > 0 
+      return sum + calculateQuoteMarkup(quote);
+    }, 0),
+    avgMarginPercent: currentQuotes.length > 0
       ? (() => {
           let totalMarkup = 0;
           let totalBaseCost = 0;
-          quotes.forEach(q => {
+          currentQuotes.forEach(q => {
             const totals = calculateQuoteTotals(
               q.lineItems,
               q.taxRate ? parseFloat(q.taxRate.toString()) : 0,
@@ -136,26 +139,26 @@ export default function Home() {
 
   // Group quotes by stage
   const quotesByStage = DEAL_STAGES.map(stage => {
-    const stageQuotes = quotes?.filter(q => (q.dealStage || 'new_lead') === stage.id) || [];
+    const stageQuotes = currentQuotes.filter(q => (q.dealStage || 'new_lead') === stage.id);
     const stageValue = stageQuotes.reduce((sum, q) => sum + calculateQuoteTotal(q), 0);
-    const stageProfit = stageQuotes.reduce((sum, q) => sum + calculateQuoteMargin(q), 0);
+    const stageMarkup = stageQuotes.reduce((sum, q) => sum + calculateQuoteMarkup(q), 0);
     return {
       ...stage,
       count: stageQuotes.length,
       value: stageValue,
-      profit: stageProfit,
-      percentage: quotes && quotes.length > 0 
-        ? (stageQuotes.length / quotes.length) * 100 
+      markup: stageMarkup,
+      percentage: currentQuotes.length > 0
+        ? (stageQuotes.length / currentQuotes.length) * 100
         : 0
     };
   });
 
   // Get recent activity (last 10 quotes)
-  const recentActivity = quotes?.slice().sort((a, b) => {
+  const recentActivity = currentQuotes.slice().sort((a, b) => {
     const dateA = new Date(b.updatedAt || b.createdAt || '');
     const dateB = new Date(a.updatedAt || a.createdAt || '');
     return dateA.getTime() - dateB.getTime();
-  }).slice(0, 10) || [];
+  }).slice(0, 10);
 
   const formatDate = (dateString: string | Date) => {
     const date = typeof dateString === 'string' ? new Date(dateString) : dateString;
@@ -171,6 +174,22 @@ export default function Home() {
 
 
   const isLoading = quotesLoading || accountsLoading || leadsLoading;
+  const loadError = quotesError || accountsError || leadsError;
+
+  if (loadError) {
+    return (
+      <div className="min-h-screen bg-background">
+        <AppHeader />
+        <PageLoadError
+          title="Dashboard couldn't be loaded"
+          description="One or more dashboard sources are unavailable, so Rainmaker will not show partial or misleading totals."
+          onRetry={() => {
+            void Promise.all([refetchQuotes(), refetchAccounts(), refetchLeads()]);
+          }}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -179,7 +198,7 @@ export default function Home() {
       <main className="container mx-auto px-4 py-8">
         {/* Header Section */}
         <div className="mb-8">
-          <h2 className="text-3xl font-bold text-edg-black mb-2">CRM Dashboard</h2>
+          <h1 className="text-3xl font-bold text-edg-black mb-2">CRM Dashboard</h1>
           <p className="text-edg-grey">Rainmaker Business Intelligence</p>
         </div>
 
@@ -304,6 +323,7 @@ export default function Home() {
               <Progress 
                 value={metrics.winRate} 
                 className="mt-3 h-2"
+                aria-label={`Win rate ${metrics.winRate.toFixed(1)} percent`}
               />
             </CardContent>
           </Card>
@@ -343,23 +363,23 @@ export default function Home() {
           </Card>
         </div>
 
-        {/* Profit & Margin Metrics */}
+        {/* Gross markup metrics (not net profit) */}
         <div className="grid md:grid-cols-4 gap-4 mb-8">
           <Card className="border-l-4 border-l-emerald-500">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-sm font-medium text-edg-grey">
-                  Total Profit
+                  Gross Markup — Won
                 </CardTitle>
                 <DollarSign className="h-4 w-4 text-emerald-500" />
               </div>
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-edg-black">
-                {isLoading ? "-" : formatCurrency(metrics.totalProfit)}
+                {isLoading ? "-" : formatCurrency(metrics.totalMarkup)}
               </div>
               <p className="text-xs text-edg-grey mt-1">
-                from all won deals
+                selling price less stored line cost
               </p>
             </CardContent>
           </Card>
@@ -368,17 +388,17 @@ export default function Home() {
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-sm font-medium text-edg-grey">
-                  Pipeline Profit
+                  Gross Markup — Pipeline
                 </CardTitle>
                 <TrendingUp className="h-4 w-4 text-amber-500" />
               </div>
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-edg-black">
-                {isLoading ? "-" : formatCurrency(metrics.pipelineProfit)}
+                {isLoading ? "-" : formatCurrency(metrics.pipelineMarkup)}
               </div>
               <p className="text-xs text-edg-grey mt-1">
-                expected from active deals
+                potential markup in active quote families
               </p>
             </CardContent>
           </Card>
@@ -387,14 +407,14 @@ export default function Home() {
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-sm font-medium text-edg-grey">
-                  Profit This Month
+                  Gross Markup Won This Month
                 </CardTitle>
                 <Award className="h-4 w-4 text-lime-500" />
               </div>
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-edg-black">
-                {isLoading ? "-" : formatCurrency(metrics.profitThisMonth)}
+                {isLoading ? "-" : formatCurrency(metrics.markupThisMonth)}
               </div>
               <p className="text-xs text-edg-grey mt-1">
                 won in {format(new Date(), 'MMMM')}
@@ -416,7 +436,7 @@ export default function Home() {
                 {isLoading ? "-" : `${metrics.avgMarginPercent.toFixed(1)}%`}
               </div>
               <p className="text-xs text-edg-grey mt-1">
-                average profit margin
+                markup divided by stored line cost
               </p>
             </CardContent>
           </Card>
@@ -460,14 +480,15 @@ export default function Home() {
                         <div className="text-sm font-medium">
                           {formatCurrency(stage.value)}
                         </div>
-                        <div className="text-xs text-emerald-600">
-                          {formatCurrency(stage.profit)} profit
+                        <div className="text-xs text-emerald-700 dark:text-emerald-400">
+                          {formatCurrency(stage.markup)} gross markup
                         </div>
                       </div>
                     </div>
                     <Progress 
                       value={stage.percentage} 
                       className="h-2"
+                      aria-label={`${stage.label} share ${stage.percentage.toFixed(1)} percent`}
                     />
                   </div>
                 ))}

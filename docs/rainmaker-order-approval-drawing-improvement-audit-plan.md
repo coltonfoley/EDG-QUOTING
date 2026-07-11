@@ -1,5 +1,7 @@
 # Rainmaker Order Approval Drawing Improvement Audit Plan
 
+> Historical reference only. The Ops Portal and Send to Ops workflow are retired. Do not implement or revive any Ops handoff described below. Existing approval-drawing records remain compatibility data.
+
 Date: 2026-06-22
 
 ## Source Intent

@@ -2,11 +2,11 @@ import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { AppHeader } from "@/components/app-header";
+import { PageLoadError } from "@/components/error-alert";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
@@ -30,6 +30,8 @@ import {
 type LeadStatus = "new" | "contacted" | "qualified" | "unresponsive" | "converted" | "archived";
 
 interface LeadAccount extends Account {
+  inquiryId?: number;
+  inquiryCount?: number;
   projectCount?: number;
   attachments?: LeadAttachment[];
   leadAttachments?: LeadAttachment[];
@@ -108,7 +110,7 @@ export default function Leads() {
   const [statusFilter, setStatusFilter] = useState<"all" | LeadStatus>("new");
   const { toast } = useToast();
 
-  const { data: leads = [], isLoading } = useQuery<LeadAccount[]>({
+  const { data: leads = [], isLoading, error, refetch } = useQuery<LeadAccount[]>({
     queryKey: ["/api/leads", "all"],
     queryFn: async () => {
       const response = await fetch("/api/leads?status=all&limit=200", {
@@ -120,8 +122,9 @@ export default function Leads() {
   });
 
   const updateLeadStatusMutation = useMutation({
-    mutationFn: async ({ id, status }: { id: number; status: LeadStatus }) => {
-      const response = await apiRequest("PATCH", `/api/leads/${id}/status`, { status });
+    mutationFn: async ({ id, inquiryId, status }: { id: number; inquiryId?: number; status: LeadStatus }) => {
+      const endpoint = inquiryId ? `/api/inquiries/${inquiryId}/status` : `/api/leads/${id}/status`;
+      const response = await apiRequest("PATCH", endpoint, { status });
       return response.json();
     },
     onSuccess: (_, variables) => {
@@ -158,6 +161,19 @@ export default function Leads() {
 
   const newLeadCount = counts.new || 0;
   const needsFollowUpCount = (counts.new || 0) + (counts.contacted || 0);
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-background">
+        <AppHeader />
+        <PageLoadError
+          title="Leads couldn't be loaded"
+          description="Rainmaker could not retrieve the lead inbox. No lead statuses were changed."
+          onRetry={() => void refetch()}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -222,18 +238,31 @@ export default function Leads() {
           <CardHeader className="border-b">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <CardTitle>Lead Inbox</CardTitle>
-              <Tabs value={statusFilter} onValueChange={(value) => setStatusFilter(value as "all" | LeadStatus)}>
-                <TabsList className="h-auto flex-wrap justify-start">
-                  {LEAD_STATUSES.map((status) => (
-                    <TabsTrigger key={status.value} value={status.value} className="gap-2">
-                      {status.label}
-                      <span className="rounded-full bg-background px-2 py-0.5 text-xs text-muted-foreground">
-                        {counts[status.value] || 0}
-                      </span>
-                    </TabsTrigger>
-                  ))}
-                </TabsList>
-              </Tabs>
+              <div
+                role="group"
+                aria-label="Filter leads by status"
+                className="inline-flex h-auto flex-wrap items-center justify-start rounded-md bg-muted p-1 text-muted-foreground"
+              >
+                {LEAD_STATUSES.map((status) => (
+                  <Button
+                    key={status.value}
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    aria-pressed={statusFilter === status.value}
+                    onClick={() => setStatusFilter(status.value)}
+                    className={cn(
+                      "gap-2 shadow-none",
+                      statusFilter === status.value && "bg-background text-foreground shadow-sm hover:bg-background",
+                    )}
+                  >
+                    {status.label}
+                    <span className="rounded-full bg-background px-2 py-0.5 text-xs text-muted-foreground">
+                      {counts[status.value] || 0}
+                    </span>
+                  </Button>
+                ))}
+              </div>
             </div>
           </CardHeader>
           <CardContent className="p-0">
@@ -258,7 +287,7 @@ export default function Leads() {
                   const attachments = getLeadAttachments(lead);
 
                   return (
-                    <div key={lead.id} className="grid gap-4 p-5 lg:grid-cols-[minmax(0,1fr)_auto]">
+                    <div key={lead.inquiryId || lead.id} className="grid gap-4 p-5 lg:grid-cols-[minmax(0,1fr)_auto]">
                     <div className="min-w-0 space-y-3">
                       <div className="flex flex-wrap items-center gap-2">
                         <Link
@@ -273,6 +302,9 @@ export default function Leads() {
                         <span className="text-sm text-muted-foreground">
                           Received {formatDate(lead.leadReceivedAt || lead.createdAt)}
                         </span>
+                        {(lead.inquiryCount || 0) > 1 && (
+                          <Badge variant="secondary">{lead.inquiryCount} inquiries</Badge>
+                        )}
                       </div>
 
                       <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-muted-foreground">
@@ -341,6 +373,18 @@ export default function Leads() {
                     </div>
 
                     <div className="flex flex-col items-stretch gap-2 lg:items-end">
+                      {lead.inquiryId && (
+                        <Link href={`/quotes/new?accountId=${lead.id}&inquiryId=${lead.inquiryId}&projectName=${encodeURIComponent(lead.leadProjectType || "")}`}>
+                          <Button
+                            size="sm"
+                            className="bg-edg-teal text-white hover:bg-edg-teal/90"
+                            data-testid={`button-create-quote-${lead.inquiryId}`}
+                          >
+                            <FolderPlus className="mr-2 h-4 w-4" />
+                            Create Quote
+                          </Button>
+                        </Link>
+                      )}
                       <Link href={`/accounts/${lead.id}`}>
                         <Button
                           size="sm"
@@ -356,7 +400,7 @@ export default function Leads() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => updateLeadStatusMutation.mutate({ id: lead.id, status: "contacted" })}
+                          onClick={() => updateLeadStatusMutation.mutate({ id: lead.id, inquiryId: lead.inquiryId, status: "contacted" })}
                           disabled={updateLeadStatusMutation.isPending}
                           data-testid={`button-mark-contacted-${lead.id}`}
                         >
@@ -368,7 +412,7 @@ export default function Leads() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => updateLeadStatusMutation.mutate({ id: lead.id, status: "qualified" })}
+                          onClick={() => updateLeadStatusMutation.mutate({ id: lead.id, inquiryId: lead.inquiryId, status: "qualified" })}
                           disabled={updateLeadStatusMutation.isPending}
                           data-testid={`button-mark-qualified-${lead.id}`}
                         >
@@ -380,7 +424,7 @@ export default function Leads() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => updateLeadStatusMutation.mutate({ id: lead.id, status: "unresponsive" })}
+                          onClick={() => updateLeadStatusMutation.mutate({ id: lead.id, inquiryId: lead.inquiryId, status: "unresponsive" })}
                           disabled={updateLeadStatusMutation.isPending}
                           data-testid={`button-mark-no-reply-${lead.id}`}
                         >
@@ -392,7 +436,7 @@ export default function Leads() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          onClick={() => updateLeadStatusMutation.mutate({ id: lead.id, status: "archived" })}
+                          onClick={() => updateLeadStatusMutation.mutate({ id: lead.id, inquiryId: lead.inquiryId, status: "archived" })}
                           disabled={updateLeadStatusMutation.isPending}
                           aria-label="Archive lead"
                           data-testid={`button-archive-lead-${lead.id}`}

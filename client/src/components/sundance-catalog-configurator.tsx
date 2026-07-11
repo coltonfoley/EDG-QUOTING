@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -100,6 +100,7 @@ export function SundanceCatalogConfigurator({
   onInsert, 
   onCancel 
 }: SundanceCatalogConfiguratorProps) {
+  const insertionAttemptRef = useRef<{ fingerprint: string; requestId: string } | null>(null);
   const { toast } = useToast();
   const [quantities, setQuantities] = useState<ProductQuantity>({});
   const [selectedColors, setSelectedColors] = useState<ProductColorSelection>({});
@@ -148,6 +149,7 @@ export function SundanceCatalogConfigurator({
 
   const insertMutation = useMutation({
     mutationFn: async (configData: {
+      requestId: string;
       items: {
         productId: number;
         quantity: number;
@@ -158,12 +160,13 @@ export function SundanceCatalogConfigurator({
       const response = await apiRequest('POST', `/api/quotes/${quoteId}/configure-product`, configData);
       return response.json();
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      insertionAttemptRef.current = null;
       queryClient.invalidateQueries({ queryKey: [`/api/quotes/${quoteId}`] });
       queryClient.invalidateQueries({ queryKey: [`/api/quotes/${quoteId}/groups`] });
       toast({
-        title: 'Configuration inserted',
-        description: 'Products added to quote successfully',
+        title: data.replayed ? 'Configuration already inserted' : 'Configuration inserted',
+        description: data.replayed ? 'Rainmaker did not add the same package twice.' : 'Products added to quote successfully',
       });
       onInsert();
     },
@@ -391,7 +394,11 @@ export function SundanceCatalogConfigurator({
       return;
     }
 
-    insertMutation.mutate({ items });
+    const fingerprint = JSON.stringify(items);
+    if (insertionAttemptRef.current?.fingerprint !== fingerprint) {
+      insertionAttemptRef.current = { fingerprint, requestId: crypto.randomUUID() };
+    }
+    insertMutation.mutate({ requestId: insertionAttemptRef.current.requestId, items });
   };
 
   if (isLoading) {

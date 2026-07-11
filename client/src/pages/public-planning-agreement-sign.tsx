@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { LoadingSpinner } from "@/components/loading-spinner";
 import { SignatureCanvas, type SignatureData } from "@/components/signature-canvas";
 import { useToast } from "@/hooks/use-toast";
+import { usePublicLightTheme } from "@/hooks/use-public-light-theme";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import {
@@ -254,6 +255,7 @@ function AgreementDocumentPreview({ agreement, compact = false }: { agreement: P
 }
 
 export default function PublicPlanningAgreementSignPage() {
+  usePublicLightTheme();
   const params = useParams();
   const token = params.token as string;
   const [signature, setSignature] = useState<SignatureData | null>(null);

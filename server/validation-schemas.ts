@@ -250,6 +250,7 @@ export const insertQuoteSchema = baseQuoteSchema.extend({
 export const createQuoteSchema = z.object({
   // Base quote fields (optional account linkage)
   accountId: z.number().int().positive("Account ID must be a positive integer").optional().nullable(),
+  sourceInquiryId: z.number().int().positive("Inquiry ID must be a positive integer").optional().nullable(),
   
   // Optional auto-create hint for customer
   customerCreate: z.object({
@@ -422,14 +423,13 @@ export const createPlanningAgreementSchema = basePlanningAgreementSchema.pick({
 });
 
 export const updatePlanningAgreementSchema = z.object({
-  status: z.enum(planningAgreementStatusValues).optional(),
   tier: z.enum(planningAgreementTierValues).optional(),
   amount: planningMoneySchema.optional(),
   creditEligible: z.boolean().optional(),
   creditExpiresAt: optionalPlanningDateSchema,
   scopeSummary: z.string().max(5000, "Scope summary is too long").optional().nullable(),
   internalNotes: z.string().max(5000, "Internal notes are too long").optional().nullable(),
-});
+}).strict("Status, payment, signature, delivery, waiver, and credit changes require their dedicated action.");
 
 export const confirmPlanningAgreementPaymentSchema = z.object({
   verified: z.literal(true, {
@@ -858,7 +858,8 @@ export const calculatePriceSchema = z.object({
   width: z.union([z.string(), z.number()])
     .transform(val => parseFloat(typeof val === 'string' ? val : val.toString()))
     .refine(val => !isNaN(val) && val > 0 && val <= 10000, 
-      "Width must be between 0 and 10,000")
+      "Width must be between 0 and 10,000"),
+  sourceUnit: z.enum(["feet", "inches", "meters"]).default("feet"),
 });
 
 // Bulk operations validation
@@ -1059,5 +1060,7 @@ export const signatureDataSchema = z.object({
 
 export const submitSignatureSchema = z.object({
   signatureData: signatureDataSchema,
-  signerType: z.enum(["client", "company"], { errorMap: () => ({ message: "Signer type must be 'client' or 'company'" }) })
+  signerType: z.enum(["client", "company"], { errorMap: () => ({ message: "Signer type must be 'client' or 'company'" }) }),
+  documentRevision: z.string().datetime().nullable().optional(),
+  customerPackageFingerprint: z.string().regex(/^[a-f0-9]{64}$/).optional(),
 });

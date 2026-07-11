@@ -3,8 +3,15 @@ import crypto from "crypto";
 import { nanoid } from "nanoid";
 import type { Account, InsertPlanningAgreementEvent, PlanningAgreement, QuoteWithDetails } from "@shared/schema";
 import { storage } from "../storage";
-import { isAuthenticated } from "../auth";
+import { isAuthenticated, requireAdmin } from "../auth";
 import { buildAppUrl } from "../config";
+import { deliverIdempotentEmail, EmailIdempotencyError, requireEmailIdempotencyKey } from "../emailDelivery";
+import { redactedErrorType } from "../redactedLogging";
+import {
+  QuoteSignedLockedError,
+  isCustomerApprovedQuote,
+  sendQuoteSignedLockResponse,
+} from "../quoteLock";
 import {
   accountIdParamSchema,
   applyPlanningAgreementCreditSchema,
@@ -317,7 +324,7 @@ export function registerPlanningAgreementRoutes(app: Express) {
     }
   });
 
-  app.patch("/api/planning-agreements/:id", isAuthenticated, async (req: any, res) => {
+  app.patch("/api/planning-agreements/:id", isAuthenticated, requireAdmin, async (req: any, res) => {
     try {
       const params = planningAgreementIdParamSchema.safeParse(req.params);
       if (!params.success) {
@@ -346,7 +353,7 @@ export function registerPlanningAgreementRoutes(app: Express) {
     }
   });
 
-  app.post("/api/planning-agreements/:id/prepare-signing", isAuthenticated, async (req: any, res) => {
+  app.post("/api/planning-agreements/:id/prepare-signing", isAuthenticated, requireAdmin, async (req: any, res) => {
     try {
       const params = planningAgreementIdParamSchema.safeParse(req.params);
       if (!params.success) {
@@ -376,12 +383,13 @@ export function registerPlanningAgreementRoutes(app: Express) {
     }
   });
 
-  app.post("/api/planning-agreements/:id/send-signature-email", isAuthenticated, async (req: any, res) => {
+  app.post("/api/planning-agreements/:id/send-signature-email", isAuthenticated, requireAdmin, async (req: any, res) => {
     try {
       const params = planningAgreementIdParamSchema.safeParse(req.params);
       if (!params.success) {
         return res.status(400).json(getRequestErrors(params.error.errors));
       }
+      const idempotencyKey = requireEmailIdempotencyKey(req.get("Idempotency-Key"));
 
       const body = sendPlanningAgreementEmailSchema.safeParse(req.body ?? {});
       if (!body.success) {
@@ -401,6 +409,41 @@ export function registerPlanningAgreementRoutes(app: Express) {
       const { quote, account } = await getPlanningAgreementContext(prepared.agreement);
       if (!account?.email) {
         return res.status(400).json({ message: "Customer email not found" });
+      }
+
+      const deliveryClaim = await storage.claimEmailDelivery({
+        idempotencyKey,
+        messageType: "planning_signature_request",
+        planningAgreementId: prepared.agreement.id,
+      });
+      if (deliveryClaim.outcome === "conflict") {
+        throw new EmailIdempotencyError(
+          409,
+          "EMAIL_IDEMPOTENCY_CONFLICT",
+          "That email action key was already used for a different operation. Refresh Rainmaker and try again.",
+        );
+      }
+      if (deliveryClaim.outcome === "in_progress") {
+        throw new EmailIdempotencyError(
+          409,
+          "EMAIL_DELIVERY_IN_PROGRESS",
+          "This email action is already being processed. Check the agreement before trying again.",
+        );
+      }
+      if (deliveryClaim.outcome === "sent") {
+        const sentAt = deliveryClaim.attempt?.sentAt ?? prepared.agreement.signatureEmailSentAt ?? new Date();
+        return res.json({
+          agreement: prepared.agreement,
+          signingToken: prepared.signingToken,
+          signingUrl: `/planning-agreements/sign/${prepared.signingToken}`,
+          absoluteSigningUrl: buildAppUrl(`/planning-agreements/sign/${prepared.signingToken}`, req),
+          message: `Design + Planning Agreement was already sent to ${account.email}`,
+          sentAt: sentAt.toISOString(),
+          replayed: true,
+        });
+      }
+      if (!deliveryClaim.attempt) {
+        throw new Error("Email delivery claim did not return an attempt record");
       }
 
       const { sendEmail } = await import("../email");
@@ -456,13 +499,34 @@ export function registerPlanningAgreementRoutes(app: Express) {
         </html>
       `;
 
-      await sendEmail({
-        to: account.email,
-        subject: `EDG Patio & Shade - Design + Planning Agreement for ${projectLabel}`,
-        htmlBody,
-      });
+      let providerResult: Awaited<ReturnType<typeof sendEmail>>;
+      try {
+        providerResult = await sendEmail({
+          to: account.email,
+          subject: `EDG Patio & Shade - Design + Planning Agreement for ${projectLabel}`,
+          htmlBody,
+        });
+      } catch (emailError) {
+        try {
+          await storage.markEmailDeliveryFailed(deliveryClaim.attempt.id, redactedErrorType(emailError));
+        } catch (deliveryError) {
+          console.error("Could not record failed planning agreement email delivery", {
+            planningAgreementId: prepared.agreement.id,
+            errorType: redactedErrorType(deliveryError),
+          });
+        }
+        throw emailError;
+      }
 
       const sentAt = new Date();
+      const finalizedDelivery = await storage.markEmailDeliverySent(
+        deliveryClaim.attempt.id,
+        sentAt,
+        providerResult?.id ?? null,
+      );
+      if (!finalizedDelivery) {
+        throw new Error("Email delivery record could not be finalized");
+      }
       const nextStatus: PlanningAgreementStatus = prepared.agreement.status === "required"
         ? "sent"
         : prepared.agreement.status as PlanningAgreementStatus;
@@ -492,13 +556,16 @@ export function registerPlanningAgreementRoutes(app: Express) {
         absoluteSigningUrl: signingUrl,
         message: `Design + Planning Agreement sent to ${account.email}`,
         sentAt: sentAt.toISOString(),
+        replayed: false,
       });
     } catch (error) {
-      console.error("Error sending planning agreement signature email:", error);
-      res.status(500).json({
-        message: "Failed to send agreement email",
-        error: error instanceof Error ? error.message : "Unknown error",
+      if (error instanceof EmailIdempotencyError) {
+        return res.status(error.status).json({ message: error.message, code: error.code });
+      }
+      console.error("Error sending planning agreement signature email", {
+        errorType: redactedErrorType(error),
       });
+      res.status(500).json({ message: "Failed to send agreement email" });
     }
   });
 
@@ -685,14 +752,30 @@ export function registerPlanningAgreementRoutes(app: Express) {
             </html>
           `;
 
-          await sendEmail({
-            to: account.email,
-            subject: `Signature Confirmed: Design + Planning Agreement ${snapshot.agreementNumber}`,
-            htmlBody,
+          const delivery = await deliverIdempotentEmail({
+            ledger: storage,
+            idempotencyKey: `planning-signature-confirmation:${agreement.id}:${documentFingerprint}`,
+            messageType: "planning_signature_confirmation",
+            planningAgreementId: agreement.id,
+            send: () => sendEmail({
+              to: account.email,
+              subject: `Signature Confirmed: Design + Planning Agreement ${snapshot.agreementNumber}`,
+              htmlBody,
+            }),
           });
-          emailSent = true;
+          emailSent = delivery.outcome === "sent" || delivery.outcome === "replayed";
+          if (!emailSent) {
+            console.warn("Planning agreement confirmation email needs review", {
+              planningAgreementId: agreement.id,
+              outcome: delivery.outcome,
+              errorType: delivery.errorType ?? null,
+            });
+          }
         } catch (emailError) {
-          console.error("Failed to send planning agreement confirmation email:", emailError);
+          console.error("Failed to send planning agreement confirmation email", {
+            planningAgreementId: agreement.id,
+            errorType: redactedErrorType(emailError),
+          });
         }
       }
 
@@ -707,7 +790,7 @@ export function registerPlanningAgreementRoutes(app: Express) {
     }
   });
 
-  app.post("/api/planning-agreements/:id/send", isAuthenticated, async (req: any, res) => {
+  app.post("/api/planning-agreements/:id/send", isAuthenticated, requireAdmin, async (req: any, res) => {
     try {
       const params = planningAgreementIdParamSchema.safeParse(req.params);
       if (!params.success) {
@@ -731,7 +814,7 @@ export function registerPlanningAgreementRoutes(app: Express) {
     }
   });
 
-  app.post("/api/planning-agreements/:id/mark-signed", isAuthenticated, async (req: any, res) => {
+  app.post("/api/planning-agreements/:id/mark-signed", isAuthenticated, requireAdmin, async (req: any, res) => {
     try {
       const params = planningAgreementIdParamSchema.safeParse(req.params);
       if (!params.success) {
@@ -761,7 +844,7 @@ export function registerPlanningAgreementRoutes(app: Express) {
     }
   });
 
-  app.post("/api/planning-agreements/:id/confirm-payment", isAuthenticated, async (req: any, res) => {
+  app.post("/api/planning-agreements/:id/confirm-payment", isAuthenticated, requireAdmin, async (req: any, res) => {
     try {
       const params = planningAgreementIdParamSchema.safeParse(req.params);
       if (!params.success) {
@@ -816,7 +899,7 @@ export function registerPlanningAgreementRoutes(app: Express) {
     }
   });
 
-  app.post("/api/planning-agreements/:id/waive", isAuthenticated, async (req: any, res) => {
+  app.post("/api/planning-agreements/:id/waive", isAuthenticated, requireAdmin, async (req: any, res) => {
     try {
       const params = planningAgreementIdParamSchema.safeParse(req.params);
       if (!params.success) {
@@ -851,7 +934,7 @@ export function registerPlanningAgreementRoutes(app: Express) {
     }
   });
 
-  app.post("/api/planning-agreements/:id/mark-delivered", isAuthenticated, async (req: any, res) => {
+  app.post("/api/planning-agreements/:id/mark-delivered", isAuthenticated, requireAdmin, async (req: any, res) => {
     try {
       const params = planningAgreementIdParamSchema.safeParse(req.params);
       if (!params.success) {
@@ -894,7 +977,7 @@ export function registerPlanningAgreementRoutes(app: Express) {
     }
   });
 
-  app.post("/api/planning-agreements/:id/apply-credit", isAuthenticated, async (req: any, res) => {
+  app.post("/api/planning-agreements/:id/apply-credit", isAuthenticated, requireAdmin, async (req: any, res) => {
     try {
       const params = planningAgreementIdParamSchema.safeParse(req.params);
       if (!params.success) {
@@ -942,6 +1025,9 @@ export function registerPlanningAgreementRoutes(app: Express) {
       if (!targetQuote) {
         return res.status(404).json({ message: "Target quote not found" });
       }
+      if (isCustomerApprovedQuote(targetQuote)) {
+        return sendQuoteSignedLockResponse(res, new QuoteSignedLockedError(targetQuote.id));
+      }
 
       const targetRootId = targetQuote.parentQuoteId || targetQuote.id;
       if (agreement.quoteFamilyRootId && agreement.quoteFamilyRootId !== targetRootId) {
@@ -954,24 +1040,16 @@ export function registerPlanningAgreementRoutes(app: Express) {
         return res.status(400).json({ message: "Planning credit cannot exceed the confirmed planning fee." });
       }
 
-      const updatedAgreement = await storage.updatePlanningAgreement(
+      const updatedAgreement = await storage.applyPlanningAgreementCredit(
         agreement.id,
-        {
-          status: "credited",
-          creditedQuoteId: targetQuote.id,
-          creditedAt: new Date(),
-          appliedCreditAmount: body.data.amount,
-        },
+        targetQuote.id,
+        body.data.amount,
         getActorUserId(req),
-        "credit_applied",
-        {
-          creditedQuoteId: targetQuote.id,
-          appliedCreditAmount: body.data.amount,
-        },
       );
 
       res.json(updatedAgreement);
     } catch (error) {
+      if (sendQuoteSignedLockResponse(res, error)) return;
       console.error("Error applying planning agreement credit:", error);
       res.status(500).json({ message: "Failed to apply planning agreement credit" });
     }

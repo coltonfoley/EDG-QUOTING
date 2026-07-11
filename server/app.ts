@@ -6,6 +6,9 @@ import type { Server } from "http";
 import { registerRoutes } from "./routes";
 import { getAllowedOrigins } from "./config";
 import { log } from "./logger";
+import { checkDatabaseReadiness } from "./db";
+import { redactedErrorType } from "./redactedLogging";
+import { createRequestId, redactedRequestPath } from "./requestLogging";
 
 type CreateAppOptions = {
   serveClient?: boolean;
@@ -23,8 +26,36 @@ export async function createApp(options: CreateAppOptions = {}): Promise<{
 
   const isProduction = process.env.NODE_ENV === "production";
 
+  app.use((req, res, next) => {
+    const requestId = createRequestId();
+    res.locals.requestId = requestId;
+    res.setHeader("X-Request-Id", requestId);
+    next();
+  });
+
   app.get("/health", (_req, res) => {
     res.status(200).json({ status: "ok", timestamp: new Date().toISOString() });
+  });
+
+  app.get("/ready", async (_req, res) => {
+    try {
+      const schemaStatus = await checkDatabaseReadiness();
+      res.status(200).json({
+        status: "ready",
+        database: "ready",
+        schema: schemaStatus,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      console.error("[ready] Database readiness check failed", {
+        errorType: redactedErrorType(error),
+      });
+      res.status(503).json({
+        status: "not_ready",
+        database: "unavailable",
+        timestamp: new Date().toISOString(),
+      });
+    }
   });
 
   app.use(helmet({
@@ -52,6 +83,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<{
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+    exposedHeaders: ["X-Request-Id"],
   };
   app.use(cors(corsOptions));
 
@@ -89,12 +121,12 @@ export async function createApp(options: CreateAppOptions = {}): Promise<{
 
   app.use((req, res, next) => {
     const start = Date.now();
-    const path = req.path;
+    const path = redactedRequestPath(req.path);
 
     res.on("finish", () => {
       const duration = Date.now() - start;
       if (path.startsWith("/api")) {
-        log(`${req.method} ${path} ${res.statusCode} in ${duration}ms`);
+        log(`[${res.locals.requestId}] ${req.method} ${path} ${res.statusCode} in ${duration}ms`);
       }
     });
 
@@ -105,11 +137,16 @@ export async function createApp(options: CreateAppOptions = {}): Promise<{
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
-    const message = err.message || "Internal Server Error";
+    const message = status >= 500 ? "Internal Server Error" : err.message || "Request failed";
+    const requestId = res.locals.requestId;
 
-    console.error("Unhandled request error:", err);
+    console.error("Unhandled request error", {
+      requestId,
+      errorType: redactedErrorType(err),
+      status,
+    });
     if (!res.headersSent) {
-      res.status(status).json({ message });
+      res.status(status).json({ message, requestId });
     }
   });
 

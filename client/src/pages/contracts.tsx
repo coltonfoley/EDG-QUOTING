@@ -148,14 +148,6 @@ export default function ContractsPage() {
               <UserIcon className="inline mr-2 h-4 w-4" />
               Users & Access
             </Link>
-            <Link 
-              href="/admin/templates"
-              className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-edg-black hover:border-b-2 hover:border-gray-300 transition-colors"
-              data-testid="link-admin-templates"
-            >
-              <FileText className="inline mr-2 h-4 w-4" />
-              Templates
-            </Link>
             <button 
               className="px-4 py-2 text-sm font-medium text-edg-black border-b-2 border-edg-black bg-white"
               data-testid="button-admin-contracts-active"

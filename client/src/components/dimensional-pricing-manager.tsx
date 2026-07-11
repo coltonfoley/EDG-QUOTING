@@ -37,6 +37,11 @@ function calculateDiscountPercentage(retailPrice: number, costPrice: number): nu
   return ((retailPrice - costPrice) / retailPrice) * 100;
 }
 
+function storedInchesToFeet(value: string): string {
+  const inches = Number(value);
+  return Number.isFinite(inches) ? (inches / 12).toFixed(2) : value;
+}
+
 interface DimensionalPricingManagerProps {
   productId: number;
   productName: string;
@@ -96,7 +101,7 @@ export function DimensionalPricingManager({ productId, productName }: Dimensiona
 
   const createPricingMutation = useMutation({
     mutationFn: async (data: PricingFormData) => {
-      const response = await apiRequest("POST", `/api/products/${productId}/pricing-tables`, data);
+      const response = await apiRequest("POST", `/api/products/${productId}/pricing-tables`, { ...data, sourceUnit: "feet" });
       return response.json();
     },
     onSuccess: () => {
@@ -105,14 +110,14 @@ export function DimensionalPricingManager({ productId, productName }: Dimensiona
       form.reset();
       toast({ title: "Pricing entry created successfully" });
     },
-    onError: () => {
-      toast({ title: "Error", description: "Failed to create pricing entry", variant: "destructive" });
+    onError: (error: any) => {
+      toast({ title: "Pricing entry rejected", description: error?.message || "Failed to create pricing entry", variant: "destructive" });
     },
   });
 
   const updatePricingMutation = useMutation({
     mutationFn: async ({ id, data }: { id: number; data: PricingFormData }) => {
-      const response = await apiRequest("PUT", `/api/pricing-tables/${id}`, data);
+      const response = await apiRequest("PUT", `/api/pricing-tables/${id}`, { ...data, sourceUnit: "feet" });
       return response.json();
     },
     onSuccess: () => {
@@ -122,8 +127,8 @@ export function DimensionalPricingManager({ productId, productName }: Dimensiona
       form.reset();
       toast({ title: "Pricing entry updated successfully" });
     },
-    onError: () => {
-      toast({ title: "Error", description: "Failed to update pricing entry", variant: "destructive" });
+    onError: (error: any) => {
+      toast({ title: "Pricing entry rejected", description: error?.message || "Failed to update pricing entry", variant: "destructive" });
     },
   });
 
@@ -169,10 +174,10 @@ export function DimensionalPricingManager({ productId, productName }: Dimensiona
   const handleEdit = (entry: PricingTable) => {
     setEditingEntry(entry);
     form.reset({
-      lengthMin: entry.lengthMin,
-      lengthMax: entry.lengthMax,
-      widthMin: entry.widthMin,
-      widthMax: entry.widthMax,
+      lengthMin: storedInchesToFeet(entry.lengthMin),
+      lengthMax: storedInchesToFeet(entry.lengthMax),
+      widthMin: storedInchesToFeet(entry.widthMin),
+      widthMax: storedInchesToFeet(entry.widthMax),
       retailPrice: entry.retailPrice,
       basePrice: entry.basePrice,
     });
@@ -498,10 +503,10 @@ export function DimensionalPricingManager({ productId, productName }: Dimensiona
                 
                 return (
                   <TableRow key={entry.id}>
-                    <TableCell className="font-medium">{entry.lengthMin} - {entry.lengthMax}</TableCell>
-                    <TableCell>{entry.widthMin} - {entry.widthMax}</TableCell>
+                    <TableCell className="font-medium">{storedInchesToFeet(entry.lengthMin)} - {storedInchesToFeet(entry.lengthMax)}</TableCell>
+                    <TableCell>{storedInchesToFeet(entry.widthMin)} - {storedInchesToFeet(entry.widthMax)}</TableCell>
                     <TableCell className="text-gray-600">
-                      {entry.lengthMin}-{entry.lengthMax} × {entry.widthMin}-{entry.widthMax} ft
+                      {storedInchesToFeet(entry.lengthMin)}-{storedInchesToFeet(entry.lengthMax)} × {storedInchesToFeet(entry.widthMin)}-{storedInchesToFeet(entry.widthMax)} ft
                     </TableCell>
                     <TableCell className="font-semibold" data-testid={`text-retail-price-${entry.id}`}>
                       {formatCurrency(retailPrice)}

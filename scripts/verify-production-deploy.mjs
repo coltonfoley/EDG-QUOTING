@@ -6,6 +6,12 @@ const checks = [
     expectJsonStatusOk: true,
   },
   {
+    name: "Rainmaker readiness",
+    url: "https://rainmaker.edgpatioshade.com/ready",
+    status: 200,
+    expectJsonStatusReady: true,
+  },
+  {
     name: "Unauthenticated user API",
     url: "https://rainmaker.edgpatioshade.com/api/user",
     status: 401,
@@ -36,6 +42,19 @@ async function checkEndpoint(check) {
     }
 
     if (payload.status !== "ok") {
+      throw new Error(`${check.name} returned unexpected payload: ${body.slice(0, 200)}`);
+    }
+  }
+
+  if (check.expectJsonStatusReady) {
+    let payload;
+    try {
+      payload = JSON.parse(body);
+    } catch (error) {
+      throw new Error(`${check.name} did not return JSON: ${body.slice(0, 200)}`);
+    }
+
+    if (payload.status !== "ready" || payload.database !== "ready") {
       throw new Error(`${check.name} returned unexpected payload: ${body.slice(0, 200)}`);
     }
   }

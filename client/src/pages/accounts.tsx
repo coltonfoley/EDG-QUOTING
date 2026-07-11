@@ -1,7 +1,8 @@
-import { useState, useMemo } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
 import { AppHeader } from "@/components/app-header";
+import { PageLoadError } from "@/components/error-alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -26,24 +27,44 @@ const PAGE_SIZE = 50;
 
 export default function Accounts() {
   const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
   const [accountTypeFilter, setAccountTypeFilter] = useState<string>("all");
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [page, setPage] = useState(0);
   const { toast } = useToast();
-  const { isAuthenticated } = useAuth();
+  const { user, isAuthenticated } = useAuth();
   const [, navigate] = useLocation();
   
-  const { data: accounts, isLoading, error } = useQuery<AccountWithCounts[]>({
-    queryKey: ["/api/accounts", { limit: PAGE_SIZE, offset: page * PAGE_SIZE }],
+  useEffect(() => {
+    const timeout = window.setTimeout(() => setDebouncedSearchTerm(searchTerm.trim()), 250);
+    return () => window.clearTimeout(timeout);
+  }, [searchTerm]);
+
+  useEffect(() => setPage(0), [debouncedSearchTerm, accountTypeFilter]);
+
+  const { data: accounts, isLoading, error, refetch } = useQuery<AccountWithCounts[]>({
+    queryKey: ["/api/accounts", {
+      limit: PAGE_SIZE,
+      offset: page * PAGE_SIZE,
+      search: debouncedSearchTerm,
+      accountType: accountTypeFilter,
+    }],
     queryFn: async () => {
       const params = new URLSearchParams({
         limit: String(PAGE_SIZE),
         offset: String(page * PAGE_SIZE),
       });
+      if (debouncedSearchTerm) params.set("search", debouncedSearchTerm);
+      if (accountTypeFilter !== "all") params.set("accountType", accountTypeFilter);
       const response = await fetch(`/api/accounts?${params}`);
       if (!response.ok) throw new Error("Failed to fetch accounts");
       return response.json();
     },
+    enabled: isAuthenticated,
+  });
+
+  const { data: accountSummary } = useQuery<{ totalClients: number; currentQuoteFamilies: number }>({
+    queryKey: ["/api/accounts/summary"],
     enabled: isAuthenticated,
   });
 
@@ -77,28 +98,7 @@ export default function Accounts() {
     });
   };
 
-  const filteredAccounts = useMemo(() => {
-    if (!accounts) return [];
-    
-    let filtered = accounts;
-    
-    // Filter by search term
-    if (searchTerm.trim()) {
-      const term = searchTerm.toLowerCase();
-      filtered = filtered.filter(account => 
-        account.name.toLowerCase().includes(term) ||
-        account.email.toLowerCase().includes(term) ||
-        (account.company && account.company.toLowerCase().includes(term))
-      );
-    }
-    
-    // Filter by account type
-    if (accountTypeFilter !== "all") {
-      filtered = filtered.filter(account => account.accountType === accountTypeFilter);
-    }
-    
-    return filtered;
-  }, [accounts, searchTerm, accountTypeFilter]);
+  const filteredAccounts = accounts || [];
 
   const getAccountTypeColor = (type: string) => {
     switch (type) {
@@ -117,8 +117,8 @@ export default function Accounts() {
     return type.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
   };
 
-  const totalAccounts = accounts?.length || 0;
-  const activeProjects = accounts?.reduce((sum, account) => sum + (account.projectCount || 0), 0) || 0;
+  const totalAccounts = accountSummary?.totalClients ?? 0;
+  const activeProjects = accountSummary?.currentQuoteFamilies ?? 0;
 
   if (isLoading) {
     return (
@@ -174,6 +174,19 @@ export default function Accounts() {
     );
   }
 
+  if (error) {
+    return (
+      <div className="min-h-screen bg-background">
+        <AppHeader />
+        <PageLoadError
+          title="Clients couldn't be loaded"
+          description="Rainmaker could not retrieve the client list. No client records were changed."
+          onRetry={() => void refetch()}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <AppHeader />
@@ -218,7 +231,7 @@ export default function Accounts() {
                   <Briefcase className="h-6 w-6 text-green-600" />
                 </div>
                 <div className="ml-4">
-                  <p className="text-sm font-medium text-muted-foreground">Active Projects</p>
+                  <p className="text-sm font-medium text-muted-foreground">Current Quote Families</p>
                   <p className="text-2xl font-bold text-foreground" data-testid="text-active-projects">{activeProjects}</p>
                 </div>
               </div>
@@ -234,6 +247,7 @@ export default function Accounts() {
                 <div className="relative">
                   <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                   <Input
+                    aria-label="Search clients"
                     placeholder="Search clients by name, email, or company..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
@@ -243,7 +257,7 @@ export default function Accounts() {
                 </div>
               </div>
               <Select value={accountTypeFilter} onValueChange={setAccountTypeFilter}>
-                <SelectTrigger className="w-[200px]" data-testid="select-client-type-filter">
+                <SelectTrigger className="w-[200px]" data-testid="select-client-type-filter" aria-label="Filter clients by type">
                   <SelectValue placeholder="Filter by type" />
                 </SelectTrigger>
                 <SelectContent>
@@ -270,16 +284,16 @@ export default function Accounts() {
                     <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                       Company Name
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                       Client Type
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                       Payment Terms
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                       # of Projects
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                       Actions
                     </th>
                   </tr>
@@ -287,7 +301,7 @@ export default function Accounts() {
                 <tbody className="bg-card divide-y divide-border">
                   {filteredAccounts.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="px-6 py-12 text-center text-gray-500">
+                      <td colSpan={5} className="px-6 py-12 text-center text-muted-foreground">
                         {searchTerm || accountTypeFilter !== "all" ? "No clients found matching your filters." : "No clients yet. Create your first client to get started."}
                       </td>
                     </tr>
@@ -295,7 +309,7 @@ export default function Accounts() {
                     filteredAccounts.map((account) => (
                       <tr 
                         key={account.id} 
-                        className="hover:bg-gray-50 cursor-pointer transition-colors"
+                        className="cursor-pointer transition-colors hover:bg-muted/50"
                         onClick={(e) => {
                           if (!(e.target as HTMLElement).closest('[data-no-navigate]')) {
                             navigate(`/accounts/${account.id}`);
@@ -305,15 +319,21 @@ export default function Accounts() {
                       >
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div>
-                            <div className="text-sm font-medium text-gray-900">
-                              {account.company || account.name}
+                            <div className="text-sm font-medium text-foreground">
+                              <Link
+                                href={`/accounts/${account.id}`}
+                                className="rounded-sm underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                onClick={(event) => event.stopPropagation()}
+                              >
+                                {account.company || account.name}
+                              </Link>
                               {account.leadStatus === "new" && (
                                 <Badge variant="outline" className="ml-2 border-sky-200 bg-sky-50 text-sky-800">
                                   New Lead
                                 </Badge>
                               )}
                             </div>
-                            <div className="text-sm text-gray-500">{account.email}</div>
+                            <div className="text-sm text-muted-foreground">{account.email}</div>
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
@@ -321,19 +341,20 @@ export default function Accounts() {
                             {formatAccountType(account.accountType)}
                           </Badge>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-foreground">
                           {account.paymentTerms?.replace('_', ' ').toUpperCase() || 'NET 30'}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-foreground">
                           {account.projectCount || 0}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium" data-no-navigate>
-                          <AlertDialog>
+                          {user?.role === "admin" && <AlertDialog>
                             <AlertDialogTrigger asChild>
                               <Button
                                 variant="ghost"
                                 size="sm"
                                 className="text-red-600 hover:text-red-700"
+                                aria-label={`Delete ${account.company || account.name}`}
                                 onClick={(e) => e.stopPropagation()}
                                 data-testid={`button-delete-client-${account.id}`}
                               >
@@ -364,7 +385,7 @@ export default function Accounts() {
                                 </AlertDialogAction>
                               </AlertDialogFooter>
                             </AlertDialogContent>
-                          </AlertDialog>
+                          </AlertDialog>}
                         </td>
                       </tr>
                     ))

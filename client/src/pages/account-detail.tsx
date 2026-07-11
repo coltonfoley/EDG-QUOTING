@@ -521,7 +521,7 @@ export default function AccountDetail() {
                 </div>
                 <Button
                   size="sm"
-                  onClick={() => navigate("/quotes")}
+                  onClick={() => navigate(`/quotes/new?accountId=${accountId}`)}
                   data-testid="button-new-quote"
                 >
                   <FolderPlus className="h-4 w-4 mr-2" />

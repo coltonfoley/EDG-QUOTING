@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "http";
 import type { Express } from "express";
+import { randomUUID } from "node:crypto";
 
 let appPromise: Promise<Express> | null = null;
 let leadIntakePromise: Promise<typeof import("../api/lead-intake")> | null = null;
@@ -23,6 +24,7 @@ function sendJson(res: ServerResponse, statusCode: number, payload: unknown) {
   const body = JSON.stringify(payload);
   res.statusCode = statusCode;
   res.setHeader("Content-Type", "application/json; charset=utf-8");
+  res.setHeader("X-Request-Id", randomUUID());
   res.setHeader("Content-Length", Buffer.byteLength(body));
   res.end(body);
 }

@@ -119,6 +119,8 @@ interface ImportOptions {
   existingQuoteId?: number;
   customerHandling: 'create_new' | 'use_existing';
   existingCustomerId?: number;
+  priceMeaning: 'customer_unit_price' | 'edg_cost';
+  defaultMarkupPercent: number;
 }
 
 interface QuoteImporterProps {
@@ -134,7 +136,9 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
   const [importOptions, setImportOptions] = useState<ImportOptions>({
     createNewQuote: true,
     combineIntoSingleQuote: false,
-    customerHandling: 'create_new'
+    customerHandling: 'create_new',
+    priceMeaning: 'customer_unit_price',
+    defaultMarkupPercent: 0,
   });
   
   // State for editable PDF data
@@ -213,6 +217,54 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
     });
   };
 
+  const updatePDFLineItem = (pdfId: string, index: number, patch: Partial<ExtractedLineItem>) => {
+    setEditedPDFData(prev => {
+      const currentData = getCurrentPDFData(pdfId);
+      if (!currentData) return prev;
+      const lineItems = currentData.lineItems.map((item, itemIndex) => {
+        if (itemIndex !== index) return item;
+        const updated = { ...item, ...patch };
+        if (patch.quantity !== undefined || patch.price !== undefined) {
+          const quantity = Number(updated.quantity);
+          const price = Number(updated.price);
+          updated.total = Number.isFinite(quantity) && Number.isFinite(price)
+            ? quantity * price
+            : null;
+        }
+        return updated;
+      });
+      return { ...prev, [pdfId]: { ...currentData, lineItems } };
+    });
+  };
+
+  const addPDFLineItem = (pdfId: string) => {
+    setEditedPDFData(prev => {
+      const currentData = getCurrentPDFData(pdfId);
+      if (!currentData) return prev;
+      return {
+        ...prev,
+        [pdfId]: {
+          ...currentData,
+          lineItems: [...currentData.lineItems, { description: '', quantity: 1, price: 0, total: 0, unit: 'each' }],
+        },
+      };
+    });
+  };
+
+  const removePDFLineItem = (pdfId: string, index: number) => {
+    setEditedPDFData(prev => {
+      const currentData = getCurrentPDFData(pdfId);
+      if (!currentData) return prev;
+      return {
+        ...prev,
+        [pdfId]: {
+          ...currentData,
+          lineItems: currentData.lineItems.filter((_, itemIndex) => itemIndex !== index),
+        },
+      };
+    });
+  };
+
   // Fetch existing quotes and customers for selection
   const { data: existingQuotes } = useQuery<QuoteWithDetails[]>({
     queryKey: ['/api/quotes'],
@@ -221,7 +273,7 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
 
   const { data: existingCustomers } = useQuery<any[]>({
     queryKey: ['/api/accounts'],
-    enabled: open && importOptions.customerHandling === 'use_existing'
+    enabled: open && importOptions.createNewQuote && importOptions.customerHandling === 'use_existing'
   });
 
   // Import execution mutation  
@@ -236,7 +288,11 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
       // Map customerHandling to attachCustomer for backend compatibility
       const mappedImportOptions = {
         ...importOptions,
-        attachCustomer: importOptions.customerHandling === 'create_new' ? 'auto' as const : 'match_only' as const
+        attachCustomer: !importOptions.createNewQuote
+          ? 'none' as const
+          : importOptions.customerHandling === 'create_new'
+            ? 'auto' as const
+            : 'match_only' as const,
       };
 
       const response = await apiRequest('POST', '/api/quotes/import-batch', {
@@ -281,6 +337,7 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
       // Clear processed PDFs to prevent duplicate imports
       setProcessedPDFs([]);
       setSelectedPDFId(null);
+      setEditedPDFData({});
       setEditedPDFData({});
       
       // Auto-close dialog after successful import
@@ -610,11 +667,11 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
 
   const getStatusColor = (status: ProcessedPDF['status']) => {
     switch (status) {
-      case 'pending': return 'bg-gray-100 text-gray-800';
-      case 'processing': return 'bg-blue-100 text-blue-800';
-      case 'success': return 'bg-green-100 text-green-800';
-      case 'error': return 'bg-red-100 text-red-800';
-      default: return 'bg-gray-100 text-gray-800';
+      case 'pending': return 'bg-muted text-foreground';
+      case 'processing': return 'bg-blue-100 text-blue-800 dark:bg-blue-950/50 dark:text-blue-200';
+      case 'success': return 'bg-green-100 text-green-800 dark:bg-green-950/50 dark:text-green-200';
+      case 'error': return 'bg-red-100 text-red-800 dark:bg-red-950/50 dark:text-red-200';
+      default: return 'bg-muted text-foreground';
     }
   };
 
@@ -630,6 +687,29 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
 
   const successfulPDFs = processedPDFs.filter(pdf => pdf.status === 'success');
   const selectedPDF = selectedPDFId ? processedPDFs.find(p => p.id === selectedPDFId) : successfulPDFs[0];
+  const reviewedLineItemCount = successfulPDFs.reduce(
+    (total, pdf) => total + (getCurrentPDFData(pdf.id)?.lineItems.length || 0),
+    0,
+  );
+  const invalidLineCount = successfulPDFs.reduce((total, pdf) => {
+    const lines = getCurrentPDFData(pdf.id)?.lineItems || [];
+    return total + lines.filter((line) => (
+      !line.description?.trim()
+      || !Number.isFinite(Number(line.quantity))
+      || Number(line.quantity) <= 0
+      || !Number.isFinite(Number(line.price))
+      || Number(line.price) < 0
+    )).length + (lines.length === 0 ? 1 : 0);
+  }, 0);
+  const hasRequiredQuoteTarget = importOptions.createNewQuote || Boolean(importOptions.existingQuoteId);
+  const hasRequiredClientTarget = !importOptions.createNewQuote
+    || importOptions.customerHandling !== 'use_existing'
+    || Boolean(importOptions.existingCustomerId);
+  const canImport = successfulPDFs.length > 0
+    && invalidLineCount === 0
+    && hasRequiredQuoteTarget
+    && hasRequiredClientTarget
+    && !isImporting;
 
   // Reset state when dialog closes
   useEffect(() => {
@@ -640,7 +720,9 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
       setImportOptions({
         createNewQuote: true,
         customerHandling: 'create_new',
-        combineIntoSingleQuote: false
+        combineIntoSingleQuote: false,
+        priceMeaning: 'customer_unit_price',
+        defaultMarkupPercent: 0,
       });
     }
   }, [open]);
@@ -657,11 +739,11 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
 
         <Tabs value={currentTab} onValueChange={setCurrentTab} className="flex-1 flex flex-col">
           <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="upload">Upload PDFs</TabsTrigger>
-            <TabsTrigger value="preview" disabled={successfulPDFs.length === 0}>
+            <TabsTrigger value="upload" data-testid="tab-import-upload" className="!text-foreground disabled:!text-muted-foreground disabled:opacity-100">Upload PDFs</TabsTrigger>
+            <TabsTrigger value="preview" disabled={successfulPDFs.length === 0} data-testid="tab-import-preview" className="!text-foreground disabled:!text-muted-foreground disabled:opacity-100">
               Preview & Edit ({successfulPDFs.length})
             </TabsTrigger>
-            <TabsTrigger value="import" disabled={successfulPDFs.length === 0}>
+            <TabsTrigger value="import" disabled={successfulPDFs.length === 0} data-testid="tab-import-options" className="!text-foreground disabled:!text-muted-foreground disabled:opacity-100">
               Import Options
             </TabsTrigger>
           </TabsList>
@@ -673,15 +755,15 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
               <Card>
                 <CardContent className="p-6">
                   <div
-                    className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-gray-400 transition-colors"
+                    className="rounded-lg border-2 border-dashed border-border p-8 text-center transition-colors hover:border-muted-foreground"
                     onDragOver={handleDragOver}
                     onDrop={handleDrop}
                   >
-                    <Upload className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                    <h3 className="text-lg font-medium text-gray-900 mb-2">
+                    <Upload className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
+                    <h3 className="mb-2 text-lg font-medium text-foreground">
                       Upload Quote PDFs
                     </h3>
-                    <p className="text-gray-600 mb-4">
+                    <p className="mb-4 text-muted-foreground">
                       Drag and drop PDF files here, or click to select files
                     </p>
                     <Button
@@ -720,10 +802,10 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
                             <div className="flex-1">
                               <p className="font-medium text-sm">{pdf.filename}</p>
                               {pdf.status === 'processing' && (
-                                <Progress value={pdf.progress} className="w-full mt-2" />
+                                <Progress value={pdf.progress} className="w-full mt-2" aria-label={`Processing ${pdf.filename}: ${pdf.progress} percent`} />
                               )}
                               {pdf.error && (
-                                <p className="text-xs text-red-600 mt-1">{pdf.error}</p>
+                                <p className="mt-1 text-xs text-red-700 dark:text-red-300">{pdf.error}</p>
                               )}
                             </div>
                             <Badge className={getStatusColor(pdf.status)}>
@@ -740,6 +822,7 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
                                   setCurrentTab('preview');
                                 }}
                                 data-testid={`button-preview-${pdf.id}`}
+                                aria-label={`Review extracted data from ${pdf.filename}`}
                               >
                                 <Eye className="h-4 w-4" />
                               </Button>
@@ -760,6 +843,7 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
                               size="sm"
                               onClick={() => removePDF(pdf.id)}
                               data-testid={`button-remove-${pdf.id}`}
+                              aria-label={`Remove ${pdf.filename} from this import`}
                             >
                               <X className="h-4 w-4" />
                             </Button>
@@ -788,12 +872,14 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
                         <div className="space-y-2">
                           {successfulPDFs.map((pdf) => {
                             return (
-                              <div
+                              <button
+                                type="button"
                                 key={pdf.id}
-                                className={`p-3 border rounded-lg cursor-pointer transition-colors ${
-                                  selectedPDFId === pdf.id ? 'border-blue-500 bg-blue-50' : 'hover:bg-gray-50'
+                                className={`w-full rounded-lg border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
+                                  selectedPDFId === pdf.id ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/30' : 'hover:bg-muted'
                                 }`}
                                 onClick={() => setSelectedPDFId(pdf.id)}
+                                aria-pressed={selectedPDFId === pdf.id}
                                 data-testid={`pdf-item-${pdf.id}`}
                               >
                                 <div className="flex items-center justify-between space-x-2">
@@ -805,9 +891,9 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
                                   {pdf.extractedData?.confidence !== undefined && (
                                     <div 
                                       className={`px-2 py-1 text-xs rounded-full font-medium ${
-                                        pdf.extractedData.confidence >= 0.8 ? 'bg-green-100 text-green-700' :
-                                        pdf.extractedData.confidence >= 0.6 ? 'bg-yellow-100 text-yellow-700' :
-                                        'bg-red-100 text-red-700'
+                                        pdf.extractedData.confidence >= 0.8 ? 'bg-green-100 text-green-700 dark:bg-green-950/50 dark:text-green-200' :
+                                        pdf.extractedData.confidence >= 0.6 ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-950/50 dark:text-yellow-200' :
+                                        'bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-200'
                                       }`}
                                       data-testid={`text-confidence-${pdf.id}`}
                                     >
@@ -815,7 +901,7 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
                                     </div>
                                   )}
                                 </div>
-                              </div>
+                              </button>
                             );
                           })}
                         </div>
@@ -831,19 +917,19 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
                       <div className="flex items-center justify-between">
                         <div>
                           <CardTitle>Extracted Data Preview</CardTitle>
-                          <p className="text-sm text-gray-600">
+                          <p className="text-sm text-muted-foreground">
                             Review and edit the extracted information before importing
                           </p>
                         </div>
                         {/* Confidence Score Display */}
                         {selectedPDF?.extractedData?.confidence !== undefined && (
                           <div className="text-right">
-                            <p className="text-sm text-gray-600">Extraction Confidence</p>
+                            <p className="text-sm text-muted-foreground">Extraction Confidence</p>
                             <div 
                               className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
-                                selectedPDF.extractedData.confidence >= 0.8 ? 'bg-green-100 text-green-700' :
-                                selectedPDF.extractedData.confidence >= 0.6 ? 'bg-yellow-100 text-yellow-700' :
-                                'bg-red-100 text-red-700'
+                                selectedPDF.extractedData.confidence >= 0.8 ? 'bg-green-100 text-green-700 dark:bg-green-950/50 dark:text-green-200' :
+                                selectedPDF.extractedData.confidence >= 0.6 ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-950/50 dark:text-yellow-200' :
+                                'bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-200'
                               }`}
                               data-testid="text-confidence-preview"
                             >
@@ -861,8 +947,9 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
                             <h4 className="font-medium mb-3">Customer Information</h4>
                             <div className="grid grid-cols-2 gap-3">
                               <div>
-                                <Label>First Name</Label>
+                                <Label htmlFor="import-customer-first-name">First Name</Label>
                                 <Input 
+                                  id="import-customer-first-name"
                                   value={selectedPDFId ? getCurrentPDFData(selectedPDFId)?.customer?.firstName ?? '' : ''} 
                                   onChange={(e) => selectedPDFId && updatePDFData(selectedPDFId, 'customer.firstName', e.target.value)}
                                   placeholder="First name"
@@ -870,8 +957,9 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
                                 />
                               </div>
                               <div>
-                                <Label>Last Name</Label>
+                                <Label htmlFor="import-customer-last-name">Last Name</Label>
                                 <Input 
+                                  id="import-customer-last-name"
                                   value={selectedPDFId ? getCurrentPDFData(selectedPDFId)?.customer?.lastName ?? '' : ''} 
                                   onChange={(e) => selectedPDFId && updatePDFData(selectedPDFId, 'customer.lastName', e.target.value)}
                                   placeholder="Last name"
@@ -879,8 +967,9 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
                                 />
                               </div>
                               <div className="col-span-2">
-                                <Label>Company</Label>
+                                <Label htmlFor="import-customer-company">Company</Label>
                                 <Input 
+                                  id="import-customer-company"
                                   value={selectedPDFId ? getCurrentPDFData(selectedPDFId)?.customer?.company ?? '' : ''} 
                                   onChange={(e) => selectedPDFId && updatePDFData(selectedPDFId, 'customer.company', e.target.value)}
                                   placeholder="Company name"
@@ -888,8 +977,9 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
                                 />
                               </div>
                               <div>
-                                <Label>Email</Label>
+                                <Label htmlFor="import-customer-email">Email</Label>
                                 <Input 
+                                  id="import-customer-email"
                                   value={selectedPDFId ? getCurrentPDFData(selectedPDFId)?.customer?.email ?? '' : ''} 
                                   onChange={(e) => selectedPDFId && updatePDFData(selectedPDFId, 'customer.email', e.target.value)}
                                   placeholder="Email address"
@@ -897,8 +987,9 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
                                 />
                               </div>
                               <div>
-                                <Label>Phone</Label>
+                                <Label htmlFor="import-customer-phone">Phone</Label>
                                 <Input 
+                                  id="import-customer-phone"
                                   value={selectedPDFId ? getCurrentPDFData(selectedPDFId)?.customer?.phone ?? '' : ''} 
                                   onChange={(e) => selectedPDFId && updatePDFData(selectedPDFId, 'customer.phone', e.target.value)}
                                   placeholder="Phone number"
@@ -915,8 +1006,9 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
                             <h4 className="font-medium mb-3">Quote Details</h4>
                             <div className="grid grid-cols-2 gap-3">
                               <div>
-                                <Label>Quote Number</Label>
+                                <Label htmlFor="import-quote-number">Quote Number</Label>
                                 <Input 
+                                  id="import-quote-number"
                                   value={selectedPDFId ? getCurrentPDFData(selectedPDFId)?.quoteNumber ?? '' : ''} 
                                   onChange={(e) => selectedPDFId && updatePDFData(selectedPDFId, 'quoteNumber', e.target.value)}
                                   placeholder="Quote number"
@@ -924,8 +1016,9 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
                                 />
                               </div>
                               <div>
-                                <Label>Date</Label>
+                                <Label htmlFor="import-quote-date">Date</Label>
                                 <Input 
+                                  id="import-quote-date"
                                   value={selectedPDFId ? getCurrentPDFData(selectedPDFId)?.date ?? '' : ''} 
                                   onChange={(e) => selectedPDFId && updatePDFData(selectedPDFId, 'date', e.target.value)}
                                   placeholder="Quote date"
@@ -933,8 +1026,9 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
                                 />
                               </div>
                               <div className="col-span-2">
-                                <Label>Project Description</Label>
+                                <Label htmlFor="import-project-description">Project Description</Label>
                                 <Textarea 
+                                  id="import-project-description"
                                   value={selectedPDFId ? getCurrentPDFData(selectedPDFId)?.projectDescription ?? '' : ''} 
                                   onChange={(e) => selectedPDFId && updatePDFData(selectedPDFId, 'projectDescription', e.target.value)}
                                   placeholder="Project description"
@@ -948,29 +1042,83 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
 
                           {/* Line Items */}
                           <div>
-                            <h4 className="font-medium mb-3">Line Items ({selectedPDFId ? getCurrentPDFData(selectedPDFId)?.lineItems?.length ?? 0 : 0})</h4>
+                            <div className="mb-3 flex items-center justify-between gap-3">
+                              <div>
+                                <h4 className="font-medium">Line Items ({selectedPDFId ? getCurrentPDFData(selectedPDFId)?.lineItems?.length ?? 0 : 0})</h4>
+                                <p className="text-xs text-muted-foreground">Confirm each description, quantity, unit, and extracted unit price before import.</p>
+                              </div>
+                              {selectedPDFId && (
+                                <Button type="button" variant="outline" size="sm" onClick={() => addPDFLineItem(selectedPDFId)}>
+                                  <Plus className="mr-1 h-4 w-4" /> Add line
+                                </Button>
+                              )}
+                            </div>
                             {selectedPDFId && getCurrentPDFData(selectedPDFId)?.lineItems && getCurrentPDFData(selectedPDFId)!.lineItems.length > 0 ? (
                               <div className="space-y-3">
                                 {getCurrentPDFData(selectedPDFId)!.lineItems.map((item, index) => (
                                   <div key={index} className="p-3 border rounded-lg">
-                                    <div className="grid grid-cols-4 gap-2 text-sm">
-                                      <div>
-                                        <span className="font-medium">Description:</span>
-                                        <p>{item.description || 'N/A'}</p>
+                                    <div className="grid grid-cols-12 gap-2 text-sm">
+                                      <div className="col-span-12 md:col-span-5">
+                                        <Label htmlFor={`import-line-description-${index}`}>Description</Label>
+                                        <Input
+                                          id={`import-line-description-${index}`}
+                                          value={item.description ?? ''}
+                                          onChange={(event) => updatePDFLineItem(selectedPDFId, index, { description: event.target.value })}
+                                          data-testid={`input-import-line-description-${index}`}
+                                        />
                                       </div>
-                                      <div>
-                                        <span className="font-medium">Quantity:</span>
-                                        <p>{item.quantity || 'N/A'} {item.unit || ''}</p>
+                                      <div className="col-span-4 md:col-span-2">
+                                        <Label htmlFor={`import-line-quantity-${index}`}>Quantity</Label>
+                                        <Input
+                                          id={`import-line-quantity-${index}`}
+                                          type="number"
+                                          min="0.01"
+                                          step="0.01"
+                                          value={item.quantity ?? ''}
+                                          onChange={(event) => updatePDFLineItem(selectedPDFId, index, { quantity: Number(event.target.value) })}
+                                          data-testid={`input-import-line-quantity-${index}`}
+                                        />
                                       </div>
-                                      <div>
-                                        <span className="font-medium">Price:</span>
-                                        <p>{item.price ? formatCurrency(item.price) : 'N/A'}</p>
+                                      <div className="col-span-4 md:col-span-2">
+                                        <Label htmlFor={`import-line-unit-${index}`}>Unit</Label>
+                                        <Input
+                                          id={`import-line-unit-${index}`}
+                                          value={item.unit ?? ''}
+                                          onChange={(event) => updatePDFLineItem(selectedPDFId, index, { unit: event.target.value })}
+                                          data-testid={`input-import-line-unit-${index}`}
+                                        />
                                       </div>
-                                      <div>
-                                        <span className="font-medium">Total:</span>
-                                        <p>{item.total ? formatCurrency(item.total) : 'N/A'}</p>
+                                      <div className="col-span-4 md:col-span-2">
+                                        <Label htmlFor={`import-line-price-${index}`}>Unit price</Label>
+                                        <Input
+                                          id={`import-line-price-${index}`}
+                                          type="number"
+                                          min="0"
+                                          step="0.01"
+                                          value={item.price ?? ''}
+                                          onChange={(event) => updatePDFLineItem(selectedPDFId, index, { price: Number(event.target.value) })}
+                                          data-testid={`input-import-line-price-${index}`}
+                                        />
+                                      </div>
+                                      <div className="col-span-12 flex items-center justify-between border-t pt-2 md:col-span-1 md:block md:border-0 md:pt-5">
+                                        <span className="text-xs text-muted-foreground md:hidden">
+                                          Calculated total: {formatCurrency(Number(item.quantity || 0) * Number(item.price || 0))}
+                                        </span>
+                                        <Button
+                                          type="button"
+                                          variant="ghost"
+                                          size="icon"
+                                          aria-label={`Remove imported line ${index + 1}`}
+                                          onClick={() => removePDFLineItem(selectedPDFId, index)}
+                                          data-testid={`button-remove-import-line-${index}`}
+                                        >
+                                          <Trash2 className="h-4 w-4" />
+                                        </Button>
                                       </div>
                                     </div>
+                                    <p className="mt-2 hidden text-xs text-muted-foreground md:block">
+                                      Calculated total: {formatCurrency(Number(item.quantity || 0) * Number(item.price || 0))}
+                                    </p>
                                   </div>
                                 ))}
                               </div>
@@ -993,8 +1141,9 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
                                 <div className="grid grid-cols-2 gap-3">
                                   {selectedPDFId && getCurrentPDFData(selectedPDFId)?.subtotal && (
                                     <div>
-                                      <Label>Subtotal</Label>
+                                      <Label htmlFor="import-subtotal">Subtotal</Label>
                                       <Input 
+                                        id="import-subtotal"
                                         value={selectedPDFId ? formatCurrency(getCurrentPDFData(selectedPDFId)!.subtotal!) : ''} 
                                         readOnly
                                       />
@@ -1002,8 +1151,9 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
                                   )}
                                   {selectedPDFId && getCurrentPDFData(selectedPDFId)?.total && (
                                     <div>
-                                      <Label>Total</Label>
+                                      <Label htmlFor="import-total">Total</Label>
                                       <Input 
+                                        id="import-total"
                                         value={selectedPDFId ? formatCurrency(getCurrentPDFData(selectedPDFId)!.total!) : ''} 
                                         readOnly
                                       />
@@ -1028,7 +1178,7 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
               <Card>
               <CardHeader>
                 <CardTitle>Import Options</CardTitle>
-                <p className="text-sm text-gray-600">
+                <p className="text-sm text-muted-foreground">
                   Configure how the extracted data should be imported into your system
                 </p>
               </CardHeader>
@@ -1060,7 +1210,7 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
                     
                     {/* Combine Option */}
                     {importOptions.createNewQuote && successfulPDFs.length > 1 && (
-                      <div className="ml-6 mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                      <div className="ml-6 mt-3 rounded-lg border border-blue-200 bg-blue-50 p-3 dark:border-blue-800 dark:bg-blue-950/30">
                         <div className="flex items-center space-x-2">
                           <input
                             type="checkbox"
@@ -1072,11 +1222,11 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
                             }))}
                             data-testid="checkbox-combine-pdfs"
                           />
-                          <Label htmlFor="combine-pdfs" className="text-blue-700 font-medium">
+                          <Label htmlFor="combine-pdfs" className="font-medium text-blue-700 dark:text-blue-200">
                             Combine all PDFs into single quote
                           </Label>
                         </div>
-                        <p className="text-sm text-blue-600 mt-1 ml-6">
+                        <p className="ml-6 mt-1 text-sm text-blue-700 dark:text-blue-200">
                           All line items from {successfulPDFs.length} PDFs will be merged into one quote
                         </p>
                       </div>
@@ -1092,7 +1242,7 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
                             existingQuoteId: parseInt(value) 
                           }))}
                         >
-                          <SelectTrigger data-testid="select-existing-quote">
+                          <SelectTrigger data-testid="select-existing-quote" aria-label="Select exact existing quote">
                             <SelectValue placeholder="Choose an existing quote" />
                           </SelectTrigger>
                           <SelectContent>
@@ -1108,12 +1258,14 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
                   </div>
                 </div>
 
-                <Separator />
+                {importOptions.createNewQuote && (
+                  <>
+                    <Separator />
 
-                {/* Customer Handling */}
-                <div>
-                  <h4 className="font-medium mb-3">Customer Handling</h4>
-                  <div className="space-y-3">
+                    {/* Customer Handling */}
+                    <div>
+                      <h4 className="font-medium mb-3">Client Target</h4>
+                      <div className="space-y-3">
                     <div className="flex items-center space-x-2">
                       <input
                         type="radio"
@@ -1122,7 +1274,7 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
                         onChange={() => setImportOptions(prev => ({ ...prev, customerHandling: 'create_new' }))}
                         data-testid="radio-create-new-customer"
                       />
-                      <Label htmlFor="create-customer">Create new customer accounts</Label>
+                      <Label htmlFor="create-customer">Match an extracted client, otherwise create one</Label>
                     </div>
                     <div className="flex items-center space-x-2">
                       <input
@@ -1132,12 +1284,12 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
                         onChange={() => setImportOptions(prev => ({ ...prev, customerHandling: 'use_existing' }))}
                         data-testid="radio-use-existing-customer"
                       />
-                      <Label htmlFor="use-existing-customer">Match with existing customers</Label>
+                      <Label htmlFor="use-existing-customer">Use one exact existing client</Label>
                     </div>
 
                     {importOptions.customerHandling === 'use_existing' && (
                       <div className="ml-6 mt-2">
-                        <Label>Default Customer (for unmatched)</Label>
+                        <Label>Client for every imported quote</Label>
                         <Select 
                           value={importOptions.existingCustomerId?.toString()} 
                           onValueChange={(value) => setImportOptions(prev => ({ 
@@ -1145,8 +1297,8 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
                             existingCustomerId: parseInt(value) 
                           }))}
                         >
-                          <SelectTrigger data-testid="select-existing-customer">
-                            <SelectValue placeholder="Choose a default customer" />
+                          <SelectTrigger data-testid="select-existing-customer" aria-label="Select exact existing client">
+                            <SelectValue placeholder="Choose the exact client" />
                           </SelectTrigger>
                           <SelectContent>
                             {existingCustomers?.map((customer) => (
@@ -1156,9 +1308,61 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
                             ))}
                           </SelectContent>
                         </Select>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          This selection overrides any client name or email extracted from the PDFs.
+                        </p>
                       </div>
                     )}
-                  </div>
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                <Separator />
+
+                <div>
+                  <h4 className="font-medium mb-3">Extracted Price Meaning</h4>
+                  <Select
+                    value={importOptions.priceMeaning}
+                    onValueChange={(value: 'customer_unit_price' | 'edg_cost') => setImportOptions(prev => ({
+                      ...prev,
+                      priceMeaning: value,
+                    }))}
+                  >
+                    <SelectTrigger data-testid="select-import-price-meaning" aria-label="Choose extracted price meaning">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="customer_unit_price">Customer unit price shown on the PDF</SelectItem>
+                      <SelectItem value="edg_cost">EDG cost that still needs markup</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {importOptions.priceMeaning === 'customer_unit_price' ? (
+                    <Alert className="mt-3">
+                      <AlertDescription>
+                        Imported prices will be preserved as customer unit prices with zero additional markup.
+                      </AlertDescription>
+                    </Alert>
+                  ) : (
+                    <div className="mt-3 space-y-2">
+                      <Label htmlFor="import-default-markup">Markup applied to every imported line (%)</Label>
+                      <Input
+                        id="import-default-markup"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={importOptions.defaultMarkupPercent}
+                        onChange={(event) => setImportOptions(prev => ({
+                          ...prev,
+                          defaultMarkupPercent: Number(event.target.value),
+                        }))}
+                        data-testid="input-import-default-markup"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Imported prices become EDG cost; Rainmaker applies this markup to calculate the customer unit price.
+                      </p>
+                    </div>
+                  )}
                 </div>
               </CardContent>
               </Card>
@@ -1177,11 +1381,7 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
                   </div>
                   <div className="flex justify-between">
                     <span>Total line items:</span>
-                    <span className="font-medium">
-                      {successfulPDFs.reduce((total, pdf) => 
-                        total + (pdf.extractedData?.lineItems?.length || 0), 0
-                      )}
-                    </span>
+                    <span className="font-medium">{reviewedLineItemCount}</span>
                   </div>
                   <div className="flex justify-between">
                     <span>Action:</span>
@@ -1190,6 +1390,24 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
                     </span>
                   </div>
                 </div>
+
+                {!hasRequiredQuoteTarget && (
+                  <Alert variant="destructive" className="mt-4">
+                    <AlertDescription>Choose the exact existing quote that should receive these lines.</AlertDescription>
+                  </Alert>
+                )}
+                {!hasRequiredClientTarget && (
+                  <Alert variant="destructive" className="mt-4">
+                    <AlertDescription>Choose the exact client for the imported quote.</AlertDescription>
+                  </Alert>
+                )}
+                {invalidLineCount > 0 && (
+                  <Alert variant="destructive" className="mt-4">
+                    <AlertDescription>
+                      Review the imported lines. Every quote needs at least one line with a description, positive quantity, and non-negative unit price.
+                    </AlertDescription>
+                  </Alert>
+                )}
 
                 <div className="mt-6 flex justify-end space-x-3">
                   <Button 
@@ -1201,7 +1419,7 @@ export function QuoteImporter({ open, onOpenChange, onImportComplete }: QuoteImp
                   </Button>
                   <Button 
                     onClick={() => importMutation.mutate()}
-                    disabled={successfulPDFs.length === 0 || isImporting}
+                    disabled={!canImport}
                     data-testid="button-start-import"
                   >
                     {isImporting ? (

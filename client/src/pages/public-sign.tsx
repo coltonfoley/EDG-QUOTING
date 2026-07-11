@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, type SyntheticEvent } from 'react';
 import { useParams } from 'wouter';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
@@ -12,10 +12,7 @@ import { SignatureCanvas, SignatureData } from '@/components/signature-canvas';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { CheckCircle, AlertTriangle, FileText, Download, Shield, Clock, Eye, PenLine, ArrowRight, ArrowLeft, MapPin, Mail, Phone, DollarSign, Package, Maximize2, Minimize2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import jsPDF from 'jspdf';
-import { barlowRegularBase64, barlowSemiBoldBase64 } from '@/lib/fonts';
-import { generateBrandedSequencePDF } from '@/lib/pdf-branded-sequence';
-import { normalizeImageToDataUrl } from '@/lib/pdf-image-pipeline';
+import { usePublicLightTheme } from '@/hooks/use-public-light-theme';
 import { ORDER_APPROVAL_SIGNATURE_CONSENT } from '@shared/approvalDrawing';
 import { generateSignedPDF, downloadSignedPDF } from '@/lib/generate-signed-pdf';
 import { QuoteApprovalDrawingPreview } from '@/components/quote-approval-drawing-preview';
@@ -24,6 +21,10 @@ import { cn } from '@/lib/utils';
 import edgLogoPath from '@assets/Logo_Full_Color_Black_1766097629382.png';
 
 interface SigningQuoteData {
+  customerPackageVersion?: number;
+  customerPackageFingerprint?: string | null;
+  documentRevision?: string | null;
+  packageIssues?: Array<{ code: string; message: string }>;
   id: number;
   quoteNumber: string | null;
   projectName: string | null;
@@ -74,6 +75,22 @@ interface SigningQuoteData {
   esigIncludeImages?: boolean;
   esigIncludeContract?: boolean;
   esigIncludeApprovalDrawing?: boolean;
+  groups?: Array<{ id: string; title: string; position: number }>;
+  productRenderings?: Array<{
+    id: number;
+    storageUrl: string;
+    filename: string;
+    originalName: string;
+    mimeType: string;
+    displayOrder?: number | null;
+  }>;
+  coverPhoto?: {
+    id: number;
+    storageUrl: string;
+    filename: string;
+    originalName: string;
+    mimeType: string;
+  };
 }
 
 type SigningStep = 'review' | 'sign' | 'complete';
@@ -298,6 +315,7 @@ function QuoteSummaryBar({ quoteData, showPricing }: { quoteData: SigningQuoteDa
 }
 
 export default function PublicSignPage() {
+  usePublicLightTheme();
   const params = useParams();
   const token = params.token as string;
   const [signature, setSignature] = useState<SignatureData | null>(null);
@@ -309,6 +327,8 @@ export default function PublicSignPage() {
   const [signedTimestamp, setSignedTimestamp] = useState<Date | null>(null);
   const [emailWasSent, setEmailWasSent] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [focusedPreview, setFocusedPreview] = useState<"review" | "sign" | null>(null);
+  const signHeadingRef = useRef<HTMLHeadingElement>(null);
   const { toast } = useToast();
 
   const { data: quoteData, isLoading, error } = useQuery<SigningQuoteData>({
@@ -354,6 +374,13 @@ export default function PublicSignPage() {
   }, [quoteData?.clientSignedAt]);
 
   useEffect(() => {
+    if (currentStep === 'sign') {
+      const focusFrame = window.requestAnimationFrame(() => signHeadingRef.current?.focus());
+      return () => window.cancelAnimationFrame(focusFrame);
+    }
+  }, [currentStep]);
+
+  useEffect(() => {
     if (isFullscreen) {
       document.body.style.overflow = 'hidden';
     } else {
@@ -384,60 +411,17 @@ export default function PublicSignPage() {
     setIsGeneratingPdf(true);
     setPdfPreviewError(null);
     try {
-      const pdf = new jsPDF({
-        unit: 'mm',
-        format: 'letter',
-        compress: true
-      });
-
-      pdf.addFileToVFS('Barlow-Regular.ttf', barlowRegularBase64);
-      pdf.addFont('Barlow-Regular.ttf', 'Barlow-Regular', 'normal');
-      pdf.addFileToVFS('Barlow-SemiBold.ttf', barlowSemiBoldBase64);
-      pdf.addFont('Barlow-SemiBold.ttf', 'Barlow-SemiBold', 'normal');
-
-      const company = COMPANY_INFO;
-
       const showPricing = quoteData.esigIncludePricing ?? true;
       const includeImages = quoteData.esigIncludeImages ?? false;
       const includeContract = quoteData.esigIncludeContract ?? true;
-
-      let contractText = '';
-      if (includeContract) {
-        contractText = (quoteData as any).contractTemplate?.terms || (quoteData as any).customContractTerms || '';
-      }
-
-      let renderImages: Array<{ dataUrl: string; format: 'PNG' | 'JPEG' }> = [];
-      if (includeImages) {
-        try {
-          const response = await fetch(`/api/quotes/${quoteData.id}/product-renderings`);
-          if (response.ok) {
-            const renderings = await response.json();
-            const imageResults = await Promise.allSettled(
-              renderings.map(async (rendering: any) => {
-                return await normalizeImageToDataUrl(rendering.storageUrl);
-              })
-            );
-            renderImages = imageResults
-              .filter((r): r is PromiseFulfilledResult<{ dataUrl: string; format: 'PNG' | 'JPEG' }> => r.status === 'fulfilled')
-              .map(r => r.value);
-          }
-        } catch (error) {
-          console.warn('Failed to load product renderings:', error);
-        }
-      }
-
-      await generateBrandedSequencePDF({
-        pdf,
-        company,
-        quote: quoteData as any,
-        renderImages,
-        contractText,
-        showPricing,
+      const blob = await generateSignedPDF({
+        quote: quoteData as unknown as QuoteWithDetails,
+        includeImages,
+        includePricing: showPricing,
+        includeContract,
         includeApprovalDrawing: quoteData.esigIncludeApprovalDrawing === true,
-        clientLogoDataUrl: null
+        groups: quoteData.groups || [],
       });
-
-      const blob = pdf.output('blob');
       const url = URL.createObjectURL(blob);
       setPdfUrl(url);
     } catch (error) {
@@ -451,7 +435,9 @@ export default function PublicSignPage() {
     mutationFn: async (signatureData: SignatureData) => {
       const response = await apiRequest('POST', `/api/signatures/${token}/sign`, { 
         signatureData,
-        signerType: 'client'
+        signerType: 'client',
+        documentRevision: quoteData?.documentRevision ?? null,
+        customerPackageFingerprint: quoteData?.customerPackageFingerprint,
       });
       return response.json();
     },
@@ -484,15 +470,7 @@ export default function PublicSignPage() {
       const response = await apiRequest('GET', `/api/signatures/${token}/full`);
       const fullQuote: QuoteWithDetails = await response.json();
       
-      // Fetch groups for proper PDF aggregation
-      let groups: { id: string; title: string; position: number }[] = [];
-      try {
-        const groupsResponse = await apiRequest('GET', `/api/quotes/${fullQuote.id}/groups`);
-        const groupsData = await groupsResponse.json();
-        groups = groupsData.map((g: any) => ({ id: g.id, title: g.title, position: g.position }));
-      } catch (e) {
-        console.warn('Failed to fetch groups for PDF:', e);
-      }
+      const groups = fullQuote.groups || [];
       
       const includeImages = fullQuote.esigIncludeImages ?? false;
       const includePricing = fullQuote.esigIncludePricing ?? true;
@@ -526,7 +504,25 @@ export default function PublicSignPage() {
   });
 
   const handleProceedToSign = () => {
+    if ((quoteData?.packageIssues?.length || 0) > 0) {
+      toast({
+        title: 'Proposal needs attention',
+        description: 'EDG must resolve the package items shown above before this proposal can be approved.',
+        variant: 'destructive',
+      });
+      return;
+    }
     setCurrentStep('sign');
+  };
+
+  const handleSignPreviewLoad = (event: SyntheticEvent<HTMLIFrameElement>) => {
+    if (currentStep !== 'sign') return;
+    const previewFrame = event.currentTarget;
+    window.requestAnimationFrame(() => {
+      if (document.activeElement === document.body || document.activeElement === previewFrame) {
+        signHeadingRef.current?.focus();
+      }
+    });
   };
 
   const handleSign = () => {
@@ -552,7 +548,8 @@ export default function PublicSignPage() {
   };
 
   const isAlreadySigned = !!quoteData?.clientSignedAt;
-  const canSign = signature && hasAgreed && !isAlreadySigned && !signMutation.isPending;
+  const hasPackageIssues = (quoteData?.packageIssues?.length || 0) > 0;
+  const canSign = signature && hasAgreed && !hasPackageIssues && !isAlreadySigned && !signMutation.isPending;
   const showPricing = quoteData?.esigIncludePricing ?? true;
   const hasApprovalDrawing = Boolean(quoteData?.esigIncludeApprovalDrawing && quoteData?.approvalDrawing);
 
@@ -581,14 +578,14 @@ export default function PublicSignPage() {
               <div className="mx-auto w-16 h-16 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center mb-4">
                 <AlertTriangle className="w-8 h-8 text-red-600" />
               </div>
-              <CardTitle className="text-xl">Invalid Signing Link</CardTitle>
+              <h1 className="text-xl font-semibold leading-none tracking-tight">Invalid Signing Link</h1>
               <CardDescription>
                 This link is no longer valid
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <Alert variant="destructive">
-                <AlertDescription>
+                <AlertDescription className="text-red-700">
                   {errorMessage}
                 </AlertDescription>
               </Alert>
@@ -625,9 +622,9 @@ export default function PublicSignPage() {
                 <CheckCircle className="w-10 h-10 text-edg-teal" />
               </div>
               
-              <h2 className="text-2xl font-bold text-edg-black mb-2">
+              <h1 className="text-2xl font-bold text-edg-black mb-2">
                 Proposal Approved
-              </h2>
+              </h1>
               <p className="text-edg-grey mb-6">
                 Your approval has been recorded. EDG will use this signed proposal to move the project forward.
               </p>
@@ -708,6 +705,15 @@ export default function PublicSignPage() {
 
   return (
     <div className="min-h-screen bg-edg-light-grey flex flex-col">
+      {currentStep === 'review' && !isFullscreen && (
+        <a
+          href="#approval-actions"
+          data-testid="link-skip-to-approval-actions"
+          className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[60] focus:rounded-md focus:bg-white focus:px-4 focus:py-3 focus:text-sm focus:font-semibold focus:text-edg-dark-teal focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-edg-teal focus:ring-offset-2"
+        >
+          Skip to approval actions
+        </a>
+      )}
       <CompanyHeader />
       <QuoteSummaryBar quoteData={quoteData} showPricing={showPricing} />
       
@@ -751,6 +757,20 @@ export default function PublicSignPage() {
                     </div>
                   </div>
                 </div>
+                {hasPackageIssues && (
+                  <Alert variant="destructive" className="mt-4 bg-white" data-testid="customer-package-issues">
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertDescription className="text-red-700">
+                      <div className="font-semibold">This proposal is not ready for approval.</div>
+                      <ul className="mt-2 list-disc space-y-1 pl-5">
+                        {quoteData.packageIssues?.map((issue) => (
+                          <li key={issue.code}>{issue.message}</li>
+                        ))}
+                      </ul>
+                      <div className="mt-2">Please contact EDG so the proposal package can be corrected.</div>
+                    </AlertDescription>
+                  </Alert>
+                )}
               </div>
             )}
             {!isFullscreen && hasApprovalDrawing && quoteData.approvalDrawing?.drawingData && (
@@ -784,6 +804,7 @@ export default function PublicSignPage() {
                   variant="secondary"
                   size="sm"
                   onClick={() => setIsFullscreen(!isFullscreen)}
+                  aria-label={isFullscreen ? "Exit fullscreen proposal view" : "Enter fullscreen proposal view"}
                   className="shadow-lg"
                   data-testid="button-toggle-fullscreen"
                 >
@@ -799,11 +820,14 @@ export default function PublicSignPage() {
                 <iframe
                   src={pdfUrl}
                   className={cn(
-                    "w-full border-0",
+                    "w-full border-0 outline-none",
+                    focusedPreview === "review" && "ring-2 ring-edg-teal ring-offset-2",
                     isFullscreen ? "h-full" : "h-[calc(100vh-280px)] min-h-[500px]"
                   )}
                   data-testid="pdf-preview"
                   title="Proposal Preview"
+                  onFocus={() => setFocusedPreview("review")}
+                  onBlur={() => setFocusedPreview(null)}
                 />
               ) : (
                 <ProposalPreviewFallback
@@ -816,7 +840,11 @@ export default function PublicSignPage() {
             </div>
 
             {!isFullscreen && (
-              <div className="bg-white border-t border-edg-teal/20 shadow-lg sticky bottom-0">
+              <div
+                id="approval-actions"
+                tabIndex={-1}
+                className="bg-white border-t border-edg-teal/20 shadow-lg sticky bottom-0 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-edg-teal"
+              >
                 <div className="max-w-7xl mx-auto px-4 py-4">
                   <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
                     <div className="flex items-center gap-3 text-sm text-edg-grey">
@@ -838,7 +866,7 @@ export default function PublicSignPage() {
                       <Button 
                         onClick={handleProceedToSign}
                         size="lg"
-                        disabled={isGeneratingPdf}
+                        disabled={isGeneratingPdf || hasPackageIssues}
                         className="flex-1 sm:flex-none min-w-[200px] bg-edg-teal text-white hover:bg-edg-dark-teal"
                         data-testid="button-proceed-to-sign"
                       >
@@ -868,9 +896,15 @@ export default function PublicSignPage() {
                     {pdfUrl ? (
                       <iframe
                         src={pdfUrl}
-                        className="w-full h-[400px] border rounded-lg"
+                        className={cn(
+                          "w-full h-[400px] border rounded-lg outline-none",
+                          focusedPreview === "sign" && "ring-2 ring-edg-teal ring-offset-2",
+                        )}
                         data-testid="pdf-preview-sign"
                         title="Proposal Preview"
+                        onFocus={() => setFocusedPreview("sign")}
+                        onBlur={() => setFocusedPreview(null)}
+                        onLoad={handleSignPreviewLoad}
                       />
                     ) : (
                       <div className="h-[400px] overflow-auto rounded-lg border bg-edg-light-grey">
@@ -889,15 +923,31 @@ export default function PublicSignPage() {
               <div className="lg:col-span-3 space-y-4">
                 <Card className="shadow-lg border-edg-teal/20">
                   <CardHeader>
-                    <CardTitle className="flex items-center gap-2 text-edg-black">
+                    <h1
+                      ref={signHeadingRef}
+                      tabIndex={-1}
+                      data-testid="heading-sign-approval"
+                      className="flex items-center gap-2 text-2xl font-semibold leading-none tracking-tight text-edg-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-edg-teal focus-visible:ring-offset-2"
+                    >
                       <PenLine className="w-5 h-5 text-edg-teal" />
                       Your Approval
-                    </CardTitle>
+                    </h1>
                     <CardDescription className="text-edg-grey">
                       Type your legal name and sign to approve this proposal.
                     </CardDescription>
+                    <a
+                      href="#signature-form"
+                      data-testid="link-skip-to-signature-form"
+                      className="sr-only focus:not-sr-only focus:w-fit focus:rounded-md focus:bg-white focus:px-3 focus:py-2 focus:text-sm focus:font-semibold focus:text-edg-dark-teal focus:outline-none focus:ring-2 focus:ring-edg-teal focus:ring-offset-2"
+                    >
+                      Skip to signature form
+                    </a>
                   </CardHeader>
-                  <CardContent className="space-y-4">
+                  <CardContent
+                    id="signature-form"
+                    tabIndex={-1}
+                    className="space-y-4 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-edg-teal"
+                  >
                     <SignatureCanvas
                       onSignatureChange={setSignature}
                       signerName=""

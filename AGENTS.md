@@ -9,8 +9,9 @@
 - GitHub remote: `https://github.com/coltonfoley/EDG-QUOTING.git`
 - Normal branch: `main`
 
-Rainmaker is the sales, lead, quote, proposal, contract, and handoff source of
-truth before a sold job moves to Ops Portal.
+Rainmaker is the sales, lead, quote, proposal, contract, and customer-approval
+source of truth. The former Ops Portal is retired; Rainmaker must not send to it
+or expose a replacement post-sale workflow.
 
 Local filesystem paths are not authoritative. On any machine, verify the repo
 root with Git, then treat GitHub, Vercel, and the live production app as the
@@ -28,13 +29,13 @@ Before making changes:
 Implementation boundaries:
 
 - Do not send customer emails, proposals, Ops handoffs, vendor orders, pricing changes, payment confirmations, or customer-visible actions unless explicitly approved.
-- Keep Rainmaker quote truth separate from Ops Portal post-sale status truth.
+- Keep Rainmaker focused on pre-sale and customer-approval truth.
 - Handoff changes must be idempotent and auditable.
 
 Known fragile areas:
 
 - Serverless startup can fail if API startup imports heavy browser/PDF/backend code too early.
-- Be careful around `api/index.ts`, `server/vercelHandler.ts`, `server/integrations/operationsPayload.ts`, and document/PDF generation paths.
+- Be careful around `api/index.ts`, `server/vercelHandler.ts`, and document/PDF generation paths.
 - Do not import browser-oriented PDF helpers directly into server startup or serverless request paths without proving they are server-safe.
 - If `/health` fails, debug startup imports before chasing deeper UI behavior.
 

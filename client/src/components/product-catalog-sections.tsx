@@ -2,7 +2,7 @@ import { AIProductImporter } from "@/components/ai-product-importer";
 import { CSVProductImporter } from "@/components/csv-product-importer";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -28,19 +28,19 @@ export function ProductImportWorkspace() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
+        <h1 className="flex items-center gap-2 text-2xl font-semibold leading-none tracking-tight">
           <Package className="h-5 w-5" />
           Product Import
-        </CardTitle>
+        </h1>
       </CardHeader>
       <CardContent>
         <Tabs defaultValue="ai" className="w-full">
           <TabsList className="mb-4">
-            <TabsTrigger value="ai" className="gap-2">
+            <TabsTrigger value="ai" className="gap-2" data-testid="product-import-tab-ai">
               <Sparkles className="h-4 w-4" />
               AI Import
             </TabsTrigger>
-            <TabsTrigger value="manual" className="gap-2">
+            <TabsTrigger value="manual" className="gap-2" data-testid="product-import-tab-manual">
               <FileSpreadsheet className="h-4 w-4" />
               Manual CSV Import
             </TabsTrigger>
@@ -147,7 +147,7 @@ export function ProductTable({
                     <div>
                       <div className="font-medium">{product.name}</div>
                       {product.description && (
-                        <div className="text-sm text-gray-500 truncate max-w-xs">
+                        <div className="text-sm text-muted-foreground truncate max-w-xs">
                           {product.description}
                         </div>
                       )}
@@ -163,7 +163,7 @@ export function ProductTable({
                     {product.sku ? (
                       <Badge variant="outline" data-testid={`text-sku-${product.id}`}>{product.sku}</Badge>
                     ) : (
-                      <span className="text-sm text-gray-400">None</span>
+                      <span className="text-sm text-muted-foreground">None</span>
                     )}
                   </TableCell>
                   <TableCell>
@@ -173,9 +173,9 @@ export function ProductTable({
                   </TableCell>
                   <TableCell>
                     {product.category ? (
-                      <span className="text-sm text-gray-600">{product.category}</span>
+                      <span className="text-sm text-muted-foreground">{product.category}</span>
                     ) : (
-                      <span className="text-sm text-gray-400">Uncategorized</span>
+                      <span className="text-sm text-muted-foreground">Uncategorized</span>
                     )}
                   </TableCell>
                   <TableCell>
@@ -183,15 +183,15 @@ export function ProductTable({
                       {product.productType === "configurable" ? "Dimensional" : "Simple"}
                     </Badge>
                   </TableCell>
-                  <TableCell className="text-sm text-gray-600">{product.unit}</TableCell>
-                  <TableCell className="text-right text-gray-600">
+                  <TableCell className="text-sm text-muted-foreground">{product.unit}</TableCell>
+                  <TableCell className="text-right text-muted-foreground">
                     {product.productType === "configurable" ? (
-                      <span className="text-sm text-gray-500">Dimensional</span>
+                      <span className="text-sm text-muted-foreground">Dimensional</span>
                     ) : formatCurrency(getProductPricingBreakdown(product).manufacturerMsrp)}
                   </TableCell>
                   <TableCell className="text-right font-medium">
                     {product.productType === "configurable" ? (
-                      <span className="text-sm text-gray-500">Dimensional</span>
+                      <span className="text-sm text-muted-foreground">Dimensional</span>
                     ) : formatCurrency(getProductPricingBreakdown(product).edgCost)}
                   </TableCell>
                   {canManage && (

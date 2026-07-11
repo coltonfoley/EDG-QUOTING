@@ -62,6 +62,7 @@ const PHASE_LABELS: Record<string, string> = {
 };
 
 export function AIProductImporter() {
+  const importRequestIdRef = useRef<string | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [step, setStep] = useState<Step>('upload');
   const [extractedProducts, setExtractedProducts] = useState<ExtractedProduct[]>([]);
@@ -229,7 +230,11 @@ export function AIProductImporter() {
 
   const importMutation = useMutation({
     mutationFn: async (products: Array<{ name: string; manufacturer?: string; category?: string; unit?: string; description?: string; retailPrice: number; cost: number }>) => {
-      const response = await apiRequest("POST", "/api/admin/import-csv-products", { products });
+      importRequestIdRef.current ||= crypto.randomUUID();
+      const response = await apiRequest("POST", "/api/admin/import-csv-products", {
+        importRequestId: importRequestIdRef.current,
+        products,
+      });
       return response.json();
     },
     onSuccess: (data) => {
@@ -239,9 +244,10 @@ export function AIProductImporter() {
       setStep('results');
       queryClient.invalidateQueries({ queryKey: ["/api/products"] });
       toast({
-        title: "Import Complete",
-        description: `${data.created} created, ${data.updated} updated`,
+        title: data.replayed ? "Import already completed" : "Import Complete",
+        description: data.replayed ? "Rainmaker did not apply the same import twice." : `${data.created} created, ${data.updated} updated`,
       });
+      importRequestIdRef.current = null;
     },
     onError: (error: Error) => {
       toast({
@@ -253,6 +259,7 @@ export function AIProductImporter() {
   });
 
   const handleFileSelect = useCallback(async (selectedFile: File) => {
+    importRequestIdRef.current = null;
     const ext = selectedFile.name.toLowerCase().split('.').pop();
     if (!['csv', 'xlsx', 'xls', 'pdf'].includes(ext || '')) {
       setErrors(['Unsupported file type. Please upload CSV, Excel (.xlsx/.xls), or PDF files.']);
@@ -343,6 +350,7 @@ export function AIProductImporter() {
   };
 
   const resetImporter = () => {
+    importRequestIdRef.current = null;
     setFile(null);
     setStep('upload');
     setExtractedProducts([]);
@@ -391,19 +399,28 @@ export function AIProductImporter() {
           <div className="space-y-4">
             <div
               className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors cursor-pointer ${
-                isDragOver ? 'border-teal-500 bg-teal-50' : 'border-gray-300 hover:border-gray-400'
+                isDragOver ? 'border-teal-500 bg-teal-50 dark:bg-teal-950/30' : 'border-border hover:border-muted-foreground'
               }`}
+              role="button"
+              tabIndex={0}
+              aria-label="Choose or drop a manufacturer price sheet"
               onDrop={handleDrop}
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
               onClick={() => fileInputRef.current?.click()}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault();
+                  fileInputRef.current?.click();
+                }
+              }}
             >
-              <Upload className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+              <Upload className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
               <h3 className="text-lg font-medium mb-1">Drop your price sheet here</h3>
-              <p className="text-sm text-gray-500 mb-1">
+              <p className="text-sm text-muted-foreground mb-1">
                 or click to browse
               </p>
-              <p className="text-xs text-gray-400">
+              <p className="text-xs text-muted-foreground">
                 Supports CSV, Excel (.xlsx/.xls), and PDF files
               </p>
               <Input

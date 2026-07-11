@@ -118,6 +118,34 @@ export const leadIntakeSubmissions = pgTable("lead_intake_submissions", {
   index("idx_lead_intake_submissions_account_id").on(table.accountId),
 ]);
 
+// Append-only website/customer inquiries linked to a durable account identity.
+// Legacy lead fields remain on accounts for compatibility and backfill.
+export const leadInquiries = pgTable("lead_inquiries", {
+  id: serial("id").primaryKey(),
+  accountId: integer("account_id").notNull().references(() => accounts.id, { onDelete: "cascade" }),
+  submissionId: text("submission_id").unique(),
+  status: text("status").notNull().default("new"),
+  source: text("source"),
+  projectType: text("project_type"),
+  message: text("message"),
+  location: text("location"),
+  customerType: text("customer_type"),
+  metadata: jsonb("metadata"),
+  receivedAt: timestamp("received_at").notNull().defaultNow(),
+  lastContactedAt: timestamp("last_contacted_at"),
+  convertedAt: timestamp("converted_at"),
+  // The database migration owns this FK because quotes also references the source inquiry.
+  convertedQuoteId: integer("converted_quote_id"),
+  convertedBy: integer("converted_by").references(() => users.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_lead_inquiries_account_id").on(table.accountId),
+  index("idx_lead_inquiries_status").on(table.status),
+  index("idx_lead_inquiries_received_at").on(table.receivedAt),
+  index("idx_lead_inquiries_converted_quote_id").on(table.convertedQuoteId),
+]);
+
 // Aliases for different conceptual uses
 export const customers = accounts; // Legacy alias for backward compatibility
 export const clients = accounts; // New unified client model alias
@@ -138,6 +166,7 @@ export const quotes = pgTable("quotes", {
   id: serial("id").primaryKey(),
   quoteNumber: text("quote_number").notNull().unique(),
   accountId: integer("account_id").references(() => accounts.id, { onDelete: "set null" }), // Reference to accounts table
+  sourceInquiryId: integer("source_inquiry_id").references(() => leadInquiries.id, { onDelete: "set null" }),
   projectName: text("project_name"),
   jobsiteAddress: text("jobsite_address"), // Legacy field, kept for backward compatibility
   // Structured jobsite address fields for Google Places integration
@@ -157,6 +186,7 @@ export const quotes = pgTable("quotes", {
   shipping: decimal("shipping", { precision: 10, scale: 2 }).default("0"),
   isShippingTaxable: boolean("is_shipping_taxable").default(false), // whether shipping is subject to sales tax
   dealStage: text("deal_stage").notNull().default("new_lead"), // new_lead, qualifying, consultation_scheduled, building_estimate, quote_sent, closed_won, closed_lost, on_hold
+  dealStageChangedAt: timestamp("deal_stage_changed_at"),
   lostReason: text("lost_reason"), // price, timeline, competitor, no_budget, etc.
   // Contract fields
   contractTemplateId: integer("contract_template_id").references(() => contractTemplates.id, { onDelete: "set null" }), // reference to contract template
@@ -193,12 +223,29 @@ export const quotes = pgTable("quotes", {
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => [
   index("idx_quotes_account_id").on(table.accountId),
+  index("idx_quotes_source_inquiry_id").on(table.sourceInquiryId),
   index("idx_quotes_deal_stage").on(table.dealStage),
   index("idx_quotes_account_created").on(table.accountId, table.createdAt),
   index("idx_quotes_qb_sync_status").on(table.qbSyncStatus),
   index("idx_quotes_parent_quote_id").on(table.parentQuoteId),
   index("idx_quotes_is_latest_version").on(table.isLatestVersion),
   index("idx_quotes_parent_latest").on(table.parentQuoteId, table.isLatestVersion),
+]);
+
+export const quoteVersionEvents = pgTable("quote_version_events", {
+  id: serial("id").primaryKey(),
+  quoteFamilyRootId: integer("quote_family_root_id").notNull().references((): AnyPgColumn => quotes.id, { onDelete: "cascade" }),
+  quoteId: integer("quote_id").references((): AnyPgColumn => quotes.id, { onDelete: "set null" }),
+  eventType: text("event_type").notNull(),
+  actorUserId: integer("actor_user_id").references(() => users.id, { onDelete: "set null" }),
+  fromQuoteId: integer("from_quote_id").references((): AnyPgColumn => quotes.id, { onDelete: "set null" }),
+  toQuoteId: integer("to_quote_id").references((): AnyPgColumn => quotes.id, { onDelete: "set null" }),
+  payload: jsonb("payload"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_quote_version_events_family").on(table.quoteFamilyRootId),
+  index("idx_quote_version_events_quote").on(table.quoteId),
+  index("idx_quote_version_events_created").on(table.createdAt),
 ]);
 
 export const planningAgreementStatusValues = [
@@ -305,6 +352,26 @@ export const planningAgreementEvents = pgTable("planning_agreement_events", {
   index("idx_planning_agreement_events_created_at").on(table.createdAt),
 ]);
 
+export const emailDeliveryAttempts = pgTable("email_delivery_attempts", {
+  id: serial("id").primaryKey(),
+  idempotencyKey: text("idempotency_key").notNull().unique(),
+  messageType: text("message_type").notNull(),
+  quoteId: integer("quote_id").references((): AnyPgColumn => quotes.id, { onDelete: "set null" }),
+  planningAgreementId: integer("planning_agreement_id").references((): AnyPgColumn => planningAgreements.id, { onDelete: "set null" }),
+  status: text("status").notNull().default("pending"),
+  attemptCount: integer("attempt_count").notNull().default(1),
+  providerMessageId: text("provider_message_id"),
+  lastErrorType: text("last_error_type"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+  sentAt: timestamp("sent_at"),
+}, (table) => [
+  index("idx_email_delivery_attempts_quote").on(table.quoteId),
+  index("idx_email_delivery_attempts_planning").on(table.planningAgreementId),
+  index("idx_email_delivery_attempts_status").on(table.status),
+  index("idx_email_delivery_attempts_created").on(table.createdAt),
+]);
+
 export const quoteApprovalDrawings = pgTable("quote_approval_drawings", {
   id: serial("id").primaryKey(),
   quoteId: integer("quote_id").notNull().references((): AnyPgColumn => quotes.id, { onDelete: "cascade" }),
@@ -404,6 +471,11 @@ export const products = pgTable("products", {
   // Pricing fields
   retailPrice: decimal("retail_price", { precision: 10, scale: 2 }).notNull(), // MSRP/list price from manufacturer
   costPrice: decimal("cost_price", { precision: 10, scale: 2 }).notNull().default("0"), // EDG's internal cost after supplier discount
+  // Legacy product-pricing columns remain mapped so new writes preserve older
+  // readers while retailPrice/costPrice stay authoritative in Rainmaker.
+  defaultUnitPrice: decimal("default_unit_price", { precision: 10, scale: 2 }).notNull().default("0"),
+  defaultMarkupType: text("default_markup_type").notNull().default("percentage"),
+  defaultMarkupValue: decimal("default_markup_value", { precision: 10, scale: 2 }).notNull().default("25"),
   // Manufacturer discount (applied to retail price to get our cost)
   defaultDiscountType: text("default_discount_type").notNull().default("percentage"),
   defaultDiscountValue: decimal("default_discount_value", { precision: 10, scale: 2 }).notNull().default("0"),
@@ -425,6 +497,27 @@ export const products = pgTable("products", {
   index("idx_products_product_type").on(table.productType),
   index("idx_products_category").on(table.category),
   index("idx_products_manufacturer_category").on(table.manufacturer, table.category),
+]);
+
+// Privacy-minimized, append-only evidence that an authoritative business action
+// completed. Customer content, request bodies, filenames, dimensions, prices,
+// signing tokens, and email addresses do not belong in this table.
+export const businessEvents = pgTable("business_events", {
+  id: serial("id").primaryKey(),
+  eventKey: text("event_key").unique(),
+  eventType: text("event_type").notNull(),
+  quoteId: integer("quote_id").references((): AnyPgColumn => quotes.id, { onDelete: "set null" }),
+  accountId: integer("account_id").references(() => accounts.id, { onDelete: "set null" }),
+  inquiryId: integer("inquiry_id").references(() => leadInquiries.id, { onDelete: "set null" }),
+  productId: integer("product_id").references(() => products.id, { onDelete: "set null" }),
+  actorUserId: integer("actor_user_id").references(() => users.id, { onDelete: "set null" }),
+  occurredAt: timestamp("occurred_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_business_events_type_time").on(table.eventType, table.occurredAt),
+  index("idx_business_events_quote").on(table.quoteId),
+  index("idx_business_events_account").on(table.accountId),
+  index("idx_business_events_inquiry").on(table.inquiryId),
+  index("idx_business_events_product").on(table.productId),
 ]);
 
 // Admin-managed pricing defaults for specific catalogs or product groups.
@@ -498,6 +591,10 @@ export const lineItems = pgTable("line_items", {
   quoteId: integer("quote_id").notNull(),
   productId: integer("product_id"), // optional reference to product catalog
   sku: text("sku"),
+  manufacturer: text("manufacturer"), // frozen manufacturer at the time the quote line is created
+  unit: text("unit"), // frozen catalog unit such as each, sq ft, or linear ft
+  priceSource: text("price_source"), // manual, catalog_cost, dimensional_catalog, configured_catalog, or import
+  sourceMetadata: jsonb("source_metadata"), // frozen catalog/import/configuration provenance for audit and recovery
   description: text("description").notNull(),
   quantity: decimal("quantity", { precision: 10, scale: 2 }).notNull(),
   retailPrice: decimal("retail_price", { precision: 10, scale: 2 }), // manufacturer's suggested retail price
@@ -853,6 +950,9 @@ export const insertLeadAttachmentSchema = createInsertSchema(leadAttachments).om
 export type Account = typeof accounts.$inferSelect;
 export type Customer = typeof accounts.$inferSelect; // Legacy alias
 export type Quote = typeof quotes.$inferSelect;
+export type QuoteVersionEvent = typeof quoteVersionEvents.$inferSelect;
+export type EmailDeliveryAttempt = typeof emailDeliveryAttempts.$inferSelect;
+export type BusinessEvent = typeof businessEvents.$inferSelect;
 export type PlanningAgreement = typeof planningAgreements.$inferSelect;
 export type PlanningAgreementEvent = typeof planningAgreementEvents.$inferSelect;
 export type QuoteApprovalDrawing = typeof quoteApprovalDrawings.$inferSelect;
@@ -868,6 +968,7 @@ export type QuoteCoverPhoto = typeof quoteCoverPhotos.$inferSelect;
 export type QuoteProductRendering = typeof quoteProductRenderings.$inferSelect;
 export type LeadAttachment = typeof leadAttachments.$inferSelect;
 export type LeadIntakeSubmission = typeof leadIntakeSubmissions.$inferSelect;
+export type LeadInquiry = typeof leadInquiries.$inferSelect;
 
 export type InsertAccount = z.infer<typeof insertAccountSchema>;
 export type InsertCustomer = z.infer<typeof insertAccountSchema>; // Legacy alias
@@ -891,6 +992,7 @@ export type QuoteWithDetails = Quote & {
   account?: Account; // Optional since accountId can be null
   customer?: Account; // Legacy alias for backward compatibility - also optional
   lineItems: (LineItem & { manufacturer?: string })[];
+  groups?: Group[];
   contractTemplate?: ContractTemplate;
   coverPhoto?: QuoteCoverPhoto; // Cover page image
   productRenderings?: QuoteProductRendering[]; // Visual assets and details

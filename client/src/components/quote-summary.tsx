@@ -8,12 +8,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
-import { Archive, FileText, Plus, Eye, Send, Mail, CheckCircle, AlertCircle, Clock, Link2, Copy, Download, PenTool, Package, Loader2 } from "lucide-react";
-import { Switch } from "@/components/ui/switch";
+import { Archive, FileText, Plus, Eye, Send, Mail, CheckCircle, AlertCircle, Clock, Link2, Copy, Download, PenTool, Package, Settings2 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { formatCurrency, calculateQuoteTotals, type QuoteTotalsLineItem } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import type { QuoteWithDetails, ContractTemplate } from "@shared/schema";
+import { getSnapshotBackedCustomerPackage } from "@/lib/customer-package";
 import { apiRequest } from "@/lib/queryClient";
 import { SignatureCanvas, SignatureData } from "@/components/signature-canvas";
 import { ESignatureOptionsModal } from "@/components/esignature-options-modal";
@@ -21,8 +21,7 @@ import { ESignatureOptionsModal } from "@/components/esignature-options-modal";
 interface QuoteSummaryProps {
   quote: QuoteWithDetails;
   onUpdateQuote: (field: string, value: any) => void;
-  onGenerateProposal?: () => void;
-  isPreparingProposal?: boolean;
+  isReadOnly?: boolean;
 }
 
 const planningAgreementStatusLabels: Record<string, string> = {
@@ -64,7 +63,7 @@ const formatDateDetail = (label: string, value?: string | Date | null) => {
   return date ? ` · ${label} ${date}` : "";
 };
 
-export function QuoteSummary({ quote, onUpdateQuote, onGenerateProposal, isPreparingProposal = false }: QuoteSummaryProps) {
+export function QuoteSummary({ quote, onUpdateQuote, isReadOnly = false }: QuoteSummaryProps) {
   const [localTaxRate, setLocalTaxRate] = useState<string | null>(null);
   const [localTariffRate, setLocalTariffRate] = useState<string | null>(null);
   const [localDiscount, setLocalDiscount] = useState<string | null>(null);
@@ -94,6 +93,14 @@ export function QuoteSummary({ quote, onUpdateQuote, onGenerateProposal, isPrepa
       setLocalNotes(quote.notes || "");
     }
   }, [quote.notes, isEditingNotes]);
+
+  useEffect(() => {
+    if (!isReadOnly) return;
+    setShowSigningLinkDialog(false);
+    setShowESignatureOptionsModal(false);
+    setIsEditingNotes(false);
+    setLocalCustomContractTerms(null);
+  }, [isReadOnly]);
 
   // Fetch available contract templates
   const { data: contractTemplates = [] } = useQuery<ContractTemplate[]>({
@@ -129,35 +136,27 @@ export function QuoteSummary({ quote, onUpdateQuote, onGenerateProposal, isPrepa
       // Fetch full quote data with signatures
       const response = await apiRequest('GET', `/api/quotes/${quote.id}`);
       const fullQuote: QuoteWithDetails = await response.json();
-      
-      // Fetch groups for proper PDF aggregation
-      let groups: { id: string; title: string; position: number }[] = [];
-      try {
-        const groupsResponse = await apiRequest('GET', `/api/quotes/${quote.id}/groups`);
-        const groupsData = await groupsResponse.json();
-        groups = groupsData.map((g: any) => ({ id: g.id, title: g.title, position: g.position }));
-      } catch (e) {
-        console.warn('Failed to fetch groups for PDF:', e);
-      }
+      const documentQuote = getSnapshotBackedCustomerPackage(fullQuote);
+      const groups = documentQuote.groups || [];
       
       // Use stored PDF preferences
-      const includeImages = fullQuote.esigIncludeImages ?? false;
-      const includePricing = fullQuote.esigIncludePricing ?? true;
-      const includeContract = fullQuote.esigIncludeContract ?? true;
-      const signedSnapshot = fullQuote.signedDocumentSnapshot as any;
-      const includeApprovalDrawing = fullQuote.esigIncludeApprovalDrawing === true
+      const includeImages = documentQuote.esigIncludeImages ?? false;
+      const includePricing = documentQuote.esigIncludePricing ?? true;
+      const includeContract = documentQuote.esigIncludeContract ?? true;
+      const signedSnapshot = documentQuote.signedDocumentSnapshot as any;
+      const includeApprovalDrawing = documentQuote.esigIncludeApprovalDrawing === true
         || Boolean(signedSnapshot?.approvalDrawing && signedSnapshot.esigIncludeApprovalDrawing !== false);
       
       const { generateSignedPDF, downloadSignedPDF } = await import("@/lib/generate-signed-pdf");
       const pdfBlob = await generateSignedPDF({ 
-        quote: fullQuote, 
+        quote: documentQuote,
         includeImages,
         includePricing,
         includeContract,
         includeApprovalDrawing,
         groups
       });
-      downloadSignedPDF(pdfBlob, fullQuote);
+      downloadSignedPDF(pdfBlob, documentQuote);
     },
     onError: (error: any) => {
       toast({
@@ -214,63 +213,6 @@ export function QuoteSummary({ quote, onUpdateQuote, onGenerateProposal, isPrepa
   });
 
   // E-signature toggle mutation
-  const toggleESignatureMutation = useMutation({
-    mutationFn: async (enabled: boolean) => {
-      const response = await apiRequest("PUT", `/api/quotes/${quote.id}`, { 
-        enableESignature: enabled 
-      });
-      return response.json();
-    },
-    onSuccess: (updatedQuote, enabled) => {
-      toast({ 
-        title: enabled ? "E-signature enabled" : "E-signature disabled",
-        description: enabled ? "You can now send this quote for digital signature" : "Digital signature has been disabled for this quote"
-      });
-      
-      queryClient.setQueryData([`/api/quotes/${quote.id}`], (oldData: any) => {
-        if (!oldData) return oldData;
-        return { ...oldData, ...updatedQuote };
-      });
-    },
-    onError: () => {
-      toast({ 
-        title: "Error", 
-        description: "Failed to update e-signature setting", 
-        variant: "destructive" 
-      });
-    },
-  });
-
-  // Generate signing link mutation
-  const generateSigningLinkMutation = useMutation({
-    mutationFn: async () => {
-      const response = await apiRequest("POST", `/api/quotes/${quote.id}/enable-esignature`, {});
-      return response.json();
-    },
-    onSuccess: (data) => {
-      const link = `${window.location.origin}/sign/${data.signingToken}`;
-      setSigningLink(link);
-      setShowSigningLinkDialog(true);
-      const isNewToken = !quote.signingToken;
-      toast({ 
-        title: isNewToken ? "Signing link generated" : "Signing link retrieved",
-        description: isNewToken ? "Share this link with the client to sign the quote" : "Your permanent signing link is ready"
-      });
-      
-      // Invalidate query to refetch with updated data
-      queryClient.invalidateQueries({ 
-        queryKey: [`/api/quotes/${quote.id}`] 
-      });
-    },
-    onError: () => {
-      toast({ 
-        title: "Error", 
-        description: "Failed to generate signing link", 
-        variant: "destructive" 
-      });
-    },
-  });
-
   // Company signature mutation
   const companySignMutation = useMutation({
     mutationFn: async (signatureData: SignatureData) => {
@@ -302,19 +244,11 @@ export function QuoteSummary({ quote, onUpdateQuote, onGenerateProposal, isPrepa
     }
   });
 
-  // Handle signing link button click
-  const handleSigningLinkClick = () => {
-    if (quote.signingToken) {
-      // Token exists - just show the dialog with the existing link
-      const link = `${window.location.origin}/sign/${quote.signingToken}`;
-      setSigningLink(link);
-      // Pre-populate personalized message from saved value if available
-      setPersonalizedMessage(quote.signatureEmailMessage || '');
-      setShowSigningLinkDialog(true);
-    } else {
-      // No token - open the options modal to configure preferences
-      setShowESignatureOptionsModal(true);
-    }
+  const showExistingApprovalLink = () => {
+    if (!quote.signingToken) return;
+    setSigningLink(`${window.location.origin}/sign/${quote.signingToken}`);
+    setPersonalizedMessage(quote.signatureEmailMessage || '');
+    setShowSigningLinkDialog(true);
   };
 
   // Handle successful link generation from the modal
@@ -339,9 +273,11 @@ export function QuoteSummary({ quote, onUpdateQuote, onGenerateProposal, isPrepa
 
   // Send signature email mutation
   const sendSignatureEmailMutation = useMutation({
-    mutationFn: async (message?: string) => {
+    mutationFn: async ({ message, idempotencyKey }: { message?: string; idempotencyKey: string }) => {
       const response = await apiRequest("POST", `/api/quotes/${quote.id}/send-signature-email`, {
         message: message || ''
+      }, {
+        headers: { "Idempotency-Key": idempotencyKey },
       });
       return response.json();
     },
@@ -420,7 +356,7 @@ export function QuoteSummary({ quote, onUpdateQuote, onGenerateProposal, isPrepa
             <div>
               <Label htmlFor="notes">Quote Contract Notes</Label>
               <p className="mt-1 text-xs text-muted-foreground">
-                Shown on the customer proposal and signed contract. Use Internal Notes above for Ops handoff context.
+                Shown on the customer proposal and signed contract. Keep private project context in Internal Notes above.
               </p>
               <Textarea
                 id="notes"
@@ -429,13 +365,14 @@ export function QuoteSummary({ quote, onUpdateQuote, onGenerateProposal, isPrepa
                 onFocus={() => setIsEditingNotes(true)}
                 onChange={(e) => setLocalNotes(e.target.value)}
                 onBlur={() => {
-                  if (localNotes !== quote.notes) {
+                  if (!isReadOnly && localNotes !== quote.notes) {
                     onUpdateQuote("notes", localNotes);
                   }
                   setIsEditingNotes(false);
                 }}
                 placeholder="Add customer-facing contract notes, exclusions, terms, or special conditions..."
                 className="mt-1"
+                readOnly={isReadOnly}
               />
             </div>
             {/* Contract Selection */}
@@ -471,8 +408,9 @@ export function QuoteSummary({ quote, onUpdateQuote, onGenerateProposal, isPrepa
                       });
                     }
                   }}
+                  disabled={isReadOnly}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger aria-label="Contract template">
                     <SelectValue placeholder="Select a contract template" />
                   </SelectTrigger>
                   <SelectContent>
@@ -519,7 +457,7 @@ export function QuoteSummary({ quote, onUpdateQuote, onGenerateProposal, isPrepa
                       value={localCustomContractTerms ?? (quote.customContractTerms ?? "")}
                       onChange={(e) => setLocalCustomContractTerms(e.target.value)}
                       onBlur={() => {
-                        if (localCustomContractTerms !== null && localCustomContractTerms !== (quote.customContractTerms ?? "")) {
+                        if (!isReadOnly && localCustomContractTerms !== null && localCustomContractTerms !== (quote.customContractTerms ?? "")) {
                           updateContractMutation.mutate({
                             contractTemplateId: null,
                             customContractTerms: localCustomContractTerms
@@ -529,6 +467,7 @@ export function QuoteSummary({ quote, onUpdateQuote, onGenerateProposal, isPrepa
                       }}
                       placeholder="Enter custom contract terms and conditions..."
                       className="mt-1 text-sm"
+                      readOnly={isReadOnly}
                     />
                   </div>
                 )}
@@ -545,7 +484,7 @@ export function QuoteSummary({ quote, onUpdateQuote, onGenerateProposal, isPrepa
                   value={localTaxRate ?? quote.taxRate ?? ""}
                   onChange={(e) => setLocalTaxRate(e.target.value)}
                   onBlur={() => {
-                    if (localTaxRate !== null) {
+                    if (!isReadOnly && localTaxRate !== null) {
                       const nextTaxRate = normalizeBlankNumber(localTaxRate);
                       if (hasNumberChanged(nextTaxRate, quote.taxRate)) {
                         onUpdateQuote("taxRate", nextTaxRate);
@@ -554,6 +493,7 @@ export function QuoteSummary({ quote, onUpdateQuote, onGenerateProposal, isPrepa
                     setLocalTaxRate(null);
                   }}
                   className="mt-1"
+                  readOnly={isReadOnly}
                 />
                 <p className="mt-1 text-xs text-muted-foreground">
                   Applies only to rows marked Sales Tax, plus shipping when Tax shipping is checked.
@@ -568,7 +508,7 @@ export function QuoteSummary({ quote, onUpdateQuote, onGenerateProposal, isPrepa
                   value={localTariffRate ?? quote.tariffRate ?? ""}
                   onChange={(e) => setLocalTariffRate(e.target.value)}
                   onBlur={() => {
-                    if (localTariffRate !== null) {
+                    if (!isReadOnly && localTariffRate !== null) {
                       const nextTariffRate = normalizeBlankNumber(localTariffRate);
                       if (hasNumberChanged(nextTariffRate, quote.tariffRate)) {
                         onUpdateQuote("tariffRate", nextTariffRate);
@@ -578,6 +518,7 @@ export function QuoteSummary({ quote, onUpdateQuote, onGenerateProposal, isPrepa
                   }}
                   className="mt-1"
                   data-testid="input-tariff-rate"
+                  readOnly={isReadOnly}
                 />
                 <p className="mt-1 text-xs text-muted-foreground">
                   Applies only to rows with Tariff checked; treated as pass-through, not margin.
@@ -592,7 +533,7 @@ export function QuoteSummary({ quote, onUpdateQuote, onGenerateProposal, isPrepa
                   value={localDiscount ?? quote.discount ?? ""}
                   onChange={(e) => setLocalDiscount(e.target.value)}
                   onBlur={() => {
-                    if (localDiscount !== null) {
+                    if (!isReadOnly && localDiscount !== null) {
                       const nextDiscount = normalizeBlankNumber(localDiscount);
                       if (hasNumberChanged(nextDiscount, quote.discount)) {
                         onUpdateQuote("discount", nextDiscount);
@@ -601,6 +542,7 @@ export function QuoteSummary({ quote, onUpdateQuote, onGenerateProposal, isPrepa
                     setLocalDiscount(null);
                   }}
                   className="mt-1"
+                  readOnly={isReadOnly}
                 />
                 <p className="mt-1 text-xs text-muted-foreground">
                   Customer-level discount across the full quote.
@@ -616,7 +558,7 @@ export function QuoteSummary({ quote, onUpdateQuote, onGenerateProposal, isPrepa
                   value={localShipping ?? quote.shipping ?? ""}
                   onChange={(e) => setLocalShipping(e.target.value)}
                   onBlur={() => {
-                    if (localShipping !== null) {
+                    if (!isReadOnly && localShipping !== null) {
                       const nextShipping = normalizeBlankNumber(localShipping);
                       if (hasNumberChanged(nextShipping, quote.shipping)) {
                         onUpdateQuote("shipping", nextShipping);
@@ -626,6 +568,7 @@ export function QuoteSummary({ quote, onUpdateQuote, onGenerateProposal, isPrepa
                   }}
                   className="mt-1"
                   data-testid="input-shipping"
+                  readOnly={isReadOnly}
                 />
                 <div className="flex items-center gap-2 mt-2">
                   <Checkbox
@@ -636,6 +579,7 @@ export function QuoteSummary({ quote, onUpdateQuote, onGenerateProposal, isPrepa
                     }}
                     data-testid="checkbox-shipping-taxable"
                     title={isShippingTaxable ? "Shipping is included in sales tax" : "Shipping is excluded from sales tax"}
+                    disabled={isReadOnly}
                   />
                   <Label 
                     htmlFor="isShippingTaxable" 
@@ -751,7 +695,7 @@ export function QuoteSummary({ quote, onUpdateQuote, onGenerateProposal, isPrepa
               <Alert className="border-amber-200 bg-amber-50">
                 <Archive className="h-4 w-4 text-amber-700" />
                 <AlertDescription className="text-amber-900">
-                  This version is archived. Make it current before using approval, proposal, BOM, or Ops tools.
+                  This version is archived. Make it current before using approval, proposal, BOM, or administrative tools.
                 </AlertDescription>
               </Alert>
             )}
@@ -785,29 +729,38 @@ export function QuoteSummary({ quote, onUpdateQuote, onGenerateProposal, isPrepa
                 </AlertDescription>
               </Alert>
             )}
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label htmlFor="enable-esignature" className="text-sm font-medium">
-                  Enable customer approval
-                </Label>
-                <p className="text-xs text-muted-foreground">
-                  Prepare a secure review-and-sign link for this proposal
+            <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
+              <div>
+                <div className="text-sm font-medium text-foreground">Customer package</div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Choose pricing, terms, and visuals once. Download the preview or prepare the customer approval link from the same package.
                 </p>
               </div>
-              <Switch
-                id="enable-esignature"
-                data-testid="switch-enable-esignature"
-                checked={quote.enableESignature ?? false}
-                onCheckedChange={(checked) => toggleESignatureMutation.mutate(checked)}
-                disabled={toggleESignatureMutation.isPending || isArchivedVersion}
-              />
+              <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                <span className="rounded-full border bg-background px-2 py-1">{quote.esigIncludePricing !== false ? "Pricing included" : "Pricing hidden"}</span>
+                <span className="rounded-full border bg-background px-2 py-1">{quote.esigIncludeContract !== false ? "Terms included" : "Terms omitted"}</span>
+                <span className="rounded-full border bg-background px-2 py-1">{quote.esigIncludeImages ? "Visuals included" : "Visuals omitted"}</span>
+              </div>
+              {!isReadOnly && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => setShowESignatureOptionsModal(true)}
+                  disabled={isArchivedVersion || quote.lineItems.length === 0}
+                  data-testid="button-build-customer-package"
+                >
+                  <Settings2 className="mr-2 h-4 w-4" />
+                  {quote.signingToken ? "Review Customer Package" : "Build Customer Package"}
+                </Button>
+              )}
             </div>
 
             {quote.enableESignature && (
               <>
                 <div className="rounded-lg border bg-muted/40 p-3 text-xs text-muted-foreground space-y-1">
                   <div className="font-medium text-foreground">Approval workflow</div>
-                  <div>Prepare link, send to customer, customer approves, EDG signs, ready for Ops.</div>
+                  <div>Prepare the link, send it to the customer, collect approval, and add the EDG signature.</div>
                   {signatureAudit?.documentFingerprint && (
                     <div className="pt-1 font-mono">Document ID: {signatureAudit.documentFingerprint.slice(0, 16)}</div>
                   )}
@@ -891,15 +844,17 @@ export function QuoteSummary({ quote, onUpdateQuote, onGenerateProposal, isPrepa
                   </Alert>
                 ) : null}
 
-                <Button
-                  onClick={handleSigningLinkClick}
-                  disabled={isArchivedVersion || generateSigningLinkMutation.isPending || !!(quote.clientSignedAt && quote.companySignedAt)}
-                  className="w-full"
-                  data-testid="button-send-for-signature"
-                >
-                  <Link2 className="mr-2 h-4 w-4" />
-                  {quote.signingToken ? 'View Approval Link' : 'Prepare Approval Link'}
-                </Button>
+                {quote.signingToken && (
+                  <Button
+                    onClick={showExistingApprovalLink}
+                    disabled={isArchivedVersion || isReadOnly}
+                    className="w-full"
+                    data-testid="button-send-for-signature"
+                  >
+                    <Link2 className="mr-2 h-4 w-4" />
+                    View Approval Link
+                  </Button>
+                )}
 
                 {quote.signingToken && !quote.companySignedAt && (
                   <Button
@@ -918,13 +873,13 @@ export function QuoteSummary({ quote, onUpdateQuote, onGenerateProposal, isPrepa
           </CardContent>
         </Card>
 
-        {/* Ops and admin tools */}
+        {/* Internal document tools */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Ops & Admin Tools</CardTitle>
+            <CardTitle className="text-base">Internal Documents</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <div className={onGenerateProposal ? "grid grid-cols-1 gap-3 sm:grid-cols-2" : ""}>
+            <div>
               <Button
                 onClick={() => downloadBomPdfMutation.mutate()}
                 disabled={isArchivedVersion || downloadBomPdfMutation.isPending || quote.lineItems.length === 0}
@@ -935,23 +890,6 @@ export function QuoteSummary({ quote, onUpdateQuote, onGenerateProposal, isPrepa
                 <Package className="mr-2 h-4 w-4" />
                 {downloadBomPdfMutation.isPending ? 'Generating BOM...' : 'Download BOM'}
               </Button>
-
-              {onGenerateProposal && (
-                <Button
-                  onClick={onGenerateProposal}
-                  disabled={isArchivedVersion || isPreparingProposal || quote.lineItems.length === 0}
-                  variant="outline"
-                  className="w-full border-edg-black text-edg-black hover:bg-edg-black hover:text-white"
-                  data-testid="button-generate-proposal"
-                >
-                  {isPreparingProposal ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <FileText className="mr-2 h-4 w-4" />
-                  )}
-                  {isPreparingProposal ? "Preparing..." : "Generate Proposal"}
-                </Button>
-              )}
             </div>
           </CardContent>
         </Card>
@@ -1027,6 +965,7 @@ export function QuoteSummary({ quote, onUpdateQuote, onGenerateProposal, isPrepa
                       rows={3}
                       className="resize-none"
                       data-testid="input-personalized-message"
+                      disabled={isReadOnly}
                     />
                     <p className="text-xs text-muted-foreground">
                       This message will appear as a highlighted note in the email, before the quote details.
@@ -1034,8 +973,11 @@ export function QuoteSummary({ quote, onUpdateQuote, onGenerateProposal, isPrepa
                   </div>
                   
                   <Button
-                    onClick={() => sendSignatureEmailMutation.mutate(personalizedMessage)}
-                    disabled={sendSignatureEmailMutation.isPending}
+                    onClick={() => sendSignatureEmailMutation.mutate({
+                      message: personalizedMessage,
+                      idempotencyKey: `quote-email:${quote.id}:${crypto.randomUUID()}`,
+                    })}
+                    disabled={sendSignatureEmailMutation.isPending || isReadOnly}
                     className="w-full bg-edg-teal hover:bg-edg-dark-teal text-white"
                     data-testid="button-send-email"
                   >

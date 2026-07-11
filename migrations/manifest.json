@@ -23,6 +23,14 @@
     "0019_add_lead_intake_submissions.sql",
     "0020_add_missing_application_tables.sql",
     "0021_reconcile_application_columns.sql",
-    "0022_add_manufacturer_discounts.sql"
+    "0022_add_manufacturer_discounts.sql",
+    "0023_allow_unassigned_quotes.sql",
+    "0024_add_quote_version_events.sql",
+    "0025_add_line_item_source_identity.sql",
+    "0026_preserve_legacy_product_price_default.sql",
+    "0027_add_lead_inquiry_history.sql",
+    "0028_add_deal_stage_timestamp.sql",
+    "0029_add_email_delivery_attempts.sql",
+    "0030_add_business_events.sql"
   ]
 }

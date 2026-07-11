@@ -1,21 +1,21 @@
 import { useLocation, useParams } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState, Suspense } from "react";
+import { useState } from "react";
 import { AppHeader } from "@/components/app-header";
 import { QuoteHeader } from "@/components/quote-header";
 import { LineItemsTable } from "@/components/line-items-table";
 import { QuoteSummary } from "@/components/quote-summary";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { apiRequest } from "@/lib/queryClient";
+import { ApiError, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 import { generateQuoteNumber } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { LoadingSpinner } from "@/components/loading-spinner";
-import { lazyWithReload } from "@/lib/lazy-with-reload";
+import { isSignedQuoteLockApiError, SIGNED_QUOTE_READ_ONLY_MESSAGE } from "@/lib/quote-lock";
 
-const SimpleProposalGenerator = lazyWithReload(() => import("@/components/simple-proposal-generator").then(m => ({ default: m.SimpleProposalGenerator })), "simple-proposal-generator");
-import { Archive, CheckCircle2, Copy, History, Loader2 } from "lucide-react";
+import { AlertTriangle, Archive, ArrowLeft, CheckCircle2, Copy, History, Loader2, LockKeyhole, RefreshCw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
@@ -30,6 +30,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import type { QuoteWithDetails } from "@shared/schema";
+import { getSnapshotBackedStaffQuote } from "@/lib/customer-package";
 
 export default function QuoteBuilder() {
   const params = useParams();
@@ -38,17 +39,22 @@ export default function QuoteBuilder() {
   
   const isNewQuote = !id || id === "new";
   const quoteId = id && id !== "new" ? parseInt(id) : undefined;
+  const newQuoteSearch = isNewQuote ? new URLSearchParams(window.location.search) : null;
+  const requestedAccountId = Number(newQuoteSearch?.get("accountId"));
+  const requestedInquiryId = Number(newQuoteSearch?.get("inquiryId"));
+  const preselectedAccountId = Number.isInteger(requestedAccountId) && requestedAccountId > 0 ? requestedAccountId : null;
+  const sourceInquiryId = Number.isInteger(requestedInquiryId) && requestedInquiryId > 0 ? requestedInquiryId : null;
+  const suggestedProjectName = newQuoteSearch?.get("projectName")?.trim() || "";
   
   const { toast } = useToast();
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
   const queryClient = useQueryClient();
 
 
-  // State for proposal generator dialog
-  const [proposalGeneratorOpen, setProposalGeneratorOpen] = useState(false);
-  const [isPreparingProposal, setIsPreparingProposal] = useState(false);
   const [versionHistoryOpen, setVersionHistoryOpen] = useState(false);
 
-  const { data: quote, isLoading, error } = useQuery<QuoteWithDetails>({
+  const { data: quote, isLoading, error, refetch } = useQuery<QuoteWithDetails>({
     queryKey: [`/api/quotes/${quoteId}`],
     enabled: !isNewQuote,
     staleTime: 60_000,
@@ -128,6 +134,7 @@ export default function QuoteBuilder() {
       const quoteData = {
         ...data,
         accountId,
+        sourceInquiryId: data.sourceInquiryId ?? sourceInquiryId,
         quoteNumber: generateQuoteNumber(),
       };
       
@@ -180,7 +187,12 @@ export default function QuoteBuilder() {
       
       toast({ title: "Quote updated successfully" });
     },
-    onError: () => {
+    onError: (error: Error) => {
+      if (isSignedQuoteLockApiError(error)) {
+        queryClient.invalidateQueries({ queryKey: [`/api/quotes/${quoteId}`] });
+        toast({ title: "Quote is now read only", description: SIGNED_QUOTE_READ_ONLY_MESSAGE, variant: "destructive" });
+        return;
+      }
       toast({ title: "Error", description: "Failed to update quote", variant: "destructive" });
     },
   });
@@ -200,38 +212,6 @@ export default function QuoteBuilder() {
     updateQuoteMutation.mutate({
       [field]: value,
     });
-  };
-
-  const waitForPendingQuoteSaves = async (timeoutMs = 3000) => {
-    const startedAt = Date.now();
-    while (queryClient.isMutating() > 0 && Date.now() - startedAt < timeoutMs) {
-      await new Promise(resolve => setTimeout(resolve, 100));
-    }
-  };
-
-  const openProposalGenerator = async () => {
-    if (!quoteId) return;
-
-    const activeElement = document.activeElement;
-    if (activeElement instanceof HTMLElement) {
-      activeElement.blur();
-    }
-
-    setIsPreparingProposal(true);
-    try {
-      await new Promise(resolve => setTimeout(resolve, 100));
-      await waitForPendingQuoteSaves();
-      await queryClient.fetchQuery({ queryKey: [`/api/quotes/${quoteId}`] });
-      setProposalGeneratorOpen(true);
-    } catch (error: any) {
-      toast({
-        title: "Could not prepare proposal",
-        description: error?.message || "Please try again after the quote finishes saving.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsPreparingProposal(false);
-    }
   };
 
   if (isLoading) {
@@ -283,12 +263,58 @@ export default function QuoteBuilder() {
     );
   }
 
+  if (!isNewQuote && error) {
+    const statusCode = error instanceof ApiError ? error.statusCode : undefined;
+    const title = statusCode === 403
+      ? "You don't have access to this quote"
+      : statusCode === 404
+        ? "Quote not found"
+        : "Quote couldn't be loaded";
+    const description = statusCode === 403
+      ? "Your account is signed in, but this quote is not available to you."
+      : statusCode === 404
+        ? "It may have been deleted, moved, or the link may be incorrect."
+        : "Rainmaker could not retrieve this quote. Your changes were not opened or replaced.";
+
+    return (
+      <div className="min-h-screen bg-background">
+        <AppHeader />
+        <main className="mx-auto flex max-w-3xl items-center px-4 py-16 sm:px-6 lg:px-8">
+          <Card className="w-full" data-testid={`quote-load-error-${statusCode ?? "generic"}`}>
+            <CardContent className="space-y-5 p-6 sm:p-8">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-destructive" aria-hidden="true" />
+                <div className="space-y-1">
+                  <h1 className="text-xl font-semibold">{title}</h1>
+                  <p className="text-sm text-muted-foreground">{description}</p>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-3">
+                {statusCode !== 403 && statusCode !== 404 && (
+                  <Button type="button" onClick={() => void refetch()} data-testid="button-retry-quote">
+                    <RefreshCw className="mr-2 h-4 w-4" aria-hidden="true" />
+                    Retry
+                  </Button>
+                )}
+                <Button type="button" variant="outline" onClick={() => setLocation("/quotes")}>
+                  <ArrowLeft className="mr-2 h-4 w-4" aria-hidden="true" />
+                  Back to Quotes
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </main>
+      </div>
+    );
+  }
+
 
   const currentQuote: QuoteWithDetails = quote || {
     id: 0,
     quoteNumber: "",
-    accountId: null,
-    projectName: "",
+    accountId: preselectedAccountId,
+    sourceInquiryId,
+    projectName: suggestedProjectName,
     jobsiteAddress: null,
     jobsiteStreetAddress: null,
     jobsiteAddressLine2: null,
@@ -306,6 +332,7 @@ export default function QuoteBuilder() {
     shipping: "0",
     isShippingTaxable: false,
     dealStage: "new_lead",
+    dealStageChangedAt: null,
     lostReason: null,
     contractTemplateId: null,
     customContractTerms: null,
@@ -397,19 +424,84 @@ export default function QuoteBuilder() {
     lineItems: [],
   };
   const isArchivedVersion = currentQuote.isLatestVersion === false;
+  const isCustomerApproved = Boolean(
+    currentQuote.clientSignedAt
+    || currentQuote.clientSignatureData
+    || currentQuote.signedDocumentSnapshot
+  );
+  const displayedQuote = isCustomerApproved
+    ? getSnapshotBackedStaffQuote(currentQuote)
+    : currentQuote;
   return (
     <div className="min-h-screen bg-background">
       <AppHeader />
       
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <QuoteHeader
-          quote={isNewQuote ? undefined : currentQuote}
-          onSave={handleSaveQuote}
-          isLoading={createQuoteMutation.isPending || updateQuoteMutation.isPending}
-        />
+      <main className="max-w-7xl mx-auto px-4 py-4 sm:px-6 sm:py-8 lg:px-8">
+        {isCustomerApproved && (
+          <Card className="mb-6 border-emerald-300 bg-emerald-50" data-testid="signed-quote-read-only">
+            <CardContent className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start gap-3">
+                <LockKeyhole className="mt-0.5 h-5 w-5 shrink-0 text-emerald-800" aria-hidden="true" />
+                <div>
+                  <p className="font-semibold text-emerald-950">Customer-approved version — read only</p>
+                  <p className="mt-1 text-sm text-emerald-900">
+                    This version is the signed project record. Create a new version to change scope, pricing, terms, line items, or visuals.
+                  </p>
+                </div>
+              </div>
+              <Button
+                type="button"
+                onClick={() => createVersionMutation.mutate()}
+                disabled={createVersionMutation.isPending}
+                className="shrink-0 bg-emerald-900 text-white hover:bg-emerald-800"
+                data-testid="button-create-version-from-signed"
+              >
+                {createVersionMutation.isPending ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Copy className="mr-2 h-4 w-4" />
+                )}
+                Create New Version
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
+        <nav
+          aria-label="Quote sections"
+          className="sticky top-0 z-30 mb-4 overflow-x-auto rounded-lg border bg-background/95 p-2 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-background/85"
+          data-testid="quote-section-navigation"
+        >
+          <div className="flex min-w-max gap-1">
+            <a className="inline-flex min-h-11 items-center rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" href="#quote-details">
+              Details
+            </a>
+            {!isNewQuote && (
+              <a className="inline-flex min-h-11 items-center rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" href="#quote-versions">
+                Versions
+              </a>
+            )}
+            <a className="inline-flex min-h-11 items-center rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" href="#quote-line-items">
+              Line Items
+            </a>
+            <a className="inline-flex min-h-11 items-center rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" href="#quote-review">
+              Review &amp; Approval
+            </a>
+          </div>
+        </nav>
+
+        <section id="quote-details" aria-label="Quote details" className="scroll-mt-4">
+          <QuoteHeader
+            quote={displayedQuote}
+            onSave={handleSaveQuote}
+            isLoading={createQuoteMutation.isPending || updateQuoteMutation.isPending}
+            isReadOnly={isCustomerApproved}
+          />
+        </section>
 
         {/* Version Control Section */}
         {!isNewQuote && quote && (
+          <section id="quote-versions" aria-label="Quote versions" className="scroll-mt-4">
           <Card className="mb-6">
             <CardContent className="p-4">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -441,7 +533,7 @@ export default function QuoteBuilder() {
                   )}
                 </div>
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                  {isArchivedVersion && (
+                  {isArchivedVersion && isAdmin && (
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
                         <Button
@@ -464,6 +556,7 @@ export default function QuoteBuilder() {
                           <AlertDialogTitle>Use this quote version?</AlertDialogTitle>
                           <AlertDialogDescription>
                             This will move {currentQuote.quoteNumber} back to the main quote list and archive the other versions for this project. No quote data will be deleted.
+                            {isCustomerApproved ? " Its customer approval stays attached, and the version remains read only." : ""}
                           </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
@@ -475,7 +568,7 @@ export default function QuoteBuilder() {
                       </AlertDialogContent>
                     </AlertDialog>
                   )}
-                  <Button
+                  {!isCustomerApproved && <Button
                     onClick={() => createVersionMutation.mutate()}
                     disabled={createVersionMutation.isPending}
                     variant="outline"
@@ -487,16 +580,17 @@ export default function QuoteBuilder() {
                       <Copy className="mr-2 h-4 w-4" />
                     )}
                     Create New Version
-                  </Button>
+                  </Button>}
                 </div>
               </div>
               {isArchivedVersion && (
                 <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900" data-testid="archived-version-warning">
-                  This version is archived for history. Make it current before sending it to a customer or Ops.
+                  This version is archived for history. {isAdmin ? "Make it current before sending it for customer approval." : "Ask an administrator to make it current before sending it for customer approval."}
                 </div>
               )}
             </CardContent>
           </Card>
+          </section>
         )}
 
         {/* Version History Dialog */}
@@ -514,7 +608,7 @@ export default function QuoteBuilder() {
                   return (
                   <Card key={version.id} className={version.id === quoteId ? "border-blue-500 border-2" : ""}>
                     <CardContent className="p-4">
-                      <div className="flex items-center justify-between">
+                      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-2">
                             <h3 className="font-semibold">{version.quoteNumber}</h3>
@@ -538,7 +632,7 @@ export default function QuoteBuilder() {
                           </p>
                         </div>
                         <div className="flex flex-col gap-2 sm:flex-row">
-                          {!versionIsCurrent && (
+                          {!versionIsCurrent && isAdmin && (
                             <AlertDialog>
                               <AlertDialogTrigger asChild>
                                 <Button
@@ -594,32 +688,25 @@ export default function QuoteBuilder() {
         </Dialog>
 
         {/* Line Items Table - Show for both new and existing quotes */}
-        <LineItemsTable
-          quoteId={currentQuote.id || 0}
-          lineItems={currentQuote.lineItems}
-          tariffRate={currentQuote.tariffRate || "0"}
-        />
+        <section id="quote-line-items" aria-label="Quote line items" className="scroll-mt-4">
+          <LineItemsTable
+            quoteId={currentQuote.id || 0}
+            lineItems={displayedQuote.lineItems}
+            tariffRate={displayedQuote.tariffRate || "0"}
+            isReadOnly={isCustomerApproved || isArchivedVersion}
+          />
+        </section>
 
         {/* Quote Summary - Show for both new and existing quotes */}
-        <QuoteSummary
-          quote={currentQuote}
-          onUpdateQuote={handleUpdateQuote}
-          onGenerateProposal={!isNewQuote && currentQuote.id ? openProposalGenerator : undefined}
-          isPreparingProposal={isPreparingProposal}
-        />
+        <section id="quote-review" aria-label="Quote review and approval" className="scroll-mt-4">
+          <QuoteSummary
+            quote={displayedQuote}
+            onUpdateQuote={handleUpdateQuote}
+            isReadOnly={isCustomerApproved}
+          />
+        </section>
 
-        {/* Simple Proposal Generator Dialog */}
-        {!isNewQuote && currentQuote.id && proposalGeneratorOpen && (
-          <Suspense fallback={null}>
-            <SimpleProposalGenerator
-              quote={currentQuote}
-              open={proposalGeneratorOpen}
-              onOpenChange={setProposalGeneratorOpen}
-            />
-          </Suspense>
-        )}
-
-      </div>
+      </main>
     </div>
   );
 }

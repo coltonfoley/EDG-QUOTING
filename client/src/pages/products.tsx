@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, useMemo, useEffect } from "react";
 import { AppHeader } from "@/components/app-header";
+import { PageLoadError } from "@/components/error-alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -93,7 +94,7 @@ export default function Products() {
   const isProductsSection = productSection === "products";
   const isSundanceSection = isProductsSection && selectedManufacturer === "Sundance";
 
-  const { data: products, isLoading } = useQuery<Product[]>({
+  const { data: products, isLoading, error: productsError, refetch: refetchProducts } = useQuery<Product[]>({
     queryKey: ["/api/products", {
       limit: PRODUCT_CATALOG_LIMIT,
     }],
@@ -532,7 +533,7 @@ export default function Products() {
 
   if (isProductsSection && isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-background text-foreground">
         <AppHeader />
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {/* Header Skeleton */}
@@ -614,25 +615,58 @@ export default function Products() {
     );
   }
 
+  if (isProductsSection && productsError) {
+    return (
+      <div className="min-h-screen bg-background">
+        <AppHeader />
+        <PageLoadError
+          title="Product catalog couldn't be loaded"
+          description="Rainmaker could not retrieve products and pricing. The catalog is unavailable rather than empty."
+          onRetry={() => void refetchProducts()}
+        />
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-background text-foreground">
       <AppHeader />
       
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-6">
-          <Tabs value={productSection} onValueChange={(value) => setProductSection(value as ProductSection)}>
-            <TabsList className={`grid w-full ${isAdmin ? "max-w-md grid-cols-2" : "max-w-xs grid-cols-1"}`}>
-              <TabsTrigger value="products">Products</TabsTrigger>
-              {isAdmin && <TabsTrigger value="import">Import</TabsTrigger>}
-            </TabsList>
-          </Tabs>
+          <div
+            className={`grid w-full rounded-md bg-muted p-1 ${isAdmin ? "max-w-md grid-cols-2" : "max-w-xs grid-cols-1"}`}
+            role="group"
+            aria-label="Product sections"
+          >
+            <Button
+              type="button"
+              variant={productSection === "products" ? "default" : "ghost"}
+              aria-pressed={productSection === "products"}
+              onClick={() => setProductSection("products")}
+              data-testid="product-section-products"
+            >
+              Products
+            </Button>
+            {isAdmin && (
+              <Button
+                type="button"
+                variant={productSection === "import" ? "default" : "ghost"}
+                aria-pressed={productSection === "import"}
+                onClick={() => setProductSection("import")}
+                data-testid="product-section-import"
+              >
+                Import
+              </Button>
+            )}
+          </div>
           {isProductsSection && isSundanceSection && (
             <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_380px]">
               <Card className="border-edg-teal/30 bg-edg-teal/5">
                 <CardContent className="flex flex-col gap-3 p-4 md:flex-row md:items-start">
                   <PackageCheck className="mt-0.5 h-5 w-5 shrink-0 text-edg-teal" />
                   <div>
-                    <h3 className="text-sm font-semibold text-edg-black">Sundance Builder Parts</h3>
+                    <h3 className="text-sm font-semibold text-foreground">Sundance Builder Parts</h3>
                     <p className="mt-1 text-sm text-edg-grey">
                       This is the Products list filtered to Manufacturer: Sundance. The Sundance Builder uses these same products.
                     </p>
@@ -640,13 +674,13 @@ export default function Products() {
                 </CardContent>
               </Card>
 
-              <Card className="border-slate-200 bg-white">
+              <Card className="border-border bg-card">
                 <CardContent className="p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-start gap-3">
                       <Percent className="mt-0.5 h-5 w-5 shrink-0 text-edg-teal" />
                       <div>
-                        <h3 className="text-sm font-semibold text-edg-black">Standard Margin</h3>
+                        <h3 className="text-sm font-semibold text-foreground">Standard Margin</h3>
                         <p className="mt-1 text-sm text-edg-grey">Standard margin (markup on cost)</p>
                       </div>
                     </div>
@@ -655,7 +689,7 @@ export default function Products() {
 
                   <div className="mt-4 flex items-end gap-2">
                     <div className="min-w-0 flex-1">
-                      <label className="mb-1 block text-xs font-medium text-gray-600" htmlFor="sundance-standard-margin">
+                      <label className="mb-1 block text-xs font-medium text-muted-foreground" htmlFor="sundance-standard-margin">
                         Markup %
                       </label>
                       <Input
@@ -699,11 +733,11 @@ export default function Products() {
           <ProductImportWorkspace />
         ) : (
           <>
-        <div className="flex justify-between items-center mb-6">
+        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="text-3xl font-bold text-edg-black">
+            <h1 className="text-3xl font-bold text-foreground">
               {isSundanceSection ? "Sundance Builder Parts" : "Products"}
-            </h2>
+            </h1>
             <p className="text-edg-grey mt-2">
               {isSundanceSection
                 ? `Filtered from Products by Manufacturer: Sundance • ${filteredProducts.length} parts`
@@ -762,7 +796,7 @@ export default function Products() {
 	                          <FormControl>
 	                            <Input {...field} value={field.value || ""} placeholder="e.g. timotionmotorcoverblk" data-testid="input-sku" />
 	                          </FormControl>
-	                          <p className="text-xs text-gray-500">This is the short code the Sundance Builder and Ops handoff should use.</p>
+	                          <p className="text-xs text-muted-foreground">This short code is used by the Sundance Builder and saved quote line items.</p>
 	                          <FormMessage />
 	                        </FormItem>
 	                      )}
@@ -1032,6 +1066,7 @@ export default function Products() {
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
             <Input
+              aria-label="Search products"
               placeholder="Search products..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -1040,9 +1075,9 @@ export default function Products() {
             />
           </div>
           
-          <div className="flex gap-2">
+          <div className="grid min-w-0 grid-cols-1 gap-2 sm:flex">
             <Select value={selectedManufacturer} onValueChange={setSelectedManufacturer} data-testid="select-manufacturer-filter">
-              <SelectTrigger className="w-48">
+              <SelectTrigger className="w-full sm:w-48" aria-label="Filter products by manufacturer">
                 <Filter className="h-4 w-4 mr-2" />
                 <SelectValue placeholder="All Manufacturers" />
               </SelectTrigger>
@@ -1057,7 +1092,7 @@ export default function Products() {
             </Select>
 
             <Select value={selectedCategory} onValueChange={setSelectedCategory} data-testid="select-category-filter">
-              <SelectTrigger className="w-48">
+              <SelectTrigger className="w-full sm:w-48" aria-label="Filter products by category">
                 <Filter className="h-4 w-4 mr-2" />
                 <SelectValue placeholder="All Categories" />
               </SelectTrigger>
@@ -1071,12 +1106,13 @@ export default function Products() {
               </SelectContent>
             </Select>
 
-            <div className="flex border rounded-md">
+            <div className="flex w-fit rounded-md border">
               <Button
                 variant={viewMode === "table" ? "default" : "ghost"}
                 size="sm"
                 onClick={() => setViewMode("table")}
                 className="rounded-r-none"
+                aria-label="Table view"
               >
                 <List className="h-4 w-4" />
               </Button>
@@ -1085,6 +1121,7 @@ export default function Products() {
                 size="sm"
                 onClick={() => setViewMode("grid")}
                 className="rounded-l-none"
+                aria-label="Grid view"
               >
                 <Grid className="h-4 w-4" />
               </Button>
@@ -1159,10 +1196,10 @@ export default function Products() {
           <Card>
             <CardContent className="p-12 text-center">
               <Package className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">
+              <h3 className="text-lg font-medium text-foreground mb-2">
                 {isSundanceSection ? "No Sundance parts yet" : "No products yet"}
               </h3>
-              <p className="text-gray-500 mb-6">
+              <p className="text-muted-foreground mb-6">
                 {isAdmin
                   ? isSundanceSection
                     ? "Create the first approved part for the Sundance Builder."
@@ -1185,8 +1222,8 @@ export default function Products() {
           <Card>
             <CardContent className="p-12 text-center">
               <Package className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No products found</h3>
-              <p className="text-gray-500 mb-6">Try adjusting your search or filter criteria.</p>
+              <h3 className="text-lg font-medium text-foreground mb-2">No products found</h3>
+              <p className="text-muted-foreground mb-6">Try adjusting your search or filter criteria.</p>
               <Button
                 variant="outline"
                 onClick={() => {
