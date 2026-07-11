@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-10
 **Branch:** `codex/rainmaker-improvement-plan`
-**State:** prepared locally; not committed, pushed, previewed, migrated, or deployed
+**State:** published to an isolated private preview; production remains unchanged
 
 ## Purpose
 
@@ -37,9 +37,19 @@ No customer record, project record, quote history, signed snapshot, planning agr
 
 The working branch began before production hotfix commit `e3664f7`. Before publication, the intended local scope must be committed and then synchronized with current `origin/main`. The database logging regression test currently exists as a local untracked file because it was introduced on `main` after the branch point; it must be included so the larger release cannot regress the credential-safe logging behavior.
 
+This requirement is now complete. The review branch was rebased onto `e3664f7`, pushed, and opened as draft pull request #12. The first review commit is `313e71a`; the public-sign keyboard follow-up is `b4e3b72`.
+
+## Isolated preview database evidence
+
+- Neon created child branch `preview/codex/rainmaker-improvement-plan` (`br-fragrant-hat-an9iuwdg`) from `main` for this review branch.
+- The additive migrations `0023` through `0030` were run only on that child branch in one transaction. The final metadata-only proof confirmed `quote_version_events`, `lead_inquiries`, `email_delivery_attempts`, and `business_events` are present.
+- Production schema and customer records were not migrated or changed.
+- Vercel's integration-created preview connection did not override the project's older general `DATABASE_URL` for the already-created deployment. A sensitive `DATABASE_URL` override was therefore added for `Preview (codex/rainmaker-improvement-plan)` only. Production's environment setting was not changed.
+- A fresh preview deployment is required after that branch-only environment change; the prior deployment's `/ready` response is not release evidence.
+
 ## Current verification
 
-- 182 ordinary tests pass; 47 database cases are skipped in that command and pass separately against the isolated migrated database.
+- 183 ordinary tests pass; 47 database cases are skipped in that command and pass separately against the isolated migrated database, including the new production-schema-drift case.
 - Focused retired-route, approval-drawing, permissions, request-redaction, and database-logging set: 82 tests pass.
 - TypeScript check passes.
 - Production build and Vercel bundle pass; the existing large-fonts-chunk warning remains.

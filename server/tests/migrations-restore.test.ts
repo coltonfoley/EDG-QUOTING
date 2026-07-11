@@ -87,4 +87,42 @@ describe("fresh database restore", () => {
       await database.close();
     }
   }, 60_000);
+
+  it("restores the required legacy product price column on a production-drifted schema", async () => {
+    const database = new PGlite();
+
+    try {
+      await database.exec(`
+        CREATE TABLE "products" (
+          "id" serial PRIMARY KEY,
+          "retail_price" numeric(10, 2) NOT NULL
+        );
+        INSERT INTO "products" ("retail_price") VALUES (125.50);
+      `);
+
+      await database.exec(
+        readFileSync(resolve(migrationDirectory, "0026_preserve_legacy_product_price_default.sql"), "utf8")
+      );
+
+      const column = await database.query<{
+        column_default: string | null;
+        is_nullable: string;
+      }>(`
+        SELECT column_default, is_nullable
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'products'
+          AND column_name = 'default_unit_price'
+      `);
+      const product = await database.query<{ default_unit_price: string }>(`
+        SELECT "default_unit_price"::text AS "default_unit_price"
+        FROM "products"
+      `);
+
+      expect(column.rows).toEqual([{ column_default: "0", is_nullable: "NO" }]);
+      expect(product.rows).toEqual([{ default_unit_price: "125.50" }]);
+    } finally {
+      await database.close();
+    }
+  }, 60_000);
 });

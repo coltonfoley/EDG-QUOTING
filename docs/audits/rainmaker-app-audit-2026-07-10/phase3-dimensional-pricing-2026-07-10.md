@@ -34,7 +34,7 @@ The existing `deletePricingTablesByProductId` compatibility method remains avail
 
 The isolated restored database exposed that the historical `products.default_unit_price` column is still non-null even though current Rainmaker uses `retail_price` and `cost_price`. New product creation could therefore fail on a fully restored database.
 
-The compatibility column is now mapped and synchronized to `retailPrice` on current catalog writes. Migration `0026_preserve_legacy_product_price_default.sql` adds a non-destructive zero default for older/direct writers. The legacy column is retained; no compatibility data is removed.
+The compatibility column is now mapped and synchronized to `retailPrice` on current catalog writes. Migration `0026_preserve_legacy_product_price_default.sql` adds a non-destructive zero default for older/direct writers. Private-preview migration against a child of the real production schema then showed that production no longer had this compatibility column at all. The migration now safely recreates it when absent, backfills existing rows from `retail_price`, and restores its default and non-null boundary. A focused PGlite test reproduces that production-drifted shape. The legacy column is retained; no compatibility data is removed.
 
 ## User-facing recovery
 

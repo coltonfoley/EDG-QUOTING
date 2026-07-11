@@ -2,7 +2,7 @@
 
 ## Verdict
 
-The audit improvement work is a locally verified release candidate on `codex/rainmaker-improvement-plan`. It is prepared for GitHub review, but it is not committed, pushed, migrated, deployed, or production-verified. Customer/project data and retired compatibility paths remain preserved.
+The audit improvement work is a private-preview release candidate on `codex/rainmaker-improvement-plan`. It is committed, pushed, and under review in draft pull request #12. An isolated Neon child branch has been migrated for preview testing. It is not merged, production-migrated, deployed to production, or production-verified. Customer/project data and retained compatibility paths remain preserved.
 
 ## Owner decisions now reflected locally
 
@@ -31,17 +31,24 @@ Until those are complete, do not remove the Ops backend/configuration, legacy fi
 
 - Owner-approved version override policy: focused authorization suite passes (35 tests).
 - TypeScript check passes after the policy update.
-- Current release-candidate verification after retiring the Ops backend: 182 ordinary tests, 47 isolated migrated database tests, TypeScript, production build, asset audit, secrets audit, patch-format audit, and the full browser/accessibility gate pass. Seven obsolete Ops-only tests were removed with the retired integration; the remaining focused route/security/permissions/approval-drawing set passes 82 tests.
+- Current release-candidate verification after retiring the Ops backend: 183 ordinary tests, 47 isolated migrated database tests, TypeScript, production build, asset audit, secrets audit, patch-format audit, and the full browser/accessibility gate pass. Seven obsolete Ops-only tests were removed with the retired integration; the remaining focused route/security/permissions/approval-drawing set passes 82 tests.
 - A human VoiceOver/NVDA interpretation pass and actual browser-zoom spot check remain manual validation gaps.
+
+## Private-preview status
+
+- Review commits: `313e71a` and `b4e3b72`; GitHub CI and the Vercel checks pass for `b4e3b72`.
+- The isolated Neon child is `preview/codex/rainmaker-improvement-plan` (`br-fragrant-hat-an9iuwdg`). Migrations `0023` through `0030` committed successfully there; production was untouched.
+- Preview migration exposed real schema drift: the copied production `products` table did not contain retained compatibility column `default_unit_price`. Migration `0026` now recreates, backfills, defaults, and makes that column non-null without removing any path. A focused restored-schema test covers this case.
+- The branch's existing Vercel deployment still used the older general database setting and correctly failed `/ready`; a sensitive `DATABASE_URL` override was added only for `Preview (codex/rainmaker-improvement-plan)`. The next deployment must prove `/health` 200, `/ready` 200, and unauthenticated `/api/user` 401 before the preview is considered complete.
 
 ## GitHub and deployment gates
 
 Preparation is approved. The following actions are not implied by that approval and remain separate stop points:
 
-1. Confirm the exact files to include and create an intentional commit.
-2. Push a review branch and open a draft pull request.
-3. Review and approve the eight pending database migrations plus rollback checkpoint.
-4. Merge/release only after preservation evidence and explicit deployment approval.
-5. Prove GitHub CI, Vercel `Ready`, live `/health`, `/ready`, `/api/user`, core quote/lead/signing journeys, and post-release Vercel error/email evidence separately.
+1. Commit and push the production-schema-drift compatibility follow-up.
+2. Prove the refreshed private preview's `/health`, `/ready`, `/api/user`, and read-only UI shell against its isolated database.
+3. Review and explicitly approve the eight production migrations plus rollback checkpoint.
+4. Merge/release only after a manual Neon snapshot and explicit deployment approval.
+5. Prove GitHub CI, Vercel `Ready`, live production `/health`, `/ready`, `/api/user`, core quote/lead/signing journeys, and post-release Vercel error/email evidence separately.
 
 No customer email, proposal, signature, quote mutation, Ops handoff, production data write, or deployment was performed while preparing this packet.
