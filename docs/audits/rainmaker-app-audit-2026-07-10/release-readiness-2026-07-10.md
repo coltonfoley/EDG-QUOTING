@@ -38,17 +38,16 @@ Until those are complete, do not remove the Ops backend/configuration, legacy fi
 
 - Review commits: `313e71a`, `b4e3b72`, and `ec58863`; GitHub CI and the Vercel checks pass for `ec58863`.
 - The isolated Neon child is `preview/codex/rainmaker-improvement-plan` (`br-fragrant-hat-an9iuwdg`). Migrations `0023` through `0030` committed successfully there; production was untouched.
-- Preview migration exposed real schema drift: the copied production `products` table did not contain retained compatibility column `default_unit_price`. Migration `0026` now recreates, backfills, defaults, and makes that column non-null without removing any path. A focused restored-schema test covers this case.
-- Deployments through `ec58863` still used the older general database setting and correctly failed `/ready`; the sensitive `DATABASE_URL` override for `Preview (codex/rainmaker-improvement-plan)` was re-saved and locally validated to target the isolated child compute. A Vercel redeploy reused the prior deployment's environment snapshot, so it was not valid proof of the corrected override. A direct CLI preview upload was abandoned after Vercel's remote TypeScript step disagreed with the passing local and GitHub checks; it never became a ready deployment. The next normal Git-connected deployment must prove `/health` 200, `/ready` 200, and unauthenticated `/api/user` 401 before the preview is considered complete.
+- Preview migration exposed real schema drift: the copied production `products` table did not contain retained compatibility columns `default_unit_price`, `default_markup_type`, or `default_markup_value`. Migration `0026` now recreates, backfills, defaults, and makes those columns non-null without removing any path. A focused restored-schema test covers this case.
+- Git-connected preview `https://rainmaker-5cq1pxikv-edgpatioshade.vercel.app` is private-preview ready: GitHub CI and Vercel passed, `/health` returned 200, `/ready` returned 200 with 25 tables and 370 expected columns, and unauthenticated `/api/user` returned 401. The signed-out browser shell rendered the EDG Workspace login without visible Ops Portal actions. No customer or quote record was opened or changed.
+- Earlier deployments correctly failed `/ready` while the copied schema lacked the three retained product-default columns. A Vercel redeploy reused the prior deployment's environment snapshot and was not treated as valid configuration proof. A direct CLI preview upload was abandoned after Vercel's remote TypeScript step disagreed with the passing local and GitHub checks; it never became a ready deployment.
 
 ## GitHub and deployment gates
 
 Preparation is approved. The following actions are not implied by that approval and remain separate stop points:
 
-1. Prove the refreshed private preview's `/health`, `/ready`, `/api/user`, and read-only UI shell against its isolated database.
-2. Review the private preview in the browser without creating or changing quote/customer records.
-3. Review and explicitly approve the eight production migrations plus rollback checkpoint.
-4. Merge/release only after a manual Neon snapshot and explicit deployment approval.
-5. Prove GitHub CI, Vercel `Ready`, live production `/health`, `/ready`, `/api/user`, core quote/lead/signing journeys, and post-release Vercel error/email evidence separately.
+1. Review and explicitly approve the eight production migrations plus rollback checkpoint.
+2. Merge/release only after a manual Neon snapshot and explicit deployment approval.
+3. Prove GitHub CI, Vercel `Ready`, live production `/health`, `/ready`, `/api/user`, core quote/lead/signing journeys, and post-release Vercel error/email evidence separately.
 
 No customer email, proposal, signature, quote mutation, Ops handoff, production data write, or deployment was performed while preparing this packet.

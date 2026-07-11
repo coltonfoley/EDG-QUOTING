@@ -88,7 +88,7 @@ describe("fresh database restore", () => {
     }
   }, 60_000);
 
-  it("restores the required legacy product price column on a production-drifted schema", async () => {
+  it("restores the required legacy product defaults on a production-drifted schema", async () => {
     const database = new PGlite();
 
     try {
@@ -104,23 +104,40 @@ describe("fresh database restore", () => {
         readFileSync(resolve(migrationDirectory, "0026_preserve_legacy_product_price_default.sql"), "utf8")
       );
 
-      const column = await database.query<{
+      const columns = await database.query<{
+        column_name: string;
         column_default: string | null;
         is_nullable: string;
       }>(`
-        SELECT column_default, is_nullable
+        SELECT column_name, column_default, is_nullable
         FROM information_schema.columns
         WHERE table_schema = 'public'
           AND table_name = 'products'
-          AND column_name = 'default_unit_price'
+          AND column_name IN ('default_unit_price', 'default_markup_type', 'default_markup_value')
+        ORDER BY column_name
       `);
-      const product = await database.query<{ default_unit_price: string }>(`
-        SELECT "default_unit_price"::text AS "default_unit_price"
+      const product = await database.query<{
+        default_unit_price: string;
+        default_markup_type: string;
+        default_markup_value: string;
+      }>(`
+        SELECT
+          "default_unit_price"::text AS "default_unit_price",
+          "default_markup_type",
+          "default_markup_value"::text AS "default_markup_value"
         FROM "products"
       `);
 
-      expect(column.rows).toEqual([{ column_default: "0", is_nullable: "NO" }]);
-      expect(product.rows).toEqual([{ default_unit_price: "125.50" }]);
+      expect(columns.rows).toEqual([
+        { column_name: "default_markup_type", column_default: "'percentage'::text", is_nullable: "NO" },
+        { column_name: "default_markup_value", column_default: "25", is_nullable: "NO" },
+        { column_name: "default_unit_price", column_default: "0", is_nullable: "NO" },
+      ]);
+      expect(product.rows).toEqual([{
+        default_unit_price: "125.50",
+        default_markup_type: "percentage",
+        default_markup_value: "25.00",
+      }]);
     } finally {
       await database.close();
     }
