@@ -13,6 +13,10 @@
       "destination": "/api/index?__path=/health"
     },
     {
+      "source": "/ready",
+      "destination": "/api/index?__path=/ready"
+    },
+    {
       "source": "/api",
       "destination": "/api/index?__path=/api"
     },

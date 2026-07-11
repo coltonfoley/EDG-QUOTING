@@ -46,7 +46,7 @@ export async function apiRequest(
   method: string,
   url: string,
   data?: unknown | undefined,
-  options?: { timeout?: number; signal?: AbortSignal },
+  options?: { timeout?: number; signal?: AbortSignal; headers?: Record<string, string> },
 ): Promise<Response> {
   // Handle FormData differently - don't set Content-Type and don't stringify
   const isFormData = data instanceof FormData;
@@ -75,7 +75,10 @@ export async function apiRequest(
   try {
     const res = await fetch(url, {
       method,
-      headers: isFormData ? {} : (data ? { "Content-Type": "application/json" } : {}),
+      headers: {
+        ...(isFormData ? {} : (data ? { "Content-Type": "application/json" } : {})),
+        ...options?.headers,
+      },
       body: isFormData ? data : (data ? JSON.stringify(data) : undefined),
       credentials: "include",
       signal: controller.signal,

@@ -1,8 +1,10 @@
 import type {
   Account,
+  BusinessEvent,
   Color,
   ContractTemplate,
   Customer,
+  EmailDeliveryAttempt,
   Group,
   InsertAccount,
   InsertColor,
@@ -31,15 +33,76 @@ import type {
   ProductColor,
   ProductWithDetails,
   Quote,
+  QuoteVersionEvent,
   QuoteApprovalDrawing,
   QuoteCoverPhoto,
   QuoteProductRendering,
   QuoteWithDetails,
   User,
 } from "@shared/schema";
+import type { QuoteUpdateOptions } from "./quoteLock";
+import type { BusinessEventInput } from "./businessEvents";
 
 type PlanningAgreementUpdate = Partial<InsertPlanningAgreement>;
 type QuoteApprovalDrawingUpdate = Partial<InsertQuoteApprovalDrawing>;
+
+export type EmailDeliveryMessageType =
+  | "quote_signature_request"
+  | "planning_signature_request"
+  | "quote_signature_confirmation"
+  | "planning_signature_confirmation";
+export type EmailDeliveryClaim = {
+  outcome: "claimed" | "sent" | "in_progress" | "conflict";
+  attempt?: EmailDeliveryAttempt;
+};
+export type EmailDeliveryHealth = {
+  asOf: Date;
+  staleAfterMinutes: number;
+  summary: {
+    pending: number;
+    stalePending: number;
+    failed: number;
+    sent: number;
+    sentLast24Hours: number;
+  };
+  attentionTotal: number;
+  attentionTruncated: boolean;
+  attention: Array<{
+    id: number;
+    messageType: EmailDeliveryMessageType;
+    quoteId: number | null;
+    planningAgreementId: number | null;
+    status: "pending" | "failed";
+    attemptCount: number;
+    lastErrorType: string | null;
+    createdAt: Date | null;
+    updatedAt: Date | null;
+  }>;
+};
+export type AdoptionMetricKey =
+  | "customer_package_prepared"
+  | "approval_email_accepted"
+  | "quote_customer_signed"
+  | "quote_company_signed"
+  | "lead_converted_to_quote"
+  | "quote_import_completed"
+  | "dimensional_price_resolved"
+  | "product_catalog_import_completed"
+  | "sundance_configuration_inserted"
+  | "quote_version_created";
+export type AdoptionSummary = {
+  asOf: Date;
+  windowDays: number;
+  windowStart: Date;
+  historicalCoverage: "post_instrumentation_only";
+  metrics: Array<{
+    key: AdoptionMetricKey;
+    label: string;
+    count: number;
+    firstRecordedAt: Date | null;
+    source: "business_events" | "email_delivery_attempts" | "quote_version_events";
+  }>;
+};
 
 export interface IStorage {
   // Account methods (formerly customer methods)
@@ -80,8 +143,22 @@ export interface IStorage {
   getQuoteBySigningToken(token: string): Promise<QuoteWithDetails | undefined>;
   getAllQuotes(options?: { page?: number; pageSize?: number }): Promise<QuoteWithDetails[]>;
   createQuote(quote: InsertQuote): Promise<Quote>;
-  updateQuote(id: number, quote: Partial<InsertQuote>): Promise<Quote | undefined>;
+  updateQuote(id: number, quote: Partial<InsertQuote>, options?: QuoteUpdateOptions): Promise<Quote | undefined>;
   deleteQuote(id: number): Promise<boolean>;
+  claimEmailDelivery(input: {
+    idempotencyKey: string;
+    messageType: EmailDeliveryMessageType;
+    quoteId?: number | null;
+    planningAgreementId?: number | null;
+  }): Promise<EmailDeliveryClaim>;
+  getEmailDeliveryAttempt(id: number): Promise<EmailDeliveryAttempt | undefined>;
+  markEmailDeliverySent(id: number, sentAt: Date, providerMessageId?: string | null): Promise<EmailDeliveryAttempt | undefined>;
+  markEmailDeliveryFailed(id: number, errorType: string): Promise<EmailDeliveryAttempt | undefined>;
+  getEmailDeliveryHealth(options?: { staleAfterMinutes?: number; limit?: number }): Promise<EmailDeliveryHealth>;
+  recordBusinessEvent(input: BusinessEventInput): Promise<BusinessEvent | undefined>;
+  getAdoptionSummary(options?: { windowDays?: number }): Promise<AdoptionSummary>;
+  importProductCatalog(input: import("./productCatalogImport").ProductCatalogImportRequest, actorUserId?: number | null): Promise<import("./productCatalogImport").ProductCatalogImportResult>;
+  insertConfiguredProduct(quoteId: number, input: import("./configuredProductInsertion").ConfiguredProductInsertionRequest, actorUserId?: number | null): Promise<import("./configuredProductInsertion").ConfiguredProductInsertionResult>;
 
   // Planning agreement methods
   getPlanningAgreement(id: number): Promise<PlanningAgreement | undefined>;
@@ -92,6 +169,7 @@ export interface IStorage {
   getPlanningAgreementBySigningToken(token: string): Promise<PlanningAgreement | undefined>;
   createPlanningAgreement(planningAgreement: InsertPlanningAgreement, actorUserId?: number | null): Promise<PlanningAgreement>;
   updatePlanningAgreement(id: number, planningAgreement: PlanningAgreementUpdate, actorUserId?: number | null, eventType?: InsertPlanningAgreementEvent["eventType"], payload?: Record<string, unknown>): Promise<PlanningAgreement | undefined>;
+  applyPlanningAgreementCredit(id: number, quoteId: number, amount: string, actorUserId?: number | null): Promise<PlanningAgreement | undefined>;
   createPlanningAgreementEvent(event: InsertPlanningAgreementEvent): Promise<PlanningAgreementEvent>;
 
   // Quote approval drawing methods
@@ -109,8 +187,9 @@ export interface IStorage {
   
   // Quote versioning methods
   getQuoteVersions(quoteId: number): Promise<QuoteWithDetails[]>;
-  createQuoteVersion(originalQuoteId: number): Promise<Quote>;
-  setCurrentQuoteVersion(quoteId: number): Promise<Quote | undefined>;
+  createQuoteVersion(originalQuoteId: number, actorUserId?: number | null): Promise<Quote>;
+  setCurrentQuoteVersion(quoteId: number, actorUserId?: number | null): Promise<Quote | undefined>;
+  getQuoteVersionEvents(quoteFamilyRootId: number): Promise<QuoteVersionEvent[]>;
   markPreviousVersionsAsOld(parentQuoteId: number): Promise<void>;
 
 
@@ -133,6 +212,7 @@ export interface IStorage {
   updatePricingTable(id: number, pricingTable: Partial<InsertPricingTable>): Promise<PricingTable | undefined>;
   deletePricingTable(id: number): Promise<boolean>;
   deletePricingTablesByProductId(productId: number): Promise<boolean>;
+  replacePricingTablesForProduct(productId: number, pricingTableData: InsertPricingTable[]): Promise<PricingTable[]>;
   calculateConfigurableProductPrice(productId: number, length: number, width: number): Promise<number | null>;
 
   // Color methods
@@ -206,7 +286,7 @@ export interface IStorage {
   deleteQuoteImagesByQuoteId(quoteId: number): Promise<boolean>;
 
   // Authorization methods for security
-  validateLineItemsOwnership(lineItemIds: number[], userId: any): Promise<{ isValid: boolean; quoteId?: number }>;
-  validateQuoteOwnership(quoteId: number, userId: any): Promise<boolean>;
+  validateLineItemSelection(lineItemIds: number[]): Promise<{ isValid: boolean; quoteId?: number }>;
+  quoteExists(quoteId: number): Promise<boolean>;
 
 }

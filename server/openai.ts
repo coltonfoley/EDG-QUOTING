@@ -43,11 +43,6 @@ class SimpleCache {
     this.defaultTTL = defaultTTL;
   }
 
-  // Generate cache key from input content
-  generateKey(content: string): string {
-    return crypto.createHash('sha256').update(content).digest('hex').slice(0, 16);
-  }
-
   set(key: string, value: any, ttl?: number): void {
     const now = Date.now();
     const expiry = now + (ttl || this.defaultTTL);
@@ -98,6 +93,27 @@ class SimpleCache {
 // Cache for OpenAI API responses - separate caches for different types
 const textExtractionCache = new SimpleCache(200, 24 * 60 * 60 * 1000); // 24 hours for text extraction
 const visionExtractionCache = new SimpleCache(300, 6 * 60 * 60 * 1000); // 6 hours for vision extraction
+
+export function createVisionExtractionCacheKey(
+  images: Array<{ index: number; imageBase64: string }>,
+): string {
+  const hash = crypto.createHash("sha256");
+  hash.update("rainmaker-vision-extraction-v2\0");
+
+  for (const image of images) {
+    const encodedImage = image.imageBase64.replace(/^data:[^;]+;base64,/, "");
+    const imageBytes = Buffer.from(encodedImage, "base64");
+    const byteLength = Buffer.allocUnsafe(8);
+    byteLength.writeBigUInt64BE(BigInt(imageBytes.length));
+
+    hash.update(String(image.index));
+    hash.update("\0");
+    hash.update(byteLength);
+    hash.update(imageBytes);
+  }
+
+  return hash.digest("hex");
+}
 
 // Clean up expired entries every hour
 setInterval(() => {
@@ -629,7 +645,10 @@ export async function extractProductsFromPriceSheet(
     if (deterministicResult && deterministicResult.products.length > 0) {
       const filenameMfr = detectManufacturerFromFilename(originalName);
       deterministicResult.detectedManufacturer = filenameMfr;
-      console.log(`Deterministic parse successful: ${deterministicResult.products.length} products, manufacturer: ${filenameMfr || 'none'}`);
+      console.log("Deterministic parse successful", {
+        productCount: deterministicResult.products.length,
+        manufacturerInferred: Boolean(filenameMfr),
+      });
       onProgress?.({ phase: 'done', current: 1, total: 1, productsFound: deterministicResult.products.length });
       return deterministicResult;
     }
@@ -1088,9 +1107,9 @@ async function processImagesInSingleCall(images: Array<{index: number, imageBase
   let parsedContent: any;
   
   try {
-    // Generate cache key based on image content (use first few characters of each image for efficiency)
-    const cacheKeyInput = images.map(img => `${img.index}:${img.imageBase64.slice(0, 100)}`).join('|');
-    const cacheKey = visionExtractionCache.generateKey(cacheKeyInput);
+    // Cache by the complete decoded image content so visually different pages
+    // cannot share a response merely because their base64 prefixes match.
+    const cacheKey = createVisionExtractionCacheKey(images);
     
     // Check cache first
     const cachedResult = visionExtractionCache.get(cacheKey);

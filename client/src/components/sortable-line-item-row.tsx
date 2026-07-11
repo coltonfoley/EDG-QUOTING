@@ -4,6 +4,17 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { GripVertical, Info, Trash2 } from "lucide-react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -133,14 +144,21 @@ export const SortableLineItemRow = memo(function SortableLineItemRow({
     >
       {/* Drag handle */}
       <td className="border-r border-border px-2 py-1 w-8">
-        <div {...listeners} className="cursor-grab hover:cursor-grabbing text-muted-foreground">
+        <button
+          type="button"
+          {...attributes}
+          {...listeners}
+          aria-label={`Reorder ${item.description || "line item"}`}
+          className="cursor-grab hover:cursor-grabbing text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
           <GripVertical className="h-4 w-4" />
-        </div>
+        </button>
       </td>
 
       {/* Description - Always visible */}
       <td className="border-r border-border px-3 py-1">
         <Input
+          aria-label={`${item.description || "Line item"} description`}
           value={getCurrentValue(item.id, 'description')}
           onChange={(e) => {
             handleFieldChange(item.id, "description", e.target.value);
@@ -270,6 +288,7 @@ export const SortableLineItemRow = memo(function SortableLineItemRow({
       {/* Quantity - Always visible */}
       <td className="border-r border-border px-3 py-1 w-20 text-center">
         <Input
+          aria-label={`${item.description || "Line item"} quantity`}
           value={getCurrentValue(item.id, 'quantity')}
           onChange={(e) => {
             handleFieldChange(item.id, "quantity", e.target.value);
@@ -294,6 +313,7 @@ export const SortableLineItemRow = memo(function SortableLineItemRow({
       <td className="border-r border-border px-3 py-1 text-center hidden lg:table-cell">
         <div className="flex items-center gap-1">
           <Input
+            aria-label={`${item.description || "Line item"} EDG cost`}
             value={getCurrentValue(item.id, 'unitPrice')}
             onChange={(e) => {
               handleFieldChange(item.id, "unitPrice", e.target.value);
@@ -346,6 +366,7 @@ export const SortableLineItemRow = memo(function SortableLineItemRow({
       <td className="border-r border-border px-3 py-1 text-center hidden lg:table-cell">
         <div className="flex items-center space-x-1">
           <Input
+            aria-label={`${item.description || "Line item"} markup value`}
             type="number"
             min="0"
             value={getCurrentValue(item.id, 'markupValue')}
@@ -382,7 +403,7 @@ export const SortableLineItemRow = memo(function SortableLineItemRow({
               });
             }}
           >
-            <SelectTrigger className="w-12 h-6 border-0 bg-transparent p-0 text-xs" data-testid={`select-markup-type-${item.id}`}>
+            <SelectTrigger className="w-12 h-6 border-0 bg-transparent p-0 text-xs" aria-label={`${item.description || "Line item"} markup type`} data-testid={`select-markup-type-${item.id}`}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -451,15 +472,38 @@ export const SortableLineItemRow = memo(function SortableLineItemRow({
 
       {/* Actions - Always visible */}
       <td className="px-3 py-1 text-center">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => deleteLineItemMutation.mutate(item.id)}
-          className="text-red-600 hover:text-red-700 hover:bg-red-50 p-1 h-auto"
-          data-testid={`button-delete-${item.id}`}
-        >
-          <Trash2 className="h-4 w-4" />
-        </Button>
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="text-red-600 hover:text-red-700 hover:bg-red-50 p-1 h-auto"
+              aria-label={`Delete ${item.description || "line item"}`}
+              data-testid={`button-delete-${item.id}`}
+            >
+              <Trash2 className="h-4 w-4" aria-hidden="true" />
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete this line item?</AlertDialogTitle>
+              <AlertDialogDescription>
+                {item.description || "This item"} will be removed from the quote. This cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => deleteLineItemMutation.mutate(item.id)}
+                className="bg-red-600 hover:bg-red-700"
+                data-testid={`button-confirm-delete-${item.id}`}
+              >
+                Delete Item
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </td>
     </tr>
   );

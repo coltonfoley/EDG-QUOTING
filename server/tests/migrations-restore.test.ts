@@ -65,6 +65,24 @@ describe("fresh database restore", () => {
 
       expect(missingTables).toEqual([]);
       expect(missingColumns).toEqual([]);
+
+      const quoteAccountColumn = await database.query<{ is_nullable: string }>(`
+        SELECT is_nullable
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'quotes'
+          AND column_name = 'account_id'
+      `);
+      expect(quoteAccountColumn.rows).toEqual([{ is_nullable: "YES" }]);
+
+      const legacyProductPriceColumn = await database.query<{ column_default: string | null }>(`
+        SELECT column_default
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'products'
+          AND column_name = 'default_unit_price'
+      `);
+      expect(legacyProductPriceColumn.rows[0]?.column_default).not.toBeNull();
     } finally {
       await database.close();
     }

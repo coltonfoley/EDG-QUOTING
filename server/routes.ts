@@ -11,7 +11,6 @@ import {
 } from "./validation-schemas";
 import multer from "multer";
 import { extractProductsFromPriceSheet, analyzePriceSheetColumns } from "./openai";
-import { applySundanceSkuDefault, deriveSundanceSku } from "./sundanceSku";
 
 import { registerAccountRoutes } from "./routes/accountRoutes";
 import { registerQuoteRoutes } from "./routes/quoteRoutes";
@@ -20,7 +19,10 @@ import { registerProductRoutes } from "./routes/productRoutes";
 import { registerImageRoutes } from "./routes/imageRoutes";
 import { registerLeadIntakeRoutes } from "./routes/leadIntakeRoutes";
 import { registerPlanningAgreementRoutes } from "./routes/planningAgreementRoutes";
-import { deriveProductCostFields } from "@shared/pricing";
+import { registerEmailDeliveryRoutes } from "./routes/emailDeliveryRoutes";
+import { registerBusinessEventRoutes } from "./routes/businessEventRoutes";
+import { redactedErrorType, validationIssueSummary } from "./redactedLogging";
+import { productCatalogImportRequestSchema } from "./productCatalogImport";
 
 const STORAGE_USAGE_CACHE_MS = 5 * 60 * 1000;
 
@@ -220,6 +222,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerQuoteRoutes(app);
   registerLineItemRoutes(app);
   registerProductRoutes(app);
+  registerEmailDeliveryRoutes(app);
+  registerBusinessEventRoutes(app);
 
   app.get('/api/admin/users', isAuthenticated, requireAdmin, async (req: any, res) => {
     try {
@@ -299,110 +303,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Admin access required" });
       }
 
-      const { products } = req.body;
-
-      if (!products || !Array.isArray(products)) {
-        return res.status(400).json({ message: "Products array is required" });
+      const parsed = productCatalogImportRequestSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({
+          message: "Product import data needs attention",
+          errors: parsed.error.issues.map((issue) => ({ path: issue.path, message: issue.message })),
+        });
       }
 
-      let created = 0;
-      let updated = 0;
-      const errors: string[] = [];
-
-      const allProducts = await storage.getAllProducts();
-      const productLookupByName = new Map<string, typeof allProducts[0]>();
-      const productLookupBySku = new Map<string, typeof allProducts[0]>();
-      const skuRegex = /\(([A-Z0-9][A-Z0-9\-]+)\)\s*$/i;
-      for (const p of allProducts) {
-        productLookupByName.set(p.name.toLowerCase().trim(), p);
-        const lookupSku = deriveSundanceSku(p) || p.sku;
-        if (lookupSku) {
-          productLookupBySku.set(lookupSku.toUpperCase().trim(), p);
-        }
-        const skuMatch = p.name.match(skuRegex);
-        if (skuMatch) {
-          productLookupBySku.set(skuMatch[1].toUpperCase(), p);
-        }
-      }
-
-      for (const product of products) {
-        try {
-          const { name, manufacturer, category, unit, description, retailPrice, cost } = product;
-          const sku = deriveSundanceSku(product) || product.sku;
-
-          if (!name || typeof retailPrice !== 'number' || typeof cost !== 'number') {
-            errors.push(`Invalid product data for: ${name || 'unnamed'}`);
-            continue;
-          }
-
-          const normalizedCost = cost > 0 ? cost : retailPrice;
-          const pricingFields = deriveProductCostFields(retailPrice, normalizedCost);
-
-          let existingProduct = productLookupByName.get(name.toLowerCase().trim());
-          if (!existingProduct && sku) {
-            existingProduct = productLookupBySku.get(sku.toUpperCase().trim());
-          }
-
-          if (existingProduct) {
-            const updateData: any = {
-              retailPrice: retailPrice.toString(),
-              costPrice: pricingFields.costPrice,
-              defaultDiscountType: pricingFields.defaultDiscountType,
-              defaultDiscountValue: pricingFields.defaultDiscountValue,
-            };
-            if (sku !== undefined) {
-              updateData.sku = sku ? sku.trim() : null;
-            }
-            if (manufacturer !== undefined) {
-              updateData.manufacturer = manufacturer;
-            }
-            if (category !== undefined) {
-              updateData.category = category;
-            }
-            if (unit !== undefined) {
-              updateData.unit = unit;
-            }
-            if (description !== undefined) {
-              updateData.description = description;
-            }
-            
-            await storage.updateProduct(existingProduct.id, updateData);
-            updated++;
-          } else {
-            const productData = applySundanceSkuDefault({
-              name: name.trim(),
-              sku: sku ? sku.trim() : null,
-              description: description || '',
-              manufacturer: manufacturer || 'Imported',
-              category: category || null,
-              retailPrice: retailPrice.toString(),
-              costPrice: pricingFields.costPrice,
-              defaultDiscountType: pricingFields.defaultDiscountType,
-              defaultDiscountValue: pricingFields.defaultDiscountValue,
-              unit: unit || 'each',
-            });
-            
-            const newProduct = await storage.createProduct(productData);
-            productLookupByName.set(name.toLowerCase().trim(), newProduct);
-            if (sku) {
-              productLookupBySku.set(sku.toUpperCase().trim(), newProduct);
-            }
-            created++;
-          }
-        } catch (error) {
-          console.error(`Error processing product ${product.name}:`, error);
-          errors.push(`Failed to process: ${product.name}`);
-        }
-      }
-
-      res.json({
-        created,
-        updated,
-        errors,
-        total: products.length,
-      });
+      const actorUserId = Number(req.user?.id);
+      const result = await storage.importProductCatalog(
+        parsed.data,
+        Number.isInteger(actorUserId) && actorUserId > 0 ? actorUserId : null,
+      );
+      res.json(result);
     } catch (error) {
-      console.error("CSV import error:", error);
+      console.error("Product catalog import failed", { errorType: redactedErrorType(error) });
       res.status(500).json({ message: "Failed to import products" });
     }
   });
@@ -520,7 +436,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const useSSE = (req.headers.accept || '').includes('text/event-stream');
-      console.log(`AI product import: ${file.originalname} (${fileType}, ${(file.size / 1024).toFixed(1)} KB, sse=${useSSE}, cols=${JSON.stringify(columnOptions)})`);
+      console.log("AI product import started", { fileType, sizeKb: Math.round(file.size / 1024), useSSE });
 
       if (useSSE) {
         res.writeHead(200, {
@@ -555,7 +471,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
     } catch (error: any) {
-      console.error("AI product import error:", error);
+      console.error("AI product import failed", { errorType: redactedErrorType(error) });
       if (error.message?.includes('Unsupported file type')) {
         return res.status(400).json({ message: error.message });
       }
@@ -572,8 +488,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const validatedData = bulkUpdateProductsSchema.safeParse(req.body);
       if (!validatedData.success) {
-        console.error("Bulk update validation failed:", JSON.stringify(validatedData.error.errors, null, 2));
-        console.error("Request body:", JSON.stringify(req.body, null, 2));
+        console.error("Bulk update validation failed", validationIssueSummary(validatedData.error));
         return res.status(400).json({ 
           message: "Invalid request data", 
           errors: validatedData.error.errors 
@@ -595,13 +510,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/contract-templates', isAuthenticated, requireAdmin, async (req: any, res) => {
+  app.get('/api/contract-templates', isAuthenticated, async (_req: any, res) => {
     try {
-      const currentUser = await storage.getUser(req.user?.id);
-      if (currentUser?.role !== 'admin') {
-        return res.status(403).json({ message: "Admin access required" });
-      }
-
       const templates = await storage.getAllContractTemplates();
       res.json(templates);
     } catch (error) {
@@ -610,13 +520,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/contract-templates/:id', isAuthenticated, requireAdmin, async (req: any, res) => {
+  app.get('/api/contract-templates/:id', isAuthenticated, async (req: any, res) => {
     try {
-      const currentUser = await storage.getUser(req.user?.id);
-      if (currentUser?.role !== 'admin') {
-        return res.status(403).json({ message: "Admin access required" });
-      }
-
       const id = parseInt(req.params.id);
       const template = await storage.getContractTemplate(id);
       if (!template) {

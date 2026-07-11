@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -43,6 +43,7 @@ const PRODUCT_FIELDS = [
 ];
 
 export function CSVProductImporter() {
+  const importRequestIdRef = useRef<string | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [csvData, setCsvData] = useState<CSVRow[]>([]);
   const [csvColumns, setCsvColumns] = useState<string[]>([]);
@@ -66,17 +67,19 @@ export function CSVProductImporter() {
       if (lowerCol.includes('name') || lowerCol.includes('product')) {
         return { csvColumn: col, productField: 'name' as const };
       }
-      if (lowerCol.includes('manufacturer') || lowerCol.includes('brand') || lowerCol.includes('mfr')) {
-        return { csvColumn: col, productField: 'manufacturer' as const };
-      }
-      if (lowerCol.includes('category') || lowerCol.includes('type')) {
-        return { csvColumn: col, productField: 'category' as const };
-      }
+      // Price headers often include the word "manufacturer" (for example,
+      // "Manufacturer MSRP"), so pricing must win before brand detection.
       if (lowerCol.includes('retail') || lowerCol.includes('dealer') || lowerCol.includes('msrp') || lowerCol.includes('list price')) {
         return { csvColumn: col, productField: 'retailPrice' as const };
       }
       if (lowerCol.includes('cost') || lowerCol.includes('your price') || lowerCol.includes('net')) {
         return { csvColumn: col, productField: 'cost' as const };
+      }
+      if (lowerCol.includes('manufacturer') || lowerCol.includes('brand') || lowerCol.includes('mfr')) {
+        return { csvColumn: col, productField: 'manufacturer' as const };
+      }
+      if (lowerCol.includes('category') || lowerCol.includes('type')) {
+        return { csvColumn: col, productField: 'category' as const };
       }
       if (lowerCol.includes('unit') || lowerCol.includes('uom') || lowerCol === 'um') {
         return { csvColumn: col, productField: 'unit' as const };
@@ -91,6 +94,7 @@ export function CSVProductImporter() {
     if (!selectedFile) return;
 
     setFile(selectedFile);
+    importRequestIdRef.current = null;
     setErrors([]);
     setImportErrors([]);
     setIsParsing(true);
@@ -236,16 +240,19 @@ export function CSVProductImporter() {
 
   const importMutation = useMutation({
     mutationFn: async (products: PreviewProduct[]) => {
+      importRequestIdRef.current ||= crypto.randomUUID();
       const response = await apiRequest("POST", "/api/admin/import-csv-products", {
-        products
+        importRequestId: importRequestIdRef.current,
+        products,
       });
       return response.json();
     },
     onSuccess: (data) => {
       toast({
-        title: "Import Successful",
-        description: `Created: ${data.created}, Updated: ${data.updated}`,
+        title: data.replayed ? "Import already completed" : "Import Successful",
+        description: data.replayed ? "Rainmaker did not apply the same import twice." : `Created: ${data.created}, Updated: ${data.updated}`,
       });
+      importRequestIdRef.current = null;
       if (data.errors && data.errors.length > 0) {
         setImportErrors(data.errors);
       }
@@ -276,6 +283,7 @@ export function CSVProductImporter() {
   };
 
   const resetImporter = () => {
+    importRequestIdRef.current = null;
     setFile(null);
     setCsvData([]);
     setCsvColumns([]);

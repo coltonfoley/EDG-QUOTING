@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { Upload, X, Image, FileText } from 'lucide-react';
+import { AlertTriangle, Download, Loader2, Upload, X, Image, FileText } from 'lucide-react';
 import { getProxiedImageUrl } from '@/lib/image-utils';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { uploadQuoteImage } from '@/lib/quote-image-upload';
@@ -41,12 +41,11 @@ export function ESignatureOptionsModal({ quote, open, onOpenChange, onSuccess }:
   const [includeImages, setIncludeImages] = useState(quote.esigIncludeImages ?? false);
   
   const [tempProductRenderings, setTempProductRenderings] = useState<UploadedFile[]>([]);
-  const [persistentProductRenderings, setPersistentProductRenderings] = useState<QuoteProductRendering[]>([]);
-  
   const [isUploading, setIsUploading] = useState(false);
+  const [isGeneratingPreview, setIsGeneratingPreview] = useState(false);
   
   const hasContractData = Boolean(quote.notes?.trim() || quote.contractTemplate || quote.customContractTerms?.trim());
-  const [includeContract, setIncludeContract] = useState(quote.esigIncludeContract ?? hasContractData);
+  const [includeContract, setIncludeContract] = useState(hasContractData && (quote.esigIncludeContract ?? true));
   
   const { toast } = useToast();
   const renderingsRef = useRef<HTMLInputElement>(null);
@@ -56,7 +55,7 @@ export function ESignatureOptionsModal({ quote, open, onOpenChange, onSuccess }:
     if (open) {
       setShowPricing(quote.esigIncludePricing ?? true);
       setIncludeImages(quote.esigIncludeImages ?? false);
-      setIncludeContract(quote.esigIncludeContract ?? hasContractData);
+      setIncludeContract(hasContractData && (quote.esigIncludeContract ?? true));
     }
   }, [open, quote.esigIncludePricing, quote.esigIncludeImages, quote.esigIncludeContract, hasContractData]);
 
@@ -129,7 +128,7 @@ export function ESignatureOptionsModal({ quote, open, onOpenChange, onSuccess }:
   const handleFileUpload = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
 
-    const currentTotal = (persistentProductRenderings.length || 0) + tempProductRenderings.length;
+    const currentTotal = (existingProductRenderings?.length || 0) + tempProductRenderings.length;
     const remaining = 5 - currentTotal;
     
     if (remaining <= 0) {
@@ -200,6 +199,57 @@ export function ESignatureOptionsModal({ quote, open, onOpenChange, onSuccess }:
       originalFile: f.file,
     }))
   ];
+  const packageIssues = [
+    ...(quote.lineItems.length === 0 ? ["Add at least one line item before preparing the approval link."] : []),
+    ...(includeContract && !hasContractData ? ["Add customer-facing contract notes or terms, or turn off contract inclusion."] : []),
+    ...(includeImages && productRenderings.length === 0 ? ["Add at least one visual, or turn off visual inclusion."] : []),
+  ];
+
+  const downloadPreview = async () => {
+    setIsGeneratingPreview(true);
+    try {
+      const previewQuote = {
+        ...quote,
+        esigIncludePricing: showPricing,
+        esigIncludeImages: includeImages,
+        esigIncludeContract: includeContract,
+        esigIncludeApprovalDrawing: false,
+        productRenderings: includeImages ? (existingProductRenderings || quote.productRenderings || []) : [],
+        coverPhoto: includeImages ? quote.coverPhoto : undefined,
+      };
+      const { generateSignedPDF } = await import('@/lib/generate-signed-pdf');
+      const pdf = await generateSignedPDF({
+        quote: previewQuote,
+        includeImages,
+        includePricing: showPricing,
+        includeContract,
+        includeApprovalDrawing: false,
+        groups: quote.groups || [],
+      });
+      const url = URL.createObjectURL(pdf);
+      const link = document.createElement('a');
+      const projectName = quote.projectName || 'Project';
+      const quoteNumber = quote.quoteNumber || 'Quote';
+      link.href = url;
+      link.download = `${projectName.replace(/[^a-zA-Z0-9]/g, '_')}_${quoteNumber}_Proposal_Preview.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      toast({
+        title: 'Customer package downloaded',
+        description: 'This preview uses the same package renderer as the approval link and signed receipt.',
+      });
+    } catch (error: any) {
+      toast({
+        title: 'Preview could not be generated',
+        description: error?.message || 'Review the package contents and try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsGeneratingPreview(false);
+    }
+  };
 
   const handleGenerateLink = () => {
     generateSigningLinkMutation.mutate();
@@ -211,14 +261,14 @@ export function ESignatureOptionsModal({ quote, open, onOpenChange, onSuccess }:
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileText className="w-5 h-5" />
-            Proposal Approval Options
+            Customer Package Builder
           </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Customer Proposal Package</CardTitle>
+              <CardTitle className="text-lg">Package Contents</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center justify-between">
@@ -235,7 +285,7 @@ export function ESignatureOptionsModal({ quote, open, onOpenChange, onSuccess }:
                 <div className="flex flex-col">
                   <Label htmlFor="include-contract">Include Contract Notes & Terms</Label>
                   {!hasContractData && (
-                    <span className="text-xs text-gray-500 mt-1">No contract notes or terms available for this quote</span>
+                    <span className="text-xs text-muted-foreground mt-1">No contract notes or terms available for this quote</span>
                   )}
                 </div>
                 <Switch 
@@ -331,6 +381,18 @@ export function ESignatureOptionsModal({ quote, open, onOpenChange, onSuccess }:
             </Card>
           )}
 
+          {packageIssues.length > 0 && (
+            <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-900" data-testid="staff-package-issues">
+              <div className="flex items-center gap-2 font-semibold">
+                <AlertTriangle className="h-4 w-4" />
+                Finish the customer package
+              </div>
+              <ul className="mt-2 list-disc space-y-1 pl-5">
+                {packageIssues.map((issue) => <li key={issue}>{issue}</li>)}
+              </ul>
+            </div>
+          )}
+
           <div className="flex gap-3 justify-end">
             <Button 
               variant="outline" 
@@ -339,12 +401,21 @@ export function ESignatureOptionsModal({ quote, open, onOpenChange, onSuccess }:
             >
               Cancel
             </Button>
+            <Button
+              variant="outline"
+              onClick={downloadPreview}
+              disabled={isGeneratingPreview || isUploading || loadingRenderings || packageIssues.length > 0}
+              data-testid="button-download-customer-package"
+            >
+              {isGeneratingPreview ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+              {isGeneratingPreview ? 'Generating...' : 'Download Preview'}
+            </Button>
             <Button 
               onClick={handleGenerateLink}
-              disabled={generateSigningLinkMutation.isPending || isUploading}
+              disabled={generateSigningLinkMutation.isPending || isUploading || loadingRenderings || packageIssues.length > 0}
               data-testid="button-generate-signing-link"
             >
-              {generateSigningLinkMutation.isPending ? 'Generating...' : 'Prepare Approval Link'}
+              {generateSigningLinkMutation.isPending ? 'Preparing...' : 'Prepare Approval Link'}
             </Button>
           </div>
         </div>

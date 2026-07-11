@@ -42,11 +42,17 @@ jobs:
       - name: Run safety tests
         run: npm test
 
+      - name: Run isolated database tests
+        run: npm run test:database:isolated
+
       - name: Type-check
         run: npm run check
 
       - name: Build
         run: npm run build
+
+      - name: Audit responsive accessibility
+        run: npm run audit:browser:a11y
 
       - name: Cutover preflight sanity
         run: PREFLIGHT_HEALTH_URL=skip PREFLIGHT_SKIP_LOCAL_CHECKS=true npm run cutover:preflight

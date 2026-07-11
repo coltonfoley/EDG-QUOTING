@@ -30,7 +30,6 @@ import { extractQuoteDataFromImages, extractQuoteDataFromPDF, isOpenAIConfigured
 import { ObjectStorageService, getObjectStorageProvider } from "../objectStorage";
 import { nanoid } from "nanoid";
 import { buildAppUrl } from "../config";
-import { sendQuoteToOperations } from "../integrations/operations";
 import {
   ORDER_APPROVAL_SIGNATURE_CONSENT,
 } from "@shared/approvalDrawing";
@@ -38,11 +37,42 @@ import {
   buildPublicSigningQuote,
   createDocumentFingerprint,
   formatJobsiteAddress,
+  getCustomerPackageIssues,
   getClientIp,
   isArchivedQuoteVersion,
   sendArchivedQuoteResponse,
   shouldIncludeApprovalDrawingInPackage,
 } from "../quotePublicSigning";
+import {
+  QuoteChangedBeforeSignatureError,
+  QuoteSignedLockedError,
+  isCustomerApprovedQuote,
+  sendQuoteChangedBeforeSignatureResponse,
+  sendQuoteSignedLockResponse,
+} from "../quoteLock";
+import { executeQuoteImport, QuoteImportError, quoteImportRequestSchema } from "../quoteImport";
+import { createQuoteFromInquiry, InquiryConversionError } from "../inquiryConversion";
+import { redactedErrorType, validationIssueSummary } from "../redactedLogging";
+import { EmailIdempotencyError, requireEmailIdempotencyKey } from "../emailDelivery";
+import { deliverQuoteSignatureConfirmation } from "../quoteSignatureConfirmation";
+
+function sendCustomerPackageIncompleteResponse(
+  res: { status(code: number): { json(body: unknown): unknown } },
+  quote: any,
+): boolean {
+  const issues = getCustomerPackageIssues(quote);
+  if (issues.length === 0) return false;
+  console.warn("Customer package validation blocked approval", {
+    quoteId: quote?.id ?? null,
+    issueCodes: issues.map((issue) => issue.code),
+  });
+  res.status(409).json({
+    message: "This customer package is incomplete. Resolve the listed items before requesting approval.",
+    code: "CUSTOMER_PACKAGE_INCOMPLETE",
+    issues,
+  });
+  return true;
+}
 
 const quotesQuerySchema = z.object({
   page: z.coerce.number().int().gte(1).optional(),
@@ -59,6 +89,22 @@ const uploadedQuotePdfImportSchema = z.object({
   filename: z.string().min(1).max(255),
   fileSize: z.number().int().positive().optional(),
 });
+
+async function rejectCustomerApprovedQuoteMutation(
+  res: { status(code: number): { json(body: unknown): unknown } },
+  quoteId: number,
+): Promise<boolean> {
+  const quote = await storage.getQuote(quoteId);
+  if (!quote) {
+    res.status(404).json({ message: "Quote not found" });
+    return true;
+  }
+  if (isCustomerApprovedQuote(quote)) {
+    sendQuoteSignedLockResponse(res, new QuoteSignedLockedError(quote.id));
+    return true;
+  }
+  return false;
+}
 
 function getMaxQuotePdfUploadBytes(): number {
   const configuredMb = Number(process.env.MAX_QUOTE_PDF_UPLOAD_MB || "");
@@ -286,169 +332,12 @@ const upload = multer({
   },
 });
 
-function parseFullName(fullName: string): { firstName: string; lastName: string } {
-  const trimmed = fullName.trim();
-  if (!trimmed) {
-    return { firstName: '', lastName: '' };
-  }
-  
-  const parts = trimmed.split(/\s+/);
-  if (parts.length === 1) {
-    return { firstName: parts[0], lastName: '' };
-  } else if (parts.length === 2) {
-    return { firstName: parts[0], lastName: parts[1] };
-  } else {
-    return { firstName: parts[0], lastName: parts.slice(1).join(' ') };
-  }
-}
-
-async function handleCustomerAttachment(
-  customerData: { 
-    name?: string | null; 
-    email?: string | null; 
-    phone?: string | null; 
-    company?: string | null; 
-    address?: string | null;
-    streetAddress?: string | null;
-    addressLine2?: string | null;
-    city?: string | null;
-    state?: string | null;
-    zipCode?: string | null;
-    country?: string | null;
-  },
-  attachCustomer: 'auto' | 'none' | 'match_only',
-  existingCustomerId?: number
-): Promise<{ accountId: number | null; wasCreated: boolean }> {
-  if (attachCustomer === 'none') {
-    return { accountId: null, wasCreated: false };
-  }
-
-  const hasContactInfo = !!(
-    (customerData.name && customerData.name.trim()) || 
-    (customerData.email && customerData.email.trim()) || 
-    (customerData.phone && customerData.phone.trim())
-  );
-  const hasCompanyOnly = !hasContactInfo && customerData.company && customerData.company.trim();
-
-  if (hasCompanyOnly && attachCustomer === 'auto') {
-    console.log('Company-only import detected, checking for existing company match');
-    
-    const accounts = await storage.getAllAccounts();
-    const existingByCompany = accounts.find(acc => {
-      const isPlaceholder = acc.name === 'Unnamed Client' && (!acc.email || !acc.email.trim()) && (!acc.phone || !acc.phone.trim());
-      const companyMatches = acc.company && acc.company.toLowerCase().trim() === customerData.company?.toLowerCase().trim();
-      return !isPlaceholder && companyMatches;
-    });
-
-    if (existingByCompany) {
-      console.log(`Found existing company match: ${existingByCompany.name} (ID: ${existingByCompany.id})`);
-      return { accountId: existingByCompany.id, wasCreated: false };
-    }
-
-    console.log('No existing company found, creating new account');
-    const clientData = {
-      name: customerData.company!.trim(),
-      firstName: undefined,
-      lastName: undefined,
-      email: `import_${Date.now()}@example.com`,
-      phone: '',
-      company: customerData.company || undefined,
-      accountType: 'commercial' as const,
-      paymentTerms: 'net_30' as const,
-      billingAddress: customerData.address || undefined,
-      streetAddress: customerData.streetAddress || undefined,
-      addressLine2: customerData.addressLine2 || undefined,
-      city: customerData.city || undefined,
-      state: customerData.state || undefined,
-      zipCode: customerData.zipCode || undefined,
-      country: customerData.country || undefined,
-    };
-
-    const newClient = await storage.createClient(clientData, {
-      allowDuplicate: true,
-      updateIfExists: false
-    });
-    return { accountId: newClient.id, wasCreated: true };
-  }
-
-  let existingAccount = null;
-  if (customerData.email && customerData.email.trim()) {
-    existingAccount = await storage.getAccountByEmail(customerData.email);
-  }
-  
-  if (!existingAccount && customerData.name && customerData.name.trim()) {
-    const accounts = await storage.getAllAccounts();
-    existingAccount = accounts.find(acc => {
-      const isPlaceholder = acc.name === 'Unnamed Client' && (!acc.email || !acc.email.trim()) && (!acc.phone || !acc.phone.trim());
-      return !isPlaceholder && acc.name.toLowerCase().trim() === (customerData.name?.toLowerCase().trim() || '');
-    });
-  }
-
-  if (existingAccount) {
-    const isPlaceholder = existingAccount.name === 'Unnamed Client' && 
-                         (!existingAccount.email || !existingAccount.email.trim()) && 
-                         (!existingAccount.phone || !existingAccount.phone.trim());
-    
-    if (isPlaceholder) {
-      console.log(`Skipping placeholder account ${existingAccount.id}, will create new account instead`);
-      existingAccount = null;
-    } else {
-      console.log(`Found existing account match: ${existingAccount.name} (ID: ${existingAccount.id})`);
-      return { accountId: existingAccount.id, wasCreated: false };
-    }
-  }
-
-  if (attachCustomer === 'match_only') {
-    return { accountId: null, wasCreated: false };
-  }
-
-  if (attachCustomer === 'auto') {
-    let firstName = (customerData as any).firstName || '';
-    let lastName = (customerData as any).lastName || '';
-    
-    if (!firstName && !lastName && customerData.name) {
-      const parsed = parseFullName(customerData.name);
-      firstName = parsed.firstName;
-      lastName = parsed.lastName;
-    }
-    
-    const name = customerData.name || `${firstName} ${lastName}`.trim() || 'Unnamed Client';
-    
-    const clientData = {
-      name,
-      firstName: firstName || undefined,
-      lastName: lastName || undefined,
-      email: customerData.email || `import_${Date.now()}@example.com`,
-      phone: customerData.phone || '',
-      company: customerData.company || undefined,
-      accountType: 'homeowner' as const,
-      paymentTerms: 'net_30' as const,
-      billingAddress: customerData.address || undefined,
-      streetAddress: customerData.streetAddress || undefined,
-      addressLine2: customerData.addressLine2 || undefined,
-      city: customerData.city || undefined,
-      state: customerData.state || undefined,
-      zipCode: customerData.zipCode || undefined,
-      country: customerData.country || undefined,
-    };
-
-    console.log('Creating new client for import (unified model):', clientData);
-    const newClient = await storage.createClient(clientData, {
-      allowDuplicate: false,
-      updateIfExists: true
-    });
-    return { accountId: newClient.id, wasCreated: true };
-  }
-
-  return { accountId: null, wasCreated: false };
-}
-
 async function upsertAccountFromHint(customerCreate: NonNullable<CreateQuoteBody['customerCreate']>) {
   try {
     if (customerCreate.email) {
       const existingAccount = await storage.getAccountByEmail(customerCreate.email);
       if (existingAccount) {
-        console.log(`Found existing account by email: ${customerCreate.email}`);
+        console.log("Matched existing account for quote import", { accountId: existingAccount.id });
         return existingAccount;
       }
     }
@@ -463,7 +352,7 @@ async function upsertAccountFromHint(customerCreate: NonNullable<CreateQuoteBody
       billingAddress: undefined,
     };
     
-    console.log('Creating new account from customer hint:', accountData);
+    console.log("Creating account from quote customer hint");
     const newAccount = await storage.createAccount(accountData);
     return newAccount;
   } catch (error) {
@@ -530,8 +419,7 @@ export function registerQuoteRoutes(app: Express) {
 
   app.post("/api/quotes", isAuthenticated, async (req, res) => {
     try {
-      console.log("Quote creation request body:", JSON.stringify(req.body, null, 2));
-      const { accountId, customerCreate, ...baseQuoteData } = createQuoteSchema.parse(req.body);
+      const { accountId, sourceInquiryId, customerCreate, ...baseQuoteData } = createQuoteSchema.parse(req.body);
       
       let resolvedAccountId = accountId ?? null;
 
@@ -544,6 +432,7 @@ export function registerQuoteRoutes(app: Express) {
       const quoteData: InsertQuote = {
         ...baseQuoteData,
         accountId: resolvedAccountId,
+        sourceInquiryId: sourceInquiryId ?? null,
         quoteNumber: `Q-${Date.now()}`,
         taxRate: baseQuoteData.taxRate ?? "0",
         discount: baseQuoteData.discount ?? "0",
@@ -554,12 +443,21 @@ export function registerQuoteRoutes(app: Express) {
         esigIncludeApprovalDrawing: false,
       };
       
-      const quote = await storage.createQuote(quoteData);
+      const quote = sourceInquiryId
+        ? await createQuoteFromInquiry(
+            { ...quoteData, sourceInquiryId },
+            typeof (req as any).user?.id === "number" ? (req as any).user.id : undefined,
+          )
+        : await storage.createQuote(quoteData);
       res.status(201).json(quote);
     } catch (error: any) {
+      if (sendQuoteSignedLockResponse(res, error)) return;
       if (error instanceof z.ZodError) {
-        console.error("Quote validation errors:", JSON.stringify(error.errors, null, 2));
+        console.error("Quote validation failed", validationIssueSummary(error));
         return res.status(400).json({ message: "Invalid quote data", errors: error.errors });
+      }
+      if (error instanceof InquiryConversionError) {
+        return res.status(error.status).json({ message: error.message, code: error.code });
       }
       
       if (error.message?.includes("already exists") || error.message?.includes("Unable to generate unique quote number")) {
@@ -748,7 +646,9 @@ export function registerQuoteRoutes(app: Express) {
         return;
       }
 
-      console.log(`📄 Processing PDF directly with GPT-5: ${file.originalname} (${(file.size / 1024 / 1024).toFixed(2)}MB)`);
+      console.log("Processing quote PDF with configured extraction service", {
+        sizeMb: Number((file.size / 1024 / 1024).toFixed(2)),
+      });
 
       const extractedQuote = await extractQuoteDataFromPDF(file.buffer);
       
@@ -759,7 +659,7 @@ export function registerQuoteRoutes(app: Express) {
         });
       }
 
-      console.log(`✅ Quote data extracted from ${file.originalname}`);
+      console.log("Quote data extraction completed");
 
       res.status(200).json({
         success: true,
@@ -866,328 +766,36 @@ export function registerQuoteRoutes(app: Express) {
 
   app.post("/api/quotes/import-batch", isAuthenticated, async (req: any, res) => {
     try {
-      const importData = z.object({
-        importOptions: z.object({
-          createNewQuote: z.boolean(),
-          combineIntoSingleQuote: z.boolean(),
-          existingQuoteId: z.number().optional(),
-          attachCustomer: z.enum(['auto', 'none', 'match_only']).default('match_only'),
-          existingCustomerId: z.number().optional(),
-        }),
-        extractedQuotes: z.array(z.object({
-          pdfId: z.string(),
-          filename: z.string(),
-          customer: z.object({
-            name: z.string().nullable().optional(),
-            email: z.string().nullable().optional(),
-            phone: z.string().nullable().optional(),
-            company: z.string().nullable().optional(),
-            address: z.string().nullable().optional(),
-            streetAddress: z.string().nullable().optional(),
-            addressLine2: z.string().nullable().optional(),
-            city: z.string().nullable().optional(),
-            state: z.string().nullable().optional(),
-            zipCode: z.string().nullable().optional(),
-            country: z.string().nullable().optional(),
-          }),
-          quoteNumber: z.string().nullable().optional(),
-          date: z.string().nullable().optional(),
-          projectDescription: z.string().nullable().optional(),
-          lineItems: z.array(z.object({
-            description: z.string().nullable().optional(),
-            quantity: z.number().nullable().optional(),
-            price: z.number().nullable().optional(),
-            total: z.number().nullable().optional(),
-            unit: z.string().nullable().optional(),
-          })),
-          subtotal: z.number().nullable().optional(),
-          taxRate: z.number().nullable().optional(),
-          taxAmount: z.number().nullable().optional(),
-          discountAmount: z.number().nullable().optional(),
-          total: z.number().nullable().optional(),
-          notes: z.string().nullable().optional(),
-          terms: z.string().nullable().optional(),
-        }))
-      }).parse(req.body);
-
-      const results: {
-        success: boolean;
-        imported: Array<{
-          pdfId: string;
-          quoteId: number;
-          quoteNumber: string;
-          lineItemsAdded: number;
-          action: 'created' | 'added_to_existing';
-        }>;
-        errors: Array<{
-          pdfId: string;
-          filename: string;
-          error: string;
-        }>;
-        summary: {
-          quotesCreated: number;
-          lineItemsAdded: number;
-          customersCreated: number;
-          failed: number;
-        };
-      } = {
-        success: true,
-        imported: [],
-        errors: [],
-        summary: {
-          quotesCreated: 0,
-          lineItemsAdded: 0,
-          customersCreated: 0,
-          failed: 0
-        }
-      };
-
-      if (importData.importOptions.createNewQuote && importData.importOptions.combineIntoSingleQuote && importData.extractedQuotes.length > 1) {
-        try {
-          const firstQuote = importData.extractedQuotes[0];
-          const { accountId, wasCreated } = await handleCustomerAttachment(
-            firstQuote.customer,
-            importData.importOptions.attachCustomer,
-            importData.importOptions.existingCustomerId
-          );
-          
-          if (wasCreated) {
-            results.summary.customersCreated++;
-          }
-
-          const combinedDescription = importData.extractedQuotes
-            .map(q => q.projectDescription)
-            .filter(desc => desc && desc.trim())
-            .join(' | ');
-
-          const combinedFilenames = importData.extractedQuotes.map(q => q.filename).join(', ');
-
-          const quoteData: InsertQuote = {
-            quoteNumber: firstQuote.quoteNumber || `COMBINED-${Date.now()}`,
-            accountId: accountId,
-            projectName: combinedDescription || `Combined Import: ${combinedFilenames}`,
-            jobsiteStreetAddress: firstQuote.customer.streetAddress || undefined,
-            jobsiteAddressLine2: firstQuote.customer.addressLine2 || undefined,
-            jobsiteCity: firstQuote.customer.city || undefined,
-            jobsiteState: firstQuote.customer.state || undefined,
-            jobsiteZipCode: firstQuote.customer.zipCode || undefined,
-            jobsiteCountry: firstQuote.customer.country || undefined,
-            estimatedStartDate: firstQuote.date || new Date().toISOString().split('T')[0],
-            notes: `Combined import from ${importData.extractedQuotes.length} PDFs: ${combinedFilenames}`,
-            taxRate: '0',
-            tariffRate: '0',
-            discount: '0',
-            shipping: '0',
-            isShippingTaxable: false,
-            dealStage: 'new_lead' as const,
-            esigIncludeApprovalDrawing: false
-          };
-
-          const newQuote = await storage.createQuote(quoteData);
-          results.summary.quotesCreated++;
-          console.log(`✅ Created combined quote: ${newQuote.quoteNumber} (ID: ${newQuote.id})`);
-
-          let totalLineItemsAdded = 0;
-          for (const extractedQuote of importData.extractedQuotes) {
-            if (extractedQuote.lineItems && extractedQuote.lineItems.length > 0) {
-              for (const lineItem of extractedQuote.lineItems) {
-                if (lineItem.description && lineItem.price && lineItem.quantity) {
-                  const lineItemData = {
-                    quoteId: newQuote.id,
-                    description: `[${extractedQuote.filename}] ${lineItem.description}`,
-                    quantity: lineItem.quantity.toString(),
-                    unitPrice: lineItem.price.toString(),
-                    markupType: 'percentage' as const,
-                    markupValue: '0',
-                    discountType: 'percentage' as const,
-                    discountValue: '0',
-                    position: totalLineItemsAdded
-                  };
-
-                  await storage.createLineItem(lineItemData);
-                  totalLineItemsAdded++;
-                }
-              }
-            }
-
-            results.imported.push({
-              pdfId: extractedQuote.pdfId,
-              quoteId: newQuote.id,
-              quoteNumber: newQuote.quoteNumber,
-              lineItemsAdded: extractedQuote.lineItems?.length || 0,
-              action: 'created'
-            });
-          }
-          
-          results.summary.lineItemsAdded += totalLineItemsAdded;
-          console.log(`✅ Added ${totalLineItemsAdded} combined line items to quote ${newQuote.quoteNumber}`);
-
-        } catch (error: any) {
-          console.error('❌ Error in combined import:', error);
-          importData.extractedQuotes.forEach(quote => {
-            results.errors.push({
-              pdfId: quote.pdfId,
-              filename: quote.filename,
-              error: `Combined import failed: ${error.message}`
-            });
-          });
-          results.summary.failed += importData.extractedQuotes.length;
-        }
-
-        const totalProcessed = results.imported.length + results.errors.length;
-        console.log(`📊 Combined import completed: ${results.summary.quotesCreated} quotes created, ${results.summary.lineItemsAdded} line items added, ${results.summary.customersCreated} customers created, ${results.summary.failed} failed`);
-        
-        return res.json(results);
-      }
-
-      for (const extractedQuote of importData.extractedQuotes) {
-        try {
-          const { accountId, wasCreated } = await handleCustomerAttachment(
-            extractedQuote.customer,
-            importData.importOptions.attachCustomer,
-            importData.importOptions.existingCustomerId
-          );
-          
-          if (wasCreated) {
-            results.summary.customersCreated++;
-          }
-
-          if (importData.importOptions.createNewQuote) {
-            const quoteData: InsertQuote = {
-              quoteNumber: extractedQuote.quoteNumber || `IMP-${Date.now()}`,
-              accountId: accountId,
-              projectName: extractedQuote.projectDescription || `Imported from ${extractedQuote.filename}`,
-              jobsiteStreetAddress: extractedQuote.customer.streetAddress || undefined,
-              jobsiteAddressLine2: extractedQuote.customer.addressLine2 || undefined,
-              jobsiteCity: extractedQuote.customer.city || undefined,
-              jobsiteState: extractedQuote.customer.state || undefined,
-              jobsiteZipCode: extractedQuote.customer.zipCode || undefined,
-              jobsiteCountry: extractedQuote.customer.country || undefined,
-              estimatedStartDate: extractedQuote.date || new Date().toISOString().split('T')[0],
-              notes: extractedQuote.notes ? `Imported from PDF: ${extractedQuote.filename}\n\n${extractedQuote.notes}` : `Imported from PDF: ${extractedQuote.filename}`,
-              taxRate: extractedQuote.taxRate?.toString() || '0',
-              tariffRate: '0',
-              discount: '0',
-              shipping: '0',
-              isShippingTaxable: false,
-              dealStage: 'new_lead' as const,
-              esigIncludeApprovalDrawing: false
-            };
-
-            const newQuote = await storage.createQuote(quoteData);
-            results.summary.quotesCreated++;
-            console.log(`✅ Created new quote: ${newQuote.quoteNumber} (ID: ${newQuote.id})`);
-
-            let lineItemsAdded = 0;
-            if (extractedQuote.lineItems && extractedQuote.lineItems.length > 0) {
-              for (const lineItem of extractedQuote.lineItems) {
-                if (lineItem.description && lineItem.price && lineItem.quantity) {
-                  const lineItemData = {
-                    quoteId: newQuote.id,
-                    description: lineItem.description,
-                    quantity: lineItem.quantity.toString(),
-                    unitPrice: lineItem.price.toString(),
-                    markupType: 'percentage' as const,
-                    markupValue: '0',
-                    discountType: 'percentage' as const,
-                    discountValue: '0',
-                    position: lineItemsAdded
-                  };
-
-                  await storage.createLineItem(lineItemData);
-                  lineItemsAdded++;
-                }
-              }
-            }
-            
-            results.summary.lineItemsAdded += lineItemsAdded;
-            results.imported.push({
-              pdfId: extractedQuote.pdfId,
-              quoteId: newQuote.id,
-              quoteNumber: newQuote.quoteNumber,
-              lineItemsAdded,
-              action: 'created'
-            });
-            
-            console.log(`✅ Added ${lineItemsAdded} line items to quote ${newQuote.quoteNumber}`);
-          } else {
-            if (!importData.importOptions.existingQuoteId) {
-              throw new Error('Existing quote ID required when not creating new quotes');
-            }
-
-            const existingQuote = await storage.getQuote(importData.importOptions.existingQuoteId);
-            if (!existingQuote) {
-              throw new Error('Specified existing quote not found');
-            }
-
-            const hasAccess = await storage.validateQuoteOwnership(importData.importOptions.existingQuoteId, req.user?.id);
-            if (!hasAccess) {
-              throw new Error('Access denied to the specified quote');
-            }
-
-            let lineItemsAdded = 0;
-            if (extractedQuote.lineItems && extractedQuote.lineItems.length > 0) {
-              for (const lineItem of extractedQuote.lineItems) {
-                if (lineItem.description && lineItem.price && lineItem.quantity) {
-                  const lineItemData = {
-                    quoteId: importData.importOptions.existingQuoteId,
-                    description: lineItem.description,
-                    quantity: lineItem.quantity.toString(),
-                    unitPrice: lineItem.price.toString(),
-                    markupType: 'percentage' as const,
-                    markupValue: '0',
-                    discountType: 'percentage' as const,
-                    discountValue: '0',
-                    position: lineItemsAdded
-                  };
-
-                  await storage.createLineItem(lineItemData);
-                  lineItemsAdded++;
-                }
-              }
-            }
-
-            results.summary.lineItemsAdded += lineItemsAdded;
-            results.imported.push({
-              pdfId: extractedQuote.pdfId,
-              quoteId: importData.importOptions.existingQuoteId,
-              quoteNumber: existingQuote.quoteNumber,
-              lineItemsAdded,
-              action: 'added_to_existing'
-            });
-
-            console.log(`✅ Added ${lineItemsAdded} line items to existing quote ${existingQuote.quoteNumber}`);
-          }
-
-        } catch (error: any) {
-          console.error(`❌ Failed to import PDF ${extractedQuote.filename}:`, error);
-          results.summary.failed++;
-          results.errors.push({
-            pdfId: extractedQuote.pdfId,
-            filename: extractedQuote.filename,
-            error: error.message || 'Unknown error occurred'
-          });
-        }
-      }
-
-      console.log(`📊 Import completed: ${results.summary.quotesCreated} quotes created, ${results.summary.lineItemsAdded} line items added, ${results.summary.customersCreated} customers created, ${results.summary.failed} failed`);
-
-      res.status(200).json(results);
-
+      const importData = quoteImportRequestSchema.parse(req.body);
+      const results = await executeQuoteImport(importData, getActorUserId(req) ?? undefined);
+      res.status(201).json(results);
     } catch (error: any) {
-      console.error("Batch import error:", error);
-      
       if (error instanceof z.ZodError) {
-        return res.status(400).json({ 
+        return res.status(400).json({
           success: false,
-          message: "Invalid import data", 
-          errors: error.errors 
+          message: "Review the import data and required selections.",
+          code: "IMPORT_INVALID",
+          errors: error.errors,
         });
       }
-      
-      res.status(500).json({ 
+      if (error instanceof QuoteSignedLockedError) {
+        return sendQuoteSignedLockResponse(res, error);
+      }
+      if (error instanceof QuoteImportError) {
+        return res.status(error.status).json({
+          success: false,
+          message: error.message,
+          code: error.code,
+        });
+      }
+      console.error("Batch quote import failed", {
+        errorName: error?.name || "Error",
+        errorCode: error?.code || null,
+      });
+      res.status(500).json({
         success: false,
-        message: "Internal server error during import" 
+        message: "The import failed before any records were saved.",
+        code: "IMPORT_FAILED",
       });
     }
   });
@@ -1202,7 +810,6 @@ export function registerQuoteRoutes(app: Express) {
         });
       }
       
-      console.log("Raw request body:", JSON.stringify(req.body, null, 2));
       const parsedData = updateQuoteSchema.parse(req.body);
       
       // Filter out undefined values to prevent accidentally overwriting existing data
@@ -1223,6 +830,10 @@ export function registerQuoteRoutes(app: Express) {
         return res.status(404).json({ message: "Quote not found" });
       }
 
+      if (isCustomerApprovedQuote(originalQuote)) {
+        return sendQuoteSignedLockResponse(res, new QuoteSignedLockedError(originalQuote.id));
+      }
+
       if (isArchivedQuoteVersion(originalQuote)) {
         if (quoteData.enableESignature === true) {
           return sendArchivedQuoteResponse(res, "prepare it for customer approval");
@@ -1240,8 +851,9 @@ export function registerQuoteRoutes(app: Express) {
       
       res.json(quote);
     } catch (error: any) {
+      if (sendQuoteSignedLockResponse(res, error)) return;
       if (error instanceof z.ZodError) {
-        console.error("Quote validation errors:", JSON.stringify(error.errors, null, 2));
+        console.error("Quote update validation failed", validationIssueSummary(error));
         return res.status(400).json({ message: "Invalid quote data", errors: error.errors });
       }
       
@@ -1296,12 +908,13 @@ export function registerQuoteRoutes(app: Express) {
         return sendArchivedQuoteResponse(res, "change its pipeline stage");
       }
       
-      const updateData: any = { dealStage: deal_stage };
-      if (lost_reason) {
-        updateData.lostReason = lost_reason;
-      }
+      const updateData: any = {
+        dealStage: deal_stage,
+        lostReason: deal_stage === 'closed_lost' ? lost_reason : null,
+        ...(existingQuote.dealStage !== deal_stage ? { dealStageChangedAt: new Date() } : {}),
+      };
       
-      const quote = await storage.updateQuote(params.data.id, updateData);
+      const quote = await storage.updateQuote(params.data.id, updateData, { mutationKind: "pipeline_stage" });
       if (!quote) {
         return res.status(404).json({ message: "Quote not found" });
       }
@@ -1310,40 +923,6 @@ export function registerQuoteRoutes(app: Express) {
       res.json(quote);
     } catch (error) {
       console.error("Error updating quote stage:", error);
-      res.status(500).json({ message: "Internal server error" });
-    }
-  });
-
-  app.post("/api/quotes/:id/send-to-ops", isAuthenticated, async (req, res) => {
-    try {
-      const params = idParamSchema.safeParse(req.params);
-      if (!params.success) {
-        return res.status(400).json({
-          message: "Invalid request parameters",
-          errors: params.error.errors,
-        });
-      }
-
-      const quote = await storage.getQuoteWithDetails(params.data.id);
-      if (!quote) {
-        return res.status(404).json({ message: "Quote not found" });
-      }
-
-      if (isArchivedQuoteVersion(quote)) {
-        return sendArchivedQuoteResponse(res, "send it to Ops");
-      }
-
-      const result = await sendQuoteToOperations(params.data.id, {
-        dryRun: req.body?.dryRun === true,
-      });
-
-      if (!result.success) {
-        return res.status(result.status && result.status >= 400 ? result.status : 502).json(result);
-      }
-
-      res.json(result);
-    } catch (error) {
-      console.error("Error sending quote to Ops:", error);
       res.status(500).json({ message: "Internal server error" });
     }
   });
@@ -1364,6 +943,7 @@ export function registerQuoteRoutes(app: Express) {
       }
       res.status(204).send();
     } catch (error) {
+      if (sendQuoteSignedLockResponse(res, error)) return;
       res.status(500).json({ message: "Internal server error" });
     }
   });
@@ -1383,7 +963,7 @@ export function registerQuoteRoutes(app: Express) {
         return res.status(404).json({ message: "Original quote not found" });
       }
 
-      const newVersion = await storage.createQuoteVersion(params.data.id);
+      const newVersion = await storage.createQuoteVersion(params.data.id, getActorUserId(req));
       
       console.log(`✅ Created version ${newVersion.versionNumber} of quote ${params.data.id}`);
       res.status(201).json(newVersion);
@@ -1420,7 +1000,7 @@ export function registerQuoteRoutes(app: Express) {
     }
   });
 
-  app.post("/api/quotes/:id/use-version", isAuthenticated, async (req, res) => {
+  app.post("/api/quotes/:id/use-version", isAuthenticated, requireAdmin, async (req, res) => {
     try {
       const params = idParamSchema.safeParse(req.params);
       if (!params.success) {
@@ -1435,7 +1015,7 @@ export function registerQuoteRoutes(app: Express) {
         return res.status(404).json({ message: "Quote not found" });
       }
 
-      const updatedQuote = await storage.setCurrentQuoteVersion(params.data.id);
+      const updatedQuote = await storage.setCurrentQuoteVersion(params.data.id, getActorUserId(req));
       if (!updatedQuote) {
         return res.status(404).json({ message: "Quote not found" });
       }
@@ -1514,6 +1094,10 @@ export function registerQuoteRoutes(app: Express) {
         return res.status(404).json({ message: "Quote not found" });
       }
 
+      if (isCustomerApprovedQuote(quote)) {
+        return sendQuoteSignedLockResponse(res, new QuoteSignedLockedError(quote.id));
+      }
+
       if (isArchivedQuoteVersion(quote)) {
         return sendArchivedQuoteResponse(res, "edit its order approval drawing");
       }
@@ -1530,6 +1114,7 @@ export function registerQuoteRoutes(app: Express) {
       }, actorUserId);
       res.json(updated);
     } catch (error: any) {
+      if (sendQuoteSignedLockResponse(res, error)) return;
       console.error("Error updating approval drawing:", error);
       res.status(error.message?.includes("frozen") ? 409 : 500).json({ message: error.message || "Internal server error" });
     }
@@ -1674,6 +1259,10 @@ export function registerQuoteRoutes(app: Express) {
         return res.status(404).json({ message: "Quote not found" });
       }
 
+      if (isCustomerApprovedQuote(quote)) {
+        return sendQuoteSignedLockResponse(res, new QuoteSignedLockedError(quote.id));
+      }
+
       if (isArchivedQuoteVersion(quote)) {
         return sendArchivedQuoteResponse(res, "prepare it for customer approval");
       }
@@ -1684,6 +1273,14 @@ export function registerQuoteRoutes(app: Express) {
       const esigIncludeImages = req.body.esigIncludeImages ?? false;
       const esigIncludeContract = req.body.esigIncludeContract ?? true;
       const esigIncludeApprovalDrawing = false;
+
+      if (sendCustomerPackageIncompleteResponse(res, {
+        ...quote,
+        esigIncludePricing,
+        esigIncludeImages,
+        esigIncludeContract,
+        esigIncludeApprovalDrawing,
+      })) return;
       
       const updatedQuote = await storage.updateQuote(params.data.id, {
         enableESignature: true,
@@ -1692,6 +1289,9 @@ export function registerQuoteRoutes(app: Express) {
         esigIncludeImages,
         esigIncludeContract,
         esigIncludeApprovalDrawing,
+      }, {
+        mutationKind: "package_preparation",
+        actorUserId: getActorUserId(req),
       });
 
       res.json({ 
@@ -1701,6 +1301,7 @@ export function registerQuoteRoutes(app: Express) {
         approvalDrawingIncluded: false,
       });
     } catch (error) {
+      if (sendQuoteSignedLockResponse(res, error)) return;
       console.error("Error enabling e-signature:", error);
       res.status(500).json({ message: "Internal server error" });
     }
@@ -1715,10 +1316,15 @@ export function registerQuoteRoutes(app: Express) {
           errors: params.error.errors 
         });
       }
+      const idempotencyKey = requireEmailIdempotencyKey(req.get("Idempotency-Key"));
 
       const quote = await storage.getQuoteWithDetails(params.data.id);
       if (!quote) {
         return res.status(404).json({ message: "Quote not found" });
+      }
+
+      if (isCustomerApprovedQuote(quote)) {
+        return sendQuoteSignedLockResponse(res, new QuoteSignedLockedError(quote.id));
       }
 
       if (isArchivedQuoteVersion(quote)) {
@@ -1728,6 +1334,8 @@ export function registerQuoteRoutes(app: Express) {
       if (!quote.enableESignature || !quote.signingToken) {
         return res.status(400).json({ message: "E-signature must be enabled first" });
       }
+
+      if (sendCustomerPackageIncompleteResponse(res, quote)) return;
 
       const approvalDrawingForPackage = shouldIncludeApprovalDrawingInPackage(quote)
         ? quote.approvalDrawing
@@ -1748,6 +1356,38 @@ export function registerQuoteRoutes(app: Express) {
         return res.status(400).json({ message: "Customer email not found" });
       }
 
+      const deliveryClaim = await storage.claimEmailDelivery({
+        idempotencyKey,
+        messageType: "quote_signature_request",
+        quoteId: quote.id,
+      });
+      if (deliveryClaim.outcome === "conflict") {
+        throw new EmailIdempotencyError(
+          409,
+          "EMAIL_IDEMPOTENCY_CONFLICT",
+          "That email action key was already used for a different operation. Refresh Rainmaker and try again.",
+        );
+      }
+      if (deliveryClaim.outcome === "in_progress") {
+        throw new EmailIdempotencyError(
+          409,
+          "EMAIL_DELIVERY_IN_PROGRESS",
+          "This email action is already being processed. Check the quote before trying again.",
+        );
+      }
+      if (deliveryClaim.outcome === "sent") {
+        const sentAt = deliveryClaim.attempt?.sentAt ?? quote.signatureEmailSentAt ?? new Date();
+        return res.json({
+          success: true,
+          message: `E-signature email was already sent to ${quote.account.email}`,
+          sentAt: sentAt.toISOString(),
+          replayed: true,
+        });
+      }
+      if (!deliveryClaim.attempt) {
+        throw new Error("Email delivery claim did not return an attempt record");
+      }
+
       const { sendEmail } = await import("../email");
 
       // Load logo for email
@@ -1756,7 +1396,7 @@ export function registerQuoteRoutes(app: Express) {
       try {
         logoBase64 = fs.readFileSync(logoPath).toString('base64');
       } catch (e) {
-        console.warn('Could not load logo for email:', e);
+        console.warn("Could not load logo for email", { errorType: redactedErrorType(e) });
       }
 
       // Get optional personalized message from request body
@@ -1834,36 +1474,61 @@ export function registerQuoteRoutes(app: Express) {
         </html>
       `;
 
-      await sendEmail({
-        to: quote.account.email,
-        subject: `EDG Patio & Shade - Quote #${quote.quoteNumber}${quote.projectName ? ` for ${quote.projectName}` : ''} Ready for Your Signature`,
-        htmlBody,
-        inlineAttachments: logoBase64 ? [{
-          contentId: 'edg-logo',
-          base64Data: logoBase64,
-          mimeType: 'image/png',
-          filename: 'edg-logo.png'
-        }] : undefined
-      });
+      let providerResult: Awaited<ReturnType<typeof sendEmail>>;
+      try {
+        providerResult = await sendEmail({
+          to: quote.account.email,
+          subject: `EDG Patio & Shade - Quote #${quote.quoteNumber}${quote.projectName ? ` for ${quote.projectName}` : ''} Ready for Your Signature`,
+          htmlBody,
+          inlineAttachments: logoBase64 ? [{
+            contentId: 'edg-logo',
+            base64Data: logoBase64,
+            mimeType: 'image/png',
+            filename: 'edg-logo.png'
+          }] : undefined
+        });
+      } catch (emailError) {
+        try {
+          await storage.markEmailDeliveryFailed(deliveryClaim.attempt.id, redactedErrorType(emailError));
+        } catch (deliveryError) {
+          console.error("Could not record failed quote email delivery", {
+            quoteId: quote.id,
+            errorType: redactedErrorType(deliveryError),
+          });
+        }
+        throw emailError;
+      }
+
+      const sentAt = new Date();
+      const finalizedDelivery = await storage.markEmailDeliverySent(
+        deliveryClaim.attempt.id,
+        sentAt,
+        providerResult?.id ?? null,
+      );
+      if (!finalizedDelivery) {
+        throw new Error("Email delivery record could not be finalized");
+      }
 
       // Track when the email was sent and the personalized message
       // Always update the message field so it stays in sync with what was sent
       await storage.updateQuote(quote.id, {
-        signatureEmailSentAt: new Date(),
+        signatureEmailSentAt: sentAt,
         signatureEmailMessage: personalizedMessage || null, // Store null if cleared
-      });
+      }, { mutationKind: "signature_email" });
 
       res.json({ 
         success: true,
         message: `E-signature email sent to ${quote.account.email}`,
-        sentAt: new Date().toISOString()
+        sentAt: sentAt.toISOString(),
+        replayed: false,
       });
     } catch (error) {
-      console.error("Error sending signature email:", error);
-      res.status(500).json({ 
-        message: "Failed to send email", 
-        error: error instanceof Error ? error.message : "Unknown error" 
-      });
+      if (sendQuoteSignedLockResponse(res, error)) return;
+      if (error instanceof EmailIdempotencyError) {
+        return res.status(error.status).json({ message: error.message, code: error.code });
+      }
+      console.error("Error sending signature email", { errorType: redactedErrorType(error) });
+      res.status(500).json({ message: "Failed to send email" });
     }
   });
 
@@ -2031,6 +1696,9 @@ export function registerQuoteRoutes(app: Express) {
             auditEntry,
           ],
         },
+      }, {
+        mutationKind: "company_signature",
+        actorUserId: getActorUserId(req),
       });
 
       res.json({
@@ -2064,7 +1732,7 @@ export function registerQuoteRoutes(app: Express) {
         });
       }
 
-      const { signatureData, signerType } = bodyValidation.data;
+      const { signatureData, signerType, customerPackageFingerprint } = bodyValidation.data;
 
       if (signerType !== 'client') {
         return res.status(403).json({ message: "Company signatures must be submitted from the staff quote screen" });
@@ -2083,7 +1751,7 @@ export function registerQuoteRoutes(app: Express) {
         return res.status(403).json({ message: "E-signature not enabled for this quote" });
       }
 
-      if (quote.clientSignedAt) {
+      if (isCustomerApprovedQuote(quote)) {
         return res.status(409).json({ message: "Client signature has already been recorded" });
       }
 
@@ -2091,6 +1759,17 @@ export function registerQuoteRoutes(app: Express) {
         quote,
         () => storage.getQuoteBySigningToken(params.data.token),
       );
+
+      if (sendCustomerPackageIncompleteResponse(res, quoteForSignature)) return;
+
+      if (!customerPackageFingerprint) {
+        throw new QuoteChangedBeforeSignatureError(quoteForSignature.id);
+      }
+
+      const currentPackage = buildPublicSigningQuote(quoteForSignature);
+      if ((currentPackage as any).customerPackageFingerprint !== customerPackageFingerprint) {
+        throw new QuoteChangedBeforeSignatureError(quoteForSignature.id);
+      }
 
       const clientIp = getClientIp(req);
       const signedAt = new Date();
@@ -2130,6 +1809,9 @@ export function registerQuoteRoutes(app: Express) {
             auditEntry,
           ],
         },
+      }, {
+        mutationKind: "customer_signature",
+        expectedUpdatedAt: quoteForSignature.updatedAt,
       });
 
       const approvalDrawingForPackage = shouldIncludeApprovalDrawingInPackage(quoteForSignature)
@@ -2140,99 +1822,31 @@ export function registerQuoteRoutes(app: Express) {
         await storage.markQuoteApprovalDrawingSignedLocked(approvalDrawingForPackage.id, null);
       }
 
-      // Send confirmation email to client after they sign
       let emailSent = false;
-      if (signerType === 'client' && quoteForSignature.account?.email) {
+      if (signerType === "client" && quoteForSignature.account?.email) {
         try {
-          const { sendEmail } = await import("../email");
-          
           const customerName = quoteForSignature.account.firstName
-            ? `${quoteForSignature.account.firstName} ${quoteForSignature.account.lastName || ''}`.trim()
-            : quoteForSignature.account.name;
-
-          const downloadUrl = buildAppUrl(`/sign/${quoteForSignature.signingToken}`, req);
-
-          const signedDate = new Date().toLocaleString('en-US', {
-            weekday: 'long',
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric',
-            hour: 'numeric',
-            minute: '2-digit',
-            timeZoneName: 'short'
+            ? `${quoteForSignature.account.firstName} ${quoteForSignature.account.lastName || ""}`.trim()
+            : quoteForSignature.account.name || "Client";
+          const delivery = await deliverQuoteSignatureConfirmation({
+            ledger: storage,
+            quote: quoteForSignature,
+            recipient: quoteForSignature.account.email,
+            customerName,
+            signedAt,
+            documentFingerprint,
+            downloadUrl: buildAppUrl(`/sign/${quoteForSignature.signingToken}`, req),
           });
-
-          const htmlBody = `
-            <!DOCTYPE html>
-            <html>
-            <head>
-              <meta charset="utf-8">
-              <meta name="viewport" content="width=device-width, initial-scale=1.0">
-              <title>Signature Confirmation</title>
-            </head>
-            <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #1a1a1a; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9fafb;">
-              <div style="background-color: #059669; border-radius: 8px 8px 0 0; padding: 30px; margin-bottom: 0;">
-                <div style="text-align: center; margin-bottom: 15px;">
-                  <div style="display: inline-block; width: 60px; height: 60px; background-color: rgba(255,255,255,0.2); border-radius: 50%; line-height: 60px; font-size: 30px;">
-                    ✓
-                  </div>
-                </div>
-                <h1 style="color: #ffffff; margin: 0; font-size: 24px; text-align: center;">Document Signed Successfully</h1>
-              </div>
-              
-              <div style="background-color: #ffffff; border: 1px solid #e5e7eb; border-top: none; padding: 30px; margin-bottom: 20px;">
-                <p style="color: #1a1a1a; margin-top: 0;">Hello ${customerName},</p>
-                <p style="color: #4b5563;">Thank you for signing your quote. This email confirms that your electronic signature has been successfully recorded.</p>
-                
-                <div style="background-color: #f3f4f6; border-radius: 8px; padding: 20px; margin: 20px 0;">
-                  <h3 style="color: #1f2937; margin: 0 0 15px 0; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px;">Signature Details</h3>
-                  <table style="width: 100%; font-size: 14px;">
-                    <tr>
-                      <td style="padding: 5px 0; color: #6b7280;">Document:</td>
-                      <td style="padding: 5px 0; color: #1f2937; font-weight: 600;">${quoteForSignature.projectName || `Quote #${quoteForSignature.quoteNumber}`}</td>
-                    </tr>
-	                    <tr>
-	                      <td style="padding: 5px 0; color: #6b7280;">Quote Number:</td>
-	                      <td style="padding: 5px 0; color: #1f2937; font-weight: 600;">#${quoteForSignature.quoteNumber}</td>
-	                    </tr>
-                    <tr>
-                      <td style="padding: 5px 0; color: #6b7280;">Signed On:</td>
-                      <td style="padding: 5px 0; color: #1f2937; font-weight: 600;">${signedDate}</td>
-                    </tr>
-                    <tr>
-                      <td style="padding: 5px 0; color: #6b7280;">Signed By:</td>
-                      <td style="padding: 5px 0; color: #1f2937; font-weight: 600;">${customerName}</td>
-                    </tr>
-                  </table>
-                </div>
-
-                <div style="text-align: center; margin: 25px 0;">
-                  <a href="${downloadUrl}" style="display: inline-block; background-color: #000000; color: #ffffff; text-decoration: none; padding: 14px 30px; border-radius: 6px; font-weight: 600; font-size: 14px;">Download Signed Document</a>
-                </div>
-
-                <p style="color: #6b7280; font-size: 13px; text-align: center;">You can access your signed document at any time using the link above.</p>
-              </div>
-              
-              <div style="text-align: center; color: #6b7280; font-size: 12px; padding-top: 20px;">
-                <p style="margin: 5px 0; font-weight: 600; color: #1a1a1a;">EDG Patio & Shade</p>
-                <p style="margin: 5px 0;">1802 Holian Drive, Spring Grove, IL 60081</p>
-                <p style="margin: 5px 0;">Phone: +1 (815) 581-0138 | Email: info@edgpatioshade.com</p>
-                <p style="margin: 15px 0 5px 0; font-size: 11px; color: #9ca3af;">This is an automated confirmation. Please do not reply to this email.</p>
-              </div>
-            </body>
-            </html>
-          `;
-
-	          await sendEmail({
-	            to: quoteForSignature.account.email,
-	            subject: `Signature Confirmed: ${quoteForSignature.projectName || `Quote #${quoteForSignature.quoteNumber}`}`,
-	            htmlBody
-	          });
-
-	          emailSent = true;
-	          console.log(`Signature confirmation email sent to ${quoteForSignature.account.email}`);
+          emailSent = delivery.outcome === "sent" || delivery.outcome === "replayed";
+          if (!emailSent) {
+            console.warn("Signature confirmation email needs review", {
+              quoteId: quoteForSignature.id,
+              outcome: delivery.outcome,
+              errorType: delivery.errorType ?? null,
+            });
+          }
         } catch (emailError) {
-          console.error("Failed to send signature confirmation email:", emailError);
+          console.error("Failed to send signature confirmation email", { errorType: redactedErrorType(emailError) });
         }
       }
 
@@ -2242,6 +1856,7 @@ export function registerQuoteRoutes(app: Express) {
         emailSent
       });
     } catch (error: any) {
+      if (sendQuoteChangedBeforeSignatureResponse(res, error)) return;
       console.error("Error submitting signature:", error);
       res.status(error.status || 500).json({
         message: error.message || "Internal server error",
@@ -2260,9 +1875,9 @@ export function registerQuoteRoutes(app: Express) {
         });
       }
 
-      const hasAccess = await storage.validateQuoteOwnership(params.data.quoteId, req.user?.id);
-      if (!hasAccess) {
-        return res.status(403).json({ message: "Access denied" });
+      const quoteExists = await storage.quoteExists(params.data.quoteId);
+      if (!quoteExists) {
+        return res.status(404).json({ message: "Quote not found" });
       }
 
       const coverPhoto = await storage.getQuoteCoverPhoto(params.data.quoteId);
@@ -2287,9 +1902,9 @@ export function registerQuoteRoutes(app: Express) {
         });
       }
 
-      const hasAccess = await storage.validateQuoteOwnership(params.data.quoteId, req.user?.id);
-      if (!hasAccess) {
-        return res.status(403).json({ message: "Access denied" });
+      const quoteExists = await storage.quoteExists(params.data.quoteId);
+      if (!quoteExists) {
+        return res.status(404).json({ message: "Quote not found" });
       }
 
       const renderings = await storage.getQuoteProductRenderings(params.data.quoteId);
@@ -2310,15 +1925,17 @@ export function registerQuoteRoutes(app: Express) {
         });
       }
 
-      const hasAccess = await storage.validateQuoteOwnership(params.data.quoteId, req.user?.id);
-      if (!hasAccess) {
-        return res.status(403).json({ message: "Access denied" });
+      const quoteExists = await storage.quoteExists(params.data.quoteId);
+      if (!quoteExists) {
+        return res.status(404).json({ message: "Quote not found" });
       }
+      if (await rejectCustomerApprovedQuoteMutation(res, params.data.quoteId)) return;
 
       const photoData = createQuoteCoverPhotoSchema.parse({ ...req.body, quoteId: params.data.quoteId });
       const coverPhoto = await storage.createQuoteCoverPhoto(photoData);
       res.status(201).json(coverPhoto);
     } catch (error) {
+      if (sendQuoteSignedLockResponse(res, error)) return;
       console.error("Error creating quote cover photo:", error);
       if (error instanceof z.ZodError) {
         return res.status(400).json({ 
@@ -2340,15 +1957,17 @@ export function registerQuoteRoutes(app: Express) {
         });
       }
 
-      const hasAccess = await storage.validateQuoteOwnership(params.data.quoteId, req.user?.id);
-      if (!hasAccess) {
-        return res.status(403).json({ message: "Access denied" });
+      const quoteExists = await storage.quoteExists(params.data.quoteId);
+      if (!quoteExists) {
+        return res.status(404).json({ message: "Quote not found" });
       }
+      if (await rejectCustomerApprovedQuoteMutation(res, params.data.quoteId)) return;
 
       const renderingData = createQuoteProductRenderingSchema.parse({ ...req.body, quoteId: params.data.quoteId });
       const rendering = await storage.createQuoteProductRendering(renderingData);
       res.status(201).json(rendering);
     } catch (error) {
+      if (sendQuoteSignedLockResponse(res, error)) return;
       console.error("Error creating quote visual asset:", error);
       if (error instanceof z.ZodError) {
         return res.status(400).json({ 
@@ -2370,10 +1989,11 @@ export function registerQuoteRoutes(app: Express) {
         });
       }
 
-      const hasAccess = await storage.validateQuoteOwnership(params.data.quoteId, req.user?.id);
-      if (!hasAccess) {
-        return res.status(403).json({ message: "Access denied" });
+      const quoteExists = await storage.quoteExists(params.data.quoteId);
+      if (!quoteExists) {
+        return res.status(404).json({ message: "Quote not found" });
       }
+      if (await rejectCustomerApprovedQuoteMutation(res, params.data.quoteId)) return;
 
       if (!req.file) {
         return res.status(400).json({ message: "No file uploaded" });
@@ -2405,6 +2025,7 @@ export function registerQuoteRoutes(app: Express) {
       console.log(`✅ Cover photo saved: ${coverPhoto.filename}`);
       res.status(201).json(coverPhoto);
     } catch (error) {
+      if (sendQuoteSignedLockResponse(res, error)) return;
       console.error("Error uploading cover photo:", error);
       res.status(500).json({ message: "Failed to upload cover photo" });
     }
@@ -2420,10 +2041,11 @@ export function registerQuoteRoutes(app: Express) {
         });
       }
 
-      const hasAccess = await storage.validateQuoteOwnership(params.data.quoteId, req.user?.id);
-      if (!hasAccess) {
-        return res.status(403).json({ message: "Access denied" });
+      const quoteExists = await storage.quoteExists(params.data.quoteId);
+      if (!quoteExists) {
+        return res.status(404).json({ message: "Quote not found" });
       }
+      if (await rejectCustomerApprovedQuoteMutation(res, params.data.quoteId)) return;
 
       if (!req.file) {
         return res.status(400).json({ message: "No file uploaded" });
@@ -2455,6 +2077,7 @@ export function registerQuoteRoutes(app: Express) {
       console.log(`✅ Visual asset saved: ${rendering.filename}`);
       res.status(201).json(rendering);
     } catch (error) {
+      if (sendQuoteSignedLockResponse(res, error)) return;
       console.error("Error uploading visual asset:", error);
       res.status(500).json({ message: "Failed to upload visual asset" });
     }
@@ -2470,6 +2093,12 @@ export function registerQuoteRoutes(app: Express) {
         });
       }
 
+      const existingPhoto = await storage.getQuoteCoverPhotoById(params.data.imageId);
+      if (!existingPhoto) return res.status(404).json({ message: "Cover photo not found" });
+      if (!(await storage.quoteExists(existingPhoto.quoteId))) {
+        return res.status(404).json({ message: "Quote not found" });
+      }
+
       const updateData = updateQuoteCoverPhotoSchema.parse(req.body);
       const updatedPhoto = await storage.updateQuoteCoverPhoto(params.data.imageId, updateData);
       
@@ -2479,6 +2108,7 @@ export function registerQuoteRoutes(app: Express) {
 
       res.json(updatedPhoto);
     } catch (error) {
+      if (sendQuoteSignedLockResponse(res, error)) return;
       console.error("Error updating quote cover photo:", error);
       if (error instanceof z.ZodError) {
         return res.status(400).json({ 
@@ -2500,6 +2130,12 @@ export function registerQuoteRoutes(app: Express) {
         });
       }
 
+      const existingRendering = await storage.getQuoteProductRenderingById(params.data.imageId);
+      if (!existingRendering) return res.status(404).json({ message: "Visual asset not found" });
+      if (!(await storage.quoteExists(existingRendering.quoteId))) {
+        return res.status(404).json({ message: "Quote not found" });
+      }
+
       const updateData = updateQuoteProductRenderingSchema.parse(req.body);
       const updatedRendering = await storage.updateQuoteProductRendering(params.data.imageId, updateData);
       
@@ -2509,6 +2145,7 @@ export function registerQuoteRoutes(app: Express) {
 
       res.json(updatedRendering);
     } catch (error) {
+      if (sendQuoteSignedLockResponse(res, error)) return;
       console.error("Error updating quote visual asset:", error);
       if (error instanceof z.ZodError) {
         return res.status(400).json({ 
@@ -2534,8 +2171,8 @@ export function registerQuoteRoutes(app: Express) {
       if (!photo) {
         return res.status(404).json({ message: "Cover photo not found" });
       }
-      if (!(await storage.validateQuoteOwnership(photo.quoteId, req.user?.id))) {
-        return res.status(403).json({ message: "Unauthorized: You don't have access to this quote" });
+      if (!(await storage.quoteExists(photo.quoteId))) {
+        return res.status(404).json({ message: "Quote not found" });
       }
 
       const deleted = await storage.deleteQuoteCoverPhoto(params.data.imageId);
@@ -2545,6 +2182,7 @@ export function registerQuoteRoutes(app: Express) {
 
       res.status(204).send();
     } catch (error) {
+      if (sendQuoteSignedLockResponse(res, error)) return;
       console.error("Error deleting quote cover photo:", error);
       res.status(500).json({ message: "Internal server error" });
     }
@@ -2564,8 +2202,8 @@ export function registerQuoteRoutes(app: Express) {
       if (!rendering) {
         return res.status(404).json({ message: "Visual asset not found" });
       }
-      if (!(await storage.validateQuoteOwnership(rendering.quoteId, req.user?.id))) {
-        return res.status(403).json({ message: "Unauthorized: You don't have access to this quote" });
+      if (!(await storage.quoteExists(rendering.quoteId))) {
+        return res.status(404).json({ message: "Quote not found" });
       }
 
       const deleted = await storage.deleteQuoteProductRendering(params.data.imageId);
@@ -2575,6 +2213,7 @@ export function registerQuoteRoutes(app: Express) {
 
       res.status(204).send();
     } catch (error) {
+      if (sendQuoteSignedLockResponse(res, error)) return;
       console.error("Error deleting quote visual asset:", error);
       res.status(500).json({ message: "Internal server error" });
     }

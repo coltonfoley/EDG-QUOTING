@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, useCallback, memo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { AppHeader } from "@/components/app-header";
+import { PageLoadError } from "@/components/error-alert";
 import { PipelineCard } from "@/components/pipeline-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -43,7 +44,9 @@ import {
   Filter,
   ChevronRight,
   AlertCircle,
-  Plus
+  Plus,
+  GripVertical,
+  Undo2
 } from "lucide-react";
 import { format, subDays, startOfDay, endOfDay, isWithinInterval } from "date-fns";
 import type { QuoteWithDetails } from "@shared/schema";
@@ -101,7 +104,7 @@ const SortableColumn = memo(function SortableColumn({
         )}
       </div>
       
-      <ScrollArea className="flex-1 bg-gray-50 border-2 border-t-0 rounded-b-lg p-2">
+      <ScrollArea className="flex-1 rounded-b-lg border-2 border-t-0 bg-muted/30 p-2">
         <div className="space-y-2 min-h-[200px]">
           <SortableContext
             items={quotes.map(q => q.id)}
@@ -149,9 +152,19 @@ const SortableQuote = memo(function SortableQuote({ quote }: { quote: QuoteWithD
     <div
       ref={setNodeRef}
       style={style}
-      {...attributes}
-      {...listeners}
+      className="relative"
     >
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="absolute right-1 top-1 z-10 h-8 w-8 bg-background/90"
+        aria-label={`Move ${quote.projectName || quote.quoteNumber} to another pipeline stage`}
+        {...attributes}
+        {...listeners}
+      >
+        <GripVertical className="h-4 w-4" aria-hidden="true" />
+      </Button>
       <PipelineCard quote={quote} isDragging={isDragging} />
     </div>
   );
@@ -159,7 +172,6 @@ const SortableQuote = memo(function SortableQuote({ quote }: { quote: QuoteWithD
 
 export default function Pipeline() {
   const [searchTerm, setSearchTerm] = useState("");
-  const [filterRep, setFilterRep] = useState("all");
   const [filterDateRange, setFilterDateRange] = useState("all");
   const [filterAccountType, setFilterAccountType] = useState("all");
   const [viewMode, setViewMode] = useState<"board" | "list">("board");
@@ -168,7 +180,14 @@ export default function Pipeline() {
     open: boolean;
     quoteId: number | null;
     quoteName: string;
-  }>({ open: false, quoteId: null, quoteName: '' });
+    previousDealStage: string | null;
+  }>({ open: false, quoteId: null, quoteName: '', previousDealStage: null });
+  const [lastStageChange, setLastStageChange] = useState<{
+    quoteId: number;
+    quoteName: string;
+    previousDealStage: string;
+    nextDealStage: string;
+  } | null>(null);
   const [lostReason, setLostReason] = useState("");
   const { toast } = useToast();
 
@@ -183,13 +202,8 @@ export default function Pipeline() {
   );
 
   // Fetch quotes
-  const { data: quotes, isLoading, error } = useQuery<QuoteWithDetails[]>({
+  const { data: quotes, isLoading, error, refetch } = useQuery<QuoteWithDetails[]>({
     queryKey: ["/api/quotes"],
-  });
-
-  // Fetch users for rep filter
-  const { data: users } = useQuery<any[]>({
-    queryKey: ["/api/users"],
   });
 
   // Update stage mutation
@@ -197,11 +211,14 @@ export default function Pipeline() {
     mutationFn: async ({ 
       quoteId, 
       dealStage, 
-      lostReason 
+      lostReason,
     }: { 
       quoteId: number; 
       dealStage: string; 
       lostReason?: string;
+      previousDealStage?: string;
+      quoteName?: string;
+      isUndo?: boolean;
     }) => {
       const payload: any = { deal_stage: dealStage };
       if (lostReason) {
@@ -240,7 +257,8 @@ export default function Pipeline() {
         variant: "destructive",
       });
     },
-    onSuccess: (updatedQuote, { quoteId }) => {
+    onSuccess: (updatedQuote, variables) => {
+      const { quoteId } = variables;
       // Merge server response into the cache to capture any server-side changes
       queryClient.setQueryData<QuoteWithDetails[]>(["/api/quotes"], (old) => {
         if (!old) return old;
@@ -251,10 +269,23 @@ export default function Pipeline() {
         );
       });
       
-      toast({
-        title: "Success",
-        description: "Deal stage updated successfully.",
-      });
+      if (variables.isUndo) {
+        setLastStageChange(null);
+        toast({ title: "Stage change undone" });
+      } else {
+        if (variables.previousDealStage && variables.previousDealStage !== variables.dealStage) {
+          setLastStageChange({
+            quoteId,
+            quoteName: variables.quoteName || `Quote #${quoteId}`,
+            previousDealStage: variables.previousDealStage,
+            nextDealStage: variables.dealStage,
+          });
+        }
+        toast({
+          title: "Deal stage updated",
+          description: `${variables.quoteName || `Quote #${quoteId}`} moved to ${getDealStageById(variables.dealStage)?.label || "the selected stage"}.`,
+        });
+      }
     },
   });
 
@@ -274,14 +305,6 @@ export default function Pipeline() {
         quote.customer?.company?.toLowerCase().includes(term)
       );
     }
-
-    // Rep filter - disabled until new assignment system is implemented
-    // if (filterRep !== "all") {
-    //   filtered = filtered.filter(quote => {
-    //     // Rep assignment feature temporarily disabled
-    //     return true;
-    //   });
-    // }
 
     // Date range filter
     if (filterDateRange !== "all") {
@@ -319,7 +342,7 @@ export default function Pipeline() {
     }
 
     return filtered;
-  }, [quotes, searchTerm, filterRep, filterDateRange, filterAccountType]);
+  }, [quotes, searchTerm, filterDateRange, filterAccountType]);
 
   // Group quotes by stage
   const quotesByStage = useMemo(() => {
@@ -400,14 +423,17 @@ export default function Pipeline() {
           setLostReasonDialog({
             open: true,
             quoteId: quote.id,
-            quoteName: quote.projectName || quote.quoteNumber
+            quoteName: quote.projectName || quote.quoteNumber,
+            previousDealStage: quote.dealStage || "new_lead",
           });
           setLostReason("");
         } else {
           // Update stage directly
           updateStageMutation.mutate({
             quoteId: quote.id,
-            dealStage: targetStage
+            dealStage: targetStage,
+            previousDealStage: quote.dealStage || "new_lead",
+            quoteName: quote.projectName || quote.quoteNumber,
           });
         }
       }
@@ -420,12 +446,14 @@ export default function Pipeline() {
       updateStageMutation.mutate({
         quoteId: lostReasonDialog.quoteId,
         dealStage: 'closed_lost',
-        lostReason: lostReason.trim()
+        lostReason: lostReason.trim(),
+        previousDealStage: lostReasonDialog.previousDealStage || "new_lead",
+        quoteName: lostReasonDialog.quoteName,
       });
-      setLostReasonDialog({ open: false, quoteId: null, quoteName: '' });
+      setLostReasonDialog({ open: false, quoteId: null, quoteName: '', previousDealStage: null });
       setLostReason("");
     }
-  }, [lostReasonDialog.quoteId, lostReason, updateStageMutation]);
+  }, [lostReasonDialog, lostReason, updateStageMutation]);
 
   // Find active quote for drag overlay
   const activeQuote = activeId 
@@ -434,7 +462,7 @@ export default function Pipeline() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-background text-foreground">
         <AppHeader />
         <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <Skeleton className="h-12 w-48 mb-8" />
@@ -449,18 +477,31 @@ export default function Pipeline() {
     );
   }
 
+  if (error) {
+    return (
+      <div className="min-h-screen bg-background">
+        <AppHeader />
+        <PageLoadError
+          title="Pipeline couldn't be loaded"
+          description="Rainmaker could not retrieve the quote pipeline. No stages or quotes were changed."
+          onRetry={() => void refetch()}
+        />
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-background text-foreground">
       <AppHeader />
       
       <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-center">
           <div>
-            <h2 className="text-3xl font-bold text-edg-black">Sales Pipeline</h2>
+            <h1 className="text-3xl font-bold text-foreground">Sales Pipeline</h1>
             <p className="text-edg-grey mt-2">Track and manage your sales opportunities</p>
           </div>
-          <div className="flex rounded-md border bg-white p-1">
+          <div className="flex rounded-md border bg-card p-1">
             <Button
               type="button"
               size="sm"
@@ -490,7 +531,7 @@ export default function Pipeline() {
                 <Target className="h-8 w-8 text-edg-teal" />
                 <div className="ml-4">
                   <p className="text-sm font-medium text-edg-grey">Total Deals</p>
-                  <p className="text-2xl font-bold text-edg-black">{stats.totalDeals}</p>
+                  <p className="text-2xl font-bold text-foreground">{stats.totalDeals}</p>
                 </div>
               </div>
             </CardContent>
@@ -502,7 +543,7 @@ export default function Pipeline() {
                 <DollarSign className="h-8 w-8 text-edg-teal" />
                 <div className="ml-4">
                   <p className="text-sm font-medium text-edg-grey">Pipeline Value</p>
-                  <p className="text-2xl font-bold text-edg-black">
+                  <p className="text-2xl font-bold text-foreground">
                     {formatCurrency(stats.totalValue)}
                   </p>
                 </div>
@@ -516,7 +557,7 @@ export default function Pipeline() {
                 <TrendingUp className="h-8 w-8 text-edg-teal" />
                 <div className="ml-4">
                   <p className="text-sm font-medium text-edg-grey">Conversion Rate</p>
-                  <p className="text-2xl font-bold text-edg-black">
+                  <p className="text-2xl font-bold text-foreground">
                     {stats.conversionRate.toFixed(1)}%
                   </p>
                 </div>
@@ -530,7 +571,7 @@ export default function Pipeline() {
                 <Clock className="h-8 w-8 text-edg-teal" />
                 <div className="ml-4">
                   <p className="text-sm font-medium text-edg-grey">Avg Deal Size</p>
-                  <p className="text-2xl font-bold text-edg-black">
+                  <p className="text-2xl font-bold text-foreground">
                     {formatCurrency(stats.avgDealSize)}
                   </p>
                 </div>
@@ -549,6 +590,7 @@ export default function Pipeline() {
               </div>
               
               <Input
+                aria-label="Search pipeline deals"
                 placeholder="Search deals..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -556,22 +598,8 @@ export default function Pipeline() {
                 data-testid="input-search"
               />
 
-              <Select value={filterRep} onValueChange={setFilterRep}>
-                <SelectTrigger className="w-48" data-testid="select-filter-rep">
-                  <SelectValue placeholder="All Reps" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Reps</SelectItem>
-                  {users?.map((user) => (
-                    <SelectItem key={user.id} value={String(user.id)} data-testid={`option-rep-${user.id}`}>
-                      {user.firstName || user.username} {user.lastName || ''}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
               <Select value={filterDateRange} onValueChange={setFilterDateRange}>
-                <SelectTrigger className="w-40" data-testid="select-filter-date">
+                <SelectTrigger className="w-40" data-testid="select-filter-date" aria-label="Filter pipeline by date">
                   <SelectValue placeholder="All Time" />
                 </SelectTrigger>
                 <SelectContent>
@@ -584,7 +612,7 @@ export default function Pipeline() {
               </Select>
 
               <Select value={filterAccountType} onValueChange={setFilterAccountType}>
-                <SelectTrigger className="w-48" data-testid="select-filter-type">
+                <SelectTrigger className="w-48" data-testid="select-filter-type" aria-label="Filter pipeline by client type">
                   <SelectValue placeholder="All Account Types" />
                 </SelectTrigger>
                 <SelectContent>
@@ -597,6 +625,34 @@ export default function Pipeline() {
             </div>
           </CardContent>
         </Card>
+
+        {lastStageChange && (
+          <div
+            className="mb-6 flex flex-col gap-3 rounded-md border border-border bg-card p-4 text-sm text-foreground sm:flex-row sm:items-center sm:justify-between"
+            role="status"
+            data-testid="pipeline-stage-undo"
+          >
+            <span>
+              {lastStageChange.quoteName} moved to {getDealStageById(lastStageChange.nextDealStage)?.label || "the selected stage"}.
+            </span>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => updateStageMutation.mutate({
+                quoteId: lastStageChange.quoteId,
+                dealStage: lastStageChange.previousDealStage,
+                quoteName: lastStageChange.quoteName,
+                isUndo: true,
+              })}
+              disabled={updateStageMutation.isPending}
+              data-testid="button-undo-pipeline-stage"
+            >
+              <Undo2 className="mr-2 h-4 w-4" aria-hidden="true" />
+              Undo stage change
+            </Button>
+          </div>
+        )}
 
         {/* Pipeline Board/List */}
         {viewMode === "board" ? (
@@ -667,18 +723,18 @@ export default function Pipeline() {
                         return (
                           <tr key={quote.id} className="hover:bg-muted/30">
                             <td className="px-6 py-4 text-sm">
-                              <div className="font-medium text-edg-black">
+                              <div className="font-medium text-foreground">
                                 {account?.company || account?.name || "Unassigned"}
                               </div>
                               <div className="text-xs text-edg-grey">{quote.quoteNumber}</div>
                             </td>
-                            <td className="px-6 py-4 text-sm text-edg-black">
+                            <td className="px-6 py-4 text-sm text-foreground">
                               {quote.projectName || "Untitled project"}
                             </td>
                             <td className="px-6 py-4 text-sm">
                               <Badge className={stage?.color}>{stage?.label || "New Lead"}</Badge>
                             </td>
-                            <td className="px-6 py-4 text-right text-sm font-medium text-edg-black">
+                            <td className="px-6 py-4 text-right text-sm font-medium text-foreground">
                               {formatCurrency(calculateLineItemsValue(quote.lineItems))}
                             </td>
                             <td className="px-6 py-4 text-sm text-edg-grey">
@@ -708,7 +764,7 @@ export default function Pipeline() {
       {/* Lost Reason Dialog */}
       <Dialog open={lostReasonDialog.open} onOpenChange={(open) => {
         if (!open) {
-          setLostReasonDialog({ open: false, quoteId: null, quoteName: '' });
+          setLostReasonDialog({ open: false, quoteId: null, quoteName: '', previousDealStage: null });
           setLostReason("");
         }
       }}>
@@ -741,7 +797,7 @@ export default function Pipeline() {
             <Button
               variant="outline"
               onClick={() => {
-                setLostReasonDialog({ open: false, quoteId: null, quoteName: '' });
+                setLostReasonDialog({ open: false, quoteId: null, quoteName: '', previousDealStage: null });
                 setLostReason("");
               }}
               data-testid="button-cancel-lost"

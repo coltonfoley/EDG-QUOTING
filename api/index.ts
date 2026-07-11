@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "http";
+import { randomUUID } from "node:crypto";
 
 type VercelHandler = (req: IncomingMessage, res: ServerResponse) => unknown;
 
@@ -14,6 +15,7 @@ function sendJson(res: ServerResponse, statusCode: number, payload: unknown) {
   const body = JSON.stringify(payload);
   res.statusCode = statusCode;
   res.setHeader("Content-Type", "application/json; charset=utf-8");
+  res.setHeader("X-Request-Id", randomUUID());
   res.setHeader("Content-Length", Buffer.byteLength(body));
   res.end(body);
 }

@@ -3,7 +3,7 @@ import { storage } from "../storage";
 import { z } from "zod";
 import { db } from "../db";
 import { accounts, quotes } from "@shared/schema";
-import { or, ilike, sql, desc } from "drizzle-orm";
+import { and, eq, or, ilike, sql, desc } from "drizzle-orm";
 import { isAuthenticated, requireAdmin } from "../auth";
 import {
   insertAccountSchema,
@@ -11,12 +11,16 @@ import {
   updateAccountSchema,
   idParamSchema
 } from "../validation-schemas";
+import { redactedErrorType, validationIssueSummary } from "../redactedLogging";
 
 export function registerAccountRoutes(app: Express) {
   // Account routes (formerly customer routes)
   app.get("/api/accounts", isAuthenticated, async (req, res) => {
     try {
       const searchTerm = req.query.search as string;
+      const accountType = typeof req.query.accountType === "string" && req.query.accountType !== "all"
+        ? req.query.accountType
+        : undefined;
       const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
       const offset = parseInt(req.query.offset as string) || 0;
 
@@ -41,41 +45,49 @@ export function registerAccountRoutes(app: Express) {
         leadConvertedAt: accounts.leadConvertedAt,
         createdAt: accounts.createdAt,
         updatedAt: accounts.updatedAt,
-        projectCount: sql<number>`(SELECT COUNT(*)::int FROM quotes WHERE quotes.account_id = accounts.id)`,
+        projectCount: sql<number>`(
+          SELECT COUNT(*)::int FROM quotes
+          WHERE quotes.account_id = accounts.id
+            AND quotes.is_latest_version = true
+        )`,
       };
-      
-      if (searchTerm && searchTerm.length > 0) {
-        console.log(`[SEARCH] Account search request: search="${searchTerm}"`);
-        const term = searchTerm.toLowerCase();
-        
-        const accountResults = await db
-          .select(accountFields)
-          .from(accounts)
-          .where(
-            or(
-              ilike(accounts.name, `%${term}%`),
-              ilike(accounts.email, `%${term}%`),
-              ilike(accounts.company, `%${term}%`)
-            )
-          )
-          .orderBy(desc(accounts.createdAt))
-          .limit(limit)
-          .offset(offset);
-        
-        console.log(`[SEARCH] Found ${accountResults.length} accounts for term "${term}"`);
-        res.json(accountResults);
-      } else {
-        const allAccounts = await db
-          .select(accountFields)
-          .from(accounts)
-          .orderBy(desc(accounts.createdAt))
-          .limit(limit)
-          .offset(offset);
-        res.json(allAccounts);
+      const filters = [];
+      if (searchTerm?.trim()) {
+        const term = searchTerm.trim();
+        filters.push(or(
+          ilike(accounts.name, `%${term}%`),
+          ilike(accounts.email, `%${term}%`),
+          ilike(accounts.company, `%${term}%`),
+        ));
       }
+      if (accountType) filters.push(eq(accounts.accountType, accountType));
+
+      const accountResults = await db
+        .select(accountFields)
+        .from(accounts)
+        .where(filters.length ? and(...filters) : undefined)
+        .orderBy(desc(accounts.createdAt))
+        .limit(limit)
+        .offset(offset);
+      res.json(accountResults);
     } catch (error) {
       console.error("Error fetching accounts:", error);
       res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.get("/api/accounts/summary", isAuthenticated, async (_req, res) => {
+    try {
+      const [summary] = await db.select({
+        totalClients: sql<number>`COUNT(*)::int`,
+        currentQuoteFamilies: sql<number>`(
+          SELECT COUNT(*)::int FROM quotes WHERE quotes.is_latest_version = true
+        )`,
+      }).from(accounts);
+      res.json(summary || { totalClients: 0, currentQuoteFamilies: 0 });
+    } catch (error) {
+      console.error("Error fetching account summary:", error);
+      res.status(500).json({ message: "Failed to fetch account summary" });
     }
   });
 
@@ -83,17 +95,12 @@ export function registerAccountRoutes(app: Express) {
   app.get("/api/accounts/search", isAuthenticated, async (req, res) => {
     try {
       const searchTerm = req.query.q as string;
-      console.log(`[SEARCH] Account search request: q="${searchTerm}"`);
-      
       if (!searchTerm || searchTerm.length < 1) {
-        console.log("[SEARCH] Empty or short search term, returning empty array");
         return res.json([]);
       }
       
       // Direct database query to avoid any storage layer issues
       const term = searchTerm.toLowerCase();
-      console.log(`[SEARCH] Searching for term: "${term}"`);
-      
       // Search accounts directly
       const accountResults = await db
         .select()
@@ -107,16 +114,11 @@ export function registerAccountRoutes(app: Express) {
         )
         .limit(10);
       
-      console.log(`[SEARCH] Found ${accountResults.length} accounts`);
-      console.log(`[SEARCH] Returning ${accountResults.length} results`);
+      console.log("[ACCOUNT_SEARCH] completed", { resultCount: accountResults.length });
       res.json(accountResults.slice(0, 10));
     } catch (error) {
-      console.error("[SEARCH ERROR] Account search error:", error);
-      if (error instanceof Error) {
-        console.error("[SEARCH ERROR] Message:", error.message);
-        console.error("[SEARCH ERROR] Stack:", error.stack);
-      }
-      res.status(500).json({ message: "Search failed", error: error instanceof Error ? error.message : "Unknown error" });
+      console.error("[ACCOUNT_SEARCH] failed", { errorType: redactedErrorType(error) });
+      res.status(500).json({ message: "Search failed" });
     }
   });
 
@@ -215,30 +217,21 @@ export function registerAccountRoutes(app: Express) {
   app.get("/api/customers/search", isAuthenticated, async (req, res) => {
     try {
       const searchTerm = req.query.q as string;
-      console.log(`Customer search request: q="${searchTerm}"`);
-      
       if (!searchTerm) {
-        console.log("Empty search term, returning empty array");
         return res.json([]);
       }
-      
-      console.log("Calling storage.searchCustomers...");
+
       const customers = await storage.searchCustomers(searchTerm);
-      console.log(`Search completed, found ${customers.length} results`);
+      console.log("[CUSTOMER_SEARCH] completed", { resultCount: customers.length });
       res.json(customers);
     } catch (error) {
-      console.error("Customer search error:", error);
-      if (error instanceof Error) {
-        console.error("Error message:", error.message);
-        console.error("Error stack:", error.stack);
-      }
-      res.status(400).json({ message: "Invalid request parameter", error: error instanceof Error ? error.message : "Unknown error" });
+      console.error("[CUSTOMER_SEARCH] failed", { errorType: redactedErrorType(error) });
+      res.status(400).json({ message: "Invalid request parameter" });
     }
   });
 
   app.post("/api/accounts", isAuthenticated, async (req, res) => {
     try {
-      console.log("Account creation request body:", JSON.stringify(req.body, null, 2));
       const accountData = insertAccountSchema.parse(req.body);
       
       // Options for duplicate handling and contact creation
@@ -269,7 +262,7 @@ export function registerAccountRoutes(app: Express) {
       }
     } catch (error) {
       if (error instanceof z.ZodError) {
-        console.error("Account validation error:", JSON.stringify(error.errors, null, 2));
+        console.error("Account validation failed", validationIssueSummary(error));
         return res.status(400).json({ message: "Invalid account data", errors: error.errors });
       }
       console.error("Account creation error:", error);
@@ -328,7 +321,6 @@ export function registerAccountRoutes(app: Express) {
         });
       }
       
-      console.log("Account update request body:", JSON.stringify(req.body, null, 2));
       const accountData = updateAccountSchema.parse(req.body);
       const account = await storage.updateAccount(params.data.id, accountData);
       if (!account) {
@@ -377,9 +369,8 @@ export function registerAccountRoutes(app: Express) {
       
       if (searchTerm && searchTerm.length > 0) {
         // Search functionality
-        console.log(`[CLIENT SEARCH] Search request: search="${searchTerm}"`);
         const clients = await storage.searchClients(searchTerm);
-        console.log(`[CLIENT SEARCH] Found ${clients.length} clients for term "${searchTerm}"`);
+        console.log("[CLIENT_SEARCH] completed", { resultCount: clients.length });
         res.json(clients);
       } else {
         // Return all clients when no search term
@@ -395,15 +386,12 @@ export function registerAccountRoutes(app: Express) {
   app.get("/api/clients/search", isAuthenticated, async (req, res) => {
     try {
       const searchTerm = req.query.q as string;
-      console.log(`[CLIENT SEARCH] Autocomplete request: q="${searchTerm}"`);
-      
       if (!searchTerm || searchTerm.length < 1) {
-        console.log("[CLIENT SEARCH] Empty search term, returning empty array");
         return res.json([]);
       }
       
       const clients = await storage.searchClients(searchTerm);
-      console.log(`[CLIENT SEARCH] Found ${clients.length} clients`);
+      console.log("[CLIENT_AUTOCOMPLETE] completed", { resultCount: clients.length });
       res.json(clients);
     } catch (error) {
       console.error("Client search error:", error);
@@ -455,7 +443,6 @@ export function registerAccountRoutes(app: Express) {
 
   app.post("/api/clients", isAuthenticated, async (req, res) => {
     try {
-      console.log("Client creation request body:", JSON.stringify(req.body, null, 2));
       const clientData = insertAccountSchema.parse(req.body);
       
       // Options for duplicate handling (no contact creation since info is integrated)
@@ -470,7 +457,7 @@ export function registerAccountRoutes(app: Express) {
       res.status(201).json(client);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        console.error("Client validation error:", JSON.stringify(error.errors, null, 2));
+        console.error("Client validation failed", validationIssueSummary(error));
         return res.status(400).json({ message: "Invalid client data", errors: error.errors });
       }
       console.error("Client creation error:", error);
@@ -488,7 +475,6 @@ export function registerAccountRoutes(app: Express) {
         });
       }
       
-      console.log("Client update request body:", JSON.stringify(req.body, null, 2));
       const clientData = updateAccountSchema.parse(req.body);
       const client = await storage.updateClient(params.data.id, clientData);
       if (!client) {

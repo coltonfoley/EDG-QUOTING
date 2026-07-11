@@ -24,6 +24,7 @@ interface AddressComponents {
 interface AddressAutocompleteProps {
   onAddressSelect: (components: AddressComponents) => void;
   placeholder?: string;
+  ariaLabel?: string;
   disabled?: boolean;
   testId?: string;
 }
@@ -85,6 +86,7 @@ const loadGooglePlacesScript = (): Promise<void> => {
 export function AddressAutocomplete({
   onAddressSelect,
   placeholder = "Start typing an address...",
+  ariaLabel = "Search for an address",
   disabled = false,
   testId = "input-address-autocomplete"
 }: AddressAutocompleteProps) {
@@ -213,6 +215,7 @@ export function AddressAutocomplete({
         <Input
           type="text"
           placeholder={placeholder}
+          aria-label={ariaLabel}
           disabled={disabled}
           data-testid={testId}
           className="pr-10"
@@ -231,6 +234,7 @@ export function AddressAutocomplete({
           ref={inputRef}
           type="text"
           placeholder={isScriptLoaded ? placeholder : "Loading address autocomplete..."}
+          aria-label={ariaLabel}
           disabled={disabled || !isScriptLoaded}
           data-testid={testId}
           autoComplete="new-password"

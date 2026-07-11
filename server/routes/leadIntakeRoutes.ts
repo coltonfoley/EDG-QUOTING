@@ -5,8 +5,8 @@ import { z } from "zod";
 import { storage } from "../storage";
 import { isAuthenticated } from "../auth";
 import { db } from "../db";
-import { accounts, type InsertAccount, type LeadAttachment } from "@shared/schema";
-import { and, desc, eq, isNotNull, sql } from "drizzle-orm";
+import { accounts, leadInquiries, type InsertAccount, type LeadAttachment } from "@shared/schema";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { ObjectStorageService } from "../objectStorage";
 import {
   createIdempotentLead,
@@ -211,10 +211,12 @@ function mapLeadToAccount(lead: LeadIntakePayload): InsertAccount {
   };
 }
 
-async function upsertLead(
-  accountData: InsertAccount,
+export async function preserveAccountAndCreateInquiry(
+  lead: LeadIntakePayload,
+  submissionId: string,
   database: LeadIntakeDatabase = db
 ) {
+  const accountData = mapLeadToAccount(lead);
   const [existingAccount] = await database
     .select()
     .from(accounts)
@@ -222,13 +224,39 @@ async function upsertLead(
     .limit(1);
 
   if (existingAccount) {
+    const shouldReplaceName = !existingAccount.name?.trim()
+      || existingAccount.name === existingAccount.email
+      || existingAccount.name === "Unnamed Client";
+    const conservativeUpdates = {
+      ...(shouldReplaceName ? { name: accountData.name } : {}),
+      ...(!existingAccount.firstName && accountData.firstName ? { firstName: accountData.firstName } : {}),
+      ...(!existingAccount.lastName && accountData.lastName ? { lastName: accountData.lastName } : {}),
+      ...(!existingAccount.phone && accountData.phone ? { phone: accountData.phone } : {}),
+      ...(!existingAccount.billingAddress && accountData.billingAddress ? { billingAddress: accountData.billingAddress } : {}),
+      updatedAt: new Date(),
+    };
     const [updatedAccount] = await database
       .update(accounts)
-      .set({ ...accountData, updatedAt: new Date() })
+      .set(conservativeUpdates)
       .where(sql`${accounts.id} = ${existingAccount.id}`)
       .returning();
-
-    return updatedAccount || existingAccount;
+    const account = updatedAccount || existingAccount;
+    const [inquiry] = await database
+      .insert(leadInquiries)
+      .values({
+        accountId: account.id,
+        submissionId,
+        status: "new",
+        source: lead.source || "website",
+        projectType: lead.projectType || undefined,
+        message: lead.message || undefined,
+        location: lead.location || undefined,
+        customerType: lead.customerType || undefined,
+        metadata: lead.metadata || undefined,
+        receivedAt: new Date(),
+      })
+      .returning({ id: leadInquiries.id });
+    return { ...account, inquiryId: inquiry.id };
   }
 
   const [newAccount] = await database
@@ -236,7 +264,23 @@ async function upsertLead(
     .values(accountData)
     .returning();
 
-  return newAccount;
+  const [inquiry] = await database
+    .insert(leadInquiries)
+    .values({
+      accountId: newAccount.id,
+      submissionId,
+      status: "new",
+      source: lead.source || "website",
+      projectType: lead.projectType || undefined,
+      message: lead.message || undefined,
+      location: lead.location || undefined,
+      customerType: lead.customerType || undefined,
+      metadata: lead.metadata || undefined,
+      receivedAt: new Date(),
+    })
+    .returning({ id: leadInquiries.id });
+
+  return { ...newAccount, inquiryId: inquiry.id };
 }
 
 export function registerLeadIntakeRoutes(app: Express) {
@@ -247,13 +291,21 @@ export function registerLeadIntakeRoutes(app: Express) {
       const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
       const offset = parseInt(req.query.offset as string) || 0;
 
+      const latestInquiry = sql`${leadInquiries.id} = (
+        SELECT latest_inquiry.id
+        FROM lead_inquiries latest_inquiry
+        WHERE latest_inquiry.account_id = ${accounts.id}
+        ORDER BY latest_inquiry.received_at DESC, latest_inquiry.id DESC
+        LIMIT 1
+      )`;
       const where = status === "all"
-        ? isNotNull(accounts.leadStatus)
-        : and(isNotNull(accounts.leadStatus), eq(accounts.leadStatus, status));
+        ? latestInquiry
+        : and(latestInquiry, eq(leadInquiries.status, status));
 
       const leads = await db
         .select({
           id: accounts.id,
+          inquiryId: leadInquiries.id,
           name: accounts.name,
           email: accounts.email,
           phone: accounts.phone,
@@ -271,24 +323,30 @@ export function registerLeadIntakeRoutes(app: Express) {
           firstName: accounts.firstName,
           lastName: accounts.lastName,
           secondaryContacts: accounts.secondaryContacts,
-          leadStatus: accounts.leadStatus,
-          leadSource: accounts.leadSource,
-          leadProjectType: accounts.leadProjectType,
-          leadMessage: accounts.leadMessage,
-          leadReceivedAt: accounts.leadReceivedAt,
-          leadLastContactedAt: accounts.leadLastContactedAt,
-          leadConvertedAt: accounts.leadConvertedAt,
+          leadStatus: leadInquiries.status,
+          leadSource: leadInquiries.source,
+          leadProjectType: leadInquiries.projectType,
+          leadMessage: leadInquiries.message,
+          leadReceivedAt: leadInquiries.receivedAt,
+          leadLastContactedAt: leadInquiries.lastContactedAt,
+          leadConvertedAt: leadInquiries.convertedAt,
+          inquiryCount: sql<number>`(
+            SELECT COUNT(*)::int FROM lead_inquiries inquiry_count
+            WHERE inquiry_count.account_id = ${accounts.id}
+          )`,
           createdAt: accounts.createdAt,
           updatedAt: accounts.updatedAt,
           projectCount: sql<number>`
             (SELECT COUNT(*)::int
              FROM quotes
-             WHERE quotes.account_id = accounts.id)
+             WHERE quotes.account_id = accounts.id
+               AND quotes.is_latest_version = true)
           `,
         })
-        .from(accounts)
+        .from(leadInquiries)
+        .innerJoin(accounts, eq(accounts.id, leadInquiries.accountId))
         .where(where)
-        .orderBy(sql`${accounts.leadReceivedAt} DESC NULLS LAST`, desc(accounts.createdAt))
+        .orderBy(desc(leadInquiries.receivedAt), desc(leadInquiries.id))
         .limit(limit)
         .offset(offset);
 
@@ -350,6 +408,51 @@ export function registerLeadIntakeRoutes(app: Express) {
 
       console.error("Error updating lead status:", error);
       res.status(500).json({ message: "Failed to update lead status" });
+    }
+  });
+
+  app.patch("/api/inquiries/:id/status", isAuthenticated, async (req, res) => {
+    try {
+      const id = z.coerce.number().int().positive().parse(req.params.id);
+      const { status } = leadStatusUpdateSchema.parse(req.body);
+      const now = new Date();
+      const [inquiry] = await db
+        .update(leadInquiries)
+        .set({
+          status,
+          ...(status === "contacted" ? { lastContactedAt: now } : {}),
+          ...(status === "converted" ? { convertedAt: now } : {}),
+          updatedAt: now,
+        })
+        .where(eq(leadInquiries.id, id))
+        .returning();
+
+      if (!inquiry) return res.status(404).json({ message: "Inquiry not found" });
+      res.json(inquiry);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid inquiry status", errors: error.errors });
+      }
+      console.error("Error updating inquiry status:", error);
+      res.status(500).json({ message: "Failed to update inquiry status" });
+    }
+  });
+
+  app.get("/api/accounts/:id/inquiries", isAuthenticated, async (req, res) => {
+    try {
+      const accountId = z.coerce.number().int().positive().parse(req.params.id);
+      const inquiries = await db
+        .select()
+        .from(leadInquiries)
+        .where(eq(leadInquiries.accountId, accountId))
+        .orderBy(desc(leadInquiries.receivedAt), desc(leadInquiries.id));
+      res.json(inquiries);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid client ID", errors: error.errors });
+      }
+      console.error("Error fetching inquiry history:", error);
+      res.status(500).json({ message: "Failed to fetch inquiry history" });
     }
   });
 
@@ -468,22 +571,30 @@ export function registerLeadIntakeRoutes(app: Express) {
       }
 
       const lead = leadIntakeSchema.parse(req.body);
-      const submissionId = resolveLeadIntakeSubmissionId({
+      const submittedId = resolveLeadIntakeSubmissionId({
         headerValue: req.headers["idempotency-key"],
         bodyValue: lead.idempotencyKey,
         metadataValue: lead.metadata,
       });
+      const submissionId = submittedId || randomUUID();
 
       const { account, replayed } = await createIdempotentLead({
         submissionId,
         lead,
-        createLead: (database) => upsertLead(mapLeadToAccount(lead), database),
+        createLead: (database) => preserveAccountAndCreateInquiry(lead, submissionId, database),
       });
+      const [inquiry] = await db
+        .select({ id: leadInquiries.id })
+        .from(leadInquiries)
+        .where(eq(leadInquiries.submissionId, submissionId))
+        .limit(1);
 
       res.status(replayed ? 200 : 201).json({
         success: true,
         leadId: account.id,
         accountId: account.id,
+        inquiryId: inquiry?.id || (account as any).inquiryId,
+        submissionId,
         leadStatus: account.leadStatus || "new",
         createdQuote: false,
         replayed,

@@ -7,9 +7,7 @@ import { getBrandLogoPNG } from './pdf-brand-assets';
 
 const JsPDF = jsPDFNamed || jsPDFDefault;
 
-interface BomLineItem extends LineItem {
-  manufacturer?: string;
-}
+type BomLineItem = LineItem;
 
 interface PdfGroup {
   id: string;

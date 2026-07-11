@@ -78,7 +78,6 @@ export function ClientComboboxWithCreate({
       if (!debouncedSearchQuery.trim()) return [];
       const response = await apiRequest("GET", `/api/clients?search=${encodeURIComponent(debouncedSearchQuery)}`);
       const result = await response.json();
-      console.log("Client search results for", debouncedSearchQuery, ":", result);
       return result;
     },
     enabled: debouncedSearchQuery.trim().length > 0,
@@ -197,11 +196,12 @@ export function ClientComboboxWithCreate({
           <Button
             variant="outline"
             role="combobox"
+            aria-label="Client"
             aria-expanded={open}
-            className="w-full justify-between"
+            className="min-w-0 w-full justify-between"
             data-testid="client-combobox-trigger"
           >
-            {displayName}
+            <span className="min-w-0 truncate">{displayName}</span>
             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
           </Button>
         </PopoverTrigger>
@@ -256,7 +256,6 @@ export function ClientComboboxWithCreate({
                 <CommandGroup>
                   <CommandItem
                     onSelect={() => {
-                      console.log("🗑️ Removing client link - calling onValueChange(null)");
                       onValueChange(null);
                       setOpen(false);
                       toast({
@@ -369,8 +368,8 @@ export function ClientComboboxWithCreate({
                   })
                 }
               >
-                <SelectTrigger data-testid="new-client-type">
-                  <SelectValue />
+                <SelectTrigger aria-label="Client type" data-testid="new-client-type">
+                  <SelectValue placeholder="Select client type" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="homeowner">Homeowner</SelectItem>

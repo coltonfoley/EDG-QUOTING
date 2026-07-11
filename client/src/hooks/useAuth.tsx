@@ -9,11 +9,29 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { ERROR_MESSAGES } from "@/lib/error-utils";
 
+const AUTH_CHECK_FALLBACK = "Unable to verify authentication status. Please check your connection and try again.";
+
+function safeAuthErrorMessage(value: unknown): string {
+  if (typeof value !== "string") return AUTH_CHECK_FALLBACK;
+  const message = value.trim();
+  if (
+    !message
+    || message.length > 240
+    || /<\/?(?:html|body|head|script)|<!doctype/i.test(message)
+    || /unexpected token|json at position|syntaxerror/i.test(message)
+  ) {
+    return AUTH_CHECK_FALLBACK;
+  }
+  return message;
+}
+
 type AuthContextType = {
   user: SelectUser | null;
   isLoading: boolean;
   error: Error | null;
   isAuthenticated: boolean;
+  retryAuth: () => Promise<void>;
+  dismissAuthError: () => void;
   logoutMutation: UseMutationResult<void, Error, void>;
 };
 
@@ -21,12 +39,14 @@ export const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const { toast } = useToast();
+  const [authErrorDismissed, setAuthErrorDismissed] = useState(false);
   
   const {
     data: user,
     error,
     isLoading,
     isError,
+    refetch,
   } = useQuery<SelectUser | undefined, Error>({
     queryKey: ["/api/user"],
     queryFn: async ({ queryKey, signal }) => {
@@ -48,12 +68,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             const contentType = res.headers.get('content-type');
             if (contentType && contentType.includes('application/json')) {
               const errorData = await res.json();
-              errorMessage = errorData.message || errorData.error || res.statusText;
+              errorMessage = safeAuthErrorMessage(errorData.message || errorData.error || res.statusText);
             }
           } catch {
             // Use status text if can't parse JSON
           }
-          throw new Error(errorMessage);
+          throw new Error(safeAuthErrorMessage(errorMessage));
         }
         
         return await res.json();
@@ -78,7 +98,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   
   // Handle error states
   useEffect(() => {
-    if (isError && error) {
+    if (isError && error && !authErrorDismissed) {
       const errorMessage = error?.message || "Authentication check failed";
       // Don't show errors for 401s (normal unauthenticated state) or AbortErrors (normal cancellation)
       if (!errorMessage.includes('401') && error.name !== 'AbortError') {
@@ -89,7 +109,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         });
       }
     }
-  }, [isError, error, toast]);
+  }, [isError, error, authErrorDismissed, toast]);
+
+  const retryAuth = async () => {
+    setAuthErrorDismissed(false);
+    await refetch();
+  };
+
+  const dismissAuthError = () => {
+    setAuthErrorDismissed(true);
+  };
 
   const logoutMutation = useMutation({
     mutationFn: async () => {
@@ -131,8 +160,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       value={{
         user: user ?? null,
         isLoading: effectiveIsLoading,
-        error: isError ? error : null,
+        error: isError && !authErrorDismissed ? error : null,
         isAuthenticated: !!user,
+        retryAuth,
+        dismissAuthError,
         logoutMutation,
       }}
     >

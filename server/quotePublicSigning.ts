@@ -1,6 +1,13 @@
 import crypto from "node:crypto";
 import { sanitizeQuoteApprovalDrawingForPublic } from "@shared/approvalDrawing";
 
+export const CUSTOMER_PACKAGE_VERSION = 1;
+
+export type CustomerPackageIssue = {
+  code: "NO_LINE_ITEMS" | "MISSING_CONTRACT_CONTENT" | "MISSING_VISUALS" | "INVALID_VISUAL_SOURCE";
+  message: string;
+};
+
 export function formatJobsiteAddress(quote: any): string | null {
   const parts: string[] = [];
 
@@ -62,8 +69,126 @@ function signedSnapshotIncludesApprovalDrawing(snapshot: Record<string, any>): b
   return Boolean(snapshot.approvalDrawing);
 }
 
+function getDocumentRevision(quote: any): string | null {
+  if (!quote?.updatedAt) return null;
+  const revision = new Date(quote.updatedAt);
+  return Number.isNaN(revision.getTime()) ? null : revision.toISOString();
+}
+
+function hasContractContent(quote: any): boolean {
+  return Boolean(
+    quote?.notes?.trim?.()
+    || quote?.customContractTerms?.trim?.()
+    || quote?.contractTemplate?.terms?.trim?.(),
+  );
+}
+
+export function getCustomerPackageIssues(quote: any): CustomerPackageIssue[] {
+  const issues: CustomerPackageIssue[] = [];
+  const lineItems = Array.isArray(quote?.lineItems) ? quote.lineItems : [];
+  const renderings = Array.isArray(quote?.productRenderings) ? quote.productRenderings : [];
+
+  if (lineItems.length === 0) {
+    issues.push({
+      code: "NO_LINE_ITEMS",
+      message: "This proposal has no line items. Add scope before preparing it for customer approval.",
+    });
+  }
+
+  if (quote?.esigIncludeContract === true && !hasContractContent(quote)) {
+    issues.push({
+      code: "MISSING_CONTRACT_CONTENT",
+      message: "Contract notes and terms are included, but no customer-facing contract content is available.",
+    });
+  }
+
+  if (quote?.esigIncludeImages === true && renderings.length === 0) {
+    issues.push({
+      code: "MISSING_VISUALS",
+      message: "Visuals are included, but no proposal visuals are attached.",
+    });
+  }
+
+  if (
+    quote?.esigIncludeImages === true
+    && renderings.some((rendering: any) => typeof rendering?.storageUrl !== "string" || rendering.storageUrl.trim().length === 0)
+  ) {
+    issues.push({
+      code: "INVALID_VISUAL_SOURCE",
+      message: "At least one included visual has no usable file source.",
+    });
+  }
+
+  return issues;
+}
+
+function sanitizeContractTemplate(template: any) {
+  if (!template) return undefined;
+  return {
+    id: template.id,
+    name: template.name,
+    title: template.title,
+    terms: template.terms,
+  };
+}
+
+function sanitizePublicGroups(groups: any[]) {
+  return [...groups]
+    .sort((left, right) => Number(left.position || 0) - Number(right.position || 0))
+    .map((group: any) => ({
+      id: group.id,
+      title: group.title,
+      position: group.position,
+    }));
+}
+
+function sanitizePublicVisuals(renderings: any[]) {
+  return [...renderings]
+    .sort((left, right) => Number(left.displayOrder || 0) - Number(right.displayOrder || 0))
+    .map((rendering: any) => ({
+      id: rendering.id,
+      storageUrl: rendering.storageUrl,
+      filename: rendering.filename,
+      originalName: rendering.originalName,
+      mimeType: rendering.mimeType,
+      displayOrder: rendering.displayOrder,
+    }));
+}
+
+function sanitizePublicCoverPhoto(photo: any) {
+  if (!photo) return undefined;
+  return {
+    id: photo.id,
+    storageUrl: photo.storageUrl,
+    filename: photo.filename,
+    originalName: photo.originalName,
+    mimeType: photo.mimeType,
+  };
+}
+
+function createCustomerPackageFingerprint(packageData: Record<string, any>): string {
+  const {
+    customerPackageFingerprint: _customerPackageFingerprint,
+    documentRevision: _documentRevision,
+    packageIssues: _packageIssues,
+    clientSignatureData: _clientSignatureData,
+    clientSignedAt: _clientSignedAt,
+    clientSignedIp: _clientSignedIp,
+    companySignatureData: _companySignatureData,
+    companySignedAt: _companySignedAt,
+    companySignedIp: _companySignedIp,
+    signedDocumentSnapshot: _signedDocumentSnapshot,
+    signatureAuditTrail: _signatureAuditTrail,
+    ...reviewedPackage
+  } = packageData;
+  return createDocumentFingerprint(reviewedPackage);
+}
+
 export function buildPublicSigningQuote(quote: any) {
   const includeApprovalDrawing = shouldIncludeApprovalDrawingInPackage(quote);
+  const includeImages = quote.esigIncludeImages ?? false;
+  const quoteGroups = Array.isArray(quote.groups) ? quote.groups : [];
+  const productRenderings = Array.isArray(quote.productRenderings) ? quote.productRenderings : [];
   const publicLineItems = (quote.lineItems || []).map((item: any) => {
     const quantity = Math.max(0, parseMoney(item.quantity));
     const lineTotal = calculatePublicLineTotal(item, quote);
@@ -85,10 +210,14 @@ export function buildPublicSigningQuote(quote: any) {
       position: item.position,
       sku: item.sku,
       manufacturer: item.manufacturer,
+      unit: item.unit,
     };
   });
 
   const publicQuote = {
+    customerPackageVersion: CUSTOMER_PACKAGE_VERSION,
+    documentRevision: getDocumentRevision(quote),
+    packageIssues: getCustomerPackageIssues(quote),
     id: quote.id,
     quoteNumber: quote.quoteNumber,
     projectName: quote.projectName,
@@ -117,11 +246,14 @@ export function buildPublicSigningQuote(quote: any) {
       lastName: quote.account.lastName,
     } : undefined,
     lineItems: publicLineItems,
+    groups: sanitizePublicGroups(quoteGroups),
+    productRenderings: includeImages ? sanitizePublicVisuals(productRenderings) : [],
+    coverPhoto: includeImages ? sanitizePublicCoverPhoto(quote.coverPhoto) : undefined,
     taxRate: quote.taxRate,
     discount: quote.discount,
     shipping: quote.shipping,
     isShippingTaxable: quote.isShippingTaxable,
-    contractTemplate: quote.esigIncludeContract ? quote.contractTemplate : undefined,
+    contractTemplate: quote.esigIncludeContract ? sanitizeContractTemplate(quote.contractTemplate) : undefined,
     customContractTerms: quote.esigIncludeContract ? quote.customContractTerms : null,
     notes: quote.esigIncludeContract ? quote.notes : null,
     clientSignatureData: quote.clientSignatureData,
@@ -133,12 +265,16 @@ export function buildPublicSigningQuote(quote: any) {
     signedDocumentSnapshot: quote.signedDocumentSnapshot,
     signatureAuditTrail: quote.signatureAuditTrail,
     esigIncludePricing: quote.esigIncludePricing ?? true,
-    esigIncludeImages: quote.esigIncludeImages ?? false,
+    esigIncludeImages: includeImages,
     esigIncludeContract: quote.esigIncludeContract ?? true,
     esigIncludeApprovalDrawing: includeApprovalDrawing,
     approvalDrawing: includeApprovalDrawing
       ? sanitizeQuoteApprovalDrawingForPublic(quote.approvalDrawing)
       : null,
+  };
+  const packageWithFingerprint = {
+    ...publicQuote,
+    customerPackageFingerprint: createCustomerPackageFingerprint(publicQuote),
   };
 
   if (quote.signedDocumentSnapshot) {
@@ -147,6 +283,9 @@ export function buildPublicSigningQuote(quote: any) {
 
     return {
       ...snapshot,
+      customerPackageVersion: snapshot.customerPackageVersion ?? 0,
+      customerPackageFingerprint: snapshot.customerPackageFingerprint ?? null,
+      packageIssues: Array.isArray(snapshot.packageIssues) ? snapshot.packageIssues : [],
       approvalDrawing: snapshotIncludesApprovalDrawing ? snapshot.approvalDrawing : null,
       esigIncludeApprovalDrawing: snapshotIncludesApprovalDrawing,
       clientSignatureData: quote.clientSignatureData,
@@ -159,7 +298,7 @@ export function buildPublicSigningQuote(quote: any) {
     };
   }
 
-  return publicQuote;
+  return packageWithFingerprint;
 }
 
 export function isArchivedQuoteVersion(quote: { isLatestVersion?: boolean | null }): boolean {

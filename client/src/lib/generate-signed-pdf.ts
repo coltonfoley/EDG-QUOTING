@@ -56,14 +56,15 @@ export async function generateSignedPDF(options: GenerateSignedPDFOptions): Prom
   // Prepare normalized images if requested
   let normalizedImages: Array<{ dataUrl: string; format: 'PNG' | 'JPEG' }> = [];
   if (includeImages && quote.productRenderings && quote.productRenderings.length > 0) {
-    const imageResults = await Promise.allSettled(
-      quote.productRenderings.map(async (rendering: QuoteProductRendering) => {
-        return await normalizeImage(rendering.storageUrl);
-      })
-    );
-    normalizedImages = imageResults
-      .filter((r): r is PromiseFulfilledResult<{ dataUrl: string; format: 'PNG' | 'JPEG' }> => r.status === 'fulfilled')
-      .map(r => r.value);
+    try {
+      normalizedImages = await Promise.all(
+        quote.productRenderings.map(async (rendering: QuoteProductRendering) => {
+          return await normalizeImage(rendering.storageUrl);
+        })
+      );
+    } catch {
+      throw new Error('One or more included proposal visuals could not be loaded. Refresh the document or contact EDG before approving.');
+    }
   }
 
   // Company information
@@ -90,8 +91,8 @@ export async function generateSignedPDF(options: GenerateSignedPDFOptions): Prom
     try {
       const result = await normalizeImage(quote.coverPhoto.storageUrl);
       clientLogoDataUrl = result.dataUrl;
-    } catch (error) {
-      console.warn('Failed to load client logo:', error);
+    } catch {
+      throw new Error('The included proposal cover image could not be loaded. Refresh the document or contact EDG before approving.');
     }
   }
 

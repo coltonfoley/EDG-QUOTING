@@ -16,12 +16,14 @@ import {
   DragEndEvent, 
   DragOverEvent, 
   DragStartEvent,
+  KeyboardSensor,
   PointerSensor,
   useSensor,
   useSensors,
   closestCenter,
   DragOverlay
 } from '@dnd-kit/core';
+import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import {
   SortableContext,
   verticalListSortingStrategy
@@ -36,11 +38,13 @@ import {
 } from './group-components';
 import { ProductConfigurator } from './product-configurator';
 import { HeaderHelp, SortableLineItemRow } from './sortable-line-item-row';
+import { isSignedQuoteLockApiError, SIGNED_QUOTE_READ_ONLY_MESSAGE } from "@/lib/quote-lock";
 
 interface LineItemsTableProps {
   quoteId: number;
   lineItems: LineItem[];
   tariffRate: string | number;
+  isReadOnly?: boolean;
 }
 
 type PricingDefaultResponse = {
@@ -50,20 +54,31 @@ type PricingDefaultResponse = {
   updatedAt: string | null;
 };
 
-export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTableProps) {
+const createEmptyLineItemDraft = () => ({
+  productId: null as number | null,
+  sku: null as string | null,
+  manufacturer: null as string | null,
+  unit: null as string | null,
+  priceSource: "manual",
+  configData: null as Record<string, unknown> | null,
+  description: "",
+  quantity: "1",
+  retailPrice: "",
+  unitPrice: "0",
+  discountType: "percentage" as "percentage" | "dollar",
+  discountValue: "0",
+  markupType: "percentage" as "percentage" | "dollar",
+  markupValue: "0",
+});
+
+export function LineItemsTable({ quoteId, lineItems, tariffRate, isReadOnly = false }: LineItemsTableProps) {
   // Check if quote is new (not saved yet)
   const isUnsavedQuote = !quoteId || quoteId === 0;
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
   
-  const [newItem, setNewItem] = useState({
-    description: "",
-    quantity: "1",
-    retailPrice: "",
-    unitPrice: "0",
-    discountType: "percentage" as "percentage" | "dollar",
-    discountValue: "0",
-    markupType: "percentage" as "percentage" | "dollar",
-    markupValue: "0",
-  });
+  const [newItem, setNewItem] = useState(createEmptyLineItemDraft);
+  const [newItemTargetGroupId, setNewItemTargetGroupId] = useState<string | null>(null);
   const [showNewItemForm, setShowNewItemForm] = useState(false);
   const [showProductDialog, setShowProductDialog] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -72,6 +87,7 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
   const [selectedConfigurableProduct, setSelectedConfigurableProduct] = useState<Product | null>(null);
   const [dimensions, setDimensions] = useState({ length: "", width: "" });
   const [calculatedPrice, setCalculatedPrice] = useState<number | null>(null);
+  const [dimensionPricingError, setDimensionPricingError] = useState<string | null>(null);
   const [isCleaningDescriptions, setIsCleaningDescriptions] = useState(false);
   
   // Group management state
@@ -146,6 +162,37 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
       };
     };
   }, []);
+
+  useEffect(() => {
+    if (!isReadOnly) return;
+    setShowNewItemForm(false);
+    setShowProductDialog(false);
+    setShowDimensionDialog(false);
+    setShowCreateGroupDialog(false);
+    setShowConfiguratorDialog(false);
+    setShowBulkMarginDialog(false);
+    setEditingGroupId(null);
+    setActiveId(null);
+    setOverId(null);
+  }, [isReadOnly]);
+
+  const handleSignedQuoteLock = useCallback((error: unknown): boolean => {
+    if (!isSignedQuoteLockApiError(error)) return false;
+    pendingMutations.current = { create: null, update: {}, delete: null, calculate: null };
+    setDirtyRows(new Set());
+    setEditingRowId(null);
+    setShowNewItemForm(false);
+    setShowProductDialog(false);
+    setShowCreateGroupDialog(false);
+    setShowConfiguratorDialog(false);
+    queryClient.invalidateQueries({ queryKey: [`/api/quotes/${quoteId}`] });
+    toast({
+      title: "Quote is now read only",
+      description: SIGNED_QUOTE_READ_ONLY_MESSAGE,
+      variant: "destructive",
+    });
+    return true;
+  }, [queryClient, quoteId, toast]);
 
   // Initialize local values when lineItems change
   // Only update rows that are NOT dirty (have unsaved changes) and NOT currently being edited
@@ -245,9 +292,6 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
       }
     }
   });
-
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
 
   const { data: products } = useQuery<Product[]>({
     queryKey: ["/api/products"],
@@ -640,20 +684,13 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
         });
       });
       
-      setNewItem({
-        description: "",
-        quantity: "1",
-        retailPrice: "",
-        unitPrice: "0",
-        discountType: "percentage",
-        discountValue: "0",
-        markupType: "percentage",
-        markupValue: "0",
-      });
+      setNewItem(createEmptyLineItemDraft());
+      setNewItemTargetGroupId(null);
       setShowNewItemForm(false);
       toast({ title: "Line item added successfully" });
     },
     onError: (error: any) => {
+      if (handleSignedQuoteLock(error)) return;
       // Clear the pending mutation reference
       pendingMutations.current.create = null;
       
@@ -763,6 +800,7 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
       });
     },
     onError: (error: any, variables) => {
+      if (handleSignedQuoteLock(error)) return;
       // Clear the pending mutation reference
       const updateKey = `update-${variables.id}`;
       delete pendingMutations.current.update[updateKey];
@@ -823,6 +861,7 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
       toast({ title: "Group created successfully" });
     },
     onError: (error: any) => {
+      if (handleSignedQuoteLock(error)) return;
       // Check if the error is due to abort and handle gracefully
       if (error instanceof NavigationAbortError || error?.name === 'AbortError' || error?.message?.includes('aborted') || error?.message?.includes('signal is aborted')) {
         // Silent abort - don't show error toast for user-initiated cancellations
@@ -857,6 +896,7 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
       queryClient.invalidateQueries({ queryKey: ["/api/quotes", quoteId, "groups"] });
     },
     onError: (error: any) => {
+      if (handleSignedQuoteLock(error)) return;
       // Check if the error is due to abort and handle gracefully
       if (error instanceof NavigationAbortError || error?.name === 'AbortError' || error?.message?.includes('aborted') || error?.message?.includes('signal is aborted')) {
         // Silent abort - don't show error toast for user-initiated cancellations
@@ -892,6 +932,7 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
       toast({ title: "Group deleted successfully" });
     },
     onError: (error: any) => {
+      if (handleSignedQuoteLock(error)) return;
       // Check if the error is due to abort and handle gracefully
       if (error instanceof NavigationAbortError || error?.name === 'AbortError' || error?.message?.includes('aborted') || error?.message?.includes('signal is aborted')) {
         // Silent abort - don't show error toast for user-initiated cancellations
@@ -931,6 +972,7 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
       queryClient.invalidateQueries({ queryKey: ["/api/quotes", quoteId, "groups"] });
     },
     onError: (error: any) => {
+      if (handleSignedQuoteLock(error)) return;
       // Check if the error is due to abort and handle gracefully
       if (error instanceof NavigationAbortError || error?.name === 'AbortError' || error?.message?.includes('aborted') || error?.message?.includes('signal is aborted')) {
         // Silent abort - don't show error toast for user-initiated cancellations
@@ -954,6 +996,7 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
       queryClient.invalidateQueries({ queryKey: ["/api/quotes", quoteId, "groups"] });
     },
     onError: (error: any) => {
+      if (handleSignedQuoteLock(error)) return;
       // Check if the error is due to abort and handle gracefully
       if (error instanceof NavigationAbortError || error?.name === 'AbortError' || error?.message?.includes('aborted') || error?.message?.includes('signal is aborted')) {
         // Silent abort - don't show error toast for user-initiated cancellations
@@ -1002,6 +1045,7 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
       toast({ title: "Line item deleted successfully" });
     },
     onError: (error: any) => {
+      if (handleSignedQuoteLock(error)) return;
       // Clear the pending mutation reference
       pendingMutations.current.delete = null;
       
@@ -1019,7 +1063,8 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
       try {
         const response = await apiRequest("POST", `/api/products/${data.productId}/calculate-price`, {
           length: data.length,
-          width: data.width
+          width: data.width,
+          sourceUnit: "feet",
         }, {
           signal: abortController.current.signal
         });
@@ -1042,6 +1087,7 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
       
       // Clear the pending mutation reference
       pendingMutations.current.calculate = null;
+      setDimensionPricingError(null);
       
       if (selectedConfigurableProduct) {
         setCalculatedPrice(data.price);
@@ -1049,6 +1095,12 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
           ...currentItem,
           description: selectedConfigurableProduct.name,
           unitPrice: data.price.toString(),
+          retailPrice: selectedConfigurableProduct.retailPrice?.toString() || "",
+          configData: {
+            length: data.length,
+            width: data.width,
+            calculatedPrice: data.price,
+          },
         }));
       }
     },
@@ -1061,7 +1113,12 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
         // Silent abort - don't show error toast for user-initiated cancellations
         return;
       }
-      toast({ title: "Error", description: "Failed to calculate pricing", variant: "destructive" });
+      toast({
+        title: "Manual pricing review required",
+        description: error?.message || "No exact pricing band covers those dimensions.",
+        variant: "destructive",
+      });
+      setDimensionPricingError(error?.message || "No exact pricing band covers those dimensions. Manual pricing review is required.");
     },
   });
 
@@ -1239,9 +1296,23 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
       discountType: newItem.discountType,
       discountValue: parseFloat(newItem.discountValue || "0"),
       retailPrice: newItem.retailPrice ? parseFloat(newItem.retailPrice) : null,
+      productId: newItem.productId,
+      sku: newItem.sku,
+      manufacturer: newItem.manufacturer,
+      unit: newItem.unit,
+      priceSource: newItem.priceSource,
+      configData: newItem.configData,
+      groupId: newItemTargetGroupId,
     };
     
     createLineItemMutation.mutate(data);
+  };
+
+  const openCustomItemForm = (groupId: string | null = null) => {
+    setNewItem(createEmptyLineItemDraft());
+    setNewItemTargetGroupId(groupId);
+    setNewItemErrors({});
+    setShowNewItemForm(true);
   };
 
   const handleProductSelect = (product: Product) => {
@@ -1253,10 +1324,17 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
     if (product.productType === "configurable") {
       setNewItem((currentItem) => ({
         ...currentItem,
+        productId: product.id,
+        sku: product.sku,
+        manufacturer: product.manufacturer,
+        unit: product.unit,
+        priceSource: "dimensional_catalog",
         markupType: "percentage",
         markupValue: defaultMarkupValue,
       }));
       setSelectedConfigurableProduct(product);
+      setCalculatedPrice(null);
+      setDimensionPricingError(null);
       setShowProductDialog(false);
       setShowDimensionDialog(true);
     } else {
@@ -1265,6 +1343,12 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
       
       setNewItem((currentItem) => ({
         ...currentItem,
+        productId: product.id,
+        sku: product.sku,
+        manufacturer: product.manufacturer,
+        unit: product.unit,
+        priceSource: "catalog_cost",
+        configData: null,
         description: product.name,
         retailPrice: product.retailPrice?.toString() || "",
         unitPrice: calculatedUnitPrice,
@@ -1282,6 +1366,7 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
     if (selectedConfigurableProduct) {
       const length = parseFloat(dimensions.length) || 0;
       const width = parseFloat(dimensions.width) || 0;
+      setDimensionPricingError(null);
 
       calculatePricingMutation.mutate({
         productId: selectedConfigurableProduct.id,
@@ -1304,8 +1389,12 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
       activationConstraint: {
         distance: 8,
       },
-    })
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
   );
+  const activeSensors = useMemo(() => isReadOnly ? [] : sensors, [isReadOnly, sensors]);
 
   // Group line items by groupId
   const groupedLineItems = useMemo(() => {
@@ -1370,18 +1459,6 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
   };
 
   const handleDeleteGroup = (groupId: string) => {
-    // Move all items in this group to ungrouped
-    const itemsInGroup = groupedLineItems.grouped[groupId] || [];
-    const moves = itemsInGroup.map((item, index) => ({
-      id: item.id,
-      groupId: null,
-      position: index
-    }));
-    
-    if (moves.length > 0) {
-      reorderLineItemsMutation.mutate(moves);
-    }
-    
     deleteGroupMutation.mutate(groupId);
   };
 
@@ -1643,7 +1720,7 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
   }, [filteredProducts]);
 
   return (
-    <div className="mb-6">
+    <fieldset disabled={isReadOnly} aria-label="Quote line items" className="mb-6 min-w-0 border-0 p-0">
       <div className="border-b border-border bg-card px-4 py-3">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
@@ -1760,6 +1837,10 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
                   variant="outline"
                   className="text-sm"
                   disabled={isUnsavedQuote}
+                  onClick={() => {
+                    setNewItem(createEmptyLineItemDraft());
+                    setNewItemTargetGroupId(null);
+                  }}
                 >
                   <Package className="mr-2 h-4 w-4" />
                   Add From Catalog
@@ -1780,6 +1861,7 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
                       <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
                       <Input
                         placeholder="Search products..."
+                        aria-label="Search product catalog"
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                         className="pl-9"
@@ -1788,7 +1870,7 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
                     </div>
                     
                     <Select value={selectedManufacturer} onValueChange={setSelectedManufacturer}>
-                      <SelectTrigger className="w-full sm:w-48" data-testid="select-manufacturer-filter">
+                      <SelectTrigger className="w-full sm:w-48" aria-label="Filter products by manufacturer" data-testid="select-manufacturer-filter">
                         <SelectValue>
                           <div className="flex items-center gap-2">
                             <Filter className="h-4 w-4" />
@@ -1807,8 +1889,10 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
                     </Select>
                     
                     <Button
+                      type="button"
                       variant="ghost"
                       size="sm"
+                      aria-label="Clear product filters"
                       onClick={() => {
                         setSearchTerm("");
                         setSelectedManufacturer("all");
@@ -1816,7 +1900,7 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
                       className="px-3"
                       data-testid="button-clear-filters"
                     >
-                      <X className="h-4 w-4" />
+                      <X className="h-4 w-4" aria-hidden="true" />
                     </Button>
                   </div>
 
@@ -1834,10 +1918,11 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
                           </div>
                           <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                             {products.map((product) => (
-                              <div
+                              <button
+                                type="button"
                                 key={product.id}
                                 onClick={() => handleProductSelect(product)}
-                                className="p-3 border border-border rounded hover:bg-primary/10 hover:border-blue-300 cursor-pointer transition-colors"
+                                className="w-full rounded border border-border p-3 text-left transition-colors hover:border-blue-300 hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                                 data-testid={`product-card-${product.id}`}
                               >
                                 <div className="mb-1 flex flex-wrap items-center gap-2">
@@ -1866,7 +1951,7 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
                                     </Badge>
                                   )}
                                 </div>
-                              </div>
+                              </button>
                             ))}
                           </div>
                         </div>
@@ -1887,8 +1972,8 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
               Sundance Builder
             </Button>
             <Button
-              onClick={() => setShowNewItemForm(true)}
-              className="bg-edg-black hover:bg-edg-grey text-white text-sm"
+              onClick={() => openCustomItemForm(null)}
+              className="text-sm"
               disabled={isUnsavedQuote}
             >
               <Plus className="mr-2 h-4 w-4" />
@@ -1902,20 +1987,25 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
         {/* Alert message for unsaved quotes */}
         {isUnsavedQuote && (
           <div className="p-4 border-b border-border bg-primary/10">
-            <div className="text-blue-800 text-sm">
+            <div className="text-foreground text-sm">
               <strong>Save the quote first</strong> - You need to save the quote before you can add line items.
             </div>
           </div>
         )}
         
         <DndContext
-          sensors={sensors}
+          sensors={activeSensors}
           collisionDetection={closestCenter}
           onDragStart={handleDragStart}
           onDragOver={handleDragOver}
           onDragEnd={handleDragEnd}
         >
-          <div className="overflow-x-auto">
+          <div
+            className="overflow-x-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+            role="region"
+            aria-label="Quote line items table; scroll horizontally for all pricing columns"
+            tabIndex={0}
+          >
             <table className="w-full border border-border divide-y divide-gray-300">
               <colgroup>
                 <col style={{width: '40px'}} /><col style={{width: '26%'}} /><col style={{width: '80px'}} /><col style={{width: '100px'}} /><col style={{width: '160px'}} /><col style={{width: '120px'}} /><col style={{width: '100px'}} /><col style={{width: '140px'}} /><col style={{width: '90px'}} /><col style={{width: '80px'}} /><col style={{width: '80px'}} />
@@ -1923,7 +2013,8 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
               <thead>
                 <tr className="bg-muted">
                   <th className="border-r border-border px-2 py-2 text-center text-sm font-medium text-foreground w-8">
-                    <GripVertical className="h-4 w-4 mx-auto" />
+                    <GripVertical className="h-4 w-4 mx-auto" aria-hidden="true" />
+                    <span className="sr-only">Reorder</span>
                   </th>
                   <th className="border-r border-border px-3 py-2 text-left text-sm font-medium text-foreground">
                     Description
@@ -2025,6 +2116,10 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
                 )}
 
                 {/* Render groups */}
+                <SortableContext
+                  items={sortedGroups.map((group) => `group-${group.id}`)}
+                  strategy={verticalListSortingStrategy}
+                >
                 {sortedGroups.map((group) => {
                   const groupItems = groupedLineItems.grouped[group.id] || [];
                   
@@ -2074,12 +2169,13 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
                         <GroupFooter
                           group={group}
                           lineItems={groupItems}
-                          onAddItem={() => setShowNewItemForm(true)}
+                          onAddItem={() => openCustomItemForm(group.id)}
                         />
                       )}
                     </React.Fragment>
                   );
                 })}
+                </SortableContext>
 
                 {/* Show ungrouped drop zone when dragging and groups exist */}
                 {activeId && !activeId.startsWith('group-') && sortedGroups.length > 0 && (
@@ -2114,6 +2210,17 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
       {/* Add new item form */}
       {showNewItemForm && (
         <div className="bg-muted border-t border-border p-4">
+          <div className="mb-3 flex flex-wrap items-center gap-2 text-sm">
+            <span className="font-medium text-foreground">
+              {newItem.productId ? "Catalog item" : "Custom item"}
+            </span>
+            <Badge variant="outline" data-testid="new-item-target-group">
+              {newItemTargetGroupId
+                ? `Adding to ${groups.find((group) => group.id === newItemTargetGroupId)?.title || "selected group"}`
+                : "Adding to ungrouped items"}
+            </Badge>
+            {newItem.sku && <Badge variant="secondary">SKU {newItem.sku}</Badge>}
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
             <div className="md:col-span-2">
               <label className="block text-sm font-medium text-foreground mb-1">Description</label>
@@ -2216,7 +2323,11 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
                 Save
               </Button>
               <Button
-                onClick={() => setShowNewItemForm(false)}
+                onClick={() => {
+                  setShowNewItemForm(false);
+                  setNewItem(createEmptyLineItemDraft());
+                  setNewItemTargetGroupId(null);
+                }}
                 variant="outline"
                 className="text-sm"
                 data-testid="button-cancel-item"
@@ -2229,7 +2340,13 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
       )}
 
       {/* Dimension Dialog */}
-      <Dialog open={showDimensionDialog} onOpenChange={setShowDimensionDialog}>
+      <Dialog
+        open={showDimensionDialog}
+        onOpenChange={(open) => {
+          setShowDimensionDialog(open);
+          if (!open) setDimensionPricingError(null);
+        }}
+      >
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Enter Dimensions</DialogTitle>
@@ -2271,6 +2388,16 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
                 </div>
               </div>
             )}
+            {dimensionPricingError && (
+              <div
+                role="alert"
+                className="rounded border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive"
+                data-testid="dimensional-pricing-error"
+              >
+                <div className="font-medium">Manual pricing review required</div>
+                <div className="mt-1">{dimensionPricingError}</div>
+              </div>
+            )}
             <div className="flex justify-end space-x-2">
               <Button
                 variant="outline"
@@ -2308,6 +2435,6 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate }: LineItemsTabl
         }}
       />
 
-    </div>
+    </fieldset>
   );
 }

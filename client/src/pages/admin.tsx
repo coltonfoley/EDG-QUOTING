@@ -8,6 +8,9 @@ import { Edit, Package, Settings, Shield, Trash2, User as UserIcon } from "lucid
 import type { User } from "@shared/schema";
 import { AppHeader } from "@/components/app-header";
 import { StorageUsageCard } from "@/components/storage-usage-card";
+import { EmailDeliveryHealthCard } from "@/components/email-delivery-health-card";
+import { AdoptionSummaryCard } from "@/components/adoption-summary-card";
+import { ErrorAlert } from "@/components/error-alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -37,7 +40,7 @@ export default function AdminPage() {
   const queryClient = useQueryClient();
   const [editingUser, setEditingUser] = useState<User | null>(null);
 
-  const { data: users = [], isLoading } = useQuery<User[]>({
+  const { data: users = [], error: usersError, isLoading, refetch: refetchUsers } = useQuery<User[]>({
     queryKey: ["/api/admin/users"],
     enabled: user?.role === "admin",
   });
@@ -92,25 +95,27 @@ export default function AdminPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-background">
       <AppHeader />
-      <div className="max-w-6xl mx-auto px-4 py-8">
+      <main className="max-w-6xl mx-auto px-4 py-8">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Administration</h1>
-          <p className="text-gray-600">Manage Google Workspace access and system settings</p>
+          <h1 className="text-3xl font-bold text-foreground mb-2">Administration</h1>
+          <p className="text-muted-foreground">Manage Google Workspace access and system settings</p>
           <div className="flex space-x-1 mt-6 border-b">
-            <button className="px-4 py-2 text-sm font-medium text-edg-black border-b-2 border-edg-black bg-white">Users & Access</button>
-            <Link href="/admin/contracts" className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-edg-black"><Settings className="inline mr-2 h-4 w-4" />Contracts</Link>
+            <span aria-current="page" className="border-b-2 border-foreground px-4 py-2 text-sm font-medium text-foreground">Users & Access</span>
+            <Link href="/admin/contracts" className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground"><Settings className="inline mr-2 h-4 w-4" />Contracts</Link>
           </div>
         </div>
 
         <Card>
           <CardHeader>
             <CardTitle>Workspace Team Members</CardTitle>
-            <p className="text-sm text-gray-600">New users sign in with an approved EDG Google Workspace account. Password accounts are not supported.</p>
+            <p className="text-sm text-muted-foreground">New users sign in with an approved EDG Google Workspace account. Password accounts are not supported.</p>
           </CardHeader>
           <CardContent>
-            {isLoading ? <div className="text-center py-8">Loading users...</div> : (
+            {usersError ? (
+              <ErrorAlert error={usersError} title="Team members could not be loaded" onRetry={() => void refetchUsers()} />
+            ) : isLoading ? <div className="text-center py-8">Loading users...</div> : (
               <Table>
                 <TableHeader><TableRow><TableHead>Username</TableHead><TableHead>Name</TableHead><TableHead>Workspace Email</TableHead><TableHead>Role</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
                 <TableBody>
@@ -121,8 +126,8 @@ export default function AdminPage() {
                       <TableCell>{teamMember.email || "—"}</TableCell>
                       <TableCell><div className="flex items-center gap-1">{teamMember.role === "admin" ? <Shield className="h-4 w-4 text-blue-600" /> : <UserIcon className="h-4 w-4" />}{teamMember.role}</div></TableCell>
                       <TableCell className="text-right">
-                        <Button variant="ghost" size="sm" onClick={() => openEditDialog(teamMember)}><Edit className="h-4 w-4" /></Button>
-                        <Button variant="ghost" size="sm" disabled={user.id === teamMember.id} onClick={() => confirm("Remove this team member's Rainmaker access?") && deleteUserMutation.mutate(teamMember.id)}><Trash2 className="h-4 w-4 text-red-600" /></Button>
+                        <Button variant="ghost" size="sm" aria-label={`Edit ${teamMember.username}`} onClick={() => openEditDialog(teamMember)}><Edit className="h-4 w-4" /></Button>
+                        <Button variant="ghost" size="sm" aria-label={`Remove ${teamMember.username}`} disabled={user.id === teamMember.id} onClick={() => confirm("Remove this team member's Rainmaker access?") && deleteUserMutation.mutate(teamMember.id)}><Trash2 className="h-4 w-4 text-red-600" /></Button>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -151,8 +156,10 @@ export default function AdminPage() {
         </Dialog>
 
         <Card className="mt-8 border-edg-teal/30 bg-edg-teal/5"><CardHeader><CardTitle className="flex items-center gap-2"><Package className="h-5 w-5" />Product tools moved to Products</CardTitle></CardHeader><CardContent><Button asChild><Link href="/products">Open Products</Link></Button></CardContent></Card>
+        <EmailDeliveryHealthCard />
+        <AdoptionSummaryCard />
         <StorageUsageCard />
-      </div>
+      </main>
     </div>
   );
 }

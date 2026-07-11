@@ -1,5 +1,7 @@
 # Rainmaker Order Approval Drawing Feature Plan
 
+> Historical reference only. The Ops Portal and Send to Ops workflow are retired. Do not implement or revive any Ops handoff described below. Existing approval-drawing records remain compatibility data.
+
 Research date: June 22, 2026
 
 ## Short Summary

@@ -354,7 +354,7 @@ export function registerImageRoutes(app: Express) {
       
       const imageUrl = validatedData.data.url;
       
-      console.log(`🔧 Proxying image request: ${imageUrl}`);
+      console.log("Proxying validated image request");
       
       // If it's an internal objects URL, handle directly
       if (imageUrl.includes('/objects/')) {
@@ -382,7 +382,7 @@ export function registerImageRoutes(app: Express) {
       const buffer = await readResponseBufferWithLimit(response, MAX_IMAGE_PROXY_BYTES);
       const contentType = response.headers.get('content-type') || 'application/octet-stream';
       
-      console.log(`✅ Successfully proxied image: ${imageUrl} (${buffer.byteLength} bytes, ${contentType})`);
+      console.log("Successfully proxied validated image", { bytes: buffer.byteLength, contentType });
       
       // Set appropriate headers and send the image
       res.setHeader('Content-Type', contentType);

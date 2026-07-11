@@ -31,13 +31,10 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    // Log error details for debugging
-    console.error("Error Boundary caught:", error, errorInfo);
-    
-    // In production, you might want to send this to an error reporting service
-    if (process.env.NODE_ENV === 'production') {
-      // Send to error tracking service like Sentry
-      // logErrorToService(error, errorInfo);
+    if (process.env.NODE_ENV === "development") {
+      console.error("Error Boundary caught:", error, errorInfo);
+    } else {
+      console.error("Error Boundary caught", { errorName: error.name });
     }
     
     this.setState({
@@ -69,7 +66,7 @@ export class ErrorBoundary extends Component<Props, State> {
       
       // Determine error type and provide user-friendly message
       let userFriendlyMessage = "Something went wrong while loading this page.";
-      let actionMessage = "We've been notified and are working to fix it.";
+      let actionMessage = "Please try again. If the problem continues, contact support with the error code below.";
       
       if (isAppUpdateError) {
         userFriendlyMessage = "Rainmaker was updated while this browser tab was open.";

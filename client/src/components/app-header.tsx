@@ -1,4 +1,4 @@
-import { Bell, LogOut, CloudRain } from "lucide-react";
+import { LogOut, CloudRain } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { 
@@ -12,11 +12,21 @@ import {
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { cn } from "@/lib/utils";
 
 export function AppHeader() {
   const [location] = useLocation();
   const { user, logoutMutation } = useAuth();
   const showBanner = location === "/";
+  const navItems = [
+    { href: "/", label: "Home", active: location === "/" },
+    { href: "/leads", label: "Leads", active: location.startsWith("/leads") },
+    { href: "/accounts", label: "Clients", active: location.startsWith("/accounts") },
+    { href: "/quotes", label: "Quotes", active: location.startsWith("/quotes") },
+    { href: "/pipeline", label: "Pipeline", active: location === "/pipeline" },
+    { href: "/products", label: "Products", active: location.startsWith("/products") },
+    ...(user?.role === "admin" ? [{ href: "/admin", label: "Admin", active: location.startsWith("/admin") }] : []),
+  ];
 
   const handleLogout = () => {
     logoutMutation.mutate();
@@ -37,7 +47,7 @@ export function AppHeader() {
         <div className="flex justify-between items-center h-16">
           <div className="flex items-center space-x-8">
             <div className="flex-shrink-0 flex items-center">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 160" className="h-16 mr-3" role="img" aria-label="EDG Rainmaker — primary logo (light)">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 160" className="h-12 w-48 sm:h-16 sm:w-auto mr-2 sm:mr-3" role="img" aria-label="EDG Rainmaker — primary logo">
                 <defs>
                   <linearGradient id="tealGrad1" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="#00bfa5"/>
@@ -60,83 +70,40 @@ export function AppHeader() {
                 </g>
 
                 <g transform="translate(136, 40)">
-                  <text x="0" y="56" fontSize="62" fontWeight="800" fill="#0b1115"
+                  <text x="0" y="56" fontSize="62" fontWeight="800" className="fill-[#0b1115] dark:fill-white"
                         fontFamily="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">Rainmaker</text>
-                  <text x="2" y="84" fontSize="16" fontWeight="600" fill="#6b7785"
+                  <text x="2" y="84" fontSize="16" fontWeight="600" className="fill-[#6b7785] dark:fill-[#aab4c0]"
                         fontFamily="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
                         letterSpacing=".22em" style={{textTransform: 'uppercase'}}>by EDG</text>
                 </g>
               </svg>
             </div>
-            <nav className="hidden md:flex space-x-6">
-              <Link href="/" className={`text-sm font-medium transition-colors hover:text-edg-teal ${
-                location === '/' 
-                  ? 'text-edg-teal border-b-2 border-edg-teal pb-4' 
-                  : 'text-edg-grey'
-              }`}>
-                Home
-              </Link>
-              <Link href="/leads" className={`text-sm font-medium transition-colors hover:text-edg-teal ${
-                location.startsWith('/leads')
-                  ? 'text-edg-teal border-b-2 border-edg-teal pb-4' 
-                  : 'text-edg-grey'
-              }`}>
-                Leads
-              </Link>
-              <Link href="/accounts" className={`text-sm font-medium transition-colors hover:text-edg-teal ${
-                location.startsWith('/accounts')
-                  ? 'text-edg-teal border-b-2 border-edg-teal pb-4' 
-                  : 'text-edg-grey'
-              }`}>
-                Accounts
-              </Link>
-              <Link href="/quotes" className={`text-sm font-medium transition-colors hover:text-edg-teal ${
-                location.startsWith('/quotes')
-                  ? 'text-edg-teal border-b-2 border-edg-teal pb-4' 
-                  : 'text-edg-grey'
-              }`}>
-                Quotes
-              </Link>
-              <Link href="/pipeline" className={`text-sm font-medium transition-colors hover:text-edg-teal ${
-                location === '/pipeline'
-                  ? 'text-edg-teal border-b-2 border-edg-teal pb-4' 
-                  : 'text-edg-grey'
-              }`}>
-                Pipeline
-              </Link>
-              <Link href="/products" className={`text-sm font-medium transition-colors hover:text-edg-teal ${
-                location.startsWith('/products') 
-                  ? 'text-edg-teal border-b-2 border-edg-teal pb-4' 
-                  : 'text-edg-grey'
-              }`}>
-                Products
-              </Link>
-              {user?.role === 'admin' && (
-                <Link href="/admin" className={`text-sm font-medium transition-colors hover:text-edg-teal ${
-                  location.startsWith('/admin') 
-                    ? 'text-edg-teal border-b-2 border-edg-teal pb-4' 
-                    : 'text-edg-grey'
-                }`}>
-                  Admin
+            <nav className="hidden xl:flex space-x-6" aria-label="Primary navigation">
+              {navItems.map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={cn(
+                    "text-sm font-medium transition-colors hover:text-edg-teal",
+                    item.active ? "border-b-2 border-edg-teal pb-4 text-edg-teal" : "text-edg-grey",
+                  )}
+                >
+                  {item.label}
                 </Link>
-              )}
+              ))}
             </nav>
           </div>
           <div className="flex items-center space-x-4">
             <ThemeToggle />
-            <Button variant="ghost" size="icon" className="text-edg-grey hover:text-edg-black">
-              <Bell className="h-5 w-5" />
-            </Button>
-            
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="flex items-center space-x-2 hover:bg-muted">
+                <Button variant="ghost" className="flex items-center space-x-2 hover:bg-muted" aria-label="Open user menu">
                   <Avatar className="h-8 w-8">
                     <AvatarFallback className="bg-edg-teal text-white font-medium text-xs">
                       {user?.firstName?.[0]}{user?.lastName?.[0] || user?.username?.[0]}
                     </AvatarFallback>
                   </Avatar>
-                  <span className="text-sm font-medium text-edg-black">
+                  <span className="hidden sm:inline text-sm font-medium text-edg-black">
                     {user?.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : user?.username}
                   </span>
                 </Button>
@@ -164,6 +131,22 @@ export function AppHeader() {
           </div>
         </div>
       </div>
+      <nav className="xl:hidden overflow-x-auto border-t border-border px-4" aria-label="Mobile primary navigation">
+        <div className="flex min-w-max gap-5">
+          {navItems.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={cn(
+                "py-3 text-sm font-medium whitespace-nowrap transition-colors hover:text-edg-teal",
+                item.active ? "border-b-2 border-edg-teal text-edg-teal" : "text-edg-grey",
+              )}
+            >
+              {item.label}
+            </Link>
+          ))}
+        </div>
+      </nav>
     </header>
     </>
   );

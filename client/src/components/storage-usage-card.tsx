@@ -34,8 +34,8 @@ export function StorageUsageCard() {
 
   if (isLoading) {
     return (
-      <Card className="mt-8 border-gray-200 bg-white/70">
-        <CardContent className="flex items-center gap-3 py-4 text-sm text-gray-500">
+      <Card className="mt-8">
+        <CardContent className="flex items-center gap-3 py-4 text-sm text-muted-foreground">
           <Database className="h-4 w-4" />
           Checking storage usage...
         </CardContent>
@@ -45,11 +45,11 @@ export function StorageUsageCard() {
 
   if (isError || !data || data.unavailableReason) {
     return (
-      <Card className="mt-8 border-gray-200 bg-white/70">
-        <CardContent className="flex items-start gap-3 py-4 text-sm text-gray-500">
+      <Card className="mt-8">
+        <CardContent className="flex items-start gap-3 py-4 text-sm text-muted-foreground">
           <AlertCircle className="mt-0.5 h-4 w-4" />
           <div>
-            <p className="font-medium text-gray-700">Storage usage unavailable</p>
+            <p className="font-medium text-foreground">Storage usage unavailable</p>
             <p className="text-xs">
               {data?.unavailableReason || "Rainmaker could not read storage usage right now."}
             </p>
@@ -68,23 +68,23 @@ export function StorageUsageCard() {
   });
 
   return (
-    <Card className="mt-8 border-gray-200 bg-white/70">
+    <Card className="mt-8">
       <CardContent className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-start gap-3">
-          <Database className="mt-0.5 h-4 w-4 text-gray-500" />
+          <Database className="mt-0.5 h-4 w-4 text-muted-foreground" />
           <div>
-            <p className="text-sm font-medium text-gray-700">Storage usage</p>
-            <p className="text-xs text-gray-500">
+            <p className="text-sm font-medium text-foreground">Storage usage</p>
+            <p className="text-xs text-muted-foreground">
               Tucked here for admins. Last checked {refreshedAt}.
             </p>
           </div>
         </div>
-        <div className="text-sm text-gray-600 sm:text-right">
-          <p className="font-medium text-gray-800">
+        <div className="text-sm text-muted-foreground sm:text-right">
+          <p className="font-medium text-foreground">
             {formatStorage(data.usedBytes)}
             {data.quotaBytes ? ` / ${formatStorage(data.quotaBytes)}` : ""}
           </p>
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-muted-foreground">
             {data.objectCount.toLocaleString()} files
             {usedPercent !== null ? ` • ${usedPercent}% used` : ""}
           </p>

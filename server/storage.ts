@@ -2,6 +2,9 @@ import {
   accounts,
   customers,
   quotes,
+  quoteVersionEvents,
+  emailDeliveryAttempts,
+  businessEvents,
   planningAgreements,
   planningAgreementEvents,
   quoteApprovalDrawings,
@@ -20,6 +23,9 @@ import {
   type Account,
   type Customer,
   type Quote,
+  type QuoteVersionEvent,
+  type EmailDeliveryAttempt,
+  type BusinessEvent,
   type PlanningAgreement,
   type PlanningAgreementEvent,
   type QuoteApprovalDrawing,
@@ -56,8 +62,8 @@ import {
   type ProductWithDetails
 } from "@shared/schema";
 import { db, ensureLeadAttachmentTable, ensurePlanningAgreementTables, ensurePricingDefaultsTable, ensureProductCatalogColumns, ensureQuoteApprovalDrawingTables, ensureSignatureAuditColumns, pool } from "./db";
-import { eq, desc, asc, inArray, sql, and, ne, or, ilike } from "drizzle-orm";
-import { scrypt, randomBytes, timingSafeEqual } from "crypto";
+import { eq, desc, asc, inArray, sql, and, ne, or, ilike, isNull, lte, gte } from "drizzle-orm";
+import { scrypt, randomBytes, timingSafeEqual, createHash } from "crypto";
 import { promisify } from "util";
 import connectPg from "connect-pg-simple";
 import session from "express-session";
@@ -69,7 +75,12 @@ import {
   sanitizeQuoteApprovalDrawingForPublic,
 } from "@shared/approvalDrawing";
 import { appendQuoteApprovalDrawingInternalNoteSql } from "./approvalDrawingSql";
-import type { IStorage } from "./storageContract";
+import type { AdoptionSummary, EmailDeliveryClaim, EmailDeliveryHealth, EmailDeliveryMessageType, IStorage } from "./storageContract";
+import { appendBusinessEvent, type BusinessEventInput, type BusinessEventType } from "./businessEvents";
+import { assertQuoteMutationAllowed, assertQuoteSignatureRevision, isCustomerApprovedQuote, type QuoteUpdateOptions } from "./quoteLock";
+import { selectPricingBand, validatePricingBands } from "./pricingBands";
+import { executeProductCatalogImport, type ProductCatalogImportRequest, type ProductCatalogImportResult } from "./productCatalogImport";
+import { executeConfiguredProductInsertion, type ConfiguredProductInsertionRequest, type ConfiguredProductInsertionResult } from "./configuredProductInsertion";
 
 export type { IStorage } from "./storageContract";
 
@@ -86,6 +97,14 @@ function normalizeProductPricingPayload<T extends Record<string, any>>(
 
   if (hasRetail || hasCost || hasDiscount) {
     const retailPrice = normalized.retailPrice ?? existingProduct?.retailPrice ?? "0";
+
+    // retail_price replaced default_unit_price, but the legacy non-null column
+    // is intentionally retained for compatibility. Keep it synchronized on
+    // every retail-price write instead of allowing modern catalog writes to
+    // fail or leave older readers with stale values.
+    if (hasRetail || !existingProduct) {
+      normalized.defaultUnitPrice = retailPrice;
+    }
 
     if (hasCost) {
       const costPrice = normalized.costPrice ?? normalized.cost;
@@ -144,6 +163,55 @@ const getQuoteFamilyRootId = (quote: Pick<Quote, "id" | "parentQuoteId">): numbe
 type PlanningAgreementUpdate = Partial<InsertPlanningAgreement>;
 type QuoteApprovalDrawingUpdate = Partial<InsertQuoteApprovalDrawing>;
 
+async function touchQuoteRevision(tx: any, quoteId: number): Promise<void> {
+  await tx
+    .update(quotes)
+    .set({
+      updatedAt: sql`GREATEST(CURRENT_TIMESTAMP, COALESCE(${quotes.updatedAt}, CURRENT_TIMESTAMP) + INTERVAL '1 millisecond')`,
+    })
+    .where(eq(quotes.id, quoteId));
+}
+
+function mergeSignatureAuditTrail(
+  existingValue: unknown,
+  incomingValue: unknown,
+  mutationKind: "customer_signature" | "company_signature",
+): unknown {
+  const existing = existingValue && typeof existingValue === "object"
+    ? existingValue as Record<string, any>
+    : {};
+  const incoming = incomingValue && typeof incomingValue === "object"
+    ? incomingValue as Record<string, any>
+    : {};
+  const incomingEntries = Array.isArray(incoming.entries) ? incoming.entries : [];
+  const newEntry = incomingEntries.at(-1);
+  const expectedEvent = mutationKind === "customer_signature" ? "client_signed" : "company_signed";
+  if (!newEntry || newEntry.event !== expectedEvent) {
+    throw new Error(`${mutationKind} requires one append-only ${expectedEvent} audit entry`);
+  }
+
+  const existingEntries = Array.isArray(existing.entries) ? existing.entries : [];
+  const entryKey = (entry: any) => JSON.stringify([
+    entry?.event,
+    entry?.signerType,
+    entry?.signedAt,
+    entry?.signerName,
+  ]);
+  const existingKeys = new Set(existingEntries.map(entryKey));
+  const mergedEntries = existingKeys.has(entryKey(newEntry))
+    ? existingEntries
+    : [...existingEntries, newEntry];
+
+  return {
+    ...existing,
+    ...incoming,
+    documentFingerprint: mutationKind === "customer_signature"
+      ? incoming.documentFingerprint
+      : existing.documentFingerprint || incoming.documentFingerprint,
+    entries: mergedEntries,
+  };
+}
+
 
 export class DatabaseStorage implements IStorage {
   sessionStore: any;
@@ -152,7 +220,9 @@ export class DatabaseStorage implements IStorage {
     // Initialize session store synchronously - imports are at top of file
     const PostgresSessionStore = connectPg(session);
     this.sessionStore = new PostgresSessionStore({
-      pool,
+      // The Neon Pool is runtime-compatible with node-postgres for this store,
+      // but its public type omits node-postgres implementation fields.
+      pool: pool as any,
       createTableIfMissing: false,
       schemaName: "public",
       tableName: "sessions",
@@ -240,7 +310,6 @@ export class DatabaseStorage implements IStorage {
     
     try {
       const term = searchTerm.trim().toLowerCase();
-      console.log(`Searching for: "${term}"`);
       
       // Simple search across account fields first
       const accountResults = await db
@@ -514,6 +583,10 @@ export class DatabaseStorage implements IStorage {
         id: lineItems.id,
         quoteId: lineItems.quoteId,
         productId: lineItems.productId,
+        manufacturer: lineItems.manufacturer,
+        unit: lineItems.unit,
+        priceSource: lineItems.priceSource,
+        sourceMetadata: lineItems.sourceMetadata,
         description: lineItems.description,
         quantity: lineItems.quantity,
         retailPrice: lineItems.retailPrice,
@@ -542,6 +615,10 @@ export class DatabaseStorage implements IStorage {
       id: item.id,
       quoteId: item.quoteId,
       productId: item.productId,
+      manufacturer: item.manufacturer || item.productManufacturer || "Uncategorized",
+      unit: item.unit,
+      priceSource: item.priceSource,
+      sourceMetadata: item.sourceMetadata,
       description: item.description,
       quantity: item.quantity,
       retailPrice: item.retailPrice,
@@ -558,7 +635,6 @@ export class DatabaseStorage implements IStorage {
       groupId: item.groupId,
       position: item.position,
       sku: item.sku,
-      manufacturer: item.productManufacturer || "Uncategorized",
     }));
 
     // Get contract template if referenced
@@ -567,9 +643,12 @@ export class DatabaseStorage implements IStorage {
       [contractTemplate] = await db.select().from(contractTemplates).where(eq(contractTemplates.id, quote.contractTemplateId));
     }
 
-    const [planningAgreement, approvalDrawing] = await Promise.all([
+    const [planningAgreement, approvalDrawing, quoteGroups, coverPhoto, productRenderings] = await Promise.all([
       this.getPlanningAgreementByQuoteFamilyRootId(getQuoteFamilyRootId(quote)),
       this.getQuoteApprovalDrawingByQuoteId(quote.id),
+      this.getGroupsByQuoteId(quote.id),
+      this.getQuoteCoverPhoto(quote.id),
+      this.getQuoteProductRenderings(quote.id),
     ]);
 
     return {
@@ -577,7 +656,10 @@ export class DatabaseStorage implements IStorage {
       account,
       customer: account, // Legacy alias for backward compatibility
       lineItems: quoteLineItems,
+      groups: quoteGroups,
       contractTemplate,
+      coverPhoto,
+      productRenderings,
       planningAgreement,
       approvalDrawing,
     };
@@ -602,6 +684,10 @@ export class DatabaseStorage implements IStorage {
         id: lineItems.id,
         quoteId: lineItems.quoteId,
         productId: lineItems.productId,
+        manufacturer: lineItems.manufacturer,
+        unit: lineItems.unit,
+        priceSource: lineItems.priceSource,
+        sourceMetadata: lineItems.sourceMetadata,
         description: lineItems.description,
         quantity: lineItems.quantity,
         retailPrice: lineItems.retailPrice,
@@ -630,6 +716,10 @@ export class DatabaseStorage implements IStorage {
       id: item.id,
       quoteId: item.quoteId,
       productId: item.productId,
+      manufacturer: item.manufacturer || item.productManufacturer || "Uncategorized",
+      unit: item.unit,
+      priceSource: item.priceSource,
+      sourceMetadata: item.sourceMetadata,
       description: item.description,
       quantity: item.quantity,
       retailPrice: item.retailPrice,
@@ -646,7 +736,6 @@ export class DatabaseStorage implements IStorage {
       groupId: item.groupId,
       position: item.position,
       sku: item.sku,
-      manufacturer: item.productManufacturer || "Uncategorized",
     }));
 
     // Get contract template if referenced
@@ -655,9 +744,12 @@ export class DatabaseStorage implements IStorage {
       [contractTemplate] = await db.select().from(contractTemplates).where(eq(contractTemplates.id, quote.contractTemplateId));
     }
 
-    const [planningAgreement, approvalDrawing] = await Promise.all([
+    const [planningAgreement, approvalDrawing, quoteGroups, coverPhoto, productRenderings] = await Promise.all([
       this.getPlanningAgreementByQuoteFamilyRootId(getQuoteFamilyRootId(quote)),
       this.getQuoteApprovalDrawingByQuoteId(quote.id),
+      this.getGroupsByQuoteId(quote.id),
+      this.getQuoteCoverPhoto(quote.id),
+      this.getQuoteProductRenderings(quote.id),
     ]);
 
     return {
@@ -665,7 +757,10 @@ export class DatabaseStorage implements IStorage {
       account,
       customer: account, // Legacy alias for backward compatibility
       lineItems: quoteLineItems,
+      groups: quoteGroups,
       contractTemplate,
+      coverPhoto,
+      productRenderings,
       planningAgreement,
       approvalDrawing,
     };
@@ -726,6 +821,10 @@ export class DatabaseStorage implements IStorage {
           id: lineItems.id,
           quoteId: lineItems.quoteId,
           productId: lineItems.productId,
+          manufacturer: lineItems.manufacturer,
+          unit: lineItems.unit,
+          priceSource: lineItems.priceSource,
+          sourceMetadata: lineItems.sourceMetadata,
           description: lineItems.description,
           quantity: lineItems.quantity,
           retailPrice: lineItems.retailPrice,
@@ -779,6 +878,10 @@ export class DatabaseStorage implements IStorage {
         id: item.id,
         quoteId: item.quoteId,
         productId: item.productId,
+        manufacturer: item.manufacturer || item.productManufacturer || "Uncategorized",
+        unit: item.unit,
+        priceSource: item.priceSource,
+        sourceMetadata: item.sourceMetadata,
         description: item.description,
         quantity: item.quantity,
         retailPrice: item.retailPrice,
@@ -795,7 +898,6 @@ export class DatabaseStorage implements IStorage {
         groupId: item.groupId,
         position: item.position,
         sku: item.sku,
-        manufacturer: item.productManufacturer || "Uncategorized",
       };
 
       if (!lineItemsByQuoteId.has(item.quoteId)) {
@@ -851,7 +953,7 @@ export class DatabaseStorage implements IStorage {
           .from(quotes)
           .where(eq(quotes.quoteNumber, insertQuote.quoteNumber))
           .limit(1);
-        
+
         if (existingQuote.length > 0) {
           // Quote number exists, generate a new one
           console.log(`Quote number ${insertQuote.quoteNumber} already exists, generating new one...`);
@@ -865,7 +967,7 @@ export class DatabaseStorage implements IStorage {
           retryCount++;
           continue;
         }
-        
+
         // Try to insert the quote
         const resolvedAccountId = insertQuote.accountId || null;
         
@@ -914,52 +1016,397 @@ export class DatabaseStorage implements IStorage {
     throw new Error(`Unable to generate unique quote number after ${maxRetries} attempts. Last error: ${lastError?.message || 'Unknown error'}`);
   }
 
-  async updateQuote(id: number, quoteData: Partial<InsertQuote>): Promise<Quote | undefined> {
+  async updateQuote(id: number, quoteData: Partial<InsertQuote>, options: QuoteUpdateOptions = {}): Promise<Quote | undefined> {
     await ensureSignatureAuditColumns();
-    // Get existing quote data to merge images properly
-    const [existingQuote] = await db
-      .select()
-      .from(quotes)
-      .where(eq(quotes.id, id));
-    
-    if (!existingQuote) {
-      return undefined;
-    }
-
-    // Check if quote number is being changed and validate uniqueness
-    if (quoteData.quoteNumber && quoteData.quoteNumber !== existingQuote.quoteNumber) {
-      const [duplicateQuote] = await db
+    return db.transaction(async (tx) => {
+      const [existingQuote] = await tx
         .select()
         .from(quotes)
-        .where(eq(quotes.quoteNumber, quoteData.quoteNumber))
-        .limit(1);
+        .where(eq(quotes.id, id))
+        .for("update");
       
-      if (duplicateQuote) {
-        console.error(`Cannot update quote ${id}: Quote number ${quoteData.quoteNumber} already exists`);
-        throw new Error(`Quote number ${quoteData.quoteNumber} already exists. Please use a different quote number.`);
+      if (!existingQuote) {
+        return undefined;
       }
-    }
 
-    // Prepare the update data
-    let finalQuoteData = { ...quoteData };
+      assertQuoteMutationAllowed(existingQuote, quoteData, options.mutationKind);
+      if (options.mutationKind === "customer_signature") {
+        assertQuoteSignatureRevision(existingQuote, options.expectedUpdatedAt);
+      }
 
+      const finalQuoteData = { ...quoteData };
+      if (
+        (options.mutationKind === "customer_signature" || options.mutationKind === "company_signature")
+        && quoteData.signatureAuditTrail !== undefined
+      ) {
+        finalQuoteData.signatureAuditTrail = mergeSignatureAuditTrail(
+          existingQuote.signatureAuditTrail,
+          quoteData.signatureAuditTrail,
+          options.mutationKind,
+        ) as InsertQuote["signatureAuditTrail"];
+      }
 
+      if (quoteData.quoteNumber && quoteData.quoteNumber !== existingQuote.quoteNumber) {
+        const [duplicateQuote] = await tx
+          .select()
+          .from(quotes)
+          .where(eq(quotes.quoteNumber, quoteData.quoteNumber))
+          .limit(1);
+
+        if (duplicateQuote) {
+          console.error(`Cannot update quote ${id}: Quote number ${quoteData.quoteNumber} already exists`);
+          throw new Error(`Quote number ${quoteData.quoteNumber} already exists. Please use a different quote number.`);
+        }
+      }
+
+      const [updated] = await tx
+        .update(quotes)
+        .set({ ...finalQuoteData, updatedAt: new Date() })
+        .where(eq(quotes.id, id))
+        .returning();
+
+      if (updated && options.mutationKind === "package_preparation") {
+        const packageIdentity = createHash("sha256")
+          .update(JSON.stringify({
+            quoteId: updated.id,
+            signingToken: updated.signingToken,
+            includePricing: updated.esigIncludePricing,
+            includeImages: updated.esigIncludeImages,
+            includeContract: updated.esigIncludeContract,
+            includeApprovalDrawing: updated.esigIncludeApprovalDrawing,
+          }))
+          .digest("hex");
+        await appendBusinessEvent(tx, {
+          eventType: "customer_package_prepared",
+          eventKey: `customer_package_prepared:${packageIdentity}`,
+          quoteId: updated.id,
+          accountId: updated.accountId,
+          actorUserId: options.actorUserId,
+          occurredAt: updated.updatedAt ?? new Date(),
+        });
+      }
+      if (updated && options.mutationKind === "customer_signature" && updated.clientSignedAt) {
+        await appendBusinessEvent(tx, {
+          eventType: "quote_customer_signed",
+          eventKey: `quote_customer_signed:${updated.id}:${updated.clientSignedAt.toISOString()}`,
+          quoteId: updated.id,
+          accountId: updated.accountId,
+          occurredAt: updated.clientSignedAt,
+        });
+      }
+      if (updated && options.mutationKind === "company_signature" && updated.companySignedAt) {
+        await appendBusinessEvent(tx, {
+          eventType: "quote_company_signed",
+          eventKey: `quote_company_signed:${updated.id}:${updated.companySignedAt.toISOString()}`,
+          quoteId: updated.id,
+          accountId: updated.accountId,
+          actorUserId: options.actorUserId,
+          occurredAt: updated.companySignedAt,
+        });
+      }
+      return updated || undefined;
+    });
+  }
+
+  async claimEmailDelivery(input: {
+    idempotencyKey: string;
+    messageType: EmailDeliveryMessageType;
+    quoteId?: number | null;
+    planningAgreementId?: number | null;
+  }): Promise<EmailDeliveryClaim> {
+    return db.transaction(async (tx) => {
+      const [created] = await tx
+        .insert(emailDeliveryAttempts)
+        .values({
+          idempotencyKey: input.idempotencyKey,
+          messageType: input.messageType,
+          quoteId: input.quoteId ?? null,
+          planningAgreementId: input.planningAgreementId ?? null,
+          status: "pending",
+        })
+        .onConflictDoNothing({ target: emailDeliveryAttempts.idempotencyKey })
+        .returning();
+
+      if (created) return { outcome: "claimed", attempt: created };
+
+      const [existing] = await tx
+        .select()
+        .from(emailDeliveryAttempts)
+        .where(eq(emailDeliveryAttempts.idempotencyKey, input.idempotencyKey))
+        .for("update");
+
+      if (!existing) return { outcome: "conflict" };
+      const sameOperation = existing.messageType === input.messageType
+        && (existing.quoteId ?? null) === (input.quoteId ?? null)
+        && (existing.planningAgreementId ?? null) === (input.planningAgreementId ?? null);
+      if (!sameOperation) return { outcome: "conflict", attempt: existing };
+      if (existing.status === "sent") return { outcome: "sent", attempt: existing };
+      if (existing.status === "pending") return { outcome: "in_progress", attempt: existing };
+
+      const [retried] = await tx
+        .update(emailDeliveryAttempts)
+        .set({
+          status: "pending",
+          attemptCount: sql`${emailDeliveryAttempts.attemptCount} + 1`,
+          lastErrorType: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(emailDeliveryAttempts.id, existing.id))
+        .returning();
+      return { outcome: "claimed", attempt: retried };
+    });
+  }
+
+  async getEmailDeliveryAttempt(id: number): Promise<EmailDeliveryAttempt | undefined> {
+    const [attempt] = await db
+      .select()
+      .from(emailDeliveryAttempts)
+      .where(eq(emailDeliveryAttempts.id, id))
+      .limit(1);
+    return attempt;
+  }
+
+  async markEmailDeliverySent(
+    id: number,
+    sentAt: Date,
+    providerMessageId?: string | null,
+  ): Promise<EmailDeliveryAttempt | undefined> {
     const [updated] = await db
-      .update(quotes)
-      .set(finalQuoteData)
-      .where(eq(quotes.id, id))
+      .update(emailDeliveryAttempts)
+      .set({
+        status: "sent",
+        providerMessageId: providerMessageId ?? null,
+        lastErrorType: null,
+        sentAt,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(emailDeliveryAttempts.id, id), eq(emailDeliveryAttempts.status, "pending")))
       .returning();
-    return updated || undefined;
+    return updated;
+  }
+
+  async markEmailDeliveryFailed(id: number, errorType: string): Promise<EmailDeliveryAttempt | undefined> {
+    const [updated] = await db
+      .update(emailDeliveryAttempts)
+      .set({ status: "failed", lastErrorType: errorType, updatedAt: new Date() })
+      .where(and(eq(emailDeliveryAttempts.id, id), eq(emailDeliveryAttempts.status, "pending")))
+      .returning();
+    return updated;
+  }
+
+  async getEmailDeliveryHealth(options: {
+    staleAfterMinutes?: number;
+    limit?: number;
+  } = {}): Promise<EmailDeliveryHealth> {
+    const staleAfterMinutes = Math.min(24 * 60, Math.max(1, options.staleAfterMinutes ?? 15));
+    const limit = Math.min(100, Math.max(1, options.limit ?? 50));
+    const asOf = new Date();
+    const staleBefore = new Date(asOf.getTime() - staleAfterMinutes * 60_000);
+    const last24Hours = new Date(asOf.getTime() - 24 * 60 * 60_000);
+    const activityTimestamp = sql<Date>`coalesce(${emailDeliveryAttempts.updatedAt}, ${emailDeliveryAttempts.createdAt})`;
+    const staleCondition = or(
+      lte(emailDeliveryAttempts.updatedAt, staleBefore),
+      and(isNull(emailDeliveryAttempts.updatedAt), lte(emailDeliveryAttempts.createdAt, staleBefore)),
+    );
+
+    const statusCounts = await db
+      .select({
+        status: emailDeliveryAttempts.status,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(emailDeliveryAttempts)
+      .groupBy(emailDeliveryAttempts.status);
+
+    const [staleCounts] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(emailDeliveryAttempts)
+      .where(and(eq(emailDeliveryAttempts.status, "pending"), staleCondition));
+
+    const [sentLast24HoursCounts] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(emailDeliveryAttempts)
+      .where(and(
+        eq(emailDeliveryAttempts.status, "sent"),
+        sql`${emailDeliveryAttempts.sentAt} >= ${last24Hours}`,
+      ));
+
+    const attention = await db
+      .select({
+        id: emailDeliveryAttempts.id,
+        messageType: emailDeliveryAttempts.messageType,
+        quoteId: emailDeliveryAttempts.quoteId,
+        planningAgreementId: emailDeliveryAttempts.planningAgreementId,
+        status: emailDeliveryAttempts.status,
+        attemptCount: emailDeliveryAttempts.attemptCount,
+        lastErrorType: emailDeliveryAttempts.lastErrorType,
+        createdAt: emailDeliveryAttempts.createdAt,
+        updatedAt: emailDeliveryAttempts.updatedAt,
+      })
+      .from(emailDeliveryAttempts)
+      .where(or(
+        eq(emailDeliveryAttempts.status, "failed"),
+        and(eq(emailDeliveryAttempts.status, "pending"), staleCondition),
+      ))
+      .orderBy(asc(activityTimestamp), asc(emailDeliveryAttempts.id))
+      .limit(limit);
+
+    const countByStatus = new Map(statusCounts.map((row) => [row.status, Number(row.count)]));
+    const summary = {
+      pending: countByStatus.get("pending") ?? 0,
+      stalePending: Number(staleCounts?.count ?? 0),
+      failed: countByStatus.get("failed") ?? 0,
+      sent: countByStatus.get("sent") ?? 0,
+      sentLast24Hours: Number(sentLast24HoursCounts?.count ?? 0),
+    };
+    const attentionTotal = summary.failed + summary.stalePending;
+
+    return {
+      asOf,
+      staleAfterMinutes,
+      summary,
+      attentionTotal,
+      attentionTruncated: attentionTotal > attention.length,
+      attention: attention.map((attempt) => ({
+        ...attempt,
+        messageType: attempt.messageType as EmailDeliveryMessageType,
+        status: attempt.status as "pending" | "failed",
+      })),
+    };
+  }
+
+  async recordBusinessEvent(input: BusinessEventInput): Promise<BusinessEvent | undefined> {
+    return appendBusinessEvent(db, input);
+  }
+
+  async importProductCatalog(
+    input: ProductCatalogImportRequest,
+    actorUserId?: number | null,
+  ): Promise<ProductCatalogImportResult> {
+    return executeProductCatalogImport(input, actorUserId);
+  }
+
+  async insertConfiguredProduct(
+    quoteId: number,
+    input: ConfiguredProductInsertionRequest,
+    actorUserId?: number | null,
+  ): Promise<ConfiguredProductInsertionResult> {
+    return executeConfiguredProductInsertion(quoteId, input, actorUserId);
+  }
+
+  async getAdoptionSummary(options: { windowDays?: number } = {}): Promise<AdoptionSummary> {
+    const windowDays = Math.min(365, Math.max(1, options.windowDays ?? 30));
+    const asOf = new Date();
+    const windowStart = new Date(asOf.getTime() - windowDays * 24 * 60 * 60_000);
+
+    const eventCounts = await db
+      .select({
+        eventType: businessEvents.eventType,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(businessEvents)
+      .where(gte(businessEvents.occurredAt, windowStart))
+      .groupBy(businessEvents.eventType);
+    const eventFirstRecorded = await db
+      .select({
+        eventType: businessEvents.eventType,
+        firstRecordedAt: sql<Date | null>`min(${businessEvents.occurredAt})`,
+      })
+      .from(businessEvents)
+      .groupBy(businessEvents.eventType);
+
+    const [approvalEmailCount] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(emailDeliveryAttempts)
+      .where(and(
+        eq(emailDeliveryAttempts.messageType, "quote_signature_request"),
+        eq(emailDeliveryAttempts.status, "sent"),
+        gte(emailDeliveryAttempts.sentAt, windowStart),
+      ));
+    const [approvalEmailFirst] = await db
+      .select({ firstRecordedAt: sql<Date | null>`min(${emailDeliveryAttempts.sentAt})` })
+      .from(emailDeliveryAttempts)
+      .where(and(
+        eq(emailDeliveryAttempts.messageType, "quote_signature_request"),
+        eq(emailDeliveryAttempts.status, "sent"),
+      ));
+
+    const [versionCount] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(quoteVersionEvents)
+      .where(and(
+        eq(quoteVersionEvents.eventType, "version_created"),
+        gte(quoteVersionEvents.createdAt, windowStart),
+      ));
+    const [versionFirst] = await db
+      .select({ firstRecordedAt: sql<Date | null>`min(${quoteVersionEvents.createdAt})` })
+      .from(quoteVersionEvents)
+      .where(eq(quoteVersionEvents.eventType, "version_created"));
+
+    // Aggregate timestamp expressions do not inherit Drizzle's column decoder,
+    // so PostgreSQL-compatible drivers may return them as strings.
+    const asDate = (value: Date | string | null | undefined): Date | null =>
+      value == null ? null : value instanceof Date ? value : new Date(value);
+    const countByEvent = new Map(eventCounts.map((row) => [row.eventType, Number(row.count)]));
+    const firstByEvent = new Map(eventFirstRecorded.map((row) => [row.eventType, asDate(row.firstRecordedAt)]));
+    const definitions: Array<{
+      key: BusinessEventType;
+      label: string;
+    }> = [
+      { key: "customer_package_prepared", label: "Customer packages prepared" },
+      { key: "quote_customer_signed", label: "Customer approvals completed" },
+      { key: "quote_company_signed", label: "EDG signatures completed" },
+      { key: "lead_converted_to_quote", label: "Lead inquiries converted to quotes" },
+      { key: "quote_import_completed", label: "Quote import actions completed" },
+      { key: "dimensional_price_resolved", label: "Exact dimensional prices resolved" },
+      { key: "product_catalog_import_completed", label: "Product catalog imports completed" },
+      { key: "sundance_configuration_inserted", label: "Sundance packages inserted" },
+    ];
+
+    return {
+      asOf,
+      windowDays,
+      windowStart,
+      historicalCoverage: "post_instrumentation_only",
+      metrics: [
+        ...definitions.map((definition) => ({
+          key: definition.key,
+          label: definition.label,
+          count: countByEvent.get(definition.key) ?? 0,
+          firstRecordedAt: firstByEvent.get(definition.key) ?? null,
+          source: "business_events" as const,
+        })),
+        {
+          key: "approval_email_accepted" as const,
+          label: "Approval emails accepted by provider",
+          count: Number(approvalEmailCount?.count ?? 0),
+          firstRecordedAt: asDate(approvalEmailFirst?.firstRecordedAt),
+          source: "email_delivery_attempts" as const,
+        },
+        {
+          key: "quote_version_created" as const,
+          label: "Quote versions created",
+          count: Number(versionCount?.count ?? 0),
+          firstRecordedAt: asDate(versionFirst?.firstRecordedAt),
+          source: "quote_version_events" as const,
+        },
+      ],
+    };
   }
 
   async deleteQuote(id: number): Promise<boolean> {
-    // Delete associated line items first
-    await db.delete(lineItems).where(eq(lineItems.quoteId, id));
-    
-    
-    // Then delete the quote
-    const result = await db.delete(quotes).where(eq(quotes.id, id));
-    return (result.rowCount || 0) > 0;
+    return db.transaction(async (tx) => {
+      const [existingQuote] = await tx
+        .select()
+        .from(quotes)
+        .where(eq(quotes.id, id))
+        .for("update");
+      if (!existingQuote) return false;
+
+      assertQuoteMutationAllowed(existingQuote);
+      await tx.delete(lineItems).where(eq(lineItems.quoteId, id));
+      const result = await tx.delete(quotes).where(eq(quotes.id, id));
+      return (result.rowCount || 0) > 0;
+    });
   }
 
   async getPlanningAgreement(id: number): Promise<PlanningAgreement | undefined> {
@@ -1130,6 +1577,75 @@ export class DatabaseStorage implements IStorage {
     });
   }
 
+  async applyPlanningAgreementCredit(
+    id: number,
+    quoteId: number,
+    amountValue: string,
+    actorUserId?: number | null,
+  ): Promise<PlanningAgreement | undefined> {
+    await ensurePlanningAgreementTables();
+    return db.transaction(async (tx) => {
+      const [targetQuote] = await tx.select().from(quotes).where(eq(quotes.id, quoteId)).for("update");
+      if (!targetQuote) throw new Error("Target quote not found");
+      assertQuoteMutationAllowed(targetQuote);
+
+      const [agreement] = await tx
+        .select()
+        .from(planningAgreements)
+        .where(eq(planningAgreements.id, id))
+        .for("update");
+      if (!agreement) return undefined;
+      if (!agreement.creditEligible) throw new Error("This planning agreement is not credit eligible.");
+      if (agreement.creditedAt || agreement.status === "credited") {
+        throw new Error("Planning credit has already been recorded.");
+      }
+      if (!agreement.paymentConfirmedAt && !["paid_active", "delivered"].includes(agreement.status)) {
+        throw new Error("Confirm payment before applying a planning credit.");
+      }
+      if (agreement.creditExpiresAt && agreement.creditExpiresAt < new Date()) {
+        throw new Error("This planning credit is expired.");
+      }
+
+      const targetRootId = getQuoteFamilyRootId(targetQuote);
+      if (agreement.quoteFamilyRootId && agreement.quoteFamilyRootId !== targetRootId) {
+        throw new Error("Planning credits can only be applied within the same quote family.");
+      }
+      const amount = Number(amountValue);
+      const feeAmount = Number(agreement.amount);
+      if (!Number.isFinite(amount) || amount < 0) throw new Error("Planning credit amount is invalid.");
+      if (Number.isFinite(feeAmount) && amount > feeAmount) {
+        throw new Error("Planning credit cannot exceed the confirmed planning fee.");
+      }
+
+      const now = new Date();
+      const [updated] = await tx
+        .update(planningAgreements)
+        .set({
+          status: "credited",
+          creditedQuoteId: targetQuote.id,
+          creditedAt: now,
+          appliedCreditAmount: amountValue,
+          updatedAt: now,
+        })
+        .where(eq(planningAgreements.id, id))
+        .returning();
+
+      await tx.insert(planningAgreementEvents).values({
+        planningAgreementId: id,
+        eventType: "credit_applied",
+        actorUserId: actorUserId ?? null,
+        fromStatus: agreement.status,
+        toStatus: "credited",
+        payload: {
+          creditedQuoteId: targetQuote.id,
+          appliedCreditAmount: amountValue,
+        },
+      });
+      await touchQuoteRevision(tx, targetQuote.id);
+      return updated || undefined;
+    });
+  }
+
   async createPlanningAgreementEvent(event: InsertPlanningAgreementEvent): Promise<PlanningAgreementEvent> {
     await ensurePlanningAgreementTables();
     const [created] = await db
@@ -1207,26 +1723,28 @@ export class DatabaseStorage implements IStorage {
     actorUserId?: number | null,
   ): Promise<QuoteApprovalDrawing> {
     await ensureQuoteApprovalDrawingTables();
-    const quote = await this.getQuote(insertDrawing.quoteId);
-    if (!quote) {
-      throw new Error("Quote not found for approval drawing");
-    }
+    return db.transaction(async (tx) => {
+      const [quote] = await tx.select().from(quotes).where(eq(quotes.id, insertDrawing.quoteId)).for("update");
+      if (!quote) throw new Error("Quote not found for approval drawing");
+      assertQuoteMutationAllowed(quote);
 
-    const [drawing] = await db
-      .insert(quoteApprovalDrawings)
-      .values({
-        ...insertDrawing,
-        quoteFamilyRootId: insertDrawing.quoteFamilyRootId ?? getQuoteFamilyRootId(quote),
-        drawingData: insertDrawing.drawingData ?? createDefaultApprovalDrawingData(),
-        title: insertDrawing.title || "Order Approval Drawing",
-        status: insertDrawing.status || "draft",
-        orderStatus: insertDrawing.orderStatus || "not_reviewed",
-        createdBy: insertDrawing.createdBy ?? actorUserId ?? null,
-        updatedBy: insertDrawing.updatedBy ?? actorUserId ?? null,
-        updatedAt: new Date(),
-      })
-      .returning();
-    return drawing;
+      const [drawing] = await tx
+        .insert(quoteApprovalDrawings)
+        .values({
+          ...insertDrawing,
+          quoteFamilyRootId: insertDrawing.quoteFamilyRootId ?? getQuoteFamilyRootId(quote),
+          drawingData: insertDrawing.drawingData ?? createDefaultApprovalDrawingData(),
+          title: insertDrawing.title || "Order Approval Drawing",
+          status: insertDrawing.status || "draft",
+          orderStatus: insertDrawing.orderStatus || "not_reviewed",
+          createdBy: insertDrawing.createdBy ?? actorUserId ?? null,
+          updatedBy: insertDrawing.updatedBy ?? actorUserId ?? null,
+          updatedAt: new Date(),
+        })
+        .returning();
+      await touchQuoteRevision(tx, quote.id);
+      return drawing;
+    });
   }
 
   async updateQuoteApprovalDrawing(
@@ -1235,24 +1753,30 @@ export class DatabaseStorage implements IStorage {
     actorUserId?: number | null,
   ): Promise<QuoteApprovalDrawing | undefined> {
     await ensureQuoteApprovalDrawingTables();
-    const existing = await this.getQuoteApprovalDrawing(id);
-    if (!existing) return undefined;
+    return db.transaction(async (tx) => {
+      const [existing] = await tx.select().from(quoteApprovalDrawings).where(eq(quoteApprovalDrawings.id, id));
+      if (!existing) return undefined;
+      const [quote] = await tx.select().from(quotes).where(eq(quotes.id, existing.quoteId)).for("update");
+      if (!quote) throw new Error("Quote not found for approval drawing");
+      assertQuoteMutationAllowed(quote);
 
-    if (existing.status === "signed_locked" || existing.status === "sent_for_signature" || existing.sentForSignatureAt || existing.signedLockedAt) {
-      throw new Error("Approval drawing is frozen for signature. Create a new quote version or revision before editing.");
-    }
+      if (existing.status === "signed_locked" || existing.status === "sent_for_signature" || existing.sentForSignatureAt || existing.signedLockedAt) {
+        throw new Error("Approval drawing is frozen for signature. Create a new quote version or revision before editing.");
+      }
 
-    const [updated] = await db
-      .update(quoteApprovalDrawings)
-      .set({
-        ...updateData,
-        publicSnapshot: null,
-        updatedBy: actorUserId ?? updateData.updatedBy ?? existing.updatedBy ?? null,
-        updatedAt: new Date(),
-      })
-      .where(eq(quoteApprovalDrawings.id, id))
-      .returning();
-    return updated || undefined;
+      const [updated] = await tx
+        .update(quoteApprovalDrawings)
+        .set({
+          ...updateData,
+          publicSnapshot: null,
+          updatedBy: actorUserId ?? updateData.updatedBy ?? existing.updatedBy ?? null,
+          updatedAt: new Date(),
+        })
+        .where(eq(quoteApprovalDrawings.id, id))
+        .returning();
+      if (updated) await touchQuoteRevision(tx, quote.id);
+      return updated || undefined;
+    });
   }
 
   async markQuoteApprovalDrawingReady(id: number, actorUserId?: number | null): Promise<QuoteApprovalDrawing | undefined> {
@@ -1511,7 +2035,7 @@ export class DatabaseStorage implements IStorage {
     return result;
   }
 
-  async createQuoteVersion(originalQuoteId: number): Promise<Quote> {
+  async createQuoteVersion(originalQuoteId: number, actorUserId?: number | null): Promise<Quote> {
     await ensureQuoteApprovalDrawingTables();
     return await db.transaction(async (tx) => {
       // Get the original quote
@@ -1530,7 +2054,8 @@ export class DatabaseStorage implements IStorage {
             eq(quotes.id, parentId),
             eq(quotes.parentQuoteId, parentId)
           )
-        );
+        )
+        .for("update");
       const newVersionNumber = Math.max(
         originalQuote.versionNumber,
         ...versionRows.map((version) => version.versionNumber || 1)
@@ -1572,6 +2097,7 @@ export class DatabaseStorage implements IStorage {
         shipping: originalQuote.shipping || "0",
         isShippingTaxable: originalQuote.isShippingTaxable ?? false,
         dealStage: originalQuote.dealStage as InsertQuote["dealStage"],
+        dealStageChangedAt: originalQuote.dealStageChangedAt,
         lostReason: originalQuote.lostReason,
         contractTemplateId: originalQuote.contractTemplateId,
         customContractTerms: originalQuote.customContractTerms,
@@ -1586,11 +2112,15 @@ export class DatabaseStorage implements IStorage {
         signedDocumentSnapshot: null,
         signatureAuditTrail: null,
         esigIncludeApprovalDrawing: false,
+        esigIncludePricing: originalQuote.esigIncludePricing ?? true,
+        esigIncludeImages: originalQuote.esigIncludeImages ?? false,
+        esigIncludeContract: originalQuote.esigIncludeContract ?? true,
         qbEstimateId: null,
         qbSyncStatus: null,
         qbSyncedAt: null,
         qbSyncError: null,
         parentQuoteId: parentId,
+        sourceInquiryId: originalQuote.sourceInquiryId,
         versionNumber: newVersionNumber,
         isLatestVersion: true,
       };
@@ -1611,6 +2141,7 @@ export class DatabaseStorage implements IStorage {
           title: group.title,
           position: group.position,
           isCollapsed: group.isCollapsed,
+          configData: group.configData,
         });
       }
       
@@ -1620,6 +2151,10 @@ export class DatabaseStorage implements IStorage {
         await tx.insert(lineItems).values({
           quoteId: newQuote.id,
           productId: item.productId,
+          manufacturer: item.manufacturer,
+          unit: item.unit,
+          priceSource: item.priceSource,
+          sourceMetadata: item.sourceMetadata,
           description: item.description,
           quantity: item.quantity,
           retailPrice: item.retailPrice,
@@ -1632,6 +2167,7 @@ export class DatabaseStorage implements IStorage {
           baseProductId: item.baseProductId,
           isAccessory: item.isAccessory,
           isTaxable: item.isTaxable,
+          isTariffApplicable: item.isTariffApplicable,
           sku: item.sku,
           groupId: item.groupId ? (groupIdMapping[item.groupId] || null) : null,
           position: item.position,
@@ -1711,12 +2247,26 @@ export class DatabaseStorage implements IStorage {
           updatedAt: new Date(),
         });
       }
+
+      await tx.insert(quoteVersionEvents).values({
+        quoteFamilyRootId: parentId,
+        quoteId: newQuote.id,
+        eventType: "version_created",
+        actorUserId: actorUserId ?? null,
+        fromQuoteId: originalQuote.id,
+        toQuoteId: newQuote.id,
+        payload: {
+          sourceVersionNumber: originalQuote.versionNumber,
+          newVersionNumber,
+          sourceWasCustomerApproved: isCustomerApprovedQuote(originalQuote),
+        },
+      });
       
       return newQuote;
     });
   }
 
-  async setCurrentQuoteVersion(quoteId: number): Promise<Quote | undefined> {
+  async setCurrentQuoteVersion(quoteId: number, actorUserId?: number | null): Promise<Quote | undefined> {
     await ensureSignatureAuditColumns();
 
     return await db.transaction(async (tx) => {
@@ -1731,6 +2281,10 @@ export class DatabaseStorage implements IStorage {
         eq(quotes.parentQuoteId, parentId)
       );
 
+      const familyQuotes = await tx.select().from(quotes).where(versionFamilyFilter).for("update");
+      const currentQuote = familyQuotes.find((version) => version.isLatestVersion);
+      if (currentQuote?.id === targetQuote.id) return targetQuote;
+
       await tx
         .update(quotes)
         .set({ isLatestVersion: false, updatedAt: new Date() })
@@ -1742,8 +2296,30 @@ export class DatabaseStorage implements IStorage {
         .where(eq(quotes.id, quoteId))
         .returning();
 
+      await tx.insert(quoteVersionEvents).values({
+        quoteFamilyRootId: parentId,
+        quoteId: updatedQuote.id,
+        eventType: "version_made_current",
+        actorUserId: actorUserId ?? null,
+        fromQuoteId: currentQuote?.id ?? null,
+        toQuoteId: updatedQuote.id,
+        payload: {
+          fromVersionNumber: currentQuote?.versionNumber ?? null,
+          toVersionNumber: updatedQuote.versionNumber,
+          targetHasCustomerApproval: isCustomerApprovedQuote(updatedQuote),
+        },
+      });
+
       return updatedQuote || undefined;
     });
+  }
+
+  async getQuoteVersionEvents(quoteFamilyRootId: number): Promise<QuoteVersionEvent[]> {
+    return db
+      .select()
+      .from(quoteVersionEvents)
+      .where(eq(quoteVersionEvents.quoteFamilyRootId, quoteFamilyRootId))
+      .orderBy(asc(quoteVersionEvents.createdAt), asc(quoteVersionEvents.id));
   }
 
   async markPreviousVersionsAsOld(parentQuoteId: number): Promise<void> {
@@ -1768,21 +2344,51 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createLineItem(insertLineItem: InsertLineItem): Promise<LineItem> {
-    const [lineItem] = await db
-      .insert(lineItems)
-      .values(insertLineItem)
-      .returning();
+    const lineItem = await db.transaction(async (tx) => {
+      const [quote] = await tx
+        .select()
+        .from(quotes)
+        .where(eq(quotes.id, insertLineItem.quoteId))
+        .for("update");
+      if (!quote) throw new Error("Quote not found");
+      assertQuoteMutationAllowed(quote);
+
+      const [created] = await tx
+        .insert(lineItems)
+        .values(insertLineItem)
+        .returning();
+      await touchQuoteRevision(tx, insertLineItem.quoteId);
+      return created;
+    });
     await this.markApprovalDrawingRevisionNeededForQuote(insertLineItem.quoteId, "line item added after drawing readiness");
     return lineItem;
   }
 
   async updateLineItem(id: number, lineItemData: Partial<InsertLineItem>): Promise<LineItem | undefined> {
-    const existing = await this.getLineItem(id);
-    const [updated] = await db
-      .update(lineItems)
-      .set(lineItemData)
-      .where(eq(lineItems.id, id))
-      .returning();
+    const result = await db.transaction(async (tx) => {
+      const [existing] = await tx.select().from(lineItems).where(eq(lineItems.id, id));
+      if (!existing) return { existing: undefined, updated: undefined };
+      if (lineItemData.quoteId !== undefined && lineItemData.quoteId !== existing.quoteId) {
+        throw new Error("Line items cannot be moved between quotes");
+      }
+
+      const [quote] = await tx
+        .select()
+        .from(quotes)
+        .where(eq(quotes.id, existing.quoteId))
+        .for("update");
+      if (!quote) throw new Error("Quote not found");
+      assertQuoteMutationAllowed(quote);
+
+      const [updated] = await tx
+        .update(lineItems)
+        .set(lineItemData)
+        .where(eq(lineItems.id, id))
+        .returning();
+      if (updated) await touchQuoteRevision(tx, existing.quoteId);
+      return { existing, updated };
+    });
+    const { existing, updated } = result;
     if (updated && existing) {
       await this.markApprovalDrawingRevisionNeededForQuote(existing.quoteId, "line item changed after drawing readiness");
     }
@@ -1790,48 +2396,94 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteLineItem(id: number): Promise<boolean> {
-    const existing = await this.getLineItem(id);
-    const result = await db.delete(lineItems).where(eq(lineItems.id, id));
-    if ((result.rowCount || 0) > 0 && existing) {
+    const mutation = await db.transaction(async (tx) => {
+      const [existing] = await tx.select().from(lineItems).where(eq(lineItems.id, id));
+      if (!existing) return { existing: undefined, deleted: false };
+      const [quote] = await tx
+        .select()
+        .from(quotes)
+        .where(eq(quotes.id, existing.quoteId))
+        .for("update");
+      if (!quote) throw new Error("Quote not found");
+      assertQuoteMutationAllowed(quote);
+
+      const result = await tx.delete(lineItems).where(eq(lineItems.id, id));
+      const deleted = (result.rowCount || 0) > 0;
+      if (deleted) await touchQuoteRevision(tx, existing.quoteId);
+      return { existing, deleted };
+    });
+    if (mutation.deleted && mutation.existing) {
+      const existing = mutation.existing;
       await this.markApprovalDrawingRevisionNeededForQuote(existing.quoteId, "line item removed after drawing readiness");
     }
-    return (result.rowCount || 0) > 0;
+    return mutation.deleted;
   }
 
   async deleteLineItemsByQuoteId(quoteId: number): Promise<boolean> {
-    await db.delete(lineItems).where(eq(lineItems.quoteId, quoteId));
+    await db.transaction(async (tx) => {
+      const [quote] = await tx.select().from(quotes).where(eq(quotes.id, quoteId)).for("update");
+      if (!quote) return;
+      assertQuoteMutationAllowed(quote);
+      await tx.delete(lineItems).where(eq(lineItems.quoteId, quoteId));
+      await touchQuoteRevision(tx, quoteId);
+    });
     await this.markApprovalDrawingRevisionNeededForQuote(quoteId, "line items cleared after drawing readiness");
     return true;
   }
 
   async bulkDeleteLineItems(ids: number[]): Promise<number> {
     if (ids.length === 0) return 0;
-    const existingRows = await db.select().from(lineItems).where(inArray(lineItems.id, ids));
-    const quoteIds = Array.from(new Set(existingRows.map((item) => item.quoteId)));
-    const result = await db.delete(lineItems).where(inArray(lineItems.id, ids));
+    const mutation = await db.transaction(async (tx) => {
+      const existingRows = await tx.select().from(lineItems).where(inArray(lineItems.id, ids));
+      const quoteIds = Array.from(new Set(existingRows.map((item) => item.quoteId))).sort((a, b) => a - b);
+      for (const quoteId of quoteIds) {
+        const [quote] = await tx.select().from(quotes).where(eq(quotes.id, quoteId)).for("update");
+        if (!quote) throw new Error("Quote not found");
+        assertQuoteMutationAllowed(quote);
+      }
+      const result = await tx.delete(lineItems).where(inArray(lineItems.id, ids));
+      for (const quoteId of quoteIds) await touchQuoteRevision(tx, quoteId);
+      return { quoteIds, count: result.rowCount || 0 };
+    });
+    const { quoteIds } = mutation;
     for (const quoteId of quoteIds) {
       await this.markApprovalDrawingRevisionNeededForQuote(quoteId, "line items removed after drawing readiness");
     }
-    return result.rowCount || 0;
+    return mutation.count;
   }
 
   async bulkUpdateLineItems(ids: number[], updates: Partial<InsertLineItem>): Promise<number> {
     if (ids.length === 0) return 0;
-    const existingRows = await db.select().from(lineItems).where(inArray(lineItems.id, ids));
-    const quoteIds = Array.from(new Set(existingRows.map((item) => item.quoteId)));
-    const result = await db
-      .update(lineItems)
-      .set(updates)
-      .where(inArray(lineItems.id, ids))
-      .returning();
+    if (updates.quoteId !== undefined) throw new Error("Line items cannot be moved between quotes");
+    const mutation = await db.transaction(async (tx) => {
+      const existingRows = await tx.select().from(lineItems).where(inArray(lineItems.id, ids));
+      const quoteIds = Array.from(new Set(existingRows.map((item) => item.quoteId))).sort((a, b) => a - b);
+      for (const quoteId of quoteIds) {
+        const [quote] = await tx.select().from(quotes).where(eq(quotes.id, quoteId)).for("update");
+        if (!quote) throw new Error("Quote not found");
+        assertQuoteMutationAllowed(quote);
+      }
+      const result = await tx
+        .update(lineItems)
+        .set(updates)
+        .where(inArray(lineItems.id, ids))
+        .returning();
+      for (const quoteId of quoteIds) await touchQuoteRevision(tx, quoteId);
+      return { quoteIds, count: result.length };
+    });
+    const { quoteIds } = mutation;
     for (const quoteId of quoteIds) {
       await this.markApprovalDrawingRevisionNeededForQuote(quoteId, "line items changed after drawing readiness");
     }
-    return result.length;
+    return mutation.count;
   }
 
   async reorderLineItems(quoteId: number, moves: Array<{id: number; groupId: string | null; position: number}>): Promise<void> {
     await db.transaction(async (tx) => {
+      const [quote] = await tx.select().from(quotes).where(eq(quotes.id, quoteId)).for("update");
+      if (!quote) throw new Error("Quote not found");
+      assertQuoteMutationAllowed(quote);
+
       // Phase 1: Add temporary offset to positions to break ties
       for (const move of moves) {
         await tx
@@ -1858,6 +2510,7 @@ export class DatabaseStorage implements IStorage {
             eq(lineItems.quoteId, quoteId)
           ));
       }
+      await touchQuoteRevision(tx, quoteId);
     });
     await this.markApprovalDrawingRevisionNeededForQuote(quoteId, "line item order changed after drawing readiness");
   }
@@ -1886,44 +2539,85 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createGroup(group: InsertGroup): Promise<Group> {
-    const [newGroup] = await db
-      .insert(groups)
-      .values(group)
-      .returning();
-    return newGroup;
+    return db.transaction(async (tx) => {
+      const [quote] = await tx.select().from(quotes).where(eq(quotes.id, group.quoteId)).for("update");
+      if (!quote) throw new Error("Quote not found");
+      assertQuoteMutationAllowed(quote);
+      const [newGroup] = await tx.insert(groups).values(group).returning();
+      await touchQuoteRevision(tx, group.quoteId);
+      return newGroup;
+    });
   }
 
   async updateGroup(id: string, groupData: Partial<InsertGroup>): Promise<Group | undefined> {
-    const [updated] = await db
-      .update(groups)
-      .set({ 
-        ...groupData, 
-        updatedAt: sql`CURRENT_TIMESTAMP` 
-      })
-      .where(eq(groups.id, id))
-      .returning();
-    return updated || undefined;
+    return db.transaction(async (tx) => {
+      const [existing] = await tx.select().from(groups).where(eq(groups.id, id));
+      if (!existing) return undefined;
+      if (groupData.quoteId !== undefined && groupData.quoteId !== existing.quoteId) {
+        throw new Error("Groups cannot be moved between quotes");
+      }
+      const [quote] = await tx.select().from(quotes).where(eq(quotes.id, existing.quoteId)).for("update");
+      if (!quote) throw new Error("Quote not found");
+      assertQuoteMutationAllowed(quote);
+      const [updated] = await tx
+        .update(groups)
+        .set({ ...groupData, updatedAt: sql`CURRENT_TIMESTAMP` })
+        .where(eq(groups.id, id))
+        .returning();
+      if (updated) await touchQuoteRevision(tx, existing.quoteId);
+      return updated || undefined;
+    });
   }
 
   async deleteGroup(id: string): Promise<boolean> {
-    // First, move all line items in this group to ungrouped (groupId = null)
-    await db
-      .update(lineItems)
-      .set({ groupId: null })
-      .where(eq(lineItems.groupId, id));
-
-    // Then delete the group
-    const result = await db.delete(groups).where(eq(groups.id, id));
-    return (result.rowCount || 0) > 0;
+    return db.transaction(async (tx) => {
+      const [existing] = await tx.select().from(groups).where(eq(groups.id, id));
+      if (!existing) return false;
+      const [quote] = await tx.select().from(quotes).where(eq(quotes.id, existing.quoteId)).for("update");
+      if (!quote) throw new Error("Quote not found");
+      assertQuoteMutationAllowed(quote);
+      const [ungroupedItems, groupedItems] = await Promise.all([
+        tx.select({ position: lineItems.position }).from(lineItems).where(and(
+          eq(lineItems.quoteId, existing.quoteId),
+          isNull(lineItems.groupId),
+        )),
+        tx.select({ id: lineItems.id }).from(lineItems).where(and(
+          eq(lineItems.quoteId, existing.quoteId),
+          eq(lineItems.groupId, id),
+        )).orderBy(lineItems.position),
+      ]);
+      const firstUngroupedPosition = ungroupedItems.length > 0
+        ? Math.max(...ungroupedItems.map((item) => item.position)) + 1
+        : 0;
+      for (const [offset, item] of groupedItems.entries()) {
+        await tx.update(lineItems).set({
+          groupId: null,
+          position: firstUngroupedPosition + offset,
+        }).where(eq(lineItems.id, item.id));
+      }
+      const result = await tx.delete(groups).where(eq(groups.id, id));
+      if ((result.rowCount || 0) > 0) await touchQuoteRevision(tx, existing.quoteId);
+      return (result.rowCount || 0) > 0;
+    });
   }
 
   async deleteGroupsByQuoteId(quoteId: number): Promise<boolean> {
-    await db.delete(groups).where(eq(groups.quoteId, quoteId));
+    await db.transaction(async (tx) => {
+      const [quote] = await tx.select().from(quotes).where(eq(quotes.id, quoteId)).for("update");
+      if (!quote) return;
+      assertQuoteMutationAllowed(quote);
+      await tx.delete(groups).where(eq(groups.quoteId, quoteId));
+      await touchQuoteRevision(tx, quoteId);
+    });
     return true;
   }
 
   async reorderGroups(quoteId: number, positions: Array<{id: string; position: number}>): Promise<void> {
     await db.transaction(async (tx) => {
+      const [quote] = await tx.select().from(quotes).where(eq(quotes.id, quoteId)).for("update");
+      if (!quote) throw new Error("Quote not found");
+      assertQuoteMutationAllowed(quote);
+
       // Phase 1: Add temporary offset to positions to break ties
       for (const groupPos of positions) {
         await tx
@@ -1951,11 +2645,13 @@ export class DatabaseStorage implements IStorage {
             eq(groups.quoteId, quoteId)
           ));
       }
+      await touchQuoteRevision(tx, quoteId);
     });
   }
 
-  // Authorization methods for line item security
-  async validateLineItemsOwnership(lineItemIds: number[], userId: any): Promise<{ isValid: boolean; quoteId?: number }> {
+  // Selection-integrity check. Rainmaker currently grants authenticated sales
+  // users access to the shared quote workspace; this is not an ownership rule.
+  async validateLineItemSelection(lineItemIds: number[]): Promise<{ isValid: boolean; quoteId?: number }> {
     if (lineItemIds.length === 0) return { isValid: false };
 
     // Get all line items and their associated quotes
@@ -1972,7 +2668,7 @@ export class DatabaseStorage implements IStorage {
       return { isValid: false }; // Some line items don't exist
     }
 
-    // For now, since we don't have userId in quotes table, we'll validate all items belong to same quote
+    // Bulk operations must not cross quote boundaries.
     const quoteIds = Array.from(new Set(items.map(item => item.quoteId)));
     if (quoteIds.length !== 1) {
       return { isValid: false }; // Line items belong to different quotes
@@ -1981,9 +2677,7 @@ export class DatabaseStorage implements IStorage {
     return { isValid: true, quoteId: quoteIds[0] };
   }
 
-  async validateQuoteOwnership(quoteId: number, userId: any): Promise<boolean> {
-    // For now, return true since we don't have user ownership in quotes
-    // This should be enhanced when proper user-quote relationships are implemented
+  async quoteExists(quoteId: number): Promise<boolean> {
     const quote = await db.select().from(quotes).where(eq(quotes.id, quoteId)).limit(1);
     return quote.length > 0;
   }
@@ -2252,20 +2946,31 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createPricingTable(insertPricingTable: InsertPricingTable): Promise<PricingTable> {
-    const [pricingTable] = await db
-      .insert(pricingTables)
-      .values(insertPricingTable)
-      .returning();
-    return pricingTable;
+    return db.transaction(async (tx) => {
+      const [product] = await tx.select().from(products).where(eq(products.id, insertPricingTable.productId)).for("update");
+      if (!product) throw new Error("Product not found");
+      const existing = await tx.select().from(pricingTables).where(eq(pricingTables.productId, insertPricingTable.productId));
+      validatePricingBands([...existing, insertPricingTable]);
+      const [pricingTable] = await tx.insert(pricingTables).values(insertPricingTable).returning();
+      return pricingTable;
+    });
   }
 
   async updatePricingTable(id: number, pricingTableData: Partial<InsertPricingTable>): Promise<PricingTable | undefined> {
-    const [updated] = await db
-      .update(pricingTables)
-      .set(pricingTableData)
-      .where(eq(pricingTables.id, id))
-      .returning();
-    return updated || undefined;
+    return db.transaction(async (tx) => {
+      const [existing] = await tx.select().from(pricingTables).where(eq(pricingTables.id, id));
+      if (!existing) return undefined;
+      if (pricingTableData.productId !== undefined && pricingTableData.productId !== existing.productId) {
+        throw new Error("Pricing entries cannot be moved between products");
+      }
+      const [product] = await tx.select().from(products).where(eq(products.id, existing.productId)).for("update");
+      if (!product) throw new Error("Product not found");
+      const siblings = await tx.select().from(pricingTables).where(eq(pricingTables.productId, existing.productId));
+      const candidate = { ...existing, ...pricingTableData };
+      validatePricingBands(siblings.map((entry) => entry.id === id ? candidate : entry));
+      const [updated] = await tx.update(pricingTables).set(pricingTableData).where(eq(pricingTables.id, id)).returning();
+      return updated || undefined;
+    });
   }
 
   async deletePricingTable(id: number): Promise<boolean> {
@@ -2278,6 +2983,18 @@ export class DatabaseStorage implements IStorage {
     return true; // Always return true since this is for cleanup before bulk upload
   }
 
+  async replacePricingTablesForProduct(productId: number, pricingTableData: InsertPricingTable[]): Promise<PricingTable[]> {
+    return db.transaction(async (tx) => {
+      const [product] = await tx.select().from(products).where(eq(products.id, productId)).for("update");
+      if (!product) throw new Error("Product not found");
+      const normalized = pricingTableData.map((entry) => ({ ...entry, productId }));
+      validatePricingBands(normalized);
+      await tx.delete(pricingTables).where(eq(pricingTables.productId, productId));
+      if (normalized.length === 0) return [];
+      return tx.insert(pricingTables).values(normalized).returning();
+    });
+  }
+
   async calculateConfigurableProductPrice(productId: number, length: number, width: number): Promise<number | null> {
     // Note: All dimensions are expected in inches
     // Pricing tables store all dimensions in inches for consistency across products
@@ -2288,45 +3005,8 @@ export class DatabaseStorage implements IStorage {
       .from(pricingTables)
       .where(eq(pricingTables.productId, productId));
 
-    if (pricingTablesForProduct.length === 0) {
-      return null;
-    }
-
-    // Find band that contains the requested dimensions (in inches)
-    const matchingBand = pricingTablesForProduct.find(table => {
-      const lengthMin = parseFloat(table.lengthMin);
-      const lengthMax = parseFloat(table.lengthMax);
-      const widthMin = parseFloat(table.widthMin);
-      const widthMax = parseFloat(table.widthMax);
-      
-      return length >= lengthMin && length <= lengthMax && 
-             width >= widthMin && width <= widthMax;
-    });
-
-    if (matchingBand) {
-      return parseFloat(matchingBand.basePrice);
-    }
-
-    // If no exact band match, find the closest band (for dimensions slightly outside ranges)
-    let closestTable = pricingTablesForProduct[0];
-    let minDistance = Infinity;
-
-    for (const table of pricingTablesForProduct) {
-      // Calculate distance to band center
-      const lengthCenter = (parseFloat(table.lengthMin) + parseFloat(table.lengthMax)) / 2;
-      const widthCenter = (parseFloat(table.widthMin) + parseFloat(table.widthMax)) / 2;
-      
-      const lengthDiff = Math.abs(lengthCenter - length);
-      const widthDiff = Math.abs(widthCenter - width);
-      const distance = Math.sqrt(lengthDiff * lengthDiff + widthDiff * widthDiff);
-
-      if (distance < minDistance) {
-        minDistance = distance;
-        closestTable = table;
-      }
-    }
-
-    return parseFloat(closestTable.basePrice);
+    const matchingBand = selectPricingBand(pricingTablesForProduct, length, width);
+    return parseFloat(matchingBand.basePrice);
   }
 
   // Color methods
@@ -2424,36 +3104,29 @@ export class DatabaseStorage implements IStorage {
 
   // Recalculate pricing tables when product discount changes
   async recalculatePricingTables(productId: number): Promise<{ updated: number }> {
-    // Get product discount settings
-    const product = await this.getProduct(productId);
-    if (!product) {
-      throw new Error("Product not found");
-    }
+    return db.transaction(async (tx) => {
+      const [product] = await tx.select().from(products).where(eq(products.id, productId)).for("update");
+      if (!product) throw new Error("Product not found");
+      const discountType = product.defaultDiscountType;
+      const discountValue = parseFloat(product.defaultDiscountValue);
+      if (!Number.isFinite(discountValue) || discountValue < 0 || (discountType === "percentage" && discountValue > 100)) {
+        throw new Error("Product discount settings are invalid");
+      }
 
-    const discountType = product.defaultDiscountType;
-    const discountValue = parseFloat(product.defaultDiscountValue);
-
-    // Recalculate basePrice for all pricing tables for this product
-    let updateSql;
-    if (discountType === "percentage") {
-      // For percentage discount: basePrice = retailPrice * (1 - discount/100)
-      const multiplier = (100 - discountValue) / 100;
-      updateSql = sql`
-        UPDATE pricing_tables 
-        SET base_price = ROUND(retail_price * ${multiplier}, 2)
-        WHERE product_id = ${productId}
-      `;
-    } else {
-      // For dollar discount: basePrice = retailPrice - discountValue
-      updateSql = sql`
-        UPDATE pricing_tables 
-        SET base_price = ROUND(retail_price - ${discountValue}, 2)
-        WHERE product_id = ${productId}
-      `;
-    }
-
-    const result = await db.execute(updateSql);
-    return { updated: result.rowCount || 0 };
+      const multiplier = discountType === "percentage" ? (100 - discountValue) / 100 : null;
+      const result = discountType === "percentage"
+        ? await tx.execute(sql`
+            UPDATE pricing_tables
+            SET base_price = GREATEST(ROUND(retail_price * ${multiplier}, 2), 0)
+            WHERE product_id = ${productId}
+          `)
+        : await tx.execute(sql`
+            UPDATE pricing_tables
+            SET base_price = GREATEST(ROUND(retail_price - ${discountValue}, 2), 0)
+            WHERE product_id = ${productId}
+          `);
+      return { updated: result.rowCount || 0 };
+    });
   }
 
   // Quote image methods
@@ -2494,76 +3167,99 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createQuoteCoverPhoto(photo: InsertQuoteCoverPhoto): Promise<QuoteCoverPhoto> {
-    // Soft delete any existing active cover photos for this quote (business rule: one active cover photo per quote)
-    await db
-      .update(quoteCoverPhotos)
-      .set({ isActive: false })
-      .where(and(eq(quoteCoverPhotos.quoteId, photo.quoteId), eq(quoteCoverPhotos.isActive, true)));
-
-    const [created] = await db
-      .insert(quoteCoverPhotos)
-      .values(photo)
-      .returning();
-    return created;
+    return db.transaction(async (tx) => {
+      const [quote] = await tx.select().from(quotes).where(eq(quotes.id, photo.quoteId)).for("update");
+      if (!quote) throw new Error("Quote not found");
+      assertQuoteMutationAllowed(quote);
+      await tx
+        .update(quoteCoverPhotos)
+        .set({ isActive: false })
+        .where(and(eq(quoteCoverPhotos.quoteId, photo.quoteId), eq(quoteCoverPhotos.isActive, true)));
+      const [created] = await tx.insert(quoteCoverPhotos).values(photo).returning();
+      await touchQuoteRevision(tx, photo.quoteId);
+      return created;
+    });
   }
 
   async createQuoteProductRendering(rendering: InsertQuoteProductRendering): Promise<QuoteProductRendering> {
-    const [created] = await db
-      .insert(quoteProductRenderings)
-      .values(rendering)
-      .returning();
-    return created;
+    return db.transaction(async (tx) => {
+      const [quote] = await tx.select().from(quotes).where(eq(quotes.id, rendering.quoteId)).for("update");
+      if (!quote) throw new Error("Quote not found");
+      assertQuoteMutationAllowed(quote);
+      const [created] = await tx.insert(quoteProductRenderings).values(rendering).returning();
+      await touchQuoteRevision(tx, rendering.quoteId);
+      return created;
+    });
   }
 
   async updateQuoteCoverPhoto(id: number, photo: Partial<InsertQuoteCoverPhoto>): Promise<QuoteCoverPhoto | undefined> {
-    const [updated] = await db
-      .update(quoteCoverPhotos)
-      .set(photo)
-      .where(eq(quoteCoverPhotos.id, id))
-      .returning();
-    return updated || undefined;
+    return db.transaction(async (tx) => {
+      const [existing] = await tx.select().from(quoteCoverPhotos).where(eq(quoteCoverPhotos.id, id));
+      if (!existing) return undefined;
+      if (photo.quoteId !== undefined && photo.quoteId !== existing.quoteId) {
+        throw new Error("Quote images cannot be moved between quotes");
+      }
+      const [quote] = await tx.select().from(quotes).where(eq(quotes.id, existing.quoteId)).for("update");
+      if (!quote) throw new Error("Quote not found");
+      assertQuoteMutationAllowed(quote);
+      const [updated] = await tx.update(quoteCoverPhotos).set(photo).where(eq(quoteCoverPhotos.id, id)).returning();
+      if (updated) await touchQuoteRevision(tx, existing.quoteId);
+      return updated || undefined;
+    });
   }
 
   async updateQuoteProductRendering(id: number, rendering: Partial<InsertQuoteProductRendering>): Promise<QuoteProductRendering | undefined> {
-    const [updated] = await db
-      .update(quoteProductRenderings)
-      .set(rendering)
-      .where(eq(quoteProductRenderings.id, id))
-      .returning();
-    return updated || undefined;
+    return db.transaction(async (tx) => {
+      const [existing] = await tx.select().from(quoteProductRenderings).where(eq(quoteProductRenderings.id, id));
+      if (!existing) return undefined;
+      if (rendering.quoteId !== undefined && rendering.quoteId !== existing.quoteId) {
+        throw new Error("Quote images cannot be moved between quotes");
+      }
+      const [quote] = await tx.select().from(quotes).where(eq(quotes.id, existing.quoteId)).for("update");
+      if (!quote) throw new Error("Quote not found");
+      assertQuoteMutationAllowed(quote);
+      const [updated] = await tx.update(quoteProductRenderings).set(rendering).where(eq(quoteProductRenderings.id, id)).returning();
+      if (updated) await touchQuoteRevision(tx, existing.quoteId);
+      return updated || undefined;
+    });
   }
 
   async deleteQuoteCoverPhoto(id: number): Promise<boolean> {
-    // Soft delete by setting isActive to false
-    const result = await db
-      .update(quoteCoverPhotos)
-      .set({ isActive: false })
-      .where(eq(quoteCoverPhotos.id, id));
-    return (result.rowCount || 0) > 0;
+    return db.transaction(async (tx) => {
+      const [existing] = await tx.select().from(quoteCoverPhotos).where(eq(quoteCoverPhotos.id, id));
+      if (!existing) return false;
+      const [quote] = await tx.select().from(quotes).where(eq(quotes.id, existing.quoteId)).for("update");
+      if (!quote) throw new Error("Quote not found");
+      assertQuoteMutationAllowed(quote);
+      const result = await tx.update(quoteCoverPhotos).set({ isActive: false }).where(eq(quoteCoverPhotos.id, id));
+      if ((result.rowCount || 0) > 0) await touchQuoteRevision(tx, existing.quoteId);
+      return (result.rowCount || 0) > 0;
+    });
   }
 
   async deleteQuoteProductRendering(id: number): Promise<boolean> {
-    // Soft delete by setting isActive to false
-    const result = await db
-      .update(quoteProductRenderings)
-      .set({ isActive: false })
-      .where(eq(quoteProductRenderings.id, id));
-    return (result.rowCount || 0) > 0;
+    return db.transaction(async (tx) => {
+      const [existing] = await tx.select().from(quoteProductRenderings).where(eq(quoteProductRenderings.id, id));
+      if (!existing) return false;
+      const [quote] = await tx.select().from(quotes).where(eq(quotes.id, existing.quoteId)).for("update");
+      if (!quote) throw new Error("Quote not found");
+      assertQuoteMutationAllowed(quote);
+      const result = await tx.update(quoteProductRenderings).set({ isActive: false }).where(eq(quoteProductRenderings.id, id));
+      if ((result.rowCount || 0) > 0) await touchQuoteRevision(tx, existing.quoteId);
+      return (result.rowCount || 0) > 0;
+    });
   }
 
   async deleteQuoteImagesByQuoteId(quoteId: number): Promise<boolean> {
-    // Soft delete all images for a quote when the quote is deleted
-    const coverResult = await db
-      .update(quoteCoverPhotos)
-      .set({ isActive: false })
-      .where(eq(quoteCoverPhotos.quoteId, quoteId));
-
-    const renderingsResult = await db
-      .update(quoteProductRenderings)
-      .set({ isActive: false })
-      .where(eq(quoteProductRenderings.quoteId, quoteId));
-
-    return ((coverResult.rowCount || 0) + (renderingsResult.rowCount || 0)) > 0;
+    return db.transaction(async (tx) => {
+      const [quote] = await tx.select().from(quotes).where(eq(quotes.id, quoteId)).for("update");
+      if (!quote) return false;
+      assertQuoteMutationAllowed(quote);
+      const coverResult = await tx.update(quoteCoverPhotos).set({ isActive: false }).where(eq(quoteCoverPhotos.quoteId, quoteId));
+      const renderingsResult = await tx.update(quoteProductRenderings).set({ isActive: false }).where(eq(quoteProductRenderings.quoteId, quoteId));
+      await touchQuoteRevision(tx, quoteId);
+      return ((coverResult.rowCount || 0) + (renderingsResult.rowCount || 0)) > 0;
+    });
   }
 
 }

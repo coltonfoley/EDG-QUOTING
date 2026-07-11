@@ -13,6 +13,38 @@ import {
   calculatePriceSchema,
   bulkUploadPricingSchema
 } from "../validation-schemas";
+import {
+  normalizePricingBand,
+  pricingUnitFactor,
+  PricingBandValidationError,
+  PricingManualReviewError,
+  type PricingDimensionUnit,
+} from "../pricingBands";
+
+function sendPricingError(res: any, error: unknown): boolean {
+  if (error instanceof PricingBandValidationError) {
+    res.status(error.status).json({ message: error.message, code: error.code, issues: error.issues });
+    return true;
+  }
+  if (error instanceof PricingManualReviewError) {
+    res.status(error.status).json({ message: error.message, code: error.code });
+    return true;
+  }
+  return false;
+}
+
+function normalizePartialPricingDimensions(data: Record<string, any>, sourceUnit: PricingDimensionUnit) {
+  const factor = pricingUnitFactor(sourceUnit);
+  const normalized = { ...data };
+  for (const field of ["lengthMin", "lengthMax", "widthMin", "widthMax"] as const) {
+    if (normalized[field] !== undefined) {
+      normalized[field] = (Number(normalized[field]) * factor).toFixed(2);
+    }
+  }
+  return normalized;
+}
+
+const pricingDimensionUnitSchema = z.enum(["feet", "inches", "meters"]);
 
 /**
  * Helper function to strip internal validation metadata from API responses
@@ -289,10 +321,15 @@ export function registerProductRoutes(app: Express) {
         });
       }
       
-      const pricingData = insertPricingTableSchema.parse({ ...req.body, productId: params.data.productId });
+      const sourceUnit = pricingDimensionUnitSchema.parse(req.body.sourceUnit || "feet");
+      const pricingData = insertPricingTableSchema.parse({
+        ...normalizePartialPricingDimensions(req.body, sourceUnit),
+        productId: params.data.productId,
+      });
       const pricingTable = await storage.createPricingTable(pricingData);
       res.status(201).json(pricingTable);
     } catch (error) {
+      if (sendPricingError(res, error)) return;
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: "Invalid pricing table data", errors: error.errors });
       }
@@ -303,13 +340,17 @@ export function registerProductRoutes(app: Express) {
   app.put("/api/pricing-tables/:id", isAuthenticated, requireAdmin, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
-      const pricingData = insertPricingTableSchema.partial().parse(req.body);
+      const sourceUnit = pricingDimensionUnitSchema.parse(req.body.sourceUnit || "feet");
+      const pricingData = insertPricingTableSchema.partial().parse(
+        normalizePartialPricingDimensions(req.body, sourceUnit),
+      );
       const pricingTable = await storage.updatePricingTable(id, pricingData);
       if (!pricingTable) {
         return res.status(404).json({ message: "Pricing table not found" });
       }
       res.json(pricingTable);
     } catch (error) {
+      if (sendPricingError(res, error)) return;
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: "Invalid pricing table data", errors: error.errors });
       }
@@ -454,14 +495,21 @@ export function registerProductRoutes(app: Express) {
         });
       }
       
-      const { length, width } = validatedData.data;
-      const price = await storage.calculateConfigurableProductPrice(params.data.productId, length, width);
-      if (price === null) {
-        return res.status(404).json({ message: "No pricing found for these dimensions" });
-      }
+      const { length, width, sourceUnit } = validatedData.data;
+      const factor = pricingUnitFactor(sourceUnit);
+      const lengthInches = length * factor;
+      const widthInches = width * factor;
+      const price = await storage.calculateConfigurableProductPrice(params.data.productId, lengthInches, widthInches);
+      const actorUserId = Number((req as any).user?.id);
+      await storage.recordBusinessEvent({
+        eventType: "dimensional_price_resolved",
+        productId: params.data.productId,
+        actorUserId: Number.isInteger(actorUserId) && actorUserId > 0 ? actorUserId : null,
+      });
       
-      res.json({ price, length, width });
+      res.json({ price, length, width, sourceUnit, lengthInches, widthInches });
     } catch (error) {
+      if (sendPricingError(res, error)) return;
       res.status(500).json({ message: "Internal server error" });
     }
   });
@@ -507,48 +555,18 @@ export function registerProductRoutes(app: Express) {
       }
 
       const sourceUnit = validatedData.data.sourceUnit || 'feet';
-      let conversionFactor: number;
-      
-      switch (sourceUnit) {
-        case 'feet':
-          conversionFactor = 12;
-          break;
-        case 'meters':
-          conversionFactor = 39.3701;
-          break;
-        case 'inches':
-          conversionFactor = 1;
-          break;
-        default:
-          conversionFactor = 12;
-      }
-
-      await storage.deletePricingTablesByProductId(params.data.productId);
-
-      const results = [];
-      for (const item of validatedData.data.pricingData) {
-        const lengthMinInches = item.lengthMin * conversionFactor;
-        const lengthMaxInches = item.lengthMax * conversionFactor;
-        const widthMinInches = item.widthMin * conversionFactor;
-        const widthMaxInches = item.widthMax * conversionFactor;
-
-        const pricingTable = await storage.createPricingTable({
+      const normalizedPricing = validatedData.data.pricingData.map((item) => ({
           productId: params.data.productId,
-          lengthMin: lengthMinInches.toFixed(2),
-          lengthMax: lengthMaxInches.toFixed(2),
-          widthMin: widthMinInches.toFixed(2),
-          widthMax: widthMaxInches.toFixed(2),
-          retailPrice: item.retailPrice.toString(),
-          basePrice: item.basePrice.toString()
-        });
-        results.push(pricingTable);
-      }
+          ...normalizePricingBand(item, sourceUnit),
+        }));
+      const results = await storage.replacePricingTablesForProduct(params.data.productId, normalizedPricing);
 
       res.status(201).json({ 
         message: `Successfully uploaded ${results.length} pricing entries (converted from ${sourceUnit} to inches)`,
         data: results
       });
     } catch (error) {
+      if (sendPricingError(res, error)) return;
       console.error("Error bulk uploading pricing data:", error);
       res.status(500).json({ message: "Failed to upload pricing data" });
     }

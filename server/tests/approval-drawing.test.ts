@@ -12,10 +12,6 @@ import {
   parseApprovalDrawingLightLine,
   quoteNeedsApprovalDrawing,
 } from "@shared/approvalDrawing";
-import {
-  buildOperationsPayload,
-  isApprovalDrawingClearForOps,
-} from "../integrations/operationsPayload";
 import { appendQuoteApprovalDrawingInternalNoteSql } from "../approvalDrawingSql";
 
 const completeApprovalDrawingData = () => createDefaultApprovalDrawingData({
@@ -167,102 +163,6 @@ describe("approval drawing readiness", () => {
 
     expect(normalized.posts[0]).toEqual(expect.objectContaining({ x: 0, y: 0 }));
     expect(normalized.posts[1]).toEqual(expect.objectContaining({ x: 0.75, y: 1 }));
-  });
-});
-
-describe("approval drawing Ops handoff", () => {
-  const signedOrderReadyDrawing = {
-    id: 77,
-    quoteId: 100,
-    status: "signed_locked",
-    orderStatus: "order_ready",
-    manufacturer: "Azenco",
-    productSystem: "R-Blade",
-    title: "Order Approval Drawing",
-    drawingData: completeApprovalDrawingData(),
-    publicSnapshot: {
-      id: 77,
-      quoteId: 100,
-      status: "sent_for_signature",
-      title: "Order Approval Drawing",
-      manufacturer: "Azenco",
-      productSystem: "R-Blade",
-      drawingData: completeApprovalDrawingData(),
-      customerNotes: "Customer approved layout.",
-    },
-    customerNotes: "Customer approved layout.",
-    signedLockedAt: "2026-06-22T14:00:00.000Z",
-    orderReviewedAt: "2026-06-22T14:15:00.000Z",
-    orderReadyAt: "2026-06-22T14:20:00.000Z",
-  };
-
-  it("blocks Ops unless the drawing is signed, order-ready, and complete", () => {
-    expect(isApprovalDrawingClearForOps(null)).toBe(true);
-    expect(isApprovalDrawingClearForOps({ ...signedOrderReadyDrawing, status: "sent_for_signature" })).toBe(false);
-    expect(isApprovalDrawingClearForOps({ ...signedOrderReadyDrawing, orderStatus: "not_reviewed" })).toBe(false);
-    expect(isApprovalDrawingClearForOps(signedOrderReadyDrawing)).toBe(true);
-  });
-
-  it("includes the signed approval drawing summary in the Ops payload", async () => {
-    const payload = await buildOperationsPayload({
-      id: 100,
-      quoteNumber: "Q-APPROVAL-1",
-      projectName: "Approval Drawing Test",
-      taxRate: "0",
-      discount: "0",
-      shipping: "0",
-      tariffRate: "0",
-      esigIncludeApprovalDrawing: true,
-      signatureAuditTrail: { documentFingerprint: "abc123" },
-      approvalDrawing: signedOrderReadyDrawing,
-      lineItems: [
-        {
-          id: 1,
-          description: "Azenco louvered roof",
-          quantity: "1",
-          unitPrice: "1000.00",
-          retailPrice: "1000.00",
-          markupType: "percentage",
-          markupValue: "0",
-          discountType: "percentage",
-          discountValue: "0",
-          isTaxable: true,
-          isTariffApplicable: false,
-          manufacturer: "Azenco",
-        },
-      ],
-    }, true, {
-      buildDocuments: async () => [],
-    }) as any;
-
-    expect(payload.quote.approvalDrawing).toEqual(expect.objectContaining({
-      id: 77,
-      status: "signed_locked",
-      orderStatus: "order_ready",
-      documentFingerprint: "abc123",
-      manufacturer: "Azenco",
-      readiness: { ready: true, missing: [] },
-    }));
-  });
-
-  it("omits approval drawing details from the Ops payload when the approval package excludes it", async () => {
-    const payload = await buildOperationsPayload({
-      id: 100,
-      quoteNumber: "Q-APPROVAL-2",
-      projectName: "Approval Drawing Excluded Test",
-      taxRate: "0",
-      discount: "0",
-      shipping: "0",
-      tariffRate: "0",
-      esigIncludeApprovalDrawing: false,
-      signatureAuditTrail: { documentFingerprint: "abc123" },
-      approvalDrawing: signedOrderReadyDrawing,
-      lineItems: [],
-    }, true, {
-      buildDocuments: async () => [],
-    }) as any;
-
-    expect(payload.quote.approvalDrawing).toBeNull();
   });
 });
 

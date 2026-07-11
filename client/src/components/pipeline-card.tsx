@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency } from "@/lib/utils";
 import { calculateLineItemsValue } from "@/lib/quote-value";
-import { CalendarDays, User, Building2 } from "lucide-react";
+import { CalendarDays, Building2 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import type { QuoteWithDetails } from "@shared/schema";
 import { getDealStageById, getDealStageLabel, getDealStageColor, isLostStage } from "@shared/dealStageConstants";
@@ -15,10 +15,6 @@ interface PipelineCardProps {
 
 export function PipelineCard({ quote, isDragging }: PipelineCardProps) {
   const totalValue = calculateLineItemsValue(quote.lineItems);
-
-
-  // Assignment feature disabled until new system is implemented
-  // const isAssigned = !!quote.assignedRepId;
 
   return (
     <Link href={`/quotes/${quote.id}/edit`}>
@@ -57,18 +53,13 @@ export function PipelineCard({ quote, isDragging }: PipelineCardProps) {
             )}
           </div>
 
-          {/* Footer with account type and assigned rep */}
-          <div className="flex items-center justify-between">
+          {/* Account type */}
+          <div className="flex items-center">
             <div className="flex items-center text-xs text-muted-foreground">
               <Building2 className="h-3 w-3 mr-1" />
               <span className="capitalize">
                 {quote.account?.accountType?.replace('_', ' ') || 'N/A'}
               </span>
-            </div>
-
-            <div className="flex items-center text-xs text-muted-foreground">
-              <User className="h-3 w-3 mr-1" />
-              <span>Rep feature disabled</span>
             </div>
           </div>
 

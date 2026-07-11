@@ -38,7 +38,7 @@ function GlobalLoadingIndicator() {
 }
 
 function Router() {
-  const { isAuthenticated, isLoading, error } = useAuth();
+  const { isAuthenticated, isLoading, error, retryAuth, dismissAuthError } = useAuth();
   const [location, setLocation] = useLocation();
 
   // Show loading spinner while auth is being checked
@@ -60,7 +60,7 @@ function Router() {
           </Alert>
           <div className="flex gap-4 mt-6 justify-center">
             <Button
-              onClick={() => window.location.reload()}
+              onClick={() => void retryAuth()}
               className="flex items-center gap-2"
               data-testid="button-retry-auth"
             >
@@ -69,7 +69,10 @@ function Router() {
             </Button>
             <Button
               variant="outline"
-              onClick={() => setLocation("/auth")}
+              onClick={() => {
+                dismissAuthError();
+                setLocation("/auth");
+              }}
               data-testid="button-go-to-login"
             >
               Go to Login

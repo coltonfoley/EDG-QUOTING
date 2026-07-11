@@ -72,6 +72,7 @@ writeFileSync(
       routes: [
         { handle: "filesystem" },
         { src: "^/health$", dest: "/api/index?__path=%2Fhealth", check: true },
+        { src: "^/ready$", dest: "/api/index?__path=%2Fready", check: true },
         { src: "^/api$", dest: "/api/index?__path=%2Fapi", check: true },
         { src: "^/api(?:/(.*))$", dest: "/api/index?__path=%2Fapi%2F$1", check: true },
         { src: "^/objects(?:/(.*))$", dest: "/api/index?__path=%2Fobjects%2F$1", check: true },
