@@ -394,12 +394,30 @@ try {
   });
   await keyboardPage.waitForSelector('[data-testid="button-proceed-to-sign"]:not([disabled])', { timeout: 15_000 });
   await keyboardPage.evaluate(() => document.activeElement?.blur());
+  const tabsToSkipApprovalActions = await focusByTab(keyboardPage, "link-skip-to-approval-actions");
+  await keyboardPage.keyboard.press("Enter");
+  await keyboardPage.waitForFunction(
+    () => document.activeElement?.id === "approval-actions",
+    { timeout: 10_000 },
+  );
+  const skipApprovalTargetFocused = await keyboardPage.evaluate(
+    () => document.activeElement?.id === "approval-actions",
+  );
   const tabsToProceed = await focusByTab(keyboardPage, "button-proceed-to-sign");
   await keyboardPage.keyboard.press("Enter");
   await keyboardPage.waitForSelector('[data-testid="tab-type-signature"]', { timeout: 10_000 });
   await keyboardPage.waitForFunction(
     () => document.activeElement?.getAttribute?.("data-testid") === "heading-sign-approval",
     { timeout: 10_000 },
+  );
+  const tabsToSkipSignatureForm = await focusByTab(keyboardPage, "link-skip-to-signature-form");
+  await keyboardPage.keyboard.press("Enter");
+  await keyboardPage.waitForFunction(
+    () => document.activeElement?.id === "signature-form",
+    { timeout: 10_000 },
+  );
+  const skipSignatureTargetFocused = await keyboardPage.evaluate(
+    () => document.activeElement?.id === "signature-form",
   );
   const tabsToTypeMode = await focusByTab(keyboardPage, "tab-draw-signature");
   await keyboardPage.keyboard.press("ArrowRight");
@@ -736,7 +754,11 @@ try {
 
   process.stdout.write(`${JSON.stringify({ results, dialogResults, keyboardRehearsal: {
     ...keyboardRehearsal,
+    tabsToSkipApprovalActions,
+    skipApprovalTargetFocused,
     tabsToProceed,
+    tabsToSkipSignatureForm,
+    skipSignatureTargetFocused,
     tabsToTypeMode,
     tabsToTypedName,
     tabsToConsent,
@@ -777,8 +799,12 @@ try {
     || !keyboardRehearsal.emailClaim
     || !keyboardRehearsal.accessibilityTree.expectedOrderFound
     || keyboardRehearsal.accessibilityTree.unnamedActionableNodes.length > 0
-    || tabsToProceed > 12
-    || tabsToTypeMode > 12
+    || tabsToSkipApprovalActions > 3
+    || !skipApprovalTargetFocused
+    || tabsToProceed > 3
+    || tabsToSkipSignatureForm > 3
+    || !skipSignatureTargetFocused
+    || tabsToTypeMode > 3
     || tabsToTypedName > 3
     || tabsToConsent > 3
     || tabsToFinalApproval > 3

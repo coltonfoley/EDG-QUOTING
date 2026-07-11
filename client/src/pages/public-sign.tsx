@@ -705,6 +705,15 @@ export default function PublicSignPage() {
 
   return (
     <div className="min-h-screen bg-edg-light-grey flex flex-col">
+      {currentStep === 'review' && !isFullscreen && (
+        <a
+          href="#approval-actions"
+          data-testid="link-skip-to-approval-actions"
+          className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[60] focus:rounded-md focus:bg-white focus:px-4 focus:py-3 focus:text-sm focus:font-semibold focus:text-edg-dark-teal focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-edg-teal focus:ring-offset-2"
+        >
+          Skip to approval actions
+        </a>
+      )}
       <CompanyHeader />
       <QuoteSummaryBar quoteData={quoteData} showPricing={showPricing} />
       
@@ -831,7 +840,11 @@ export default function PublicSignPage() {
             </div>
 
             {!isFullscreen && (
-              <div className="bg-white border-t border-edg-teal/20 shadow-lg sticky bottom-0">
+              <div
+                id="approval-actions"
+                tabIndex={-1}
+                className="bg-white border-t border-edg-teal/20 shadow-lg sticky bottom-0 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-edg-teal"
+              >
                 <div className="max-w-7xl mx-auto px-4 py-4">
                   <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
                     <div className="flex items-center gap-3 text-sm text-edg-grey">
@@ -922,8 +935,19 @@ export default function PublicSignPage() {
                     <CardDescription className="text-edg-grey">
                       Type your legal name and sign to approve this proposal.
                     </CardDescription>
+                    <a
+                      href="#signature-form"
+                      data-testid="link-skip-to-signature-form"
+                      className="sr-only focus:not-sr-only focus:w-fit focus:rounded-md focus:bg-white focus:px-3 focus:py-2 focus:text-sm focus:font-semibold focus:text-edg-dark-teal focus:outline-none focus:ring-2 focus:ring-edg-teal focus:ring-offset-2"
+                    >
+                      Skip to signature form
+                    </a>
                   </CardHeader>
-                  <CardContent className="space-y-4">
+                  <CardContent
+                    id="signature-form"
+                    tabIndex={-1}
+                    className="space-y-4 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-edg-teal"
+                  >
                     <SignatureCanvas
                       onSignatureChange={setSignature}
                       signerName=""
