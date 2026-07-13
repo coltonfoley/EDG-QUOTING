@@ -516,8 +516,8 @@ export const orderReadyApprovalDrawingSchema = z.object({
 // Enhanced LineItem validation
 export const insertLineItemSchema = baseLineItemSchema.extend({
   quoteId: z.number().int().positive("Quote ID must be a positive integer"),
-  productId: z.number().int().positive("Product ID must be a positive integer").optional(),
-  baseProductId: z.number().int().positive("Base product ID must be a positive integer").optional(),
+  productId: z.number().int().positive("Product ID must be a positive integer").nullable().optional(),
+  baseProductId: z.number().int().positive("Base product ID must be a positive integer").nullable().optional(),
   description: z.string().min(1, "Description is required").max(1000, "Description is too long"),
   quantity: z.union([z.string(), z.number()])
     .transform(val => typeof val === 'string' ? val : val.toString())
