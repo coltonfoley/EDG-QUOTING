@@ -304,6 +304,17 @@ describe("authorization policy", () => {
     expect(imageRoutes).toContain('app.get("/api/image-proxy", isAuthenticated');
     expect(quoteRoutes).toContain('app.post("/api/quotes/:quoteId/cover-photos", isAuthenticated');
     expect(quoteRoutes).toContain('app.post("/api/quotes/:quoteId/product-renderings", isAuthenticated');
+    expect(quoteRoutes).toContain('app.delete("/api/quote-images/product-rendering/:imageId", isAuthenticated');
+  });
+
+  it("uses the canonical image route and reports customer-package removal failures", () => {
+    const packageBuilder = source("client/src/components/esignature-options-modal.tsx");
+
+    expect(packageBuilder).toContain("`/api/quote-images/product-rendering/${renderingId}`");
+    expect(packageBuilder).not.toContain("`/api/quotes/${quote.id}/product-renderings/${renderingId}`");
+    expect(packageBuilder).toContain('title: "Remove failed"');
+    expect(packageBuilder).toContain("disabled={deleteRenderingMutation.isPending}");
+    expect(packageBuilder).toContain('aria-label={`Remove ${rendering.name}`}');
   });
 
   it("rate limits public signing surfaces and keeps retired issue reporting unavailable", () => {

@@ -87,13 +87,20 @@ export function ESignatureOptionsModal({ quote, open, onOpenChange, onSuccess }:
 
   const deleteRenderingMutation = useMutation({
     mutationFn: async (renderingId: number) => {
-      return await apiRequest('DELETE', `/api/quotes/${quote.id}/product-renderings/${renderingId}`, {});
+      return await apiRequest('DELETE', `/api/quote-images/product-rendering/${renderingId}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/quotes/${quote.id}/product-renderings`] });
       toast({
         title: "Image removed",
         description: "Product rendering has been removed",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Remove failed",
+        description: error.message || "Failed to remove image",
+        variant: "destructive"
       });
     },
   });
@@ -172,7 +179,7 @@ export function ESignatureOptionsModal({ quote, open, onOpenChange, onSuccess }:
     setTempProductRenderings(prev => prev.filter(f => !newFiles.find(nf => nf.id === f.id)));
   };
 
-  const removeFile = async (id: string | number) => {
+  const removeFile = (id: string | number) => {
     if (typeof id === 'string') {
       const file = tempProductRenderings.find(f => f.id === id);
       if (file) {
@@ -180,7 +187,7 @@ export function ESignatureOptionsModal({ quote, open, onOpenChange, onSuccess }:
         setTempProductRenderings(prev => prev.filter(f => f.id !== id));
       }
     } else {
-      await deleteRenderingMutation.mutateAsync(id);
+      deleteRenderingMutation.mutate(id);
     }
   };
 
@@ -344,6 +351,8 @@ export function ESignatureOptionsModal({ quote, open, onOpenChange, onSuccess }:
                             size="sm"
                             className="absolute top-1 right-1"
                             onClick={() => removeFile(rendering.id)}
+                            disabled={deleteRenderingMutation.isPending}
+                            aria-label={`Remove ${rendering.name}`}
                             data-testid={`button-remove-rendering-${rendering.id}`}
                           >
                             <X className="w-3 h-3" />
