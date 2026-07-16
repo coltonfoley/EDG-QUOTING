@@ -401,6 +401,9 @@ describe("authorization policy", () => {
 
   it("preserves inquiry history and uses current-family dashboard/account truth", () => {
     const leadRoutes = source("server/routes/leadIntakeRoutes.ts");
+    const leadPersistence = source("server/leadIntakePersistence.ts");
+    const deployedLeadIntake = source("api/lead-intake.ts");
+    const attributionRoutes = source("server/routes/marketingAttributionRoutes.ts");
     const conversion = source("server/inquiryConversion.ts");
     const quoteBuilder = source("client/src/pages/quote-builder.tsx");
     const leads = source("client/src/pages/leads.tsx");
@@ -409,8 +412,14 @@ describe("authorization policy", () => {
     const home = source("client/src/pages/home.tsx");
 
     expect(leadRoutes).toContain("preserveAccountAndCreateInquiry");
-    expect(leadRoutes).toContain(".insert(leadInquiries)");
-    expect(leadRoutes).not.toContain(".set({ ...accountData, updatedAt: new Date() })");
+    expect(leadPersistence).toContain(".insert(leadInquiries)");
+    expect(leadPersistence).not.toContain(".set({ ...accountData, updatedAt: new Date() })");
+    expect(deployedLeadIntake).toContain("preserveAccountAndCreateInquiry");
+    expect(deployedLeadIntake).toContain("submissionId,");
+    expect(attributionRoutes).toContain('"/api/marketing/lead-attribution"');
+    expect(attributionRoutes).toContain("leadInquiries.submissionId");
+    expect(attributionRoutes).toContain("summarizeMarketingAttribution");
+    expect(attributionRoutes).toContain("containsCustomerPii: false");
     expect(conversion).toContain("INQUIRY_ALREADY_CONVERTED");
     expect(conversion).toContain("convertedQuoteId: quote.id");
     expect(quoteBuilder).toContain('newQuoteSearch?.get("inquiryId")');

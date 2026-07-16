@@ -1,15 +1,16 @@
 import type { IncomingMessage, ServerResponse } from "http";
-import { timingSafeEqual } from "crypto";
+import { randomUUID, timingSafeEqual } from "crypto";
 import { z } from "zod";
-import { sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { db } from "../server/db";
-import { accounts, type InsertAccount } from "../shared/schema";
+import { leadInquiries } from "../shared/schema";
 import {
   createIdempotentLead,
-  type LeadIntakeDatabase,
   LeadIntakeIdempotencyError,
   resolveLeadIntakeSubmissionId,
 } from "../server/leadIntakeIdempotency";
+import { preserveAccountAndCreateInquiry } from "../server/leadIntakePersistence";
+import { redactedErrorType } from "../server/redactedLogging";
 
 const leadIntakeSchema = z.object({
   email: z.string().email().transform((value) => value.trim().toLowerCase()),
@@ -61,93 +62,6 @@ function isAuthorized(req: IncomingMessage) {
     && timingSafeEqual(configuredBuffer, suppliedBuffer);
 }
 
-function accountTypeFromLead(customerType?: string | null): InsertAccount["accountType"] {
-  switch ((customerType || "").toLowerCase()) {
-    case "commercial":
-      return "commercial";
-    case "pro":
-    case "trade":
-    case "contractor":
-    case "builder":
-      return "general_contractor";
-    default:
-      return "homeowner";
-  }
-}
-
-function buildLeadName(lead: LeadIntakePayload): string {
-  return [lead.firstName, lead.lastName].filter(Boolean).join(" ").trim();
-}
-
-function buildLeadNotes(lead: LeadIntakePayload): string {
-  const lines = [
-    "Website lead intake",
-    `Source: ${lead.source || "website"}`,
-    `Project type: ${lead.projectType || "Not provided"}`,
-    `Customer type: ${lead.customerType || "Not provided"}`,
-    `Location / ZIP: ${lead.location || "Not provided"}`,
-    `Phone: ${lead.phone || "Not provided"}`,
-    "",
-    "Message:",
-    lead.message || "No message provided.",
-  ];
-
-  if (lead.metadata && Object.keys(lead.metadata).length > 0) {
-    lines.push("", "Metadata:", JSON.stringify(lead.metadata, null, 2));
-  }
-
-  return lines.join("\n");
-}
-
-function mapLeadToAccount(lead: LeadIntakePayload): InsertAccount {
-  const name = buildLeadName(lead) || lead.email;
-
-  return {
-    name,
-    firstName: lead.firstName,
-    lastName: lead.lastName || undefined,
-    email: lead.email,
-    phone: lead.phone || "",
-    company: undefined,
-    accountType: accountTypeFromLead(lead.customerType),
-    paymentTerms: "net_30",
-    billingAddress: lead.location || undefined,
-    leadStatus: "new",
-    leadSource: lead.source || "website",
-    leadProjectType: lead.projectType || undefined,
-    leadMessage: buildLeadNotes(lead),
-    leadReceivedAt: new Date(),
-  };
-}
-
-async function upsertLead(
-  accountData: InsertAccount,
-  database: LeadIntakeDatabase = db
-) {
-  const [existingAccount] = await database
-    .select()
-    .from(accounts)
-    .where(sql`LOWER(${accounts.email}) = ${accountData.email.toLowerCase()}`)
-    .limit(1);
-
-  if (existingAccount) {
-    const [updatedAccount] = await database
-      .update(accounts)
-      .set({ ...accountData, updatedAt: new Date() })
-      .where(sql`${accounts.id} = ${existingAccount.id}`)
-      .returning();
-
-    return updatedAccount || existingAccount;
-  }
-
-  const [newAccount] = await database
-    .insert(accounts)
-    .values(accountData)
-    .returning();
-
-  return newAccount;
-}
-
 export async function handleLeadIntake(req: IncomingMessage, res: ServerResponse) {
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
@@ -161,21 +75,30 @@ export async function handleLeadIntake(req: IncomingMessage, res: ServerResponse
   try {
     const body = await readJsonBody(req);
     const lead = leadIntakeSchema.parse(body);
-    const submissionId = resolveLeadIntakeSubmissionId({
+    const submittedId = resolveLeadIntakeSubmissionId({
       headerValue: req.headers["idempotency-key"],
       bodyValue: lead.idempotencyKey,
       metadataValue: lead.metadata,
     });
+    const submissionId = submittedId || randomUUID();
     const { account, replayed } = await createIdempotentLead({
       submissionId,
       lead,
-      createLead: (database) => upsertLead(mapLeadToAccount(lead), database),
+      createLead: (database) =>
+        preserveAccountAndCreateInquiry(lead, submissionId, database),
     });
+    const [inquiry] = await db
+      .select({ id: leadInquiries.id })
+      .from(leadInquiries)
+      .where(eq(leadInquiries.submissionId, submissionId))
+      .limit(1);
 
     return sendJson(res, replayed ? 200 : 201, {
       success: true,
       leadId: account.id,
       accountId: account.id,
+      inquiryId: inquiry?.id || (account as { inquiryId?: number }).inquiryId,
+      submissionId,
       leadStatus: account.leadStatus || "new",
       createdQuote: false,
       replayed,
@@ -196,7 +119,7 @@ export async function handleLeadIntake(req: IncomingMessage, res: ServerResponse
       });
     }
 
-    console.error("Lead intake failed:", error);
+    console.error("Lead intake failed", { errorType: redactedErrorType(error) });
     return sendJson(res, 500, { success: false, message: "Failed to create lead" });
   }
 }

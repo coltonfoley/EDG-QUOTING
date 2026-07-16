@@ -5,15 +5,23 @@ import { z } from "zod";
 import { storage } from "../storage";
 import { isAuthenticated } from "../auth";
 import { db } from "../db";
-import { accounts, leadInquiries, type InsertAccount, type LeadAttachment } from "@shared/schema";
+import {
+  accounts,
+  leadInquiries,
+  type InsertAccount,
+  type LeadAttachment,
+} from "@shared/schema";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { ObjectStorageService } from "../objectStorage";
 import {
   createIdempotentLead,
-  type LeadIntakeDatabase,
   LeadIntakeIdempotencyError,
   resolveLeadIntakeSubmissionId,
 } from "../leadIntakeIdempotency";
+import { preserveAccountAndCreateInquiry } from "../leadIntakePersistence";
+import { redactedErrorType } from "../redactedLogging";
+
+export { preserveAccountAndCreateInquiry } from "../leadIntakePersistence";
 
 const leadIntakeSchema = z.object({
   email: z.string().email().transform((value) => value.trim().toLowerCase()),
@@ -153,136 +161,6 @@ function isLeadAttachmentAuthenticated(req: any, res: any, next: any) {
   res.status(401).json({ message: "Unauthorized" });
 }
 
-function accountTypeFromLead(customerType?: string | null): InsertAccount["accountType"] {
-  switch ((customerType || "").toLowerCase()) {
-    case "commercial":
-      return "commercial";
-    case "pro":
-    case "trade":
-    case "contractor":
-    case "builder":
-      return "general_contractor";
-    default:
-      return "homeowner";
-  }
-}
-
-function buildLeadName(lead: LeadIntakePayload): string {
-  return [lead.firstName, lead.lastName].filter(Boolean).join(" ").trim();
-}
-
-function buildLeadNotes(lead: LeadIntakePayload): string {
-  const lines = [
-    "Website lead intake",
-    `Source: ${lead.source || "website"}`,
-    `Project type: ${lead.projectType || "Not provided"}`,
-    `Customer type: ${lead.customerType || "Not provided"}`,
-    `Location / ZIP: ${lead.location || "Not provided"}`,
-    `Phone: ${lead.phone || "Not provided"}`,
-    "",
-    "Message:",
-    lead.message || "No message provided.",
-  ];
-
-  if (lead.metadata && Object.keys(lead.metadata).length > 0) {
-    lines.push("", "Metadata:", JSON.stringify(lead.metadata, null, 2));
-  }
-
-  return lines.join("\n");
-}
-
-function mapLeadToAccount(lead: LeadIntakePayload): InsertAccount {
-  const name = buildLeadName(lead) || lead.email;
-  return {
-    name,
-    firstName: lead.firstName,
-    lastName: lead.lastName || undefined,
-    email: lead.email,
-    phone: lead.phone || "",
-    company: undefined,
-    accountType: accountTypeFromLead(lead.customerType),
-    paymentTerms: "net_30",
-    billingAddress: lead.location || undefined,
-    leadStatus: "new",
-    leadSource: lead.source || "website",
-    leadProjectType: lead.projectType || undefined,
-    leadMessage: buildLeadNotes(lead),
-    leadReceivedAt: new Date(),
-  };
-}
-
-export async function preserveAccountAndCreateInquiry(
-  lead: LeadIntakePayload,
-  submissionId: string,
-  database: LeadIntakeDatabase = db
-) {
-  const accountData = mapLeadToAccount(lead);
-  const [existingAccount] = await database
-    .select()
-    .from(accounts)
-    .where(sql`LOWER(${accounts.email}) = ${accountData.email.toLowerCase()}`)
-    .limit(1);
-
-  if (existingAccount) {
-    const shouldReplaceName = !existingAccount.name?.trim()
-      || existingAccount.name === existingAccount.email
-      || existingAccount.name === "Unnamed Client";
-    const conservativeUpdates = {
-      ...(shouldReplaceName ? { name: accountData.name } : {}),
-      ...(!existingAccount.firstName && accountData.firstName ? { firstName: accountData.firstName } : {}),
-      ...(!existingAccount.lastName && accountData.lastName ? { lastName: accountData.lastName } : {}),
-      ...(!existingAccount.phone && accountData.phone ? { phone: accountData.phone } : {}),
-      ...(!existingAccount.billingAddress && accountData.billingAddress ? { billingAddress: accountData.billingAddress } : {}),
-      updatedAt: new Date(),
-    };
-    const [updatedAccount] = await database
-      .update(accounts)
-      .set(conservativeUpdates)
-      .where(sql`${accounts.id} = ${existingAccount.id}`)
-      .returning();
-    const account = updatedAccount || existingAccount;
-    const [inquiry] = await database
-      .insert(leadInquiries)
-      .values({
-        accountId: account.id,
-        submissionId,
-        status: "new",
-        source: lead.source || "website",
-        projectType: lead.projectType || undefined,
-        message: lead.message || undefined,
-        location: lead.location || undefined,
-        customerType: lead.customerType || undefined,
-        metadata: lead.metadata || undefined,
-        receivedAt: new Date(),
-      })
-      .returning({ id: leadInquiries.id });
-    return { ...account, inquiryId: inquiry.id };
-  }
-
-  const [newAccount] = await database
-    .insert(accounts)
-    .values(accountData)
-    .returning();
-
-  const [inquiry] = await database
-    .insert(leadInquiries)
-    .values({
-      accountId: newAccount.id,
-      submissionId,
-      status: "new",
-      source: lead.source || "website",
-      projectType: lead.projectType || undefined,
-      message: lead.message || undefined,
-      location: lead.location || undefined,
-      customerType: lead.customerType || undefined,
-      metadata: lead.metadata || undefined,
-      receivedAt: new Date(),
-    })
-    .returning({ id: leadInquiries.id });
-
-  return { ...newAccount, inquiryId: inquiry.id };
-}
-
 export function registerLeadIntakeRoutes(app: Express) {
   app.get("/api/leads", isAuthenticated, async (req, res) => {
     try {
@@ -370,7 +248,7 @@ export function registerLeadIntakeRoutes(app: Express) {
         });
       }
 
-      console.error("Error fetching leads:", error);
+      console.error("Error fetching leads", { errorType: redactedErrorType(error) });
       res.status(500).json({ message: "Failed to fetch leads" });
     }
   });
@@ -406,7 +284,7 @@ export function registerLeadIntakeRoutes(app: Express) {
         });
       }
 
-      console.error("Error updating lead status:", error);
+      console.error("Error updating lead status", { errorType: redactedErrorType(error) });
       res.status(500).json({ message: "Failed to update lead status" });
     }
   });
@@ -433,7 +311,7 @@ export function registerLeadIntakeRoutes(app: Express) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: "Invalid inquiry status", errors: error.errors });
       }
-      console.error("Error updating inquiry status:", error);
+      console.error("Error updating inquiry status", { errorType: redactedErrorType(error) });
       res.status(500).json({ message: "Failed to update inquiry status" });
     }
   });
@@ -451,7 +329,7 @@ export function registerLeadIntakeRoutes(app: Express) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: "Invalid client ID", errors: error.errors });
       }
-      console.error("Error fetching inquiry history:", error);
+      console.error("Error fetching inquiry history", { errorType: redactedErrorType(error) });
       res.status(500).json({ message: "Failed to fetch inquiry history" });
     }
   });
@@ -553,7 +431,7 @@ export function registerLeadIntakeRoutes(app: Express) {
         });
       }
 
-      console.error("Lead attachment upload failed:", error);
+      console.error("Lead attachment upload failed", { errorType: redactedErrorType(error) });
       res.status(500).json({
         success: false,
         message: error?.message || "Failed to upload lead attachments",
@@ -615,7 +493,7 @@ export function registerLeadIntakeRoutes(app: Express) {
         });
       }
 
-      console.error("Lead intake failed:", error);
+      console.error("Lead intake failed", { errorType: redactedErrorType(error) });
       res.status(500).json({
         success: false,
         message: "Failed to create lead",

@@ -2,6 +2,12 @@ import { createHash } from "crypto";
 import { eq } from "drizzle-orm";
 import { db, ensureLeadIntakeSubmissionTable } from "./db";
 import { accounts, leadIntakeSubmissions } from "@shared/schema";
+import { LeadIntakeIdempotencyError } from "./leadSubmissionIdentity";
+
+export {
+  LeadIntakeIdempotencyError,
+  resolveLeadIntakeSubmissionId,
+} from "./leadSubmissionIdentity";
 
 type LeadIntakeAccount = {
   id: number;
@@ -9,16 +15,6 @@ type LeadIntakeAccount = {
 };
 
 export type LeadIntakeDatabase = Pick<typeof db, "select" | "insert" | "update">;
-
-export class LeadIntakeIdempotencyError extends Error {
-  constructor(
-    public readonly status: 400 | 409 | 500,
-    message: string
-  ) {
-    super(message);
-    this.name = "LeadIntakeIdempotencyError";
-  }
-}
 
 function stableJson(value: unknown): string {
   if (value === null || typeof value !== "object") {
@@ -38,49 +34,6 @@ function stableJson(value: unknown): string {
 
 function payloadHash(payload: unknown) {
   return createHash("sha256").update(stableJson(payload)).digest("hex");
-}
-
-function cleanKey(value: unknown) {
-  if (typeof value !== "string") return undefined;
-  const key = value.trim();
-  return key || undefined;
-}
-
-export function resolveLeadIntakeSubmissionId({
-  headerValue,
-  bodyValue,
-  metadataValue,
-}: {
-  headerValue?: string | string[];
-  bodyValue?: unknown;
-  metadataValue?: unknown;
-}) {
-  const metadataSubmissionId =
-    metadataValue && typeof metadataValue === "object"
-      ? cleanKey((metadataValue as Record<string, unknown>).submission_id)
-      : undefined;
-  const values = [
-    cleanKey(Array.isArray(headerValue) ? headerValue[0] : headerValue),
-    cleanKey(bodyValue),
-    metadataSubmissionId,
-  ].filter((value): value is string => Boolean(value));
-  const uniqueValues = [...new Set(values)];
-
-  if (uniqueValues.some((value) => value.length > 160)) {
-    throw new LeadIntakeIdempotencyError(
-      400,
-      "Idempotency key must be 160 characters or fewer"
-    );
-  }
-
-  if (uniqueValues.length > 1) {
-    throw new LeadIntakeIdempotencyError(
-      400,
-      "Idempotency key does not match the submitted lead"
-    );
-  }
-
-  return uniqueValues[0];
 }
 
 async function getAccountById(

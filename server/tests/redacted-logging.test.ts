@@ -35,4 +35,17 @@ describe("redacted logging", () => {
     expect(databaseSource).not.toContain('console.error("[db] Unexpected pool error (connection will be recycled):", error)');
     expect(databaseSource).not.toContain("connectionString: error");
   });
+
+  it("does not serialize raw errors in website-lead or marketing-attribution routes", () => {
+    const sources = [
+      "api/lead-intake.ts",
+      "server/routes/leadIntakeRoutes.ts",
+      "server/routes/marketingAttributionRoutes.ts",
+    ].map((file) => readFileSync(resolve(process.cwd(), file), "utf8"));
+
+    for (const source of sources) {
+      expect(source).toContain("redactedErrorType(error)");
+      expect(source).not.toMatch(/console\.error\([^\n]*,\s*error\s*\)/);
+    }
+  });
 });

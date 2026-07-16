@@ -18,6 +18,7 @@ import { registerLineItemRoutes } from "./routes/lineItemRoutes";
 import { registerProductRoutes } from "./routes/productRoutes";
 import { registerImageRoutes } from "./routes/imageRoutes";
 import { registerLeadIntakeRoutes } from "./routes/leadIntakeRoutes";
+import { registerMarketingAttributionRoutes } from "./routes/marketingAttributionRoutes";
 import { registerPlanningAgreementRoutes } from "./routes/planningAgreementRoutes";
 import { registerEmailDeliveryRoutes } from "./routes/emailDeliveryRoutes";
 import { registerBusinessEventRoutes } from "./routes/businessEventRoutes";
@@ -217,6 +218,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   registerImageRoutes(app);
   registerLeadIntakeRoutes(app);
+  registerMarketingAttributionRoutes(app);
   registerAccountRoutes(app);
   registerPlanningAgreementRoutes(app);
   registerQuoteRoutes(app);
