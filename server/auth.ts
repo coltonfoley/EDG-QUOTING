@@ -9,10 +9,7 @@ import connectPg from "connect-pg-simple";
 import { User as SelectUser } from "@shared/schema";
 import { buildAppUrl } from "./config";
 
-type PublicUser = Omit<
-  SelectUser,
-  "password" | "googleAccessToken" | "googleRefreshToken"
->;
+type PublicUser = Omit<SelectUser, "password">;
 
 declare global {
   namespace Express {
@@ -119,12 +116,7 @@ export function sanitizeUser(user: SelectUser | null | undefined): PublicUser | 
 export function sanitizeUser(user: SelectUser | null | undefined): PublicUser | null {
   if (!user) return null;
 
-  const {
-    password: _password,
-    googleAccessToken: _googleAccessToken,
-    googleRefreshToken: _googleRefreshToken,
-    ...publicUser
-  } = user;
+  const { password: _password, ...publicUser } = user;
 
   return publicUser;
 }

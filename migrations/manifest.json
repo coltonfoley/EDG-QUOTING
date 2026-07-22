@@ -31,6 +31,7 @@
     "0027_add_lead_inquiry_history.sql",
     "0028_add_deal_stage_timestamp.sql",
     "0029_add_email_delivery_attempts.sql",
-    "0030_add_business_events.sql"
+    "0030_add_business_events.sql",
+    "0031_archive_retired_schema.sql"
   ]
 }
