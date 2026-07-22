@@ -27,17 +27,10 @@ export const users = pgTable("users", {
   firstName: varchar("first_name"),
   lastName: varchar("last_name"),
   role: varchar("role").notNull().default("user"), // admin, user
-  // Google OAuth fields
-  googleAccessToken: text("google_access_token"),
-  googleRefreshToken: text("google_refresh_token"),
-  googleTokenExpiry: timestamp("google_token_expiry"),
-  googleSyncEnabled: boolean("google_sync_enabled").default(false),
-  lastGoogleSync: timestamp("last_google_sync"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-// API Keys table for app-to-app authentication
 // Accounts table (formerly customers) - represents business entities
 // Enhanced with client fields (firstName, lastName) to support unified client model
 export const accounts = pgTable("accounts", {
@@ -149,18 +142,6 @@ export const leadInquiries = pgTable("lead_inquiries", {
 // Aliases for different conceptual uses
 export const customers = accounts; // Legacy alias for backward compatibility
 export const clients = accounts; // New unified client model alias
-
-// Legacy accounting integration settings retained so drizzle push does not drop production data.
-export const quickbooksSettings = pgTable("quickbooks_settings", {
-  id: serial("id").primaryKey(),
-  realmId: text("realm_id").notNull().unique(),
-  accessToken: text("access_token").notNull(),
-  refreshToken: text("refresh_token").notNull(),
-  tokenExpiresAt: timestamp("token_expires_at").notNull(),
-  isActive: boolean("is_active").default(true),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-});
 
 export const quotes = pgTable("quotes", {
   id: serial("id").primaryKey(),
@@ -619,39 +600,6 @@ export const lineItems = pgTable("line_items", {
   index("idx_line_items_group_id").on(table.groupId),
   index("idx_line_items_group_position").on(table.groupId, table.position),
 ]);
-
-// Legacy issue-report records are retained for data preservation. The application
-// no longer exposes a UI or API for this retired feature.
-export const issueReports = pgTable("issue_reports", {
-  id: serial("id").primaryKey(),
-  userId: integer("user_id"), // optional reference to users table
-  userEmail: text("user_email"), // email if user is not logged in
-  description: text("description").notNull(),
-  userAction: text("user_action").notNull(), // what the user was trying to do
-  location: text("location").notNull(), // page/route where issue occurred
-  // Browser and system information
-  userAgent: text("user_agent"),
-  browserName: text("browser_name"),
-  browserVersion: text("browser_version"),
-  screenResolution: text("screen_resolution"),
-  // Health metrics snapshot
-  healthMetrics: jsonb("health_metrics"), // console errors, performance data, etc.
-  status: text("status").notNull().default("open"), // open, in_progress, resolved, closed
-  priority: text("priority").notNull().default("medium"), // low, medium, high, critical
-  assignedTo: integer("assigned_to"), // user ID of person assigned to resolve
-  resolvedAt: timestamp("resolved_at"),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-}, (table) => [
-  index("idx_issue_reports_status").on(table.status),
-  index("idx_issue_reports_priority").on(table.priority),
-  index("idx_issue_reports_user_id").on(table.userId),
-  index("idx_issue_reports_created_at").on(table.createdAt),
-]);
-
-
-
-
 
 // Secondary contact schema for multi-contact accounts
 export const secondaryContactSchema = z.object({
