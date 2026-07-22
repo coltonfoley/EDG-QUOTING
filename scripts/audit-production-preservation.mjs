@@ -39,7 +39,6 @@ const report = {
   quoteFamilies: null,
   planningAgreements: [],
   approvalDrawings: [],
-  quickBooksCompatibility: null,
   issueReportCompatibility: null,
   legacyFieldReferences: null,
   orphanChecks: null,
@@ -282,16 +281,6 @@ try {
     group by status, order_status
     order by status, order_status
   `);
-
-  if ((await tableExists("quotes")) && (await tableExists("accounts")) && (await tableExists("quickbooks_settings"))) {
-    report.quickBooksCompatibility = (await client.query(`
-      select
-        (select count(*)::int from quotes where qb_estimate_id is not null or qb_sync_status is not null or qb_synced_at is not null or qb_sync_error is not null) as quote_rows_with_qb_fields,
-        (select count(*)::int from accounts where qb_customer_id is not null) as account_rows_with_qb_fields,
-        (select count(*)::int from quickbooks_settings) as settings_rows,
-        (select count(*)::int from quickbooks_settings where is_active) as active_settings_rows
-    `)).rows[0];
-  }
 
   if (await tableExists("issue_reports")) {
     report.issueReportCompatibility = (await client.query(`
