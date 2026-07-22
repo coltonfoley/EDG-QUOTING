@@ -142,4 +142,97 @@ describe("fresh database restore", () => {
       await database.close();
     }
   }, 60_000);
+
+  it("archives populated retired fields before removing them", async () => {
+    const database = new PGlite();
+
+    try {
+      await database.exec(`
+        CREATE TABLE accounts (id serial PRIMARY KEY, qb_customer_id text);
+        CREATE TABLE quotes (
+          id serial PRIMARY KEY,
+          is_draft boolean,
+          qb_estimate_id text,
+          qb_sync_status text,
+          qb_synced_at timestamp,
+          qb_sync_error text
+        );
+        CREATE TABLE products (
+          id serial PRIMARY KEY,
+          default_markup_type text,
+          default_markup_value numeric(10, 2)
+        );
+        CREATE TABLE pricing_tables (id serial PRIMARY KEY, housing_code text);
+        CREATE INDEX idx_accounts_qb_customer_id ON accounts (qb_customer_id);
+        CREATE INDEX idx_quotes_qb_sync_status ON quotes (qb_sync_status);
+
+        INSERT INTO accounts (qb_customer_id) VALUES ('customer-1');
+        INSERT INTO quotes (is_draft, qb_estimate_id, qb_sync_status)
+          VALUES (false, 'estimate-1', 'synced');
+        INSERT INTO products (default_markup_type, default_markup_value)
+          VALUES ('percentage', 25);
+        INSERT INTO pricing_tables (housing_code) VALUES ('H6EX');
+
+        CREATE SCHEMA archive;
+        CREATE TABLE archive.retired_field_values (
+          source_table text NOT NULL,
+          source_id text NOT NULL,
+          retired_fields jsonb NOT NULL,
+          archived_at timestamptz NOT NULL DEFAULT now(),
+          PRIMARY KEY (source_table, source_id)
+        );
+        INSERT INTO archive.retired_field_values (source_table, source_id, retired_fields)
+          VALUES ('quotes', '1', '{"opportunity_id":"kept"}'::jsonb);
+      `);
+
+      await database.exec(
+        readFileSync(resolve(migrationDirectory, "0032_archive_reviewed_legacy_fields.sql"), "utf8")
+      );
+
+      const archived = await database.query<{
+        source_table: string;
+        retired_fields: Record<string, unknown>;
+      }>(`
+        SELECT source_table, retired_fields
+        FROM archive.retired_field_values
+        ORDER BY source_table
+      `);
+      const remainingColumns = await database.query<{ column_name: string }>(`
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND (
+            (table_name = 'accounts' AND column_name = 'qb_customer_id')
+            OR (table_name = 'quotes' AND column_name IN (
+              'is_draft', 'qb_estimate_id', 'qb_sync_status', 'qb_synced_at', 'qb_sync_error'
+            ))
+            OR (table_name = 'products' AND column_name IN (
+              'default_markup_type', 'default_markup_value'
+            ))
+            OR (table_name = 'pricing_tables' AND column_name = 'housing_code')
+          )
+      `);
+
+      expect(archived.rows).toEqual([
+        { source_table: "accounts", retired_fields: { qb_customer_id: "customer-1" } },
+        { source_table: "pricing_tables", retired_fields: { housing_code: "H6EX" } },
+        {
+          source_table: "products",
+          retired_fields: { default_markup_type: "percentage", default_markup_value: 25 },
+        },
+        {
+          source_table: "quotes",
+          retired_fields: {
+            is_draft: false,
+            opportunity_id: "kept",
+            qb_estimate_id: "estimate-1",
+            qb_sync_status: "synced",
+          },
+        },
+      ]);
+      expect(remainingColumns.rows).toEqual([]);
+    } finally {
+      await database.close();
+    }
+  }, 60_000);
 });

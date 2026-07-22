@@ -54,8 +54,6 @@ export const accounts = pgTable("accounts", {
   firstName: text("first_name"), // Individual's first name (optional for company-only accounts)
   lastName: text("last_name"), // Individual's last name (optional for company-only accounts)
   secondaryContacts: jsonb("secondary_contacts"), // Array of additional contact info for multi-person accounts
-  // Legacy accounting integration field retained so drizzle push does not drop production data.
-  qbCustomerId: text("qb_customer_id"),
   // Lead intake tracking
   leadStatus: text("lead_status"), // new, contacted, qualified, unresponsive, converted, archived
   leadSource: text("lead_source"),
@@ -72,7 +70,6 @@ export const accounts = pgTable("accounts", {
   index("idx_accounts_type").on(table.accountType),
   index("idx_accounts_lead_status").on(table.leadStatus),
   index("idx_accounts_lead_received_at").on(table.leadReceivedAt),
-  index("idx_accounts_qb_customer_id").on(table.qbCustomerId),
 ]);
 
 // Lead attachments - stores website intake photo metadata for Rainmaker leads.
@@ -191,11 +188,6 @@ export const quotes = pgTable("quotes", {
   esigIncludeImages: boolean("esig_include_images").default(false), // include product renderings in signed PDF
   esigIncludeContract: boolean("esig_include_contract").default(true), // include contract terms in signed PDF
   esigIncludeApprovalDrawing: boolean("esig_include_approval_drawing").default(false), // include order approval drawing in signed PDF
-  // Legacy accounting sync fields retained so drizzle push does not drop production data.
-  qbEstimateId: text("qb_estimate_id"),
-  qbSyncStatus: text("qb_sync_status"), // null, 'pending', 'synced', 'error'
-  qbSyncedAt: timestamp("qb_synced_at"),
-  qbSyncError: text("qb_sync_error"),
   // Version control fields
   parentQuoteId: integer("parent_quote_id").references((): AnyPgColumn => quotes.id, { onDelete: "set null" }), // Links versions together
   versionNumber: integer("version_number").notNull().default(1), // Version number (1, 2, 3, etc.)
@@ -207,7 +199,6 @@ export const quotes = pgTable("quotes", {
   index("idx_quotes_source_inquiry_id").on(table.sourceInquiryId),
   index("idx_quotes_deal_stage").on(table.dealStage),
   index("idx_quotes_account_created").on(table.accountId, table.createdAt),
-  index("idx_quotes_qb_sync_status").on(table.qbSyncStatus),
   index("idx_quotes_parent_quote_id").on(table.parentQuoteId),
   index("idx_quotes_is_latest_version").on(table.isLatestVersion),
   index("idx_quotes_parent_latest").on(table.parentQuoteId, table.isLatestVersion),
@@ -452,11 +443,8 @@ export const products = pgTable("products", {
   // Pricing fields
   retailPrice: decimal("retail_price", { precision: 10, scale: 2 }).notNull(), // MSRP/list price from manufacturer
   costPrice: decimal("cost_price", { precision: 10, scale: 2 }).notNull().default("0"), // EDG's internal cost after supplier discount
-  // Legacy product-pricing columns remain mapped so new writes preserve older
-  // readers while retailPrice/costPrice stay authoritative in Rainmaker.
+  // Legacy unit price remains synchronized with retailPrice for compatibility.
   defaultUnitPrice: decimal("default_unit_price", { precision: 10, scale: 2 }).notNull().default("0"),
-  defaultMarkupType: text("default_markup_type").notNull().default("percentage"),
-  defaultMarkupValue: decimal("default_markup_value", { precision: 10, scale: 2 }).notNull().default("25"),
   // Manufacturer discount (applied to retail price to get our cost)
   defaultDiscountType: text("default_discount_type").notNull().default("percentage"),
   defaultDiscountValue: decimal("default_discount_value", { precision: 10, scale: 2 }).notNull().default("0"),
@@ -525,7 +513,6 @@ export const pricingTables = pgTable("pricing_tables", {
   widthMax: decimal("width_max", { precision: 8, scale: 2 }).notNull(),
   retailPrice: decimal("retail_price", { precision: 10, scale: 2 }).notNull(),
   basePrice: decimal("base_price", { precision: 10, scale: 2 }).notNull(),
-  housingCode: text("housing_code"), // Housing code for configurable products (e.g., H6EX, H75EX, H85EX)
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => [
   index("idx_pricing_tables_product_id").on(table.productId),
@@ -837,7 +824,6 @@ export const insertPricingTableSchema = createInsertSchema(pricingTables).omit({
   widthMax: z.union([z.string(), z.number()]).transform(val => typeof val === 'string' ? val : val.toString()),
   retailPrice: z.union([z.string(), z.number()]).transform(val => typeof val === 'string' ? val : val.toString()),
   basePrice: z.union([z.string(), z.number()]).transform(val => typeof val === 'string' ? val : val.toString()),
-  housingCode: z.string().optional().nullable(),
 });
 
 export const insertColorSchema = createInsertSchema(colors).omit({
