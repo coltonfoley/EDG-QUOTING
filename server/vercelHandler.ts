@@ -3,7 +3,7 @@ import type { Express } from "express";
 import { randomUUID } from "node:crypto";
 
 let appPromise: Promise<Express> | null = null;
-let leadIntakePromise: Promise<typeof import("../api/lead-intake")> | null = null;
+let leadIntakePromise: Promise<typeof import("./leadIntakeHandler")> | null = null;
 
 function restoreExpressPath(req: IncomingMessage) {
   const requestUrl = new URL(req.url || "/", "https://rainmaker.local");
@@ -37,7 +37,7 @@ async function getApp() {
 }
 
 function getLeadIntake() {
-  leadIntakePromise ??= import("../api/lead-intake");
+  leadIntakePromise ??= import("./leadIntakeHandler");
   return leadIntakePromise;
 }
 

@@ -2,15 +2,15 @@ import type { IncomingMessage, ServerResponse } from "http";
 import { randomUUID, timingSafeEqual } from "crypto";
 import { z } from "zod";
 import { eq } from "drizzle-orm";
-import { db } from "../server/db";
+import { db } from "./db";
 import { leadInquiries } from "../shared/schema";
 import {
   createIdempotentLead,
   LeadIntakeIdempotencyError,
   resolveLeadIntakeSubmissionId,
-} from "../server/leadIntakeIdempotency";
-import { preserveAccountAndCreateInquiry } from "../server/leadIntakePersistence";
-import { redactedErrorType } from "../server/redactedLogging";
+} from "./leadIntakeIdempotency";
+import { preserveAccountAndCreateInquiry } from "./leadIntakePersistence";
+import { redactedErrorType } from "./redactedLogging";
 
 const leadIntakeSchema = z.object({
   email: z.string().email().transform((value) => value.trim().toLowerCase()),
@@ -25,8 +25,6 @@ const leadIntakeSchema = z.object({
   metadata: z.record(z.unknown()).optional().nullable(),
   idempotencyKey: z.string().trim().min(1).max(160).optional(),
 });
-
-type LeadIntakePayload = z.infer<typeof leadIntakeSchema>;
 
 function sendJson(res: ServerResponse, statusCode: number, payload: unknown) {
   const body = JSON.stringify(payload);

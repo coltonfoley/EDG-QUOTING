@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 
@@ -418,7 +418,8 @@ describe("authorization policy", () => {
   it("preserves inquiry history and uses current-family dashboard/account truth", () => {
     const leadRoutes = source("server/routes/leadIntakeRoutes.ts");
     const leadPersistence = source("server/leadIntakePersistence.ts");
-    const deployedLeadIntake = source("api/lead-intake.ts");
+    const bundledLeadIntake = source("server/leadIntakeHandler.ts");
+    const vercelHandler = source("server/vercelHandler.ts");
     const attributionRoutes = source("server/routes/marketingAttributionRoutes.ts");
     const conversion = source("server/inquiryConversion.ts");
     const quoteBuilder = source("client/src/pages/quote-builder.tsx");
@@ -430,8 +431,11 @@ describe("authorization policy", () => {
     expect(leadRoutes).toContain("preserveAccountAndCreateInquiry");
     expect(leadPersistence).toContain(".insert(leadInquiries)");
     expect(leadPersistence).not.toContain(".set({ ...accountData, updatedAt: new Date() })");
-    expect(deployedLeadIntake).toContain("preserveAccountAndCreateInquiry");
-    expect(deployedLeadIntake).toContain("submissionId,");
+    expect(bundledLeadIntake).toContain("preserveAccountAndCreateInquiry");
+    expect(bundledLeadIntake).toContain("submissionId,");
+    expect(vercelHandler).toContain('import("./leadIntakeHandler")');
+    expect(vercelHandler).not.toContain('../api/lead-intake');
+    expect(existsSync(resolve(process.cwd(), "api/lead-intake.ts"))).toBe(false);
     expect(attributionRoutes).toContain('"/api/marketing/lead-attribution"');
     expect(attributionRoutes).toContain("leadInquiries.submissionId");
     expect(attributionRoutes).toContain("summarizeMarketingAttribution");

@@ -38,7 +38,7 @@ describe("redacted logging", () => {
 
   it("does not serialize raw errors in website-lead or marketing-attribution routes", () => {
     const sources = [
-      "api/lead-intake.ts",
+      "server/leadIntakeHandler.ts",
       "server/routes/leadIntakeRoutes.ts",
       "server/routes/marketingAttributionRoutes.ts",
     ].map((file) => readFileSync(resolve(process.cwd(), file), "utf8"));
