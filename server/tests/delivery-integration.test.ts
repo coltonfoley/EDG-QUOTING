@@ -5,6 +5,7 @@ vi.mock("../storage", () => ({ storage: {} }));
 
 import {
   buildDeliveryBomPayload,
+  buildDeliverySearchResult,
   isDeliveryIntegrationKeyValid,
 } from "../routes/deliveryIntegrationRoutes";
 
@@ -69,5 +70,37 @@ describe("delivery BOM integration", () => {
     });
     expect(JSON.stringify(payload)).not.toContain("unitPrice");
     expect(JSON.stringify(payload)).not.toContain("retailPrice");
+  });
+
+  it("returns search identity without pricing or customer contact details", () => {
+    const result = buildDeliverySearchResult({
+      id: 42,
+      quoteNumber: "Q-42",
+      versionNumber: 3,
+      projectName: "Dealer pergola",
+      dealStage: "closed_won",
+      jobsiteStreetAddress: "1802 Holian Drive",
+      jobsiteAddressLine2: null,
+      jobsiteCity: "Spring Grove",
+      jobsiteState: "IL",
+      jobsiteZipCode: "60081",
+      jobsiteAddress: null,
+      accountName: "Receiving Team",
+      accountCompany: "Lakeview Outdoor Living",
+      updatedAt: new Date("2026-07-23T12:00:00Z"),
+    });
+
+    expect(result).toEqual({
+      id: 42,
+      quoteNumber: "Q-42",
+      versionNumber: 3,
+      projectName: "Dealer pergola",
+      customerName: "Lakeview Outdoor Living",
+      jobsiteAddress: "1802 Holian Drive · Spring Grove, IL · 60081",
+      dealStage: "closed_won",
+      updatedAt: "2026-07-23T12:00:00.000Z",
+    });
+    expect(JSON.stringify(result)).not.toContain("email");
+    expect(JSON.stringify(result)).not.toContain("price");
   });
 });
