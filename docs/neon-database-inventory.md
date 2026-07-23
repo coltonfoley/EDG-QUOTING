@@ -1,6 +1,7 @@
 # Neon Database Inventory
 
-Last checked: 2026-05-22
+Last production check: 2026-05-22
+Source retirement updated: 2026-07-23
 
 ## Active Rainmaker Database
 
@@ -37,9 +38,14 @@ Post-cleanup Neon verification showed these remaining non-template databases on 
 
 ## Rainmaker App Tables
 
-After the 2026-05-22 cleanup, Rainmaker code should retain these app tables:
+After the reviewed legacy-schema retirement, Rainmaker code no longer declares
+or uses QuickBooks integration tables or fields. Historical migrations retain
+the original definitions so a fresh database can be rebuilt in order; migration
+`0033_purge_quickbooks_remnants.sql` removes the retired table, columns, indexes,
+and archived compatibility values.
 
-`accounts`, `api_keys`, `colors`, `contract_templates`, `groups`, `issue_reports`, `line_items`, `pricing_defaults`, `pricing_tables`, `product_colors`, `products`, `quickbooks_settings`, `quote_cover_photos`, `quote_product_renderings`, `quotes`, `sessions`, `users`.
+The dated table list below describes the 2026-05-22 cleanup checkpoint and is
+not the current application schema.
 
 Two unused tables were intentionally retired from the app code and removed from the live `rainmaker-production` database on 2026-05-22.
 
