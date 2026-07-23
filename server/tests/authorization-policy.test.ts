@@ -132,6 +132,22 @@ describe("authorization policy", () => {
     expect(planningRoutes).toContain('app.post("/api/planning-agreements/:id/send", isAuthenticated, requireAdmin');
   });
 
+  it("keeps the delivery BOM integration read-only, key-gated, and price-free", () => {
+    const routes = source("server/routes/deliveryIntegrationRoutes.ts");
+    const appRoutes = source("server/routes.ts");
+
+    expect(appRoutes).toContain("registerDeliveryIntegrationRoutes(app)");
+    expect(routes).toContain('app.get("/api/integrations/delivery-bom"');
+    expect(routes).toContain('req.get("x-edg-integration-key")');
+    expect(routes).toContain("DELIVERY_CHECK_INTEGRATION_KEY");
+    expect(routes).not.toContain("app.post");
+    expect(routes).not.toContain("app.patch");
+    expect(routes).not.toContain("app.put");
+    expect(routes).not.toContain("app.delete");
+    expect(routes).not.toContain("unitPrice:");
+    expect(routes).not.toContain("retailPrice:");
+  });
+
   it("makes retryable customer email actions idempotent and auditable", () => {
     const quoteRoutes = source("server/routes/quoteRoutes.ts");
     const planningRoutes = source("server/routes/planningAgreementRoutes.ts");
