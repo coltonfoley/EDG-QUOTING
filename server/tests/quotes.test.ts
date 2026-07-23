@@ -1037,18 +1037,18 @@ describe.skipIf(!shouldRunDatabaseTests)("Quote Storage Layer", () => {
         {
           status: "paid_active",
           paymentConfirmedAt: new Date(),
-          paymentMethod: "quickbooks",
-          paymentReference: "QB-123",
+          paymentMethod: "check",
+          paymentReference: "CHECK-123",
           paymentNotes: "Verified outside Rainmaker",
         },
         null,
         "payment_confirmed",
-        { verified: true, paymentReference: "QB-123" },
+        { verified: true, paymentReference: "CHECK-123" },
       );
       const events = await storage.getPlanningAgreementEvents(agreement.id);
 
       expect(paid?.status).toBe("paid_active");
-      expect(paid?.paymentMethod).toBe("quickbooks");
+      expect(paid?.paymentMethod).toBe("check");
       expect(events.some((event) => event.eventType === "payment_confirmed")).toBe(true);
     });
 

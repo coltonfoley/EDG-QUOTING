@@ -235,4 +235,77 @@ describe("fresh database restore", () => {
       await database.close();
     }
   }, 60_000);
+
+  it("purges retired QuickBooks storage without removing unrelated archived fields", async () => {
+    const database = new PGlite();
+
+    try {
+      await database.exec(`
+        CREATE TABLE accounts (id serial PRIMARY KEY, qb_customer_id text);
+        CREATE TABLE quotes (
+          id serial PRIMARY KEY,
+          qb_estimate_id text,
+          qb_sync_status text,
+          qb_synced_at timestamp,
+          qb_sync_error text
+        );
+        CREATE INDEX idx_accounts_qb_customer_id ON accounts (qb_customer_id);
+        CREATE INDEX idx_quotes_qb_sync_status ON quotes (qb_sync_status);
+
+        CREATE SCHEMA archive;
+        CREATE TABLE archive.quickbooks_settings (
+          id serial PRIMARY KEY,
+          realm_id text NOT NULL
+        );
+        CREATE TABLE archive.retired_field_values (
+          source_table text NOT NULL,
+          source_id text NOT NULL,
+          retired_fields jsonb NOT NULL,
+          archived_at timestamptz NOT NULL DEFAULT now(),
+          PRIMARY KEY (source_table, source_id)
+        );
+        INSERT INTO archive.retired_field_values (source_table, source_id, retired_fields)
+        VALUES
+          ('accounts', '1', '{"qb_customer_id":"customer-1"}'::jsonb),
+          ('quotes', '1', '{"opportunity_id":"kept","qb_estimate_id":"estimate-1","qb_sync_status":"synced"}'::jsonb);
+      `);
+
+      await database.exec(
+        readFileSync(resolve(migrationDirectory, "0033_purge_quickbooks_remnants.sql"), "utf8")
+      );
+
+      const quickBooksTables = await database.query<{ table_schema: string; table_name: string }>(`
+        SELECT table_schema, table_name
+        FROM information_schema.tables
+        WHERE table_name = 'quickbooks_settings'
+      `);
+      const quickBooksColumns = await database.query<{ table_name: string; column_name: string }>(`
+        SELECT table_name, column_name
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND (
+            (table_name = 'accounts' AND column_name = 'qb_customer_id')
+            OR (table_name = 'quotes' AND column_name IN (
+              'qb_estimate_id', 'qb_sync_status', 'qb_synced_at', 'qb_sync_error'
+            ))
+          )
+      `);
+      const archived = await database.query<{
+        source_table: string;
+        retired_fields: Record<string, unknown>;
+      }>(`
+        SELECT source_table, retired_fields
+        FROM archive.retired_field_values
+        ORDER BY source_table
+      `);
+
+      expect(quickBooksTables.rows).toEqual([]);
+      expect(quickBooksColumns.rows).toEqual([]);
+      expect(archived.rows).toEqual([
+        { source_table: "quotes", retired_fields: { opportunity_id: "kept" } },
+      ]);
+    } finally {
+      await database.close();
+    }
+  }, 60_000);
 });

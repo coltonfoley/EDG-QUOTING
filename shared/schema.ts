@@ -244,7 +244,6 @@ export const planningAgreementPaymentMethodValues = [
   "card",
   "ach",
   "cash",
-  "quickbooks",
   "other",
 ] as const;
 

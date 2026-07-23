@@ -81,7 +81,6 @@ try {
     "accounts",
     "lead_attachments",
     "lead_intake_submissions",
-    "quickbooks_settings",
     "quotes",
     "planning_agreements",
     "planning_agreement_events",

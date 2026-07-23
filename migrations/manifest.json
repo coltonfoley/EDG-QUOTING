@@ -33,6 +33,7 @@
     "0029_add_email_delivery_attempts.sql",
     "0030_add_business_events.sql",
     "0031_archive_retired_schema.sql",
-    "0032_archive_reviewed_legacy_fields.sql"
+    "0032_archive_reviewed_legacy_fields.sql",
+    "0033_purge_quickbooks_remnants.sql"
   ]
 }
