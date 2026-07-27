@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, type DragEvent } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -42,6 +42,7 @@ export function ESignatureOptionsModal({ quote, open, onOpenChange, onSuccess }:
   
   const [tempProductRenderings, setTempProductRenderings] = useState<UploadedFile[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
   const [isGeneratingPreview, setIsGeneratingPreview] = useState(false);
   
   const hasContractData = Boolean(quote.notes?.trim() || quote.contractTemplate || quote.customContractTerms?.trim());
@@ -151,6 +152,15 @@ export function ESignatureOptionsModal({ quote, open, onOpenChange, onSuccess }:
     const newFiles: UploadedFile[] = [];
 
     for (const file of filesToUpload) {
+      if (!file.type.startsWith('image/')) {
+        toast({
+          title: "Unsupported file",
+          description: `${file.name} is not an image`,
+          variant: "destructive"
+        });
+        continue;
+      }
+
       if (file.size > 100 * 1024 * 1024) {
         toast({
           title: "File too large",
@@ -177,6 +187,27 @@ export function ESignatureOptionsModal({ quote, open, onOpenChange, onSuccess }:
     }
     setIsUploading(false);
     setTempProductRenderings(prev => prev.filter(f => !newFiles.find(nf => nf.id === f.id)));
+  };
+
+  const handleDragOver = (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'copy';
+    setIsDraggingOver(true);
+  };
+
+  const handleDragLeave = (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    const nextTarget = event.relatedTarget;
+    if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) {
+      return;
+    }
+    setIsDraggingOver(false);
+  };
+
+  const handleDrop = (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setIsDraggingOver(false);
+    void handleFileUpload(event.dataTransfer.files);
   };
 
   const removeFile = (id: string | number) => {
@@ -326,16 +357,26 @@ export function ESignatureOptionsModal({ quote, open, onOpenChange, onSuccess }:
                   <Badge variant="outline">{productRenderings.length}/5</Badge>
                 </CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent
+                className={isDraggingOver ? "rounded-b-lg bg-blue-50 ring-2 ring-inset ring-blue-500" : undefined}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                aria-busy={isUploading}
+                data-testid="quote-visuals-drop-zone"
+              >
                 {productRenderings.length === 0 ? (
-                  <div 
-                    className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center cursor-pointer hover:border-gray-400 transition-colors"
+                  <button
+                    type="button"
+                    className="w-full rounded-lg border-2 border-dashed border-gray-300 p-6 text-center transition-colors hover:border-gray-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
                     onClick={() => renderingsRef.current?.click()}
+                    disabled={isUploading}
+                    data-testid="button-upload-renderings"
                   >
                     <Upload className="w-8 h-8 mx-auto mb-2 text-gray-400" />
-                    <p className="text-sm text-gray-600">Click to upload proposal visuals (renderings, photos, details)</p>
+                    <p className="text-sm text-gray-600">Click or drag and drop proposal visuals (renderings, photos, details)</p>
                     <p className="text-xs text-gray-500">PNG, JPG up to 100MB each (max 5 images)</p>
-                  </div>
+                  </button>
                 ) : (
                   <div className="space-y-4">
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
@@ -369,6 +410,7 @@ export function ESignatureOptionsModal({ quote, open, onOpenChange, onSuccess }:
                         variant="outline" 
                         onClick={() => renderingsRef.current?.click()}
                         className="w-full"
+                        disabled={isUploading}
                         data-testid="button-add-more-renderings"
                       >
                         <Upload className="w-4 h-4 mr-2" />
@@ -384,7 +426,10 @@ export function ESignatureOptionsModal({ quote, open, onOpenChange, onSuccess }:
                   accept="image/*"
                   multiple
                   className="hidden"
-                  onChange={(e) => handleFileUpload(e.target.files)}
+                  onChange={(event) => {
+                    void handleFileUpload(event.target.files);
+                    event.target.value = "";
+                  }}
                 />
               </CardContent>
             </Card>
