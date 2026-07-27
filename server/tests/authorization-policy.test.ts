@@ -333,6 +333,19 @@ describe("authorization policy", () => {
     expect(packageBuilder).toContain('aria-label={`Remove ${rendering.name}`}');
   });
 
+  it("supports both drag-and-drop and picker uploads for quote visuals", () => {
+    const packageBuilder = source("client/src/components/esignature-options-modal.tsx");
+
+    expect(packageBuilder).toContain('data-testid="quote-visuals-drop-zone"');
+    expect(packageBuilder).toContain("onDragOver={handleDragOver}");
+    expect(packageBuilder).toContain("onDragLeave={handleDragLeave}");
+    expect(packageBuilder).toContain("onDrop={handleDrop}");
+    expect(packageBuilder).toContain("handleFileUpload(event.dataTransfer.files)");
+    expect(packageBuilder).toContain("handleFileUpload(event.target.files)");
+    expect(packageBuilder).toContain('event.target.value = ""');
+    expect(packageBuilder).toContain("Click or drag and drop proposal visuals");
+  });
+
   it("rate limits public signing surfaces and keeps retired issue reporting unavailable", () => {
     const appSource = source("server/app.ts");
     expect(appSource).toContain('app.use("/api/signatures", publicActionLimiter)');
