@@ -376,6 +376,91 @@ try {
     }
   }
 
+  auditStage = "quote visual drag-and-drop rehearsal";
+  const quoteVisualDropPage = await browser.newPage();
+  let quoteVisualUploadTargetRequests = 0;
+  let quoteVisualStoragePutRequests = 0;
+  let quoteVisualFinalizeRequests = 0;
+  let quoteVisualSaveRequests = 0;
+  let quoteVisualDeleteRequests = 0;
+  quoteVisualDropPage.on("request", (request) => {
+    const requestUrl = new URL(request.url());
+    if (request.method() === "POST" && requestUrl.pathname === "/api/images/upload-url") {
+      quoteVisualUploadTargetRequests += 1;
+    }
+    if (request.method() === "PUT" && requestUrl.pathname === "/api/fixture-quote-visual-upload") {
+      quoteVisualStoragePutRequests += 1;
+    }
+    if (request.method() === "POST" && requestUrl.pathname === "/api/images/finalize-upload") {
+      quoteVisualFinalizeRequests += 1;
+    }
+    if (request.method() === "POST" && requestUrl.pathname === "/api/quotes/9301/product-rendering") {
+      quoteVisualSaveRequests += 1;
+    }
+    if (request.method() === "DELETE" && requestUrl.pathname === "/api/quote-images/product-rendering/9701") {
+      quoteVisualDeleteRequests += 1;
+    }
+  });
+  await quoteVisualDropPage.setViewport({ width: 1024, height: 900 });
+  await quoteVisualDropPage.goto(`${origin}/__fixture/admin?next=${encodeURIComponent("/quotes/9301/edit")}`, {
+    waitUntil: "domcontentloaded",
+    timeout: 20_000,
+  });
+  await quoteVisualDropPage.waitForSelector('[data-testid="button-build-customer-package"]', { visible: true, timeout: 20_000 });
+  await quoteVisualDropPage.click('[data-testid="button-build-customer-package"]');
+  await quoteVisualDropPage.waitForSelector('[data-testid="switch-esig-include-images"]', { visible: true, timeout: 10_000 });
+  await quoteVisualDropPage.click('[data-testid="switch-esig-include-images"]');
+  await quoteVisualDropPage.waitForSelector('[data-testid="quote-visuals-drop-zone"]', { visible: true, timeout: 10_000 });
+  const dropResult = await quoteVisualDropPage.evaluate(() => {
+    const dropZone = document.querySelector('[data-testid="quote-visuals-drop-zone"]');
+    if (!(dropZone instanceof HTMLElement)) {
+      return { dispatched: false, reason: "drop zone missing" };
+    }
+    const dataTransfer = new DataTransfer();
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="160" height="100"><rect width="160" height="100" fill="#244d37"/></svg>';
+    dataTransfer.items.add(new File([svg], "TEST ONLY - Dragged Quote Visual.svg", { type: "image/svg+xml" }));
+    dropZone.dispatchEvent(new DragEvent("dragover", { bubbles: true, cancelable: true, dataTransfer }));
+    dropZone.dispatchEvent(new DragEvent("drop", { bubbles: true, cancelable: true, dataTransfer }));
+    return { dispatched: true, fileCount: dataTransfer.files.length };
+  });
+  await quoteVisualDropPage.waitForSelector('[data-testid="button-remove-rendering-9701"]', { visible: true, timeout: 15_000 });
+  await quoteVisualDropPage.waitForFunction(
+    () => document.body.innerText.includes("Image saved"),
+    { timeout: 10_000 },
+  );
+  const quoteVisualPersisted = await quoteVisualDropPage.evaluate(() => ({
+    thumbnailVisible: Boolean(document.querySelector('img[alt="Visual asset"]')),
+    addMoreVisible: Boolean(document.querySelector('[data-testid="button-add-more-renderings"]')),
+    uploadedNameVisible: document.body.innerText.includes("TEST ONLY"),
+  }));
+  await quoteVisualDropPage.click('[data-testid="button-remove-rendering-9701"]');
+  await quoteVisualDropPage.waitForSelector('[data-testid="button-remove-rendering-9701"]', { hidden: true, timeout: 10_000 });
+  await quoteVisualDropPage.waitForFunction(
+    () => document.body.innerText.includes("Image removed"),
+    { timeout: 10_000 },
+  );
+  const quoteVisualDropRehearsal = {
+    ...dropResult,
+    ...quoteVisualPersisted,
+    localOnlyRequests: [
+      quoteVisualUploadTargetRequests,
+      quoteVisualStoragePutRequests,
+      quoteVisualFinalizeRequests,
+      quoteVisualSaveRequests,
+      quoteVisualDeleteRequests,
+    ].every((count) => count === 1),
+    uploadTargetRequests: quoteVisualUploadTargetRequests,
+    storagePutRequests: quoteVisualStoragePutRequests,
+    finalizeRequests: quoteVisualFinalizeRequests,
+    saveRequests: quoteVisualSaveRequests,
+    deleteRequests: quoteVisualDeleteRequests,
+    removedFromUi: await quoteVisualDropPage.evaluate(() => (
+      !document.querySelector('[data-testid="button-remove-rendering-9701"]')
+      && document.body.innerText.includes("Image removed")
+    )),
+  };
+  await quoteVisualDropPage.close();
+
   auditStage = "public approval keyboard rehearsal";
   const keyboardPage = await browser.newPage();
   let signaturePostRequests = 0;
@@ -752,7 +837,7 @@ try {
   };
   await sundancePage.close();
 
-  process.stdout.write(`${JSON.stringify({ results, dialogResults, keyboardRehearsal: {
+  process.stdout.write(`${JSON.stringify({ results, dialogResults, quoteVisualDropRehearsal, keyboardRehearsal: {
     ...keyboardRehearsal,
     tabsToSkipApprovalActions,
     skipApprovalTargetFocused,
@@ -786,6 +871,19 @@ try {
     || !result.themeMatches
     || result.severeViolations.length > 0
   )) || (
+    !quoteVisualDropRehearsal.dispatched
+    || quoteVisualDropRehearsal.fileCount !== 1
+    || !quoteVisualDropRehearsal.thumbnailVisible
+    || !quoteVisualDropRehearsal.addMoreVisible
+    || !quoteVisualDropRehearsal.uploadedNameVisible
+    || !quoteVisualDropRehearsal.localOnlyRequests
+    || quoteVisualDropRehearsal.uploadTargetRequests !== 1
+    || quoteVisualDropRehearsal.storagePutRequests !== 1
+    || quoteVisualDropRehearsal.finalizeRequests !== 1
+    || quoteVisualDropRehearsal.saveRequests !== 1
+    || quoteVisualDropRehearsal.deleteRequests !== 1
+    || !quoteVisualDropRehearsal.removedFromUi
+  ) || (
     keyboardRehearsal.currentStep !== "sign"
     || keyboardRehearsal.typedName !== "Fixture Keyboard Signer"
     || !keyboardRehearsal.consentChecked

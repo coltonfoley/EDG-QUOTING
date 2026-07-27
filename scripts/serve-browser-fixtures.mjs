@@ -10,6 +10,7 @@ if (!existsSync(resolve(publicDirectory, "index.html"))) {
 const port = Number(process.env.RAINMAKER_FIXTURE_PORT || 4174);
 const host = "127.0.0.1";
 let authRecoverAttempts = 0;
+let fixtureQuoteVisuals = [];
 
 const adminUser = {
   id: 9001,
@@ -242,6 +243,28 @@ function serveApi(request, response, pathname, scenario) {
     json(response, 200, scenario === "empty" ? [] : [fixtureQuote]);
     return;
   }
+  if (pathname === "/api/images/upload-url" && request.method === "POST") {
+    json(response, 200, {
+      uploadMode: "signed-url",
+      uploadUrl: `http://${host}:${port}/api/fixture-quote-visual-upload`,
+      objectPath: "product-renderings/test-only-dragged-quote-visual.svg",
+      publicUrl: "/fixture-quote-visual.svg",
+    });
+    return;
+  }
+  if (pathname === "/api/fixture-quote-visual-upload" && request.method === "PUT") {
+    response.writeHead(200, { "cache-control": "no-store" });
+    response.end();
+    return;
+  }
+  if (pathname === "/api/images/finalize-upload" && request.method === "POST") {
+    json(response, 200, {
+      success: true,
+      objectPath: "product-renderings/test-only-dragged-quote-visual.svg",
+      publicUrl: "/fixture-quote-visual.svg",
+    });
+    return;
+  }
   if (pathname === "/api/leads") {
     json(response, 200, scenario === "empty" ? [] : [{
       ...account,
@@ -463,8 +486,29 @@ function serveApi(request, response, pathname, scenario) {
     });
     return;
   }
+  if (pathname === `/api/quotes/${quote.id}/product-rendering` && request.method === "POST") {
+    const rendering = {
+      id: 9701,
+      quoteId: quote.id,
+      filename: "TEST_ONLY_-_Dragged_Quote_Visual.svg",
+      originalName: "TEST ONLY - Dragged Quote Visual.svg",
+      storageUrl: "/fixture-quote-visual.svg",
+      mimeType: "image/svg+xml",
+      fileSize: 183,
+      uploadedAt: "2026-07-27T20:00:00.000Z",
+    };
+    fixtureQuoteVisuals = [rendering];
+    json(response, 201, rendering);
+    return;
+  }
   if (pathname === `/api/quotes/${quote.id}/product-renderings`) {
-    json(response, 200, []);
+    json(response, 200, fixtureQuoteVisuals);
+    return;
+  }
+  if (pathname === "/api/quote-images/product-rendering/9701" && request.method === "DELETE") {
+    fixtureQuoteVisuals = [];
+    response.writeHead(204, { "cache-control": "no-store" });
+    response.end();
     return;
   }
   if (pathname === `/api/quotes/${quote.id}/planning-agreement`) {
@@ -533,6 +577,15 @@ const server = createServer((request, response) => {
 
   if (pathname.startsWith("/api/")) {
     serveApi(request, response, pathname, scenario);
+    return;
+  }
+
+  if (pathname === "/fixture-quote-visual.svg") {
+    response.writeHead(200, {
+      "cache-control": "no-store",
+      "content-type": "image/svg+xml; charset=utf-8",
+    });
+    response.end('<svg xmlns="http://www.w3.org/2000/svg" width="160" height="100"><rect width="160" height="100" fill="#244d37"/><text x="80" y="55" text-anchor="middle" fill="white" font-size="14">TEST VISUAL</text></svg>');
     return;
   }
 
