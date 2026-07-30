@@ -75,8 +75,8 @@ import {
   sanitizeQuoteApprovalDrawingForPublic,
 } from "@shared/approvalDrawing";
 import { appendQuoteApprovalDrawingInternalNoteSql } from "./approvalDrawingSql";
-import type { AdoptionSummary, EmailDeliveryClaim, EmailDeliveryHealth, EmailDeliveryMessageType, IStorage } from "./storageContract";
-import { appendBusinessEvent, type BusinessEventInput, type BusinessEventType } from "./businessEvents";
+import type { AdoptionMetricKey, AdoptionSummary, EmailDeliveryClaim, EmailDeliveryHealth, EmailDeliveryMessageType, IStorage } from "./storageContract";
+import { appendBusinessEvent, type BusinessEventInput } from "./businessEvents";
 import { assertQuoteMutationAllowed, assertQuoteSignatureRevision, isCustomerApprovedQuote, type QuoteUpdateOptions } from "./quoteLock";
 import { selectPricingBand, validatePricingBands } from "./pricingBands";
 import { executeProductCatalogImport, type ProductCatalogImportRequest, type ProductCatalogImportResult } from "./productCatalogImport";
@@ -1348,7 +1348,7 @@ export class DatabaseStorage implements IStorage {
     const countByEvent = new Map(eventCounts.map((row) => [row.eventType, Number(row.count)]));
     const firstByEvent = new Map(eventFirstRecorded.map((row) => [row.eventType, asDate(row.firstRecordedAt)]));
     const definitions: Array<{
-      key: BusinessEventType;
+      key: AdoptionMetricKey;
       label: string;
     }> = [
       { key: "customer_package_prepared", label: "Customer packages prepared" },

@@ -136,6 +136,27 @@ export const leadInquiries = pgTable("lead_inquiries", {
   index("idx_lead_inquiries_converted_quote_id").on(table.convertedQuoteId),
 ]);
 
+// Append-only results written back by the external lead-intake agent. Rainmaker
+// stores only the decision, a short reason, and the Gmail draft pointer; email
+// content remains in Gmail.
+export const leadAgentAssessments = pgTable("lead_agent_assessments", {
+  id: serial("id").primaryKey(),
+  inquiryId: integer("inquiry_id").notNull().references(() => leadInquiries.id, { onDelete: "cascade" }),
+  outcome: text("outcome").notNull(),
+  reason: text("reason").notNull(),
+  gmailDraftId: text("gmail_draft_id"),
+  gmailMessageId: text("gmail_message_id"),
+  gmailDraftUrl: text("gmail_draft_url"),
+  idempotencyKeyHash: text("idempotency_key_hash").notNull().unique(),
+  source: text("source").notNull().default("jacob-codex"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => [
+  index("idx_lead_agent_assessments_inquiry_time").on(table.inquiryId, table.createdAt),
+  index("idx_lead_agent_assessments_outcome").on(table.outcome),
+  uniqueIndex("lead_agent_assessments_gmail_draft_id_key").on(table.gmailDraftId),
+  uniqueIndex("lead_agent_assessments_gmail_message_id_key").on(table.gmailMessageId),
+]);
+
 // Aliases for different conceptual uses
 export const customers = accounts; // Legacy alias for backward compatibility
 export const clients = accounts; // New unified client model alias
@@ -902,6 +923,7 @@ export type QuoteProductRendering = typeof quoteProductRenderings.$inferSelect;
 export type LeadAttachment = typeof leadAttachments.$inferSelect;
 export type LeadIntakeSubmission = typeof leadIntakeSubmissions.$inferSelect;
 export type LeadInquiry = typeof leadInquiries.$inferSelect;
+export type LeadAgentAssessment = typeof leadAgentAssessments.$inferSelect;
 
 export type InsertAccount = z.infer<typeof insertAccountSchema>;
 export type InsertCustomer = z.infer<typeof insertAccountSchema>; // Legacy alias

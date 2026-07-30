@@ -9,6 +9,8 @@ export const businessEventTypes = [
   "dimensional_price_resolved",
   "product_catalog_import_completed",
   "sundance_configuration_inserted",
+  "lead_assessed_fit",
+  "lead_assessed_not_fit",
 ] as const;
 
 export type BusinessEventType = typeof businessEventTypes[number];
