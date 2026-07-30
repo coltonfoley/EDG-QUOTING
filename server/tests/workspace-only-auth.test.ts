@@ -47,6 +47,9 @@ describe("Workspace-only human authentication", () => {
     expect(authSource).not.toContain("validateApiKey");
     expect(authSource).toContain("if (req.isAuthenticated())");
     expect(leadRoutesSource).toContain("isConfiguredWebsiteApiKey");
+    expect(leadRoutesSource).not.toContain("isConfiguredAgentApiKey");
+    expect(leadRoutesSource).not.toContain('process.env.RAINMAKER_AGENT_API_KEY');
+    expect(leadRoutesSource).toContain('"/api/inquiries/:id/agent-assessment"');
   });
 
   it("uses production-safe session and request defaults", () => {

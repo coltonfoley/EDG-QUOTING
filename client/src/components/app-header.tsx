@@ -18,6 +18,7 @@ export function AppHeader() {
   const [location] = useLocation();
   const { user, logoutMutation } = useAuth();
   const showBanner = location === "/";
+  const useLeadLayout = location.startsWith("/leads");
   const navItems = [
     { href: "/", label: "Home", active: location === "/" },
     { href: "/leads", label: "Leads", active: location.startsWith("/leads") },
@@ -43,11 +44,26 @@ export function AppHeader() {
         </div>
       )}
       <header className="bg-card shadow-sm border-b border-border">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className={cn(
+        "mx-auto sm:px-6 lg:px-8",
+        useLeadLayout ? "max-w-[1450px] px-3" : "max-w-7xl px-4",
+      )}>
         <div className="flex justify-between items-center h-16">
-          <div className="flex items-center space-x-8">
+          <div className={cn(
+            "flex items-center sm:space-x-8",
+            useLeadLayout ? "min-w-0 space-x-4" : "space-x-8",
+          )}>
             <div className="flex-shrink-0 flex items-center">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 160" className="h-12 w-48 sm:h-16 sm:w-auto mr-2 sm:mr-3" role="img" aria-label="EDG Rainmaker — primary logo">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 820 160"
+                className={cn(
+                  "sm:h-16 sm:w-auto",
+                  useLeadLayout ? "h-10 w-36 sm:mr-3" : "mr-2 h-12 w-48 sm:mr-3",
+                )}
+                role="img"
+                aria-label="EDG Rainmaker — primary logo"
+              >
                 <defs>
                   <linearGradient id="tealGrad1" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="#00bfa5"/>
@@ -93,11 +109,21 @@ export function AppHeader() {
               ))}
             </nav>
           </div>
-          <div className="flex items-center space-x-4">
+          <div className={cn(
+            "flex items-center sm:space-x-4",
+            useLeadLayout ? "space-x-1" : "space-x-4",
+          )}>
             <ThemeToggle />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="flex items-center space-x-2 hover:bg-muted" aria-label="Open user menu">
+                <Button
+                  variant="ghost"
+                  className={cn(
+                    "flex items-center space-x-2 hover:bg-muted",
+                    useLeadLayout ? "px-2 sm:px-4" : undefined,
+                  )}
+                  aria-label="Open user menu"
+                >
                   <Avatar className="h-8 w-8">
                     <AvatarFallback className="bg-edg-teal text-white font-medium text-xs">
                       {user?.firstName?.[0]}{user?.lastName?.[0] || user?.username?.[0]}
