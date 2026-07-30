@@ -38,65 +38,6 @@ const account = {
   phone: "555-0100",
   accountType: "commercial",
 };
-const agentReviewedLeads = [
-  {
-    accountId: 9101,
-    inquiryId: 9151,
-    name: "Avery Example",
-    company: null,
-    email: "avery@example.invalid",
-    phone: "555-0100",
-    projectType: "Motorized louvered pergola",
-    location: "Spring Grove, IL",
-    message: "TEST ONLY fictional pergola inquiry",
-    source: "website",
-    receivedAt: "2026-07-30T14:24:00.000Z",
-    outcome: "fit",
-    assessmentReason: "In our service area and asking about a core EDG product.",
-    gmailDraftId: "fixture-draft-9151",
-    gmailMessageId: "fixture-message-9151",
-    gmailDraftUrl: "https://mail.google.com/mail/u/0/#drafts/fixture-message-9151",
-    assessedAt: "2026-07-30T14:30:00.000Z",
-  },
-  {
-    accountId: 9102,
-    inquiryId: 9152,
-    name: "Morgan Fiction",
-    company: "Fictional Lakeside Hospitality Group With A Long Name",
-    email: "morgan@example.invalid",
-    phone: "555-0101",
-    projectType: "MagnaTrack screens for an existing covered patio",
-    location: "Lake Geneva, WI",
-    message: "TEST ONLY fictional screen inquiry",
-    source: "website",
-    receivedAt: "2026-07-30T13:42:00.000Z",
-    outcome: "fit",
-    assessmentReason: "The requested screen system matches EDG's services and the project is nearby.",
-    gmailDraftId: "fixture-draft-9152",
-    gmailMessageId: "fixture-message-9152",
-    gmailDraftUrl: "https://mail.google.com/mail/u/0/#drafts/fixture-message-9152",
-    assessedAt: "2026-07-30T13:45:00.000Z",
-  },
-  {
-    accountId: 9103,
-    inquiryId: 9153,
-    name: "Jordan Sample",
-    company: null,
-    email: "jordan@example.invalid",
-    phone: "555-0102",
-    projectType: "Retractable awning",
-    location: "Bend, OR",
-    message: "TEST ONLY fictional out-of-area inquiry",
-    source: "website",
-    receivedAt: "2026-07-30T12:03:00.000Z",
-    outcome: "not_fit",
-    assessmentReason: "Outside EDG's current service area.",
-    gmailDraftId: null,
-    gmailMessageId: null,
-    gmailDraftUrl: null,
-    assessedAt: "2026-07-30T12:15:00.000Z",
-  },
-];
 const lineItems = [{
   id: 9201,
   quoteId: 9301,
@@ -282,7 +223,6 @@ function serveApi(request, response, pathname, scenario) {
     "/api/accounts",
     "/api/accounts/summary",
     "/api/leads",
-    "/api/lead-agent/review",
     "/api/products",
     "/api/admin/email-delivery-health",
     "/api/admin/adoption-summary",
@@ -337,10 +277,6 @@ function serveApi(request, response, pathname, scenario) {
       attachments: [],
       leadAttachments: [],
     }]);
-    return;
-  }
-  if (pathname === "/api/lead-agent/review") {
-    json(response, 200, scenario === "empty" ? [] : agentReviewedLeads);
     return;
   }
   if (pathname === "/api/admin/import-csv-products" && request.method === "POST") {

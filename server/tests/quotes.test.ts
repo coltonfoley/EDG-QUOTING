@@ -1,14 +1,6 @@
 import { afterAll, beforeAll, describe, it, expect, vi } from "vitest";
 import type { InsertQuote } from "@shared/schema";
-import {
-  businessEvents,
-  emailDeliveryAttempts,
-  groups,
-  leadAgentAssessments,
-  leadInquiries,
-  lineItems,
-  products,
-} from "@shared/schema";
+import { businessEvents, emailDeliveryAttempts, groups, leadInquiries, lineItems, products } from "@shared/schema";
 import { and, eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { randomUUID } from "node:crypto";
@@ -27,7 +19,6 @@ let executeQuoteImport: typeof import("../quoteImport").executeQuoteImport;
 let createIdempotentLead: typeof import("../leadIntakeIdempotency").createIdempotentLead;
 let preserveAccountAndCreateInquiry: typeof import("../routes/leadIntakeRoutes").preserveAccountAndCreateInquiry;
 let createQuoteFromInquiry: typeof import("../inquiryConversion").createQuoteFromInquiry;
-let recordLeadAgentAssessment: typeof import("../leadAgentAssessment").recordLeadAgentAssessment;
 let database: typeof import("../db").db;
 let pool: typeof import("../db").pool | undefined;
 
@@ -42,7 +33,6 @@ beforeAll(async () => {
   ({ createIdempotentLead } = await import("../leadIntakeIdempotency"));
   ({ preserveAccountAndCreateInquiry } = await import("../routes/leadIntakeRoutes"));
   ({ createQuoteFromInquiry } = await import("../inquiryConversion"));
-  ({ recordLeadAgentAssessment } = await import("../leadAgentAssessment"));
   ({ pool, db: database } = await import("../db"));
 });
 
@@ -862,106 +852,6 @@ describe.skipIf(!shouldRunDatabaseTests)("Quote Storage Layer", () => {
         isShippingTaxable: false,
         dealStage: "new_lead",
       })).rejects.toEqual(expect.objectContaining({ code: "INQUIRY_ALREADY_CONVERTED" }));
-    });
-
-    it("records one auditable agent assessment and replays an exact retry", async () => {
-      const suffix = `${Date.now()}-${nanoid()}`;
-      const account = await storage.createAccount({
-        name: `Agent Assessment Client ${suffix}`,
-        email: `agent-assessment-${suffix}@example.invalid`,
-        phone: "555-0115",
-        accountType: "homeowner",
-      });
-      const [inquiry] = await database.insert(leadInquiries).values({
-        accountId: account.id,
-        submissionId: `agent-assessment-${suffix}`,
-        status: "new",
-        source: "website",
-        projectType: "Pergola",
-        message: "Interested in a motorized pergola",
-      }).returning();
-      const input = {
-        inquiryId: inquiry.id,
-        outcome: "fit" as const,
-        reason: "In the service area and asking about a core EDG product.",
-        gmailDraftId: `draft-${suffix}`,
-        gmailMessageId: `message-${suffix}`,
-        gmailDraftUrl: `https://mail.google.com/mail/u/0/#drafts/message-${suffix}`,
-        idempotencyKey: `assessment-${suffix}`,
-      };
-
-      const created = await recordLeadAgentAssessment(input);
-      const replayed = await recordLeadAgentAssessment(input);
-
-      expect(created.replayed).toBe(false);
-      expect(replayed).toEqual({ assessment: created.assessment, replayed: true });
-      const assessments = await database
-        .select()
-        .from(leadAgentAssessments)
-        .where(eq(leadAgentAssessments.inquiryId, inquiry.id));
-      expect(assessments).toEqual([expect.objectContaining({
-        outcome: "fit",
-        reason: input.reason,
-        gmailDraftId: input.gmailDraftId,
-      })]);
-      const events = await database
-        .select()
-        .from(businessEvents)
-        .where(and(
-          eq(businessEvents.eventType, "lead_assessed_fit"),
-          eq(businessEvents.inquiryId, inquiry.id),
-        ));
-      expect(events).toHaveLength(1);
-
-      await expect(recordLeadAgentAssessment({
-        ...input,
-        reason: "A different result must use a new idempotency key.",
-      })).rejects.toEqual(expect.objectContaining({ code: "IDEMPOTENCY_KEY_REUSED" }));
-
-      const [secondInquiry] = await database.insert(leadInquiries).values({
-        accountId: account.id,
-        submissionId: `agent-assessment-second-${suffix}`,
-        status: "new",
-        source: "website",
-        projectType: "Pergola",
-      }).returning();
-      await expect(recordLeadAgentAssessment({
-        ...input,
-        inquiryId: secondInquiry.id,
-        gmailDraftId: `another-draft-${suffix}`,
-        idempotencyKey: `another-assessment-${suffix}`,
-      })).rejects.toEqual(expect.objectContaining({ code: "GMAIL_DRAFT_ALREADY_LINKED" }));
-    });
-
-    it("records a not-a-fit result without creating a Gmail draft reference", async () => {
-      const suffix = `${Date.now()}-${nanoid()}`;
-      const account = await storage.createAccount({
-        name: `Not Fit Client ${suffix}`,
-        email: `not-fit-${suffix}@example.invalid`,
-        phone: "555-0116",
-        accountType: "homeowner",
-      });
-      const [inquiry] = await database.insert(leadInquiries).values({
-        accountId: account.id,
-        submissionId: `not-fit-${suffix}`,
-        status: "new",
-        source: "website",
-        projectType: "Awning",
-      }).returning();
-
-      const result = await recordLeadAgentAssessment({
-        inquiryId: inquiry.id,
-        outcome: "not_fit",
-        reason: "Outside EDG's current service area.",
-        idempotencyKey: `not-fit-assessment-${suffix}`,
-      });
-
-      expect(result.assessment).toEqual(expect.objectContaining({
-        outcome: "not_fit",
-        gmailDraftId: null,
-        gmailMessageId: null,
-        gmailDraftUrl: null,
-      }));
     });
   });
 
