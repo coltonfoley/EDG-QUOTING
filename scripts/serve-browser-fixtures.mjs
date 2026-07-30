@@ -97,23 +97,6 @@ const agentReviewedLeads = [
     assessedAt: "2026-07-30T12:15:00.000Z",
   },
 ];
-const pendingLeads = [
-  {
-    accountId: 9104,
-    inquiryId: 9154,
-    submissionId: "fixture-pending-9154",
-    name: "Taylor Test",
-    email: "taylor@example.invalid",
-    phone: "555-0103",
-    projectType: "MagnaTrack screens",
-    location: "Crystal Lake, IL",
-    message: "TEST ONLY fictional newly received lead",
-    source: "website",
-    customerType: "homeowner",
-    metadata: null,
-    receivedAt: "2026-07-30T15:45:00.000Z",
-  },
-];
 const lineItems = [{
   id: 9201,
   quoteId: 9301,
@@ -300,7 +283,6 @@ function serveApi(request, response, pathname, scenario) {
     "/api/accounts/summary",
     "/api/leads",
     "/api/lead-agent/review",
-    "/api/lead-agent/inquiries/pending",
     "/api/products",
     "/api/admin/email-delivery-health",
     "/api/admin/adoption-summary",
@@ -359,10 +341,6 @@ function serveApi(request, response, pathname, scenario) {
   }
   if (pathname === "/api/lead-agent/review") {
     json(response, 200, scenario === "empty" ? [] : agentReviewedLeads);
-    return;
-  }
-  if (pathname === "/api/lead-agent/inquiries/pending") {
-    json(response, 200, scenario === "empty" ? [] : pendingLeads);
     return;
   }
   if (pathname === "/api/admin/import-csv-products" && request.method === "POST") {

@@ -30,19 +30,6 @@ type AgentReviewedLead = {
   assessedAt: string;
 };
 
-type PendingLead = {
-  accountId: number;
-  inquiryId: number;
-  name: string;
-  email: string;
-  phone?: string | null;
-  projectType?: string | null;
-  location?: string | null;
-  message?: string | null;
-  source?: string | null;
-  receivedAt: string;
-};
-
 type LeadTab = "draft_ready" | "not_fit";
 
 function formatDate(value?: string | Date | null) {
@@ -77,15 +64,11 @@ function gmailDraftHref(lead: AgentReviewedLead): string | null {
   return `https://mail.google.com/mail/u/0/#drafts/${encodeURIComponent(lead.gmailMessageId)}`;
 }
 
-function displayName(lead: Pick<AgentReviewedLead, "name" | "company">) {
+function displayName(lead: AgentReviewedLead) {
   return lead.company || lead.name;
 }
 
-function LeadIdentity({
-  lead,
-}: {
-  lead: Pick<AgentReviewedLead, "name" | "company" | "projectType" | "location">;
-}) {
+function LeadIdentity({ lead }: { lead: AgentReviewedLead }) {
   return (
     <div className="min-w-0">
       <h2 className="break-words text-lg font-semibold text-foreground">
@@ -101,26 +84,6 @@ function LeadIdentity({
         {lead.location || "Location not provided"}
       </p>
     </div>
-  );
-}
-
-function PendingLeadRow({ lead }: { lead: PendingLead }) {
-  return (
-    <article
-      className="grid gap-5 px-6 py-7 md:grid-cols-[minmax(0,1.2fr)_minmax(8rem,0.65fr)] lg:grid-cols-[minmax(17rem,1.25fr)_minmax(9rem,0.65fr)_minmax(20rem,1.5fr)] lg:items-center"
-      data-testid={`pending-lead-row-${lead.inquiryId}`}
-    >
-      <LeadIdentity lead={{ ...lead, company: null }} />
-
-      <div className="text-base">
-        <p className="font-medium text-foreground lg:sr-only">Received</p>
-        <p className="mt-1 text-muted-foreground lg:mt-0">{formatDate(lead.receivedAt)}</p>
-      </div>
-
-      <p className="break-words text-base leading-7 text-muted-foreground">
-        {lead.message || "No project details were provided."}
-      </p>
-    </article>
   );
 }
 
@@ -235,22 +198,6 @@ function LeadList({
 
 export default function Leads() {
   const [activeTab, setActiveTab] = useState<LeadTab>("draft_ready");
-  const {
-    data: pendingLeads = [],
-    isLoading: pendingIsLoading,
-    error: pendingError,
-    refetch: refetchPending,
-  } = useQuery<PendingLead[]>({
-    queryKey: ["/api/lead-agent/inquiries/pending"],
-    queryFn: async () => {
-      const response = await fetch("/api/lead-agent/inquiries/pending?limit=200", {
-        credentials: "include",
-      });
-      if (!response.ok) throw new Error("Failed to fetch new leads");
-      return response.json();
-    },
-    refetchInterval: 15_000,
-  });
   const { data: leads = [], isLoading, error, refetch } = useQuery<AgentReviewedLead[]>({
     queryKey: ["/api/lead-agent/review"],
     queryFn: async () => {
@@ -260,7 +207,7 @@ export default function Leads() {
       if (!response.ok) throw new Error("Failed to fetch agent-reviewed leads");
       return response.json();
     },
-    refetchInterval: 15_000,
+    refetchInterval: 60_000,
   });
 
   const draftReady = useMemo(
@@ -272,17 +219,14 @@ export default function Leads() {
     [leads],
   );
 
-  if (error || pendingError) {
+  if (error) {
     return (
       <div className="min-h-screen bg-background">
         <AppHeader />
         <PageLoadError
           title="Leads couldn't be loaded"
-          description="Rainmaker could not retrieve the latest incoming leads and agent assessments."
-          onRetry={() => {
-            void refetchPending();
-            void refetch();
-          }}
+          description="Rainmaker could not retrieve Jacob's latest lead assessments."
+          onRetry={() => void refetch()}
         />
       </div>
     );
@@ -296,45 +240,6 @@ export default function Leads() {
         <div className="mb-7">
           <h1 className="text-3xl font-bold text-foreground">Leads</h1>
         </div>
-
-        {(pendingIsLoading || pendingLeads.length > 0) && (
-          <section className="mb-8" aria-labelledby="new-leads-heading">
-            <div className="mb-3 flex flex-wrap items-baseline justify-between gap-3">
-              <div>
-                <h2 id="new-leads-heading" className="text-xl font-semibold text-foreground">
-                  New leads
-                </h2>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Received by Rainmaker. Jacob checks these every 15 minutes.
-                </p>
-              </div>
-              {!pendingIsLoading && (
-                <p className="text-sm text-muted-foreground" role="status" aria-live="polite">
-                  {pendingLeads.length} {pendingLeads.length === 1 ? "lead" : "leads"}
-                </p>
-              )}
-            </div>
-
-            <div className="overflow-hidden rounded-lg border border-edg-teal/30 bg-card">
-              {pendingIsLoading ? (
-                <div className="grid gap-5 px-6 py-7 lg:grid-cols-3" aria-label="Loading new leads">
-                  <div>
-                    <Skeleton className="h-5 w-40" />
-                    <Skeleton className="mt-3 h-4 w-32" />
-                  </div>
-                  <Skeleton className="h-4 w-24" />
-                  <Skeleton className="h-4 w-full" />
-                </div>
-              ) : (
-                <div className="divide-y">
-                  {pendingLeads.map((lead) => (
-                    <PendingLeadRow key={lead.inquiryId} lead={lead} />
-                  ))}
-                </div>
-              )}
-            </div>
-          </section>
-        )}
 
         <Tabs
           value={activeTab}
@@ -364,6 +269,10 @@ export default function Leads() {
               </TabsTrigger>
             </TabsList>
           </div>
+
+          <p className="mt-5 text-sm text-muted-foreground">
+            New leads are checked every 15 minutes.
+          </p>
 
           <p className="sr-only" role="status" aria-live="polite">
             {activeTab === "draft_ready"
