@@ -7,7 +7,6 @@ import { isAuthenticated } from "../auth";
 import { db } from "../db";
 import {
   accounts,
-  leadAgentAssessments,
   leadInquiries,
   type InsertAccount,
   type LeadAttachment,
@@ -20,10 +19,6 @@ import {
   resolveLeadIntakeSubmissionId,
 } from "../leadIntakeIdempotency";
 import { preserveAccountAndCreateInquiry } from "../leadIntakePersistence";
-import {
-  LeadAgentAssessmentError,
-  recordLeadAgentAssessment,
-} from "../leadAgentAssessment";
 import { redactedErrorType } from "../redactedLogging";
 
 export { preserveAccountAndCreateInquiry } from "../leadIntakePersistence";
@@ -62,46 +57,6 @@ const leadStatusSchema = z.enum([
 
 const leadStatusUpdateSchema = z.object({
   status: leadStatusSchema,
-});
-
-const gmailDraftUrlSchema = z.string().url().refine((value) => {
-  try {
-    const url = new URL(value);
-    return url.protocol === "https:"
-      && url.hostname === "mail.google.com"
-      && /^\/mail\/u\/\d+\//.test(url.pathname)
-      && url.hash.startsWith("#drafts");
-  } catch {
-    return false;
-  }
-}, "Gmail draft URL must use https://mail.google.com");
-
-const leadAgentAssessmentSchema = z.object({
-  outcome: z.enum(["fit", "not_fit"]),
-  reason: z.string().trim().min(1).max(500),
-  gmailDraftId: z.string().trim().min(1).max(255).optional().nullable(),
-  gmailMessageId: z.string().trim().min(1).max(255).optional().nullable(),
-  gmailDraftUrl: gmailDraftUrlSchema.optional().nullable(),
-  idempotencyKey: z.string().trim().min(1).max(200),
-}).superRefine((value, context) => {
-  const hasAnyDraftReference = Boolean(
-    value.gmailDraftId || value.gmailMessageId || value.gmailDraftUrl,
-  );
-
-  if (value.outcome === "fit" && !value.gmailMessageId) {
-    context.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["gmailMessageId"],
-      message: "A fit assessment needs a Gmail message ID.",
-    });
-  }
-  if (value.outcome === "not_fit" && hasAnyDraftReference) {
-    context.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["gmailDraftId"],
-      message: "A not-a-fit assessment cannot include a Gmail draft.",
-    });
-  }
 });
 
 const maxLeadAttachmentCount = 4;
@@ -207,133 +162,6 @@ function isLeadAttachmentAuthenticated(req: any, res: any, next: any) {
 }
 
 export function registerLeadIntakeRoutes(app: Express) {
-  app.get("/api/lead-agent/review", isAuthenticated, async (_req, res) => {
-    try {
-      const latestAssessment = sql`${leadAgentAssessments.id} = (
-        SELECT latest_assessment.id
-        FROM lead_agent_assessments latest_assessment
-        WHERE latest_assessment.inquiry_id = ${leadInquiries.id}
-        ORDER BY latest_assessment.created_at DESC, latest_assessment.id DESC
-        LIMIT 1
-      )`;
-
-      const rows = await db
-        .select({
-          accountId: accounts.id,
-          inquiryId: leadInquiries.id,
-          name: accounts.name,
-          company: accounts.company,
-          email: accounts.email,
-          phone: accounts.phone,
-          projectType: leadInquiries.projectType,
-          location: leadInquiries.location,
-          message: leadInquiries.message,
-          source: leadInquiries.source,
-          receivedAt: leadInquiries.receivedAt,
-          outcome: leadAgentAssessments.outcome,
-          assessmentReason: leadAgentAssessments.reason,
-          gmailDraftId: leadAgentAssessments.gmailDraftId,
-          gmailMessageId: leadAgentAssessments.gmailMessageId,
-          gmailDraftUrl: leadAgentAssessments.gmailDraftUrl,
-          assessedAt: leadAgentAssessments.createdAt,
-        })
-        .from(leadAgentAssessments)
-        .innerJoin(leadInquiries, eq(leadInquiries.id, leadAgentAssessments.inquiryId))
-        .innerJoin(accounts, eq(accounts.id, leadInquiries.accountId))
-        .where(and(
-          latestAssessment,
-          eq(leadInquiries.status, "new"),
-        ))
-        .orderBy(desc(leadInquiries.receivedAt), desc(leadInquiries.id))
-        .limit(500);
-
-      res.json(rows);
-    } catch (error) {
-      console.error("Error fetching agent-reviewed leads", {
-        errorType: redactedErrorType(error),
-      });
-      res.status(500).json({ message: "Failed to fetch agent-reviewed leads" });
-    }
-  });
-
-  app.get("/api/lead-agent/inquiries/pending", isAuthenticated, async (req, res) => {
-    try {
-      const limit = Math.min(z.coerce.number().int().positive().default(50).parse(req.query.limit), 200);
-      const rows = await db
-        .select({
-          accountId: accounts.id,
-          inquiryId: leadInquiries.id,
-          submissionId: leadInquiries.submissionId,
-          name: accounts.name,
-          email: accounts.email,
-          phone: accounts.phone,
-          projectType: leadInquiries.projectType,
-          location: leadInquiries.location,
-          message: leadInquiries.message,
-          source: leadInquiries.source,
-          customerType: leadInquiries.customerType,
-          metadata: leadInquiries.metadata,
-          receivedAt: leadInquiries.receivedAt,
-        })
-        .from(leadInquiries)
-        .innerJoin(accounts, eq(accounts.id, leadInquiries.accountId))
-        .where(and(
-          eq(leadInquiries.status, "new"),
-          sql`NOT EXISTS (
-            SELECT 1
-            FROM lead_agent_assessments existing_assessment
-            WHERE existing_assessment.inquiry_id = ${leadInquiries.id}
-          )`,
-        ))
-        .orderBy(leadInquiries.receivedAt, leadInquiries.id)
-        .limit(limit);
-
-      res.json(rows);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({
-          message: "Invalid pending-inquiry query",
-          errors: error.errors,
-        });
-      }
-      console.error("Error fetching pending lead inquiries", {
-        errorType: redactedErrorType(error),
-      });
-      res.status(500).json({ message: "Failed to fetch pending lead inquiries" });
-    }
-  });
-
-  app.put("/api/inquiries/:id/agent-assessment", isAuthenticated, async (req, res) => {
-    try {
-      const inquiryId = z.coerce.number().int().positive().parse(req.params.id);
-      const payload = leadAgentAssessmentSchema.parse(req.body);
-      const result = await recordLeadAgentAssessment({
-        inquiryId,
-        ...payload,
-      });
-
-      res.status(result.replayed ? 200 : 201).json(result);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({
-          message: "Invalid lead assessment",
-          errors: error.errors,
-        });
-      }
-      if (error instanceof LeadAgentAssessmentError) {
-        return res.status(error.status).json({
-          message: error.message,
-          code: error.code,
-        });
-      }
-
-      console.error("Error recording lead assessment", {
-        errorType: redactedErrorType(error),
-      });
-      res.status(500).json({ message: "Failed to record lead assessment" });
-    }
-  });
-
   app.get("/api/leads", isAuthenticated, async (req, res) => {
     try {
       const statusParam = typeof req.query.status === "string" ? req.query.status : "new";

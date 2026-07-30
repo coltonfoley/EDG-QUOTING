@@ -460,12 +460,7 @@ describe("authorization policy", () => {
     expect(quoteBuilder).toContain('aria-label="Quote sections"');
     expect(quoteBuilder).toContain('href="#quote-line-items"');
     expect(quoteBuilder).toContain('id="quote-review"');
-    expect(leads).toContain('value="draft_ready"');
-    expect(leads).toContain('value="not_fit"');
-    expect(leads).toContain("Open Gmail draft");
-    expect(leads).not.toContain("Create Quote");
-    expect(leads).not.toContain("Start Follow-Up");
-    expect(leads).not.toContain("Needs Follow Up");
+    expect(leads).toContain("button-create-quote-${lead.inquiryId}");
     expect(accountRoutes).toContain('app.get("/api/accounts/summary"');
     expect(accountRoutes).toContain("quotes.is_latest_version = true");
     expect(accounts).toContain("debouncedSearchTerm");

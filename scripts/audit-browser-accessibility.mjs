@@ -34,7 +34,6 @@ async function waitForFixtureServer() {
 }
 
 const viewports = [
-  { width: 320, height: 800 },
   { width: 390, height: 844 },
   { width: 512, height: 450, deviceScaleFactor: 2, zoomEquivalent: true, label: "1024x900 at 200% zoom equivalent" },
   { width: 768, height: 900 },
@@ -43,8 +42,7 @@ const viewports = [
 const cases = [
   { name: "admin delivery health", scenario: "admin", path: "/admin", readySelector: "h1" },
   { name: "admin delivery error", scenario: "admin-data-error", path: "/admin", readySelector: "h1" },
-  { name: "lead inbox", scenario: "user", path: "/leads", readySelector: "h1", expectedText: "Open Gmail draft", widths: [320, 390, 512, 768, 1024] },
-  { name: "lead inbox not fit", scenario: "user", path: "/leads", readySelector: "h1", setupTestId: "tab-not-fit", expectedText: "Outside EDG's current service area.", widths: [390, 1024] },
+  { name: "lead inbox", scenario: "user", path: "/leads", readySelector: "h1" },
   { name: "quote editor", scenario: "admin", path: "/quotes/9301/edit", readySelector: "h1" },
   { name: "public approval", scenario: "public", path: "/sign/test-token", readySelector: "h1" },
   { name: "public incomplete package", scenario: "public", path: "/sign/incomplete-token", readySelector: "h1", expectedText: "not ready for approval", widths: [390, 1024] },
@@ -63,7 +61,6 @@ const cases = [
   { name: "dark quote editor", scenario: "admin", path: "/quotes/9301/edit", readySelector: "h1", theme: "dark", expectedTheme: "dark", widths: [390, 1024] },
   { name: "public approval ignores stored dark theme", scenario: "public", path: "/sign/test-token", readySelector: "h1", theme: "dark", expectedTheme: "light", widths: [390, 1024] },
   { name: "forced colors dashboard", scenario: "admin", path: "/", readySelector: "h1", forcedColors: true, widths: [1024] },
-  { name: "forced colors leads", scenario: "admin", path: "/leads", readySelector: "h1", forcedColors: true, widths: [1024] },
   { name: "forced colors clients", scenario: "admin", path: "/accounts", readySelector: "h1", forcedColors: true, widths: [1024] },
   { name: "forced colors pipeline", scenario: "admin", path: "/pipeline", readySelector: "h1", forcedColors: true, widths: [1024] },
   { name: "forced colors products", scenario: "admin", path: "/products", readySelector: "h1", forcedColors: true, widths: [1024] },
@@ -169,7 +166,6 @@ try {
   if (process.env.RAINMAKER_SKIP_PAGE_CASES !== "1") {
     for (const viewport of viewports) {
       for (const testCase of cases) {
-      if (viewport.width === 320 && !testCase.widths?.includes(320)) continue;
       if (testCase.widths && !testCase.widths.includes(viewport.width)) continue;
       auditStage = `${testCase.name} at ${viewport.width}x${viewport.height}`;
       const page = await browser.newPage();
@@ -201,9 +197,11 @@ try {
       }
       if (testCase.setupTestId) {
         if (showProgress) process.stderr.write(`Opening ${auditStage}\n`);
-        const setupSelector = `[data-testid="${testCase.setupTestId}"]`;
-        await page.waitForSelector(setupSelector, { visible: true, timeout: 10_000 });
-        await page.click(setupSelector);
+        await page.evaluate((testId) => {
+          const control = document.querySelector(`[data-testid="${testId}"]`);
+          if (!(control instanceof HTMLElement)) throw new Error(`Missing setup control ${testId}`);
+          control.click();
+        }, testCase.setupTestId);
       }
       if (testCase.expectedText) {
         await page.waitForFunction(
