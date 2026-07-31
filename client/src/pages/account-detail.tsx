@@ -17,6 +17,22 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Account, LeadAttachment, PlanningAgreement, Quote, SecondaryContact } from "@shared/schema";
 import { format } from "date-fns";
 import { getDealStageColor, getDealStageLabel } from "@shared/dealStageConstants";
+import type { LeadWorkflowStatus } from "@shared/leadWorkflow";
+
+type AccountInquiry = {
+  id: number;
+  workflowStatus: LeadWorkflowStatus;
+  storedStatus: string;
+  source?: string | null;
+  projectType?: string | null;
+  message?: string | null;
+  location?: string | null;
+  receivedAt: string;
+  convertedQuoteId?: number | null;
+  assessmentReason?: string | null;
+  archiveReason?: string | null;
+  attachments?: LeadAttachment[];
+};
 
 interface AccountDetails extends Account {
   quotes: Quote[];
@@ -24,6 +40,7 @@ interface AccountDetails extends Account {
   projectCount: number;
   attachments?: LeadAttachment[];
   leadAttachments?: LeadAttachment[];
+  inquiries?: AccountInquiry[];
 }
 
 const planningStatusLabels: Record<string, string> = {
@@ -109,7 +126,13 @@ export default function AccountDetail() {
   };
 
   const formatLeadStatus = (status: string) => {
-    return status.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+    const labels: Record<string, string> = {
+      new: "New",
+      draft_ready: "Draft Ready",
+      contacted: "Contacted",
+      archived: "Archived / Disqualified",
+    };
+    return labels[status] || status.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
   };
 
   const extractLeadMessage = (message?: string | null) => {
@@ -296,44 +319,32 @@ export default function AccountDetail() {
               </div>
             </div>
 
-            {account.leadStatus && (
+            {(account.inquiries?.length || account.leadStatus) && (
               <div className="mt-6 border-t pt-6">
                 <div className="mb-4 flex flex-wrap items-center gap-3">
                   <div className="flex items-center gap-2">
                     <Inbox className="h-5 w-5 text-edg-teal" />
-                    <h3 className="text-lg font-semibold">Lead Details</h3>
-                  </div>
-                  <Badge variant="outline" className="border-sky-200 bg-sky-50 text-sky-800">
-                    {formatLeadStatus(account.leadStatus)}
-                  </Badge>
-                  {account.leadReceivedAt && (
-                    <span className="text-sm text-gray-500">
-                      Received {format(new Date(account.leadReceivedAt), 'MMM d, yyyy h:mm a')}
-                    </span>
-                  )}
-                </div>
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                  <div>
-                    <p className="text-sm text-gray-500">Source</p>
-                    <p className="font-medium">{account.leadSource || 'Website'}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-500">Project Type</p>
-                    <p className="font-medium">{account.leadProjectType || 'Not provided'}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-500">Location / ZIP</p>
-                    <p className="font-medium">{account.billingAddress || account.zipCode || 'Not provided'}</p>
+                    <h3 className="text-lg font-semibold">Inquiry History</h3>
                   </div>
                 </div>
-                {extractLeadMessage(account.leadMessage) && (
-                  <p className="mt-4 max-w-3xl text-sm leading-6 text-gray-700">
-                    {extractLeadMessage(account.leadMessage)}
-                  </p>
-                )}
+                {account.inquiries?.length ? <div className="space-y-4">
+                  {account.inquiries.map((inquiry) => <div key={inquiry.id} className="rounded-lg border bg-gray-50 p-4" data-testid={`account-inquiry-${inquiry.id}`}>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <Badge variant="outline" className="border-sky-200 bg-white text-sky-800">{formatLeadStatus(inquiry.workflowStatus)}</Badge>
+                      <span className="text-sm text-gray-500">Received {format(new Date(inquiry.receivedAt), 'MMM d, yyyy h:mm a')}</span>
+                      <span className="text-sm text-gray-500">{inquiry.projectType || 'Project type not provided'}</span>
+                      {inquiry.convertedQuoteId && <Button variant="link" size="sm" className="h-auto p-0" onClick={() => navigate(`/quotes/${inquiry.convertedQuoteId}/edit`)}>Open linked quote</Button>}
+                    </div>
+                    {extractLeadMessage(inquiry.message) && <p className="mt-3 max-w-3xl text-sm leading-6 text-gray-700">{extractLeadMessage(inquiry.message)}</p>}
+                    {inquiry.assessmentReason && <p className="mt-2 text-sm text-gray-600"><span className="font-semibold">Agent assessment:</span> {inquiry.assessmentReason}</p>}
+                    {inquiry.archiveReason && <p className="mt-2 text-sm text-gray-600"><span className="font-semibold">Archive reason:</span> {formatLeadStatus(inquiry.archiveReason)}</p>}
+                  </div>)}
+                </div> : <div className="rounded-lg border bg-gray-50 p-4">
+                  <Badge variant="outline" className="border-sky-200 bg-white text-sky-800">{formatLeadStatus(account.leadStatus || 'new')}</Badge>
+                  {extractLeadMessage(account.leadMessage) && <p className="mt-3 text-sm text-gray-700">{extractLeadMessage(account.leadMessage)}</p>}
+                </div>}
 
-                {leadAttachments.length > 0 && (
-                  <div className="mt-5">
+                {leadAttachments.length > 0 && <div className="mt-5">
                     <div className="mb-3 flex items-center gap-2">
                       <Images className="h-4 w-4 text-edg-teal" />
                       <p className="text-sm font-semibold text-gray-800">
@@ -367,8 +378,7 @@ export default function AccountDetail() {
                         </a>
                       ))}
                     </div>
-                  </div>
-                )}
+                  </div>}
               </div>
             )}
 

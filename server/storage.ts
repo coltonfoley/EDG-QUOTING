@@ -20,6 +20,7 @@ import {
   quoteCoverPhotos,
   quoteProductRenderings,
   leadAttachments,
+  leadInquiries,
   type Account,
   type Customer,
   type Quote,
@@ -61,6 +62,7 @@ import {
   type QuoteWithDetails,
   type ProductWithDetails
 } from "@shared/schema";
+import { projectLeadWorkflowStatus } from "@shared/leadWorkflow";
 import { db, ensureLeadAttachmentTable, ensurePlanningAgreementTables, ensurePricingDefaultsTable, ensureProductCatalogColumns, ensureQuoteApprovalDrawingTables, ensureSignatureAuditColumns, pool } from "./db";
 import { eq, desc, asc, inArray, sql, and, ne, or, ilike, isNull, lte, gte } from "drizzle-orm";
 import { scrypt, randomBytes, timingSafeEqual, createHash } from "crypto";
@@ -494,6 +496,46 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(quotes.createdAt));
     const accountPlanningAgreements = await this.getPlanningAgreementsByAccountId(id);
     const accountLeadAttachments = await this.getLeadAttachmentsForAccount(id);
+    const inquiryRows = await db.select({
+      id: leadInquiries.id,
+      submissionId: leadInquiries.submissionId,
+      storedStatus: leadInquiries.status,
+      source: leadInquiries.source,
+      projectType: leadInquiries.projectType,
+      message: leadInquiries.message,
+      location: leadInquiries.location,
+      receivedAt: leadInquiries.receivedAt,
+      lastContactedAt: leadInquiries.lastContactedAt,
+      convertedQuoteId: leadInquiries.convertedQuoteId,
+      archiveReason: leadInquiries.archiveReason,
+      manualGmailDraftUrl: leadInquiries.gmailDraftUrl,
+      assessmentOutcome: sql<string | null>`(
+        SELECT assessment.outcome FROM lead_agent_assessments assessment
+        WHERE assessment.inquiry_id = ${leadInquiries.id}
+        ORDER BY assessment.created_at DESC, assessment.id DESC LIMIT 1
+      )`,
+      assessmentReason: sql<string | null>`(
+        SELECT assessment.reason FROM lead_agent_assessments assessment
+        WHERE assessment.inquiry_id = ${leadInquiries.id}
+        ORDER BY assessment.created_at DESC, assessment.id DESC LIMIT 1
+      )`,
+      gmailMessageId: sql<string | null>`(
+        SELECT assessment.gmail_message_id FROM lead_agent_assessments assessment
+        WHERE assessment.inquiry_id = ${leadInquiries.id}
+        ORDER BY assessment.created_at DESC, assessment.id DESC LIMIT 1
+      )`,
+    }).from(leadInquiries).where(eq(leadInquiries.accountId, id))
+      .orderBy(desc(leadInquiries.receivedAt), desc(leadInquiries.id));
+    const inquiries = inquiryRows.map((inquiry) => ({
+      ...inquiry,
+      workflowStatus: projectLeadWorkflowStatus({
+        storedStatus: inquiry.storedStatus,
+        assessmentOutcome: inquiry.assessmentOutcome,
+        gmailMessageId: inquiry.gmailMessageId,
+        convertedQuoteId: inquiry.convertedQuoteId,
+      }),
+      attachments: accountLeadAttachments.filter((attachment) => Boolean(inquiry.submissionId) && attachment.submissionId === inquiry.submissionId),
+    }));
 
     return {
       ...account,
@@ -501,7 +543,8 @@ export class DatabaseStorage implements IStorage {
       planningAgreements: accountPlanningAgreements,
       projectCount: accountQuotes.length,
       attachments: accountLeadAttachments,
-      leadAttachments: accountLeadAttachments
+      leadAttachments: accountLeadAttachments,
+      inquiries,
     };
   }
 
