@@ -1,456 +1,200 @@
 import { useMemo, useState } from "react";
-import { Link } from "wouter";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { Link } from "wouter";
+import { SiGmail } from "react-icons/si";
+import { Archive, CheckCircle2, ExternalLink, FileText, FolderPlus, Inbox, Mail, MapPin, MessageSquare, Phone } from "lucide-react";
+
 import { AppHeader } from "@/components/app-header";
 import { PageLoadError } from "@/components/error-alert";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
-import type { Account, LeadAttachment } from "@shared/schema";
-import {
-  Archive,
-  CheckCircle2,
-  ChevronRight,
-  Clock,
-  ExternalLink,
-  FolderPlus,
-  Images,
-  Inbox,
-  Mail,
-  MapPin,
-  MessageSquare,
-  Phone,
-  UserCheck,
-} from "lucide-react";
+import { gmailDraftHref, type LeadWorkflowStatus } from "@shared/leadWorkflow";
+import type { LeadAttachment } from "@shared/schema";
 
-type LeadStatus = "new" | "contacted" | "qualified" | "unresponsive" | "converted" | "archived";
+type ArchiveReason = "not_a_fit" | "spam" | "duplicate" | "no_response" | "other";
 
-interface LeadAccount extends Account {
-  inquiryId?: number;
-  inquiryCount?: number;
-  projectCount?: number;
-  attachments?: LeadAttachment[];
+type LeadInquiryRow = {
+  id: number;
+  inquiryId: number;
+  submissionId?: string | null;
+  name: string;
+  company?: string | null;
+  email: string;
+  phone?: string | null;
+  billingAddress?: string | null;
+  zipCode?: string | null;
+  leadStatus: LeadWorkflowStatus;
+  storedLeadStatus: string;
+  leadSource?: string | null;
+  leadProjectType?: string | null;
+  leadMessage?: string | null;
+  leadReceivedAt: string;
+  inquiryCount: number;
+  convertedQuoteId?: number | null;
+  convertedQuoteNumber?: string | null;
+  assessmentOutcome?: string | null;
+  assessmentReason?: string | null;
+  gmailDraftId?: string | null;
+  gmailMessageId?: string | null;
+  gmailDraftUrl?: string | null;
+  archiveReason?: ArchiveReason | null;
   leadAttachments?: LeadAttachment[];
-}
+};
 
-const LEAD_STATUSES: Array<{ value: "all" | LeadStatus; label: string }> = [
+const filters: Array<{ value: "all" | LeadWorkflowStatus; label: string }> = [
   { value: "new", label: "New" },
+  { value: "draft_ready", label: "Draft Ready" },
   { value: "contacted", label: "Contacted" },
-  { value: "qualified", label: "Qualified" },
-  { value: "unresponsive", label: "No Reply" },
-  { value: "converted", label: "Converted" },
-  { value: "archived", label: "Archived" },
+  { value: "archived", label: "Archived / Disqualified" },
   { value: "all", label: "All" },
 ];
 
-const STATUS_LABELS: Record<LeadStatus, string> = {
+const statusLabels: Record<LeadWorkflowStatus, string> = {
   new: "New",
+  draft_ready: "Draft Ready",
   contacted: "Contacted",
-  qualified: "Qualified",
-  unresponsive: "No Reply",
-  converted: "Converted",
-  archived: "Archived",
+  archived: "Archived / Disqualified",
 };
 
-function getStatusClass(status?: string | null) {
-  switch (status) {
-    case "new":
-      return "border-sky-200 bg-sky-50 text-sky-800";
-    case "contacted":
-      return "border-amber-200 bg-amber-50 text-amber-800";
-    case "qualified":
-      return "border-emerald-200 bg-emerald-50 text-emerald-800";
-    case "unresponsive":
-      return "border-slate-200 bg-slate-50 text-slate-700";
-    case "converted":
-      return "border-violet-200 bg-violet-50 text-violet-800";
-    case "archived":
-      return "border-zinc-200 bg-zinc-50 text-zinc-700";
-    default:
-      return "border-slate-200 bg-slate-50 text-slate-700";
-  }
+const archiveReasons: Array<{ value: ArchiveReason; label: string }> = [
+  { value: "not_a_fit", label: "Not a fit" },
+  { value: "spam", label: "Spam" },
+  { value: "duplicate", label: "Duplicate" },
+  { value: "no_response", label: "No response" },
+  { value: "other", label: "Other" },
+];
+
+function statusClass(status: LeadWorkflowStatus) {
+  return {
+    new: "border-sky-200 bg-sky-50 text-sky-800",
+    draft_ready: "border-emerald-200 bg-emerald-50 text-emerald-800",
+    contacted: "border-violet-200 bg-violet-50 text-violet-800",
+    archived: "border-slate-200 bg-slate-50 text-slate-700",
+  }[status];
 }
 
-function formatDate(value?: string | Date | null) {
-  if (!value) return "Unknown";
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) return "Unknown";
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
+function formatDate(value: string) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "Unknown" : new Intl.DateTimeFormat("en-US", {
+    month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
   }).format(date);
 }
 
-function extractLeadMessage(message?: string | null) {
+function extractMessage(message?: string | null) {
   if (!message) return "No message provided.";
   const match = message.match(/Message:\s*([\s\S]*?)(?:\n\nMetadata:|$)/);
   return (match?.[1] || message).trim() || "No message provided.";
 }
 
-function getLeadAttachments(lead: LeadAccount) {
-  return lead.leadAttachments?.length
-    ? lead.leadAttachments
-    : lead.attachments || [];
-}
-
-function formatAttachmentSize(bytes?: number | null) {
-  if (!bytes) return "";
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
 export default function Leads() {
-  const [statusFilter, setStatusFilter] = useState<"all" | LeadStatus>("new");
+  const [filter, setFilter] = useState<"all" | LeadWorkflowStatus>("new");
   const { toast } = useToast();
-
-  const { data: leads = [], isLoading, error, refetch } = useQuery<LeadAccount[]>({
-    queryKey: ["/api/leads", "all"],
+  const { data: leads = [], isLoading, error, refetch } = useQuery<LeadInquiryRow[]>({
+    queryKey: ["/api/leads", "inquiry-workflow"],
     queryFn: async () => {
-      const response = await fetch("/api/leads?status=all&limit=200", {
-        credentials: "include",
-      });
+      const response = await fetch("/api/leads?status=all&limit=200", { credentials: "include" });
       if (!response.ok) throw new Error("Failed to fetch leads");
       return response.json();
     },
   });
 
-  const updateLeadStatusMutation = useMutation({
-    mutationFn: async ({ id, inquiryId, status }: { id: number; inquiryId?: number; status: LeadStatus }) => {
-      const endpoint = inquiryId ? `/api/inquiries/${inquiryId}/status` : `/api/leads/${id}/status`;
-      const response = await apiRequest("PATCH", endpoint, { status });
+  const updateStatus = useMutation({
+    mutationFn: async ({ lead, status, reason }: { lead: LeadInquiryRow; status: "contacted" | "archived"; reason?: ArchiveReason }) => {
+      const response = await apiRequest("PATCH", `/api/inquiries/${lead.inquiryId}/status`, { status, reason });
       return response.json();
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["/api/leads"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/accounts"] });
-      queryClient.invalidateQueries({ queryKey: [`/api/accounts/${variables.id}/details`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/accounts/${variables.lead.id}/details`] });
       toast({
-        title: "Lead updated",
-        description: `Marked as ${STATUS_LABELS[variables.status].toLowerCase()}.`,
+        title: variables.status === "contacted" ? "Marked contacted" : "Inquiry archived",
+        description: variables.status === "archived" && variables.reason
+          ? archiveReasons.find((item) => item.value === variables.reason)?.label
+          : undefined,
       });
     },
-    onError: (error: Error) => {
-      toast({
-        title: "Could not update lead",
-        description: error.message || "Please try again.",
-        variant: "destructive",
-      });
-    },
+    onError: (mutationError: Error) => toast({ title: "Could not update inquiry", description: mutationError.message, variant: "destructive" }),
   });
 
-  const counts = useMemo(() => {
-    return leads.reduce<Record<string, number>>((acc, lead) => {
-      const status = lead.leadStatus || "new";
-      acc[status] = (acc[status] || 0) + 1;
-      acc.all = (acc.all || 0) + 1;
-      return acc;
-    }, {});
-  }, [leads]);
+  const counts = useMemo(() => leads.reduce<Record<string, number>>((result, lead) => {
+    result[lead.leadStatus] = (result[lead.leadStatus] || 0) + 1;
+    result.all = (result.all || 0) + 1;
+    return result;
+  }, {}), [leads]);
+  const visible = filter === "all" ? leads : leads.filter((lead) => lead.leadStatus === filter);
 
-  const visibleLeads = useMemo(() => {
-    if (statusFilter === "all") return leads;
-    return leads.filter((lead) => lead.leadStatus === statusFilter);
-  }, [leads, statusFilter]);
-
-  const newLeadCount = counts.new || 0;
-  const needsFollowUpCount = (counts.new || 0) + (counts.contacted || 0);
-
-  if (error) {
-    return (
-      <div className="min-h-screen bg-background">
-        <AppHeader />
-        <PageLoadError
-          title="Leads couldn't be loaded"
-          description="Rainmaker could not retrieve the lead inbox. No lead statuses were changed."
-          onRetry={() => void refetch()}
-        />
-      </div>
-    );
-  }
+  if (error) return (
+    <div className="min-h-screen bg-background"><AppHeader /><PageLoadError
+      title="Leads couldn't be loaded"
+      description="Rainmaker could not retrieve the lead inbox. No inquiry statuses were changed."
+      onRetry={() => void refetch()}
+    /></div>
+  );
 
   return (
     <div className="min-h-screen bg-background">
       <AppHeader />
-
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div>
-            <div className="flex items-center gap-3">
-              <Inbox className="h-8 w-8 text-edg-teal" />
-              <h1 className="text-3xl font-bold text-foreground">Website Leads</h1>
-            </div>
-            <p className="mt-1 text-muted-foreground">New inquiries and follow-ups before a quote is created.</p>
+            <div className="flex items-center gap-3"><Inbox className="h-8 w-8 text-edg-teal" /><h1 className="text-3xl font-bold">Website Leads</h1></div>
+            <p className="mt-1 text-muted-foreground">One row for every website inquiry, from arrival through contact or archive.</p>
           </div>
-          <Link href="/quotes/new">
-            <Button className="bg-edg-black text-edg-white hover:bg-edg-grey" data-testid="button-new-quote">
-              <FolderPlus className="mr-2 h-4 w-4" />
-              New Quote
-            </Button>
-          </Link>
-        </div>
-
-        <div className="mb-8 grid gap-4 md:grid-cols-3">
-          <Card className="border-l-4 border-l-sky-500">
-            <CardContent className="p-5">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">New Leads</p>
-                  <p className="mt-2 text-3xl font-bold text-foreground">{isLoading ? "-" : newLeadCount}</p>
-                </div>
-                <Inbox className="h-6 w-6 text-sky-600" />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border-l-4 border-l-amber-500">
-            <CardContent className="p-5">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">Needs Follow Up</p>
-                  <p className="mt-2 text-3xl font-bold text-foreground">{isLoading ? "-" : needsFollowUpCount}</p>
-                </div>
-                <Clock className="h-6 w-6 text-amber-600" />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border-l-4 border-l-emerald-500">
-            <CardContent className="p-5">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">Qualified</p>
-                  <p className="mt-2 text-3xl font-bold text-foreground">{isLoading ? "-" : counts.qualified || 0}</p>
-                </div>
-                <CheckCircle2 className="h-6 w-6 text-emerald-600" />
-              </div>
-            </CardContent>
-          </Card>
+          <Link href="/quotes/new"><Button className="bg-edg-black text-edg-white hover:bg-edg-grey"><FolderPlus className="mr-2 h-4 w-4" />New Quote</Button></Link>
         </div>
 
         <Card>
           <CardHeader className="border-b">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <CardTitle>Lead Inbox</CardTitle>
-              <div
-                role="group"
-                aria-label="Filter leads by status"
-                className="inline-flex h-auto flex-wrap items-center justify-start rounded-md bg-muted p-1 text-muted-foreground"
-              >
-                {LEAD_STATUSES.map((status) => (
-                  <Button
-                    key={status.value}
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    aria-pressed={statusFilter === status.value}
-                    onClick={() => setStatusFilter(status.value)}
-                    className={cn(
-                      "gap-2 shadow-none",
-                      statusFilter === status.value && "bg-background text-foreground shadow-sm hover:bg-background",
-                    )}
-                  >
-                    {status.label}
-                    <span className="rounded-full bg-background px-2 py-0.5 text-xs text-muted-foreground">
-                      {counts[status.value] || 0}
-                    </span>
-                  </Button>
-                ))}
+              <div role="group" aria-label="Filter inquiries by status" className="inline-flex flex-wrap rounded-md bg-muted p-1">
+                {filters.map((item) => <Button key={item.value} type="button" variant="ghost" size="sm" aria-pressed={filter === item.value}
+                  onClick={() => setFilter(item.value)} className={cn("gap-2", filter === item.value && "bg-background shadow-sm hover:bg-background")}>
+                  {item.label}<span className="rounded-full bg-background px-2 py-0.5 text-xs text-muted-foreground">{counts[item.value] || 0}</span>
+                </Button>)}
               </div>
             </div>
           </CardHeader>
           <CardContent className="p-0">
-            {isLoading ? (
-              <div className="space-y-4 p-6">
-                {[1, 2, 3].map((item) => (
-                  <div key={item} className="rounded-lg border p-4">
-                    <Skeleton className="h-5 w-48" />
-                    <Skeleton className="mt-3 h-4 w-72" />
-                    <Skeleton className="mt-4 h-16 w-full" />
+            {isLoading ? <div className="space-y-4 p-6">{[1, 2, 3].map((item) => <div key={item} className="rounded-lg border p-4"><Skeleton className="h-5 w-48" /><Skeleton className="mt-3 h-4 w-72" /><Skeleton className="mt-4 h-16 w-full" /></div>)}</div>
+              : visible.length === 0 ? <div className="px-6 py-16 text-center"><Inbox className="mx-auto h-12 w-12 text-muted-foreground opacity-50" /><p className="mt-4 text-sm text-muted-foreground">No inquiries in this status.</p></div>
+              : <div className="divide-y">{visible.map((lead) => {
+                const draftHref = gmailDraftHref(lead);
+                return <article key={lead.inquiryId} data-testid={`lead-inquiry-row-${lead.inquiryId}`} className="grid gap-5 p-5 lg:grid-cols-[minmax(0,1fr)_auto]">
+                  <div className="min-w-0 space-y-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Link href={`/accounts/${lead.id}`} className="text-lg font-semibold hover:text-edg-teal">{lead.company || lead.name}</Link>
+                      <Badge variant="outline" className={cn("border", statusClass(lead.leadStatus))}>{statusLabels[lead.leadStatus]}</Badge>
+                      <span className="text-sm text-muted-foreground">Received {formatDate(lead.leadReceivedAt)}</span>
+                      {lead.inquiryCount > 1 && <Badge variant="secondary">Inquiry {lead.inquiryId} · {lead.inquiryCount} total</Badge>}
+                    </div>
+                    <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-muted-foreground">
+                      <a href={`mailto:${lead.email}`} className="flex items-center gap-1 hover:text-edg-teal"><Mail className="h-4 w-4" />{lead.email}</a>
+                      {lead.phone && <a href={`tel:${lead.phone}`} className="flex items-center gap-1 hover:text-edg-teal"><Phone className="h-4 w-4" />{lead.phone}</a>}
+                      {(lead.billingAddress || lead.zipCode) && <span className="flex items-center gap-1"><MapPin className="h-4 w-4" />{lead.billingAddress || lead.zipCode}</span>}
+                      {lead.leadProjectType && <span className="flex items-center gap-1"><MessageSquare className="h-4 w-4" />{lead.leadProjectType}</span>}
+                    </div>
+                    <p className="max-w-3xl text-sm leading-6">{extractMessage(lead.leadMessage)}</p>
+                    {lead.assessmentReason && <p className="max-w-3xl rounded-md bg-muted px-3 py-2 text-sm"><span className="font-semibold">Agent assessment:</span> {lead.assessmentReason}</p>}
+                    {lead.archiveReason && <p className="text-sm text-muted-foreground"><span className="font-semibold text-foreground">Archive reason:</span> {archiveReasons.find((reason) => reason.value === lead.archiveReason)?.label || "Other"}</p>}
+                    {(lead.leadAttachments || []).length > 0 && <div className="flex flex-wrap gap-2">{lead.leadAttachments!.map((attachment) => <a key={attachment.id} href={attachment.storageUrl} target="_blank" rel="noreferrer" className="group relative block h-16 w-20 overflow-hidden rounded-md border bg-muted"><img src={attachment.storageUrl} alt={attachment.originalName} className="h-full w-full object-cover" /></a>)}</div>}
                   </div>
-                ))}
-              </div>
-            ) : visibleLeads.length === 0 ? (
-              <div className="px-6 py-16 text-center">
-                <Inbox className="mx-auto h-12 w-12 text-muted-foreground opacity-50" />
-                <p className="mt-4 text-sm text-muted-foreground">No leads in this status.</p>
-              </div>
-            ) : (
-              <div className="divide-y">
-                {visibleLeads.map((lead) => {
-                  const attachments = getLeadAttachments(lead);
 
-                  return (
-                    <div key={lead.inquiryId || lead.id} className="grid gap-4 p-5 lg:grid-cols-[minmax(0,1fr)_auto]">
-                    <div className="min-w-0 space-y-3">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Link
-                          href={`/accounts/${lead.id}`}
-                          className="text-lg font-semibold text-foreground hover:text-edg-teal"
-                        >
-                          {lead.company || lead.name}
-                        </Link>
-                        <Badge variant="outline" className={cn("border", getStatusClass(lead.leadStatus))}>
-                          {STATUS_LABELS[(lead.leadStatus || "new") as LeadStatus] || "New"}
-                        </Badge>
-                        <span className="text-sm text-muted-foreground">
-                          Received {formatDate(lead.leadReceivedAt || lead.createdAt)}
-                        </span>
-                        {(lead.inquiryCount || 0) > 1 && (
-                          <Badge variant="secondary">{lead.inquiryCount} inquiries</Badge>
-                        )}
-                      </div>
-
-                      <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-muted-foreground">
-                        <a href={`mailto:${lead.email}`} className="flex items-center gap-1 hover:text-edg-teal">
-                          <Mail className="h-4 w-4" />
-                          {lead.email}
-                        </a>
-                        {lead.phone && (
-                          <a href={`tel:${lead.phone}`} className="flex items-center gap-1 hover:text-edg-teal">
-                            <Phone className="h-4 w-4" />
-                            {lead.phone}
-                          </a>
-                        )}
-                        {(lead.billingAddress || lead.zipCode) && (
-                          <span className="flex items-center gap-1">
-                            <MapPin className="h-4 w-4" />
-                            {lead.billingAddress || lead.zipCode}
-                          </span>
-                        )}
-                        {lead.leadProjectType && (
-                          <span className="flex items-center gap-1">
-                            <MessageSquare className="h-4 w-4" />
-                            {lead.leadProjectType}
-                          </span>
-                        )}
-                        {attachments.length > 0 && (
-                          <span className="flex items-center gap-1 text-emerald-700">
-                            <Images className="h-4 w-4" />
-                            {attachments.length} photo{attachments.length === 1 ? "" : "s"}
-                          </span>
-                        )}
-                      </div>
-
-                      <p className="max-w-3xl text-sm leading-6 text-foreground">
-                        {extractLeadMessage(lead.leadMessage)}
-                      </p>
-
-                      {attachments.length > 0 && (
-                        <div className="flex flex-wrap gap-2">
-                          {attachments.slice(0, 4).map((attachment) => (
-                            <a
-                              key={attachment.id}
-                              href={attachment.storageUrl}
-                              target="_blank"
-                              rel="noreferrer"
-                              title={[
-                                attachment.originalName,
-                                formatAttachmentSize(attachment.fileSize),
-                              ].filter(Boolean).join(" - ")}
-                              className="group relative block h-16 w-20 overflow-hidden rounded-md border bg-muted"
-                              aria-label={`Open ${attachment.originalName}`}
-                            >
-                              <img
-                                src={attachment.storageUrl}
-                                alt={attachment.originalName}
-                                className="h-full w-full object-cover transition-transform group-hover:scale-105"
-                                loading="lazy"
-                              />
-                              <span className="absolute right-1 top-1 rounded bg-black/70 p-1 text-white opacity-0 transition-opacity group-hover:opacity-100">
-                                <ExternalLink className="h-3 w-3" />
-                              </span>
-                            </a>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="flex flex-col items-stretch gap-2 lg:items-end">
-                      {lead.inquiryId && (
-                        <Link href={`/quotes/new?accountId=${lead.id}&inquiryId=${lead.inquiryId}&projectName=${encodeURIComponent(lead.leadProjectType || "")}`}>
-                          <Button
-                            size="sm"
-                            className="bg-edg-teal text-white hover:bg-edg-teal/90"
-                            data-testid={`button-create-quote-${lead.inquiryId}`}
-                          >
-                            <FolderPlus className="mr-2 h-4 w-4" />
-                            Create Quote
-                          </Button>
-                        </Link>
-                      )}
-                      <Link href={`/accounts/${lead.id}`}>
-                        <Button
-                          size="sm"
-                          className="bg-edg-black text-edg-white hover:bg-edg-grey"
-                          data-testid={`button-start-follow-up-${lead.id}`}
-                        >
-                          Start Follow-Up
-                          <ChevronRight className="ml-1 h-4 w-4" />
-                        </Button>
-                      </Link>
-                      <div className="flex flex-wrap items-center gap-1.5 lg:justify-end">
-                      {lead.leadStatus !== "contacted" && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => updateLeadStatusMutation.mutate({ id: lead.id, inquiryId: lead.inquiryId, status: "contacted" })}
-                          disabled={updateLeadStatusMutation.isPending}
-                          data-testid={`button-mark-contacted-${lead.id}`}
-                        >
-                          <UserCheck className="mr-2 h-4 w-4" />
-                          Contacted
-                        </Button>
-                      )}
-                      {lead.leadStatus !== "qualified" && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => updateLeadStatusMutation.mutate({ id: lead.id, inquiryId: lead.inquiryId, status: "qualified" })}
-                          disabled={updateLeadStatusMutation.isPending}
-                          data-testid={`button-mark-qualified-${lead.id}`}
-                        >
-                          <CheckCircle2 className="mr-2 h-4 w-4" />
-                          Qualified
-                        </Button>
-                      )}
-                      {lead.leadStatus !== "unresponsive" && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => updateLeadStatusMutation.mutate({ id: lead.id, inquiryId: lead.inquiryId, status: "unresponsive" })}
-                          disabled={updateLeadStatusMutation.isPending}
-                          data-testid={`button-mark-no-reply-${lead.id}`}
-                        >
-                          <Clock className="mr-2 h-4 w-4" />
-                          No Reply
-                        </Button>
-                      )}
-                      {lead.leadStatus !== "archived" && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => updateLeadStatusMutation.mutate({ id: lead.id, inquiryId: lead.inquiryId, status: "archived" })}
-                          disabled={updateLeadStatusMutation.isPending}
-                          aria-label="Archive lead"
-                          data-testid={`button-archive-lead-${lead.id}`}
-                        >
-                          <Archive className="h-4 w-4" />
-                        </Button>
-                      )}
-                      </div>
-                    </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+                  <div className="flex min-w-48 flex-col items-stretch gap-2 lg:items-end">
+                    {lead.leadStatus === "draft_ready" && draftHref && <Button asChild size="sm" className="bg-edg-teal text-white hover:bg-edg-teal/90"><a href={draftHref} target="_blank" rel="noopener noreferrer" data-testid={`button-open-gmail-draft-${lead.inquiryId}`}><SiGmail className="mr-2 h-4 w-4" />Open Gmail Draft<ExternalLink className="ml-2 h-3 w-3" /></a></Button>}
+                    {lead.convertedQuoteId ? <Link href={`/quotes/${lead.convertedQuoteId}/edit`}><Button size="sm" variant={lead.leadStatus === "draft_ready" ? "outline" : "default"} data-testid={`button-open-quote-${lead.inquiryId}`}><FileText className="mr-2 h-4 w-4" />Open Quote{lead.convertedQuoteNumber ? ` ${lead.convertedQuoteNumber}` : ""}</Button></Link>
+                      : lead.leadStatus !== "archived" && <Link href={`/quotes/new?accountId=${lead.id}&inquiryId=${lead.inquiryId}&projectName=${encodeURIComponent(lead.leadProjectType || "")}`}><Button size="sm" variant={lead.leadStatus === "draft_ready" ? "outline" : "default"} data-testid={`button-create-quote-${lead.inquiryId}`}><FolderPlus className="mr-2 h-4 w-4" />Create Quote</Button></Link>}
+                    {lead.leadStatus !== "contacted" && lead.leadStatus !== "archived" && <Button variant="ghost" size="sm" disabled={updateStatus.isPending} onClick={() => updateStatus.mutate({ lead, status: "contacted" })} data-testid={`button-mark-contacted-${lead.inquiryId}`}><CheckCircle2 className="mr-2 h-4 w-4" />Contacted</Button>}
+                    {lead.leadStatus !== "archived" && <DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="sm" disabled={updateStatus.isPending} data-testid={`button-archive-inquiry-${lead.inquiryId}`}><Archive className="mr-2 h-4 w-4" />Archive / Disqualify</Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuLabel>Optional reason</DropdownMenuLabel>{archiveReasons.map((reason) => <DropdownMenuItem key={reason.value} onSelect={() => updateStatus.mutate({ lead, status: "archived", reason: reason.value })}>{reason.label}</DropdownMenuItem>)}<DropdownMenuSeparator /><DropdownMenuItem onSelect={() => updateStatus.mutate({ lead, status: "archived" })}>No reason</DropdownMenuItem></DropdownMenuContent></DropdownMenu>}
+                  </div>
+                </article>;
+              })}</div>}
           </CardContent>
         </Card>
       </main>

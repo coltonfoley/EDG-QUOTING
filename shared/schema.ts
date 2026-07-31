@@ -127,6 +127,7 @@ export const leadInquiries = pgTable("lead_inquiries", {
   // The database migration owns this FK because quotes also references the source inquiry.
   convertedQuoteId: integer("converted_quote_id"),
   convertedBy: integer("converted_by").references(() => users.id, { onDelete: "set null" }),
+  archiveReason: text("archive_reason"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => [
@@ -155,6 +156,18 @@ export const leadAgentAssessments = pgTable("lead_agent_assessments", {
   index("idx_lead_agent_assessments_outcome").on(table.outcome),
   uniqueIndex("lead_agent_assessments_gmail_draft_id_key").on(table.gmailDraftId),
   uniqueIndex("lead_agent_assessments_gmail_message_id_key").on(table.gmailMessageId),
+]);
+
+export const leadInquiryStatusEvents = pgTable("lead_inquiry_status_events", {
+  id: serial("id").primaryKey(),
+  inquiryId: integer("inquiry_id").notNull().references(() => leadInquiries.id, { onDelete: "cascade" }),
+  fromStatus: text("from_status"),
+  toStatus: text("to_status").notNull(),
+  reason: text("reason"),
+  actorUserId: integer("actor_user_id").references(() => users.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => [
+  index("idx_lead_inquiry_status_events_inquiry_time").on(table.inquiryId, table.createdAt),
 ]);
 
 // Aliases for different conceptual uses
@@ -924,6 +937,7 @@ export type LeadAttachment = typeof leadAttachments.$inferSelect;
 export type LeadIntakeSubmission = typeof leadIntakeSubmissions.$inferSelect;
 export type LeadInquiry = typeof leadInquiries.$inferSelect;
 export type LeadAgentAssessment = typeof leadAgentAssessments.$inferSelect;
+export type LeadInquiryStatusEvent = typeof leadInquiryStatusEvents.$inferSelect;
 
 export type InsertAccount = z.infer<typeof insertAccountSchema>;
 export type InsertCustomer = z.infer<typeof insertAccountSchema>; // Legacy alias

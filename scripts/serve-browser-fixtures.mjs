@@ -266,17 +266,36 @@ function serveApi(request, response, pathname, scenario) {
     return;
   }
   if (pathname === "/api/leads") {
-    json(response, 200, scenario === "empty" ? [] : [{
+    const inquiry = (overrides) => ({
       ...account,
-      leadStatus: "new",
+      submissionId: `fixture-submission-${overrides.inquiryId}`,
+      storedLeadStatus: "new",
       leadSource: "website",
-      leadProjectType: "Pergola",
-      leadMessage: "TEST ONLY fictional inquiry",
-      leadReceivedAt: "2026-07-10T13:00:00.000Z",
+      leadProjectType: "Motorized pergola",
+      leadMessage: "TEST ONLY fictional inquiry for local browser verification.",
+      leadReceivedAt: "2026-07-31T13:00:00.000Z",
       projectCount: 1,
+      convertedQuoteId: null,
+      convertedQuoteNumber: null,
+      assessmentOutcome: null,
+      assessmentReason: null,
+      gmailMessageId: null,
+      gmailDraftUrl: null,
+      archiveReason: null,
       attachments: [],
       leadAttachments: [],
-    }]);
+      ...overrides,
+    });
+    json(response, 200, scenario === "empty" ? [] : [
+      inquiry({ inquiryId: 9154, leadStatus: "new", leadReceivedAt: "2026-07-31T15:00:00.000Z" }),
+      inquiry({ inquiryId: 9153, leadStatus: "draft_ready", assessmentOutcome: "fit", assessmentReason: "Service area and project type match.", gmailMessageId: "fixture-gmail-message" }),
+      inquiry({ inquiryId: 9152, leadStatus: "contacted", storedLeadStatus: "converted", convertedQuoteId: quote.id, convertedQuoteNumber: quote.quoteNumber }),
+      inquiry({ inquiryId: 9151, leadStatus: "archived", storedLeadStatus: "unresponsive", archiveReason: "no_response" }),
+    ]);
+    return;
+  }
+  if (/^\/api\/inquiries\/\d+\/status$/.test(pathname) && request.method === "PATCH") {
+    json(response, 200, { ok: true });
     return;
   }
   if (pathname === "/api/admin/import-csv-products" && request.method === "POST") {

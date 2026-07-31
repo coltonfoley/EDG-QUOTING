@@ -8,6 +8,7 @@ import { db } from "../db";
 import {
   accounts,
   leadInquiries,
+  leadInquiryStatusEvents,
   type InsertAccount,
   type LeadAttachment,
 } from "@shared/schema";
@@ -20,6 +21,8 @@ import {
 } from "../leadIntakeIdempotency";
 import { preserveAccountAndCreateInquiry } from "../leadIntakePersistence";
 import { redactedErrorType } from "../redactedLogging";
+import { LeadAgentAssessmentError, recordLeadAgentAssessment } from "../leadAgentAssessment";
+import { projectLeadWorkflowStatus } from "@shared/leadWorkflow";
 
 export { preserveAccountAndCreateInquiry } from "../leadIntakePersistence";
 
@@ -56,7 +59,32 @@ const leadStatusSchema = z.enum([
 ]);
 
 const leadStatusUpdateSchema = z.object({
-  status: leadStatusSchema,
+  status: z.enum(["contacted", "archived"]),
+  reason: z.enum(["not_a_fit", "spam", "duplicate", "no_response", "other"]).optional().nullable(),
+});
+
+const gmailDraftUrlSchema = z.string().url().refine((value) => {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && url.hostname === "mail.google.com"
+      && /^\/mail\/u\/\d+\//.test(url.pathname) && url.hash.startsWith("#drafts");
+  } catch { return false; }
+}, "Gmail draft URL must use https://mail.google.com");
+
+const leadAgentAssessmentSchema = z.object({
+  outcome: z.enum(["fit", "not_fit"]),
+  reason: z.string().trim().min(1).max(500),
+  gmailDraftId: z.string().trim().min(1).max(255).optional().nullable(),
+  gmailMessageId: z.string().trim().min(1).max(255).optional().nullable(),
+  gmailDraftUrl: gmailDraftUrlSchema.optional().nullable(),
+  idempotencyKey: z.string().trim().min(1).max(200),
+}).superRefine((value, context) => {
+  if (value.outcome === "fit" && !value.gmailMessageId) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["gmailMessageId"], message: "A fit assessment needs a Gmail message ID." });
+  }
+  if (value.outcome === "not_fit" && (value.gmailDraftId || value.gmailMessageId || value.gmailDraftUrl)) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["gmailDraftId"], message: "A not-a-fit assessment cannot include a Gmail draft." });
+  }
 });
 
 const maxLeadAttachmentCount = 4;
@@ -123,18 +151,6 @@ function getLeadAttachmentSubmissionId(value: unknown): string {
     : randomUUID();
 }
 
-function groupAttachmentsByAccountId<T extends { accountId: number }>(attachments: T[]) {
-  const grouped = new Map<number, T[]>();
-
-  for (const attachment of attachments) {
-    const existing = grouped.get(attachment.accountId) || [];
-    existing.push(attachment);
-    grouped.set(attachment.accountId, existing);
-  }
-
-  return grouped;
-}
-
 function isConfiguredWebsiteApiKey(req: any): boolean {
   const configuredKey = process.env.RAINMAKER_API_KEY;
   const authHeader = req.headers.authorization;
@@ -162,6 +178,53 @@ function isLeadAttachmentAuthenticated(req: any, res: any, next: any) {
 }
 
 export function registerLeadIntakeRoutes(app: Express) {
+  app.get("/api/lead-agent/inquiries/pending", isAuthenticated, async (req, res) => {
+    try {
+      const limit = Math.min(z.coerce.number().int().positive().default(50).parse(req.query.limit), 200);
+      const rows = await db.select({
+        accountId: accounts.id,
+        inquiryId: leadInquiries.id,
+        submissionId: leadInquiries.submissionId,
+        name: accounts.name,
+        email: accounts.email,
+        phone: accounts.phone,
+        projectType: leadInquiries.projectType,
+        location: leadInquiries.location,
+        message: leadInquiries.message,
+        source: leadInquiries.source,
+        customerType: leadInquiries.customerType,
+        metadata: leadInquiries.metadata,
+        receivedAt: leadInquiries.receivedAt,
+      }).from(leadInquiries)
+        .innerJoin(accounts, eq(accounts.id, leadInquiries.accountId))
+        .where(and(
+          eq(leadInquiries.status, "new"),
+          sql`NOT EXISTS (SELECT 1 FROM lead_agent_assessments assessment WHERE assessment.inquiry_id = ${leadInquiries.id})`,
+        ))
+        .orderBy(leadInquiries.receivedAt, leadInquiries.id)
+        .limit(limit);
+      res.json(rows);
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ message: "Invalid pending-inquiry query", errors: error.errors });
+      console.error("Error fetching pending lead inquiries", { errorType: redactedErrorType(error) });
+      res.status(500).json({ message: "Failed to fetch pending lead inquiries" });
+    }
+  });
+
+  app.put("/api/inquiries/:id/agent-assessment", isAuthenticated, async (req, res) => {
+    try {
+      const inquiryId = z.coerce.number().int().positive().parse(req.params.id);
+      const payload = leadAgentAssessmentSchema.parse(req.body);
+      const result = await recordLeadAgentAssessment({ inquiryId, ...payload });
+      res.status(result.replayed ? 200 : 201).json(result);
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ message: "Invalid lead assessment", errors: error.errors });
+      if (error instanceof LeadAgentAssessmentError) return res.status(error.status).json({ message: error.message, code: error.code });
+      console.error("Error recording lead assessment", { errorType: redactedErrorType(error) });
+      res.status(500).json({ message: "Failed to record lead assessment" });
+    }
+  });
+
   app.get("/api/leads", isAuthenticated, async (req, res) => {
     try {
       const statusParam = typeof req.query.status === "string" ? req.query.status : "new";
@@ -169,21 +232,13 @@ export function registerLeadIntakeRoutes(app: Express) {
       const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
       const offset = parseInt(req.query.offset as string) || 0;
 
-      const latestInquiry = sql`${leadInquiries.id} = (
-        SELECT latest_inquiry.id
-        FROM lead_inquiries latest_inquiry
-        WHERE latest_inquiry.account_id = ${accounts.id}
-        ORDER BY latest_inquiry.received_at DESC, latest_inquiry.id DESC
-        LIMIT 1
-      )`;
-      const where = status === "all"
-        ? latestInquiry
-        : and(latestInquiry, eq(leadInquiries.status, status));
+      const where = status === "all" ? undefined : eq(leadInquiries.status, status);
 
       const leads = await db
         .select({
           id: accounts.id,
           inquiryId: leadInquiries.id,
+          submissionId: leadInquiries.submissionId,
           name: accounts.name,
           email: accounts.email,
           phone: accounts.phone,
@@ -208,6 +263,37 @@ export function registerLeadIntakeRoutes(app: Express) {
           leadReceivedAt: leadInquiries.receivedAt,
           leadLastContactedAt: leadInquiries.lastContactedAt,
           leadConvertedAt: leadInquiries.convertedAt,
+          storedLeadStatus: leadInquiries.status,
+          archiveReason: leadInquiries.archiveReason,
+          convertedQuoteId: leadInquiries.convertedQuoteId,
+          convertedQuoteNumber: sql<string | null>`(
+            SELECT quote.quote_number FROM quotes quote WHERE quote.id = ${leadInquiries.convertedQuoteId} LIMIT 1
+          )`,
+          assessmentOutcome: sql<string | null>`(
+            SELECT assessment.outcome FROM lead_agent_assessments assessment
+            WHERE assessment.inquiry_id = ${leadInquiries.id}
+            ORDER BY assessment.created_at DESC, assessment.id DESC LIMIT 1
+          )`,
+          assessmentReason: sql<string | null>`(
+            SELECT assessment.reason FROM lead_agent_assessments assessment
+            WHERE assessment.inquiry_id = ${leadInquiries.id}
+            ORDER BY assessment.created_at DESC, assessment.id DESC LIMIT 1
+          )`,
+          gmailDraftId: sql<string | null>`(
+            SELECT assessment.gmail_draft_id FROM lead_agent_assessments assessment
+            WHERE assessment.inquiry_id = ${leadInquiries.id}
+            ORDER BY assessment.created_at DESC, assessment.id DESC LIMIT 1
+          )`,
+          gmailMessageId: sql<string | null>`(
+            SELECT assessment.gmail_message_id FROM lead_agent_assessments assessment
+            WHERE assessment.inquiry_id = ${leadInquiries.id}
+            ORDER BY assessment.created_at DESC, assessment.id DESC LIMIT 1
+          )`,
+          gmailDraftUrl: sql<string | null>`(
+            SELECT assessment.gmail_draft_url FROM lead_agent_assessments assessment
+            WHERE assessment.inquiry_id = ${leadInquiries.id}
+            ORDER BY assessment.created_at DESC, assessment.id DESC LIMIT 1
+          )`,
           inquiryCount: sql<number>`(
             SELECT COUNT(*)::int FROM lead_inquiries inquiry_count
             WHERE inquiry_count.account_id = ${accounts.id}
@@ -231,13 +317,17 @@ export function registerLeadIntakeRoutes(app: Express) {
       const attachments = await storage.getLeadAttachmentsForAccounts(
         leads.map((lead) => lead.id)
       );
-      const attachmentsByAccountId = groupAttachmentsByAccountId(attachments);
-
       res.json(
         leads.map((lead) => ({
           ...lead,
-          attachments: attachmentsByAccountId.get(lead.id) || [],
-          leadAttachments: attachmentsByAccountId.get(lead.id) || [],
+          leadStatus: projectLeadWorkflowStatus({
+            storedStatus: lead.storedLeadStatus,
+            assessmentOutcome: lead.assessmentOutcome,
+            gmailMessageId: lead.gmailMessageId,
+            convertedQuoteId: lead.convertedQuoteId,
+          }),
+          attachments: attachments.filter((attachment) => Boolean(lead.submissionId) && attachment.submissionId === lead.submissionId),
+          leadAttachments: attachments.filter((attachment) => Boolean(lead.submissionId) && attachment.submissionId === lead.submissionId),
         }))
       );
     } catch (error) {
@@ -266,10 +356,6 @@ export function registerLeadIntakeRoutes(app: Express) {
         updates.leadLastContactedAt = new Date();
       }
 
-      if (status === "converted") {
-        updates.leadConvertedAt = new Date();
-      }
-
       const account = await storage.updateAccount(id, updates);
       if (!account || !account.leadStatus) {
         return res.status(404).json({ message: "Lead not found" });
@@ -292,18 +378,27 @@ export function registerLeadIntakeRoutes(app: Express) {
   app.patch("/api/inquiries/:id/status", isAuthenticated, async (req, res) => {
     try {
       const id = z.coerce.number().int().positive().parse(req.params.id);
-      const { status } = leadStatusUpdateSchema.parse(req.body);
+      const { status, reason } = leadStatusUpdateSchema.parse(req.body);
       const now = new Date();
-      const [inquiry] = await db
-        .update(leadInquiries)
-        .set({
+      const inquiry = await db.transaction(async (tx) => {
+        const [existing] = await tx.select().from(leadInquiries).where(eq(leadInquiries.id, id)).for("update");
+        if (!existing) return undefined;
+        const [updated] = await tx.update(leadInquiries).set({
           status,
+          archiveReason: status === "archived" ? reason || null : null,
           ...(status === "contacted" ? { lastContactedAt: now } : {}),
-          ...(status === "converted" ? { convertedAt: now } : {}),
           updatedAt: now,
-        })
-        .where(eq(leadInquiries.id, id))
-        .returning();
+        }).where(eq(leadInquiries.id, id)).returning();
+        await tx.insert(leadInquiryStatusEvents).values({
+          inquiryId: id,
+          fromStatus: existing.status,
+          toStatus: status,
+          reason: status === "archived" ? reason || null : null,
+          actorUserId: (req.user as { id?: number } | undefined)?.id || null,
+          createdAt: now,
+        });
+        return updated;
+      });
 
       if (!inquiry) return res.status(404).json({ message: "Inquiry not found" });
       res.json(inquiry);

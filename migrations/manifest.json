@@ -35,6 +35,7 @@
     "0031_archive_retired_schema.sql",
     "0032_archive_reviewed_legacy_fields.sql",
     "0033_purge_quickbooks_remnants.sql",
-    "0034_add_lead_agent_assessments.sql"
+    "0034_add_lead_agent_assessments.sql",
+    "0035_add_lead_inquiry_status_audit.sql"
   ]
 }
