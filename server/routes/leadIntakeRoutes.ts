@@ -59,8 +59,15 @@ const leadStatusSchema = z.enum([
 ]);
 
 const leadStatusUpdateSchema = z.object({
-  status: z.enum(["contacted", "archived"]),
+  status: z.enum(["draft_ready", "contacted", "archived"]),
   reason: z.enum(["not_a_fit", "spam", "duplicate", "no_response", "other"]).optional().nullable(),
+  gmailDraftUrl: z.string().url().refine((value) => {
+    try {
+      const url = new URL(value);
+      return url.protocol === "https:" && url.hostname === "mail.google.com"
+        && /^\/mail\/u\/\d+\//.test(url.pathname) && url.hash.startsWith("#drafts");
+    } catch { return false; }
+  }, "Draft link must use https://mail.google.com").optional().nullable(),
 });
 
 const gmailDraftUrlSchema = z.string().url().refine((value) => {
@@ -265,6 +272,7 @@ export function registerLeadIntakeRoutes(app: Express) {
           leadConvertedAt: leadInquiries.convertedAt,
           storedLeadStatus: leadInquiries.status,
           archiveReason: leadInquiries.archiveReason,
+          manualGmailDraftUrl: leadInquiries.gmailDraftUrl,
           convertedQuoteId: leadInquiries.convertedQuoteId,
           convertedQuoteNumber: sql<string | null>`(
             SELECT quote.quote_number FROM quotes quote WHERE quote.id = ${leadInquiries.convertedQuoteId} LIMIT 1
@@ -378,7 +386,7 @@ export function registerLeadIntakeRoutes(app: Express) {
   app.patch("/api/inquiries/:id/status", isAuthenticated, async (req, res) => {
     try {
       const id = z.coerce.number().int().positive().parse(req.params.id);
-      const { status, reason } = leadStatusUpdateSchema.parse(req.body);
+      const { status, reason, gmailDraftUrl } = leadStatusUpdateSchema.parse(req.body);
       const now = new Date();
       const inquiry = await db.transaction(async (tx) => {
         const [existing] = await tx.select().from(leadInquiries).where(eq(leadInquiries.id, id)).for("update");
@@ -386,6 +394,8 @@ export function registerLeadIntakeRoutes(app: Express) {
         const [updated] = await tx.update(leadInquiries).set({
           status,
           archiveReason: status === "archived" ? reason || null : null,
+          gmailDraftUrl: status === "draft_ready" ? gmailDraftUrl || null : existing.gmailDraftUrl,
+          draftReadyAt: status === "draft_ready" ? now : existing.draftReadyAt,
           ...(status === "contacted" ? { lastContactedAt: now } : {}),
           updatedAt: now,
         }).where(eq(leadInquiries.id, id)).returning();

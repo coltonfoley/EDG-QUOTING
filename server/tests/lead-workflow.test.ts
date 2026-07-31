@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { gmailDraftHref, projectLeadWorkflowStatus } from "@shared/leadWorkflow";
+import { effectiveGmailDraftUrl, gmailDraftHref, projectLeadWorkflowStatus } from "@shared/leadWorkflow";
 
 describe("lead workflow projection", () => {
   it.each([
@@ -9,6 +9,7 @@ describe("lead workflow projection", () => {
     ["unresponsive", "archived"],
     ["archived", "archived"],
     ["converted", "contacted"],
+    ["draft_ready", "draft_ready"],
   ])("maps legacy %s to %s", (storedStatus, expected) => {
     expect(projectLeadWorkflowStatus({ storedStatus })).toBe(expected);
   });
@@ -30,5 +31,6 @@ describe("lead workflow projection", () => {
     expect(projectLeadWorkflowStatus({ storedStatus: "converted", assessmentOutcome: "not_fit", convertedQuoteId: 91 })).toBe("contacted");
     expect(gmailDraftHref({ gmailMessageId: "message/id" })).toBe("https://mail.google.com/mail/u/0/#drafts/message%2Fid");
     expect(gmailDraftHref({ gmailDraftUrl: "https://evil.example/draft", gmailMessageId: null })).toBeNull();
+    expect(effectiveGmailDraftUrl({ manualGmailDraftUrl: "https://mail.google.com/manual", assessmentGmailDraftUrl: "https://mail.google.com/agent" })).toBe("https://mail.google.com/manual");
   });
 });

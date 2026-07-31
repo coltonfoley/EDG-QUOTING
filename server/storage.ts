@@ -508,6 +508,7 @@ export class DatabaseStorage implements IStorage {
       lastContactedAt: leadInquiries.lastContactedAt,
       convertedQuoteId: leadInquiries.convertedQuoteId,
       archiveReason: leadInquiries.archiveReason,
+      manualGmailDraftUrl: leadInquiries.gmailDraftUrl,
       assessmentOutcome: sql<string | null>`(
         SELECT assessment.outcome FROM lead_agent_assessments assessment
         WHERE assessment.inquiry_id = ${leadInquiries.id}

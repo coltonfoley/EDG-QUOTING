@@ -128,6 +128,8 @@ export const leadInquiries = pgTable("lead_inquiries", {
   convertedQuoteId: integer("converted_quote_id"),
   convertedBy: integer("converted_by").references(() => users.id, { onDelete: "set null" }),
   archiveReason: text("archive_reason"),
+  gmailDraftUrl: text("gmail_draft_url"),
+  draftReadyAt: timestamp("draft_ready_at"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => [

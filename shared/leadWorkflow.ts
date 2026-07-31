@@ -28,6 +28,10 @@ export function projectLeadWorkflowStatus({
     return "archived";
   }
 
+  if (storedStatus === "draft_ready") {
+    return "draft_ready";
+  }
+
   if (
     storedStatus === "contacted"
     || storedStatus === "qualified"
@@ -40,6 +44,13 @@ export function projectLeadWorkflowStatus({
   }
 
   return "new";
+}
+
+export function effectiveGmailDraftUrl(input: {
+  manualGmailDraftUrl?: string | null;
+  assessmentGmailDraftUrl?: string | null;
+}): string | null {
+  return input.manualGmailDraftUrl || input.assessmentGmailDraftUrl || null;
 }
 
 export function gmailDraftHref(input: {

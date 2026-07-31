@@ -17,6 +17,8 @@ describe("lead inquiry workflow surface", () => {
     const leads = source("client/src/pages/leads.tsx");
     expect(leads).toContain('{ value: "draft_ready", label: "Draft Ready" }');
     expect(leads).toContain("Open Gmail Draft");
+    expect(leads).toContain("Mark Draft Ready");
+    expect(leads).toContain("Gmail draft link (optional)");
     expect(leads).toContain("Create Quote");
     expect(leads).toContain("Open Quote");
     expect(leads).toContain("Archive / Disqualify");
@@ -43,6 +45,7 @@ describe("lead inquiry workflow surface", () => {
     const routes = source("server/routes/leadIntakeRoutes.ts");
     expect(migration).toContain('CREATE TABLE IF NOT EXISTS "lead_inquiry_status_events"');
     expect(migration).toContain('ADD COLUMN IF NOT EXISTS "archive_reason"');
+    expect(migration).toContain('ADD COLUMN IF NOT EXISTS "gmail_draft_url"');
     expect(routes).toContain("fromStatus: existing.status");
     expect(routes).toContain("reason: status === \"archived\"");
   });

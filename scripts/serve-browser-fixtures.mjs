@@ -11,6 +11,7 @@ const port = Number(process.env.RAINMAKER_FIXTURE_PORT || 4174);
 const host = "127.0.0.1";
 let authRecoverAttempts = 0;
 let fixtureQuoteVisuals = [];
+const fixtureLeadUpdates = new Map();
 
 const adminUser = {
   id: 9001,
@@ -196,13 +197,19 @@ function json(response, status, value) {
   response.end(JSON.stringify(value));
 }
 
+async function readJsonBody(request) {
+  const chunks = [];
+  for await (const chunk of request) chunks.push(chunk);
+  return chunks.length ? JSON.parse(Buffer.concat(chunks).toString("utf8")) : {};
+}
+
 function fixtureUser(scenario) {
   if (["admin", "admin-data-error"].includes(scenario)) return adminUser;
   if (["user", "signed", "empty", "not-found", "auth-recover", "quote-403", "quote-404", "quote-error", "data-error"].includes(scenario)) return normalUser;
   return null;
 }
 
-function serveApi(request, response, pathname, scenario) {
+async function serveApi(request, response, pathname, scenario) {
   const fixtureQuote = scenario === "signed" ? signedQuote : quote;
   if (pathname === "/api/user") {
     if (scenario === "auth-error") {
@@ -287,15 +294,23 @@ function serveApi(request, response, pathname, scenario) {
       ...overrides,
     });
     json(response, 200, scenario === "empty" ? [] : [
-      inquiry({ inquiryId: 9154, leadStatus: "new", leadReceivedAt: "2026-07-31T15:00:00.000Z" }),
-      inquiry({ inquiryId: 9153, leadStatus: "draft_ready", assessmentOutcome: "fit", assessmentReason: "Service area and project type match.", gmailMessageId: "fixture-gmail-message" }),
+      inquiry({ inquiryId: 9154, leadStatus: "new", leadReceivedAt: "2026-07-31T15:00:00.000Z", ...(fixtureLeadUpdates.get(9154) || {}) }),
+      inquiry({ inquiryId: 9153, leadStatus: "draft_ready", storedLeadStatus: "draft_ready", manualGmailDraftUrl: "https://mail.google.com/mail/u/0/#drafts/fixture-gmail-message" }),
       inquiry({ inquiryId: 9152, leadStatus: "contacted", storedLeadStatus: "converted", convertedQuoteId: quote.id, convertedQuoteNumber: quote.quoteNumber }),
       inquiry({ inquiryId: 9151, leadStatus: "archived", storedLeadStatus: "unresponsive", archiveReason: "no_response" }),
     ]);
     return;
   }
   if (/^\/api\/inquiries\/\d+\/status$/.test(pathname) && request.method === "PATCH") {
-    json(response, 200, { ok: true });
+    const inquiryId = Number(pathname.split("/")[3]);
+    const body = await readJsonBody(request);
+    fixtureLeadUpdates.set(inquiryId, {
+      leadStatus: body.status,
+      storedLeadStatus: body.status,
+      manualGmailDraftUrl: body.gmailDraftUrl || null,
+      archiveReason: body.reason || null,
+    });
+    json(response, 200, { id: inquiryId, status: body.status });
     return;
   }
   if (pathname === "/api/admin/import-csv-products" && request.method === "POST") {
@@ -575,7 +590,7 @@ function serveApi(request, response, pathname, scenario) {
   json(response, 200, {});
 }
 
-const server = createServer((request, response) => {
+const server = createServer(async (request, response) => {
   const url = new URL(request.url || "/", `http://${host}:${port}`);
   const pathname = decodeURIComponent(url.pathname);
   const scenario = parseCookies(request.headers.cookie).rainmaker_fixture || "user";
@@ -595,7 +610,7 @@ const server = createServer((request, response) => {
   }
 
   if (pathname.startsWith("/api/")) {
-    serveApi(request, response, pathname, scenario);
+    await serveApi(request, response, pathname, scenario);
     return;
   }
 

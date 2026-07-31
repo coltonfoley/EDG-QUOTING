@@ -10,11 +10,14 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
-import { gmailDraftHref, type LeadWorkflowStatus } from "@shared/leadWorkflow";
+import { effectiveGmailDraftUrl, gmailDraftHref, type LeadWorkflowStatus } from "@shared/leadWorkflow";
 import type { LeadAttachment } from "@shared/schema";
 
 type ArchiveReason = "not_a_fit" | "spam" | "duplicate" | "no_response" | "other";
@@ -43,6 +46,7 @@ type LeadInquiryRow = {
   gmailDraftId?: string | null;
   gmailMessageId?: string | null;
   gmailDraftUrl?: string | null;
+  manualGmailDraftUrl?: string | null;
   archiveReason?: ArchiveReason | null;
   leadAttachments?: LeadAttachment[];
 };
@@ -94,6 +98,8 @@ function extractMessage(message?: string | null) {
 
 export default function Leads() {
   const [filter, setFilter] = useState<"all" | LeadWorkflowStatus>("new");
+  const [draftReadyLead, setDraftReadyLead] = useState<LeadInquiryRow | null>(null);
+  const [draftUrl, setDraftUrl] = useState("");
   const { toast } = useToast();
   const { data: leads = [], isLoading, error, refetch } = useQuery<LeadInquiryRow[]>({
     queryKey: ["/api/leads", "inquiry-workflow"],
@@ -105,19 +111,23 @@ export default function Leads() {
   });
 
   const updateStatus = useMutation({
-    mutationFn: async ({ lead, status, reason }: { lead: LeadInquiryRow; status: "contacted" | "archived"; reason?: ArchiveReason }) => {
-      const response = await apiRequest("PATCH", `/api/inquiries/${lead.inquiryId}/status`, { status, reason });
+    mutationFn: async ({ lead, status, reason, gmailDraftUrl }: { lead: LeadInquiryRow; status: "draft_ready" | "contacted" | "archived"; reason?: ArchiveReason; gmailDraftUrl?: string }) => {
+      const response = await apiRequest("PATCH", `/api/inquiries/${lead.inquiryId}/status`, { status, reason, gmailDraftUrl: gmailDraftUrl || null });
       return response.json();
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["/api/leads"] });
       queryClient.invalidateQueries({ queryKey: [`/api/accounts/${variables.lead.id}/details`] });
       toast({
-        title: variables.status === "contacted" ? "Marked contacted" : "Inquiry archived",
+        title: variables.status === "draft_ready" ? "Marked Draft Ready" : variables.status === "contacted" ? "Marked contacted" : "Inquiry archived",
         description: variables.status === "archived" && variables.reason
           ? archiveReasons.find((item) => item.value === variables.reason)?.label
           : undefined,
       });
+      if (variables.status === "draft_ready") {
+        setDraftReadyLead(null);
+        setDraftUrl("");
+      }
     },
     onError: (mutationError: Error) => toast({ title: "Could not update inquiry", description: mutationError.message, variant: "destructive" }),
   });
@@ -165,7 +175,10 @@ export default function Leads() {
             {isLoading ? <div className="space-y-4 p-6">{[1, 2, 3].map((item) => <div key={item} className="rounded-lg border p-4"><Skeleton className="h-5 w-48" /><Skeleton className="mt-3 h-4 w-72" /><Skeleton className="mt-4 h-16 w-full" /></div>)}</div>
               : visible.length === 0 ? <div className="px-6 py-16 text-center"><Inbox className="mx-auto h-12 w-12 text-muted-foreground opacity-50" /><p className="mt-4 text-sm text-muted-foreground">No inquiries in this status.</p></div>
               : <div className="divide-y">{visible.map((lead) => {
-                const draftHref = gmailDraftHref(lead);
+                const draftHref = gmailDraftHref({
+                  gmailDraftUrl: effectiveGmailDraftUrl({ manualGmailDraftUrl: lead.manualGmailDraftUrl, assessmentGmailDraftUrl: lead.gmailDraftUrl }),
+                  gmailMessageId: lead.gmailMessageId,
+                }) || (lead.leadStatus === "draft_ready" ? "https://mail.google.com/mail/u/0/#drafts" : null);
                 return <article key={lead.inquiryId} data-testid={`lead-inquiry-row-${lead.inquiryId}`} className="grid gap-5 p-5 lg:grid-cols-[minmax(0,1fr)_auto]">
                   <div className="min-w-0 space-y-3">
                     <div className="flex flex-wrap items-center gap-2">
@@ -190,6 +203,7 @@ export default function Leads() {
                     {lead.leadStatus === "draft_ready" && draftHref && <Button asChild size="sm" className="bg-edg-teal text-white hover:bg-edg-teal/90"><a href={draftHref} target="_blank" rel="noopener noreferrer" data-testid={`button-open-gmail-draft-${lead.inquiryId}`}><SiGmail className="mr-2 h-4 w-4" />Open Gmail Draft<ExternalLink className="ml-2 h-3 w-3" /></a></Button>}
                     {lead.convertedQuoteId ? <Link href={`/quotes/${lead.convertedQuoteId}/edit`}><Button size="sm" variant={lead.leadStatus === "draft_ready" ? "outline" : "default"} data-testid={`button-open-quote-${lead.inquiryId}`}><FileText className="mr-2 h-4 w-4" />Open Quote{lead.convertedQuoteNumber ? ` ${lead.convertedQuoteNumber}` : ""}</Button></Link>
                       : lead.leadStatus !== "archived" && <Link href={`/quotes/new?accountId=${lead.id}&inquiryId=${lead.inquiryId}&projectName=${encodeURIComponent(lead.leadProjectType || "")}`}><Button size="sm" variant={lead.leadStatus === "draft_ready" ? "outline" : "default"} data-testid={`button-create-quote-${lead.inquiryId}`}><FolderPlus className="mr-2 h-4 w-4" />Create Quote</Button></Link>}
+                    {lead.leadStatus === "new" && <Button variant="outline" size="sm" disabled={updateStatus.isPending} onClick={() => { setDraftReadyLead(lead); setDraftUrl(""); }} data-testid={`button-mark-draft-ready-${lead.inquiryId}`}><SiGmail className="mr-2 h-4 w-4" />Mark Draft Ready</Button>}
                     {lead.leadStatus !== "contacted" && lead.leadStatus !== "archived" && <Button variant="ghost" size="sm" disabled={updateStatus.isPending} onClick={() => updateStatus.mutate({ lead, status: "contacted" })} data-testid={`button-mark-contacted-${lead.inquiryId}`}><CheckCircle2 className="mr-2 h-4 w-4" />Contacted</Button>}
                     {lead.leadStatus !== "archived" && <DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="sm" disabled={updateStatus.isPending} data-testid={`button-archive-inquiry-${lead.inquiryId}`}><Archive className="mr-2 h-4 w-4" />Archive / Disqualify</Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuLabel>Optional reason</DropdownMenuLabel>{archiveReasons.map((reason) => <DropdownMenuItem key={reason.value} onSelect={() => updateStatus.mutate({ lead, status: "archived", reason: reason.value })}>{reason.label}</DropdownMenuItem>)}<DropdownMenuSeparator /><DropdownMenuItem onSelect={() => updateStatus.mutate({ lead, status: "archived" })}>No reason</DropdownMenuItem></DropdownMenuContent></DropdownMenu>}
                   </div>
@@ -198,6 +212,23 @@ export default function Leads() {
           </CardContent>
         </Card>
       </main>
+      <Dialog open={Boolean(draftReadyLead)} onOpenChange={(open) => { if (!open) { setDraftReadyLead(null); setDraftUrl(""); } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Mark Draft Ready</DialogTitle>
+            <DialogDescription>Use this only after confirming the Gmail draft exists. Adding its link is optional.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="gmail-draft-url">Gmail draft link (optional)</Label>
+            <Input id="gmail-draft-url" type="url" placeholder="https://mail.google.com/..." value={draftUrl} onChange={(event) => setDraftUrl(event.target.value)} />
+            <p className="text-xs text-muted-foreground">Without a link, Open Gmail Draft will open the Gmail Drafts folder.</p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setDraftReadyLead(null); setDraftUrl(""); }}>Cancel</Button>
+            <Button disabled={!draftReadyLead || updateStatus.isPending} onClick={() => draftReadyLead && updateStatus.mutate({ lead: draftReadyLead, status: "draft_ready", gmailDraftUrl: draftUrl.trim() || undefined })}>Mark Draft Ready</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
