@@ -49,4 +49,11 @@ describe("lead inquiry workflow surface", () => {
     expect(routes).toContain("fromStatus: existing.status");
     expect(routes).toContain("reason: status === \"archived\"");
   });
+
+  it("lets every local fixture inquiry exercise status transitions", () => {
+    const fixture = source("scripts/serve-browser-fixtures.mjs");
+    expect(fixture).toContain("const mutableInquiry = (overrides)");
+    expect(fixture).toContain("fixtureLeadUpdates.get(overrides.inquiryId)");
+    expect(fixture).toContain("mutableInquiry({ inquiryId: 9153");
+  });
 });

@@ -293,11 +293,15 @@ async function serveApi(request, response, pathname, scenario) {
       leadAttachments: [],
       ...overrides,
     });
+    const mutableInquiry = (overrides) => inquiry({
+      ...overrides,
+      ...(fixtureLeadUpdates.get(overrides.inquiryId) || {}),
+    });
     json(response, 200, scenario === "empty" ? [] : [
-      inquiry({ inquiryId: 9154, leadStatus: "new", leadReceivedAt: "2026-07-31T15:00:00.000Z", ...(fixtureLeadUpdates.get(9154) || {}) }),
-      inquiry({ inquiryId: 9153, leadStatus: "draft_ready", storedLeadStatus: "draft_ready", manualGmailDraftUrl: "https://mail.google.com/mail/u/0/#drafts/fixture-gmail-message" }),
-      inquiry({ inquiryId: 9152, leadStatus: "contacted", storedLeadStatus: "converted", convertedQuoteId: quote.id, convertedQuoteNumber: quote.quoteNumber }),
-      inquiry({ inquiryId: 9151, leadStatus: "archived", storedLeadStatus: "unresponsive", archiveReason: "no_response" }),
+      mutableInquiry({ inquiryId: 9154, leadStatus: "new", leadReceivedAt: "2026-07-31T15:00:00.000Z" }),
+      mutableInquiry({ inquiryId: 9153, leadStatus: "draft_ready", storedLeadStatus: "draft_ready", manualGmailDraftUrl: "https://mail.google.com/mail/u/0/#drafts/fixture-gmail-message" }),
+      mutableInquiry({ inquiryId: 9152, leadStatus: "contacted", storedLeadStatus: "converted", convertedQuoteId: quote.id, convertedQuoteNumber: quote.quoteNumber }),
+      mutableInquiry({ inquiryId: 9151, leadStatus: "archived", storedLeadStatus: "unresponsive", archiveReason: "no_response" }),
     ]);
     return;
   }
