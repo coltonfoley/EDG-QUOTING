@@ -35,7 +35,13 @@ describe("lead inquiry workflow surface", () => {
 
   it("adds manual leads through an authenticated inquiry route", () => {
     const routes = source("server/routes/leadIntakeRoutes.ts");
+    const contract = source("shared/leadIntake.ts");
+    const handler = source("server/leadIntakeHandler.ts");
     expect(routes).toContain('app.post("/api/leads/manual", isAuthenticated');
+    expect(routes).toContain('manualLeadSchema } from "@shared/leadIntake"');
+    expect(handler).toContain('leadIntakeSchema } from "@shared/leadIntake"');
+    expect(contract).toContain("streetAddress: optionalTrimmedText(500)");
+    expect(contract).toContain('customerType: z.enum(["homeowner", "commercial", "trade"])');
     expect(routes).toContain('source: "manual"');
     expect(routes).toContain("preserveAccountAndCreateInquiry(lead, submissionId!");
     expect(routes).toContain("createdQuote: false");
@@ -49,7 +55,11 @@ describe("lead inquiry workflow surface", () => {
     expect(leads).toContain('testId="input-manual-lead-location"');
     expect(leads).toContain('value={manualLead.location}');
     expect(leads).toContain('onAddressSelect={handleManualLeadAddressSelect}');
+    expect(leads).toContain("streetAddress: components.streetAddress");
+    expect(leads).toContain('data-testid="input-manual-lead-company"');
+    expect(leads).toContain('data-testid="input-manual-lead-address-line-2"');
     expect(autocomplete).toContain('onValueChange?.(event.target.value)');
+    expect(autocomplete).toContain('onValueChangeRef.current?.(components.formattedAddress)');
     expect(addressComponents).toContain('formattedAddress: place.formatted_address || ""');
   });
 

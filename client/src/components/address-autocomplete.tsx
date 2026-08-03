@@ -90,6 +90,13 @@ export function AddressAutocomplete({
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const autocompleteRef = useRef<any>(null);
+  const onAddressSelectRef = useRef(onAddressSelect);
+  const onValueChangeRef = useRef(onValueChange);
+
+  useEffect(() => {
+    onAddressSelectRef.current = onAddressSelect;
+    onValueChangeRef.current = onValueChange;
+  }, [onAddressSelect, onValueChange]);
 
   useEffect(() => {
     setIsLoading(true);
@@ -131,7 +138,11 @@ export function AddressAutocomplete({
           try {
             const components = addressComponentsFromPlace(autocomplete.getPlace());
             if (!components) return;
-            onAddressSelect(components);
+            // Google mutates the input directly. Mirror the selected value into
+            // controlled React state before handing the structured fields up.
+            input.value = components.formattedAddress;
+            onValueChangeRef.current?.(components.formattedAddress);
+            onAddressSelectRef.current(components);
           } catch (err) {
             console.error("Error processing place selection:", err);
           }
@@ -155,7 +166,7 @@ export function AddressAutocomplete({
       }
       autocompleteRef.current = null;
     };
-  }, [isScriptLoaded, onAddressSelect, disabled]);
+  }, [isScriptLoaded, disabled]);
 
   const handleInputChange = (event: ChangeEvent<HTMLInputElement>) => {
     onValueChange?.(event.target.value);

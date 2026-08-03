@@ -6,6 +6,7 @@ import { Archive, CheckCircle2, ExternalLink, FileText, FolderPlus, Inbox, Mail,
 
 import { AppHeader } from "@/components/app-header";
 import { AddressAutocomplete } from "@/components/address-autocomplete";
+import type { AddressComponents } from "@/lib/address-components";
 import { PageLoadError } from "@/components/error-alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -30,7 +31,15 @@ type ManualLeadForm = {
   lastName: string;
   email: string;
   phone: string;
+  company: string;
   location: string;
+  streetAddress: string;
+  addressLine2: string;
+  city: string;
+  state: string;
+  zipCode: string;
+  country: string;
+  placeId: string;
   projectType: string;
   customerType: "homeowner" | "commercial" | "trade";
   message: string;
@@ -41,7 +50,15 @@ const emptyManualLeadForm: ManualLeadForm = {
   lastName: "",
   email: "",
   phone: "",
+  company: "",
   location: "",
+  streetAddress: "",
+  addressLine2: "",
+  city: "",
+  state: "",
+  zipCode: "",
+  country: "",
+  placeId: "",
   projectType: "",
   customerType: "homeowner",
   message: "",
@@ -198,13 +215,33 @@ export default function Leads() {
     setManualLead((current) => ({ ...current, [field]: value }));
   }, []);
 
-  const handleManualLeadAddressSelect = useCallback((components: { formattedAddress: string }) => {
-    updateManualLead("location", components.formattedAddress);
-  }, [updateManualLead]);
+  const handleManualLeadAddressSelect = useCallback((components: AddressComponents) => {
+    setManualLead((current) => ({
+      ...current,
+      location: components.formattedAddress,
+      streetAddress: components.streetAddress,
+      addressLine2: components.addressLine2,
+      city: components.city,
+      state: components.state,
+      zipCode: components.zipCode,
+      country: components.country,
+      placeId: components.placeId,
+    }));
+  }, []);
 
   const handleManualLeadLocationChange = useCallback((value: string) => {
-    updateManualLead("location", value);
-  }, [updateManualLead]);
+    setManualLead((current) => ({
+      ...current,
+      location: value,
+      streetAddress: "",
+      addressLine2: "",
+      city: "",
+      state: "",
+      zipCode: "",
+      country: "",
+      placeId: "",
+    }));
+  }, []);
 
   const submitManualLead = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -327,21 +364,10 @@ export default function Leads() {
                 <Input id="manual-lead-phone" type="tel" maxLength={50} value={manualLead.phone} onChange={(event) => updateManualLead("phone", event.target.value)} data-testid="input-manual-lead-phone" />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="manual-lead-location">Location / ZIP</Label>
-                <AddressAutocomplete
-                  value={manualLead.location}
-                  onValueChange={handleManualLeadLocationChange}
-                  onAddressSelect={handleManualLeadAddressSelect}
-                  placeholder="Start typing an address..."
-                  ariaLabel="Location or ZIP"
-                  testId="input-manual-lead-location"
-                />
+                <Label htmlFor="manual-lead-company">Company</Label>
+                <Input id="manual-lead-company" maxLength={255} value={manualLead.company} onChange={(event) => updateManualLead("company", event.target.value)} data-testid="input-manual-lead-company" />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="manual-lead-project-type">Project type</Label>
-                <Input id="manual-lead-project-type" maxLength={255} placeholder="Pergola, shade, screen..." value={manualLead.projectType} onChange={(event) => updateManualLead("projectType", event.target.value)} data-testid="input-manual-lead-project-type" />
-              </div>
-              <div className="space-y-2 sm:col-span-2">
                 <Label htmlFor="manual-lead-customer-type">Customer type</Label>
                 <Select value={manualLead.customerType} onValueChange={(value) => updateManualLead("customerType", value)}>
                   <SelectTrigger id="manual-lead-customer-type" data-testid="select-manual-lead-customer-type">
@@ -353,6 +379,25 @@ export default function Leads() {
                     <SelectItem value="trade">Contractor / trade</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+              <div className="space-y-2 sm:col-span-2">
+                <Label htmlFor="manual-lead-location">Project address / ZIP</Label>
+                <AddressAutocomplete
+                  value={manualLead.location}
+                  onValueChange={handleManualLeadLocationChange}
+                  onAddressSelect={handleManualLeadAddressSelect}
+                  placeholder="Start typing an address..."
+                  ariaLabel="Project address or ZIP"
+                  testId="input-manual-lead-location"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="manual-lead-address-line-2">Apt, suite, etc.</Label>
+                <Input id="manual-lead-address-line-2" maxLength={255} value={manualLead.addressLine2} onChange={(event) => updateManualLead("addressLine2", event.target.value)} data-testid="input-manual-lead-address-line-2" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="manual-lead-project-type">Project type</Label>
+                <Input id="manual-lead-project-type" maxLength={255} placeholder="Pergola, shade, screen..." value={manualLead.projectType} onChange={(event) => updateManualLead("projectType", event.target.value)} data-testid="input-manual-lead-project-type" />
               </div>
               <div className="space-y-2 sm:col-span-2">
                 <Label htmlFor="manual-lead-message">Inquiry details</Label>

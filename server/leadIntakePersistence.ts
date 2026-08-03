@@ -8,7 +8,15 @@ export type PersistableLeadIntake = {
   firstName: string;
   lastName?: string | null;
   phone?: string | null;
+  company?: string | null;
   location?: string | null;
+  streetAddress?: string | null;
+  addressLine2?: string | null;
+  city?: string | null;
+  state?: string | null;
+  zipCode?: string | null;
+  country?: string | null;
+  placeId?: string | null;
   projectType?: string | null;
   message?: string | null;
   source?: string | null;
@@ -71,10 +79,17 @@ function mapLeadToAccount(lead: PersistableLeadIntake): InsertAccount {
     lastName: lead.lastName || undefined,
     email: lead.email,
     phone: lead.phone || "",
-    company: undefined,
+    company: lead.company || undefined,
     accountType: accountTypeFromLead(lead.customerType),
     paymentTerms: "net_30",
     billingAddress: lead.location || undefined,
+    streetAddress: lead.streetAddress || undefined,
+    addressLine2: lead.addressLine2 || undefined,
+    city: lead.city || undefined,
+    state: lead.state || undefined,
+    zipCode: lead.zipCode || undefined,
+    country: lead.country || undefined,
+    placeId: lead.placeId || undefined,
     leadStatus: "new",
     leadSource: lead.source || "website",
     leadProjectType: lead.projectType || undefined,
@@ -116,8 +131,32 @@ export async function preserveAccountAndCreateInquiry(
       ...(!existingAccount.phone && accountData.phone
         ? { phone: accountData.phone }
         : {}),
+      ...(!existingAccount.company && accountData.company
+        ? { company: accountData.company }
+        : {}),
       ...(!existingAccount.billingAddress && accountData.billingAddress
         ? { billingAddress: accountData.billingAddress }
+        : {}),
+      ...(!existingAccount.streetAddress && accountData.streetAddress
+        ? { streetAddress: accountData.streetAddress }
+        : {}),
+      ...(!existingAccount.addressLine2 && accountData.addressLine2
+        ? { addressLine2: accountData.addressLine2 }
+        : {}),
+      ...(!existingAccount.city && accountData.city
+        ? { city: accountData.city }
+        : {}),
+      ...(!existingAccount.state && accountData.state
+        ? { state: accountData.state }
+        : {}),
+      ...(!existingAccount.zipCode && accountData.zipCode
+        ? { zipCode: accountData.zipCode }
+        : {}),
+      ...(!existingAccount.country && accountData.country
+        ? { country: accountData.country }
+        : {}),
+      ...(!existingAccount.placeId && accountData.placeId
+        ? { placeId: accountData.placeId }
         : {}),
       updatedAt: new Date(),
     };

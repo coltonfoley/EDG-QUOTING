@@ -23,35 +23,9 @@ import { preserveAccountAndCreateInquiry } from "../leadIntakePersistence";
 import { redactedErrorType } from "../redactedLogging";
 import { LeadAgentAssessmentError, recordLeadAgentAssessment } from "../leadAgentAssessment";
 import { projectLeadWorkflowStatus } from "@shared/leadWorkflow";
+import { leadIntakeSchema, manualLeadSchema } from "@shared/leadIntake";
 
 export { preserveAccountAndCreateInquiry } from "../leadIntakePersistence";
-
-const leadIntakeSchema = z.object({
-  email: z.string().email().transform((value) => value.trim().toLowerCase()),
-  firstName: z.string().trim().min(1).max(255),
-  lastName: z.string().trim().max(255).optional().nullable(),
-  phone: z.string().trim().max(50).optional().nullable(),
-  location: z.string().trim().max(500).optional().nullable(),
-  projectType: z.string().trim().max(255).optional().nullable(),
-  message: z.string().trim().max(5000).optional().nullable(),
-  source: z.string().trim().max(255).optional().nullable(),
-  customerType: z.string().trim().max(100).optional().nullable(),
-  metadata: z.record(z.unknown()).optional().nullable(),
-  idempotencyKey: z.string().trim().min(1).max(160).optional(),
-});
-
-const manualLeadSchema = leadIntakeSchema.pick({
-  email: true,
-  firstName: true,
-  lastName: true,
-  phone: true,
-  location: true,
-  projectType: true,
-  message: true,
-  customerType: true,
-}).extend({
-  idempotencyKey: z.string().trim().min(1).max(160),
-});
 
 type LeadIntakePayload = z.infer<typeof leadIntakeSchema>;
 

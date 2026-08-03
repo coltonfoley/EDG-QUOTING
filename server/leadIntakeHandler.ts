@@ -11,20 +11,7 @@ import {
 } from "./leadIntakeIdempotency";
 import { preserveAccountAndCreateInquiry } from "./leadIntakePersistence";
 import { redactedErrorType } from "./redactedLogging";
-
-const leadIntakeSchema = z.object({
-  email: z.string().email().transform((value) => value.trim().toLowerCase()),
-  firstName: z.string().trim().min(1).max(255),
-  lastName: z.string().trim().max(255).optional().nullable(),
-  phone: z.string().trim().max(50).optional().nullable(),
-  location: z.string().trim().max(500).optional().nullable(),
-  projectType: z.string().trim().max(255).optional().nullable(),
-  message: z.string().trim().max(5000).optional().nullable(),
-  source: z.string().trim().max(255).optional().nullable(),
-  customerType: z.string().trim().max(100).optional().nullable(),
-  metadata: z.record(z.unknown()).optional().nullable(),
-  idempotencyKey: z.string().trim().min(1).max(160).optional(),
-});
+import { leadIntakeSchema } from "@shared/leadIntake";
 
 function sendJson(res: ServerResponse, statusCode: number, payload: unknown) {
   const body = JSON.stringify(payload);
