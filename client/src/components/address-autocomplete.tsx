@@ -1,5 +1,6 @@
-import { useState, useEffect, useRef } from "react";
+import { type ChangeEvent, useState, useEffect, useRef } from "react";
 import { Input } from "@/components/ui/input";
+import { addressComponentsFromPlace, type AddressComponents } from "@/lib/address-components";
 import { Loader2, MapPin } from "lucide-react";
 
 declare global {
@@ -11,18 +12,10 @@ declare global {
   }
 }
 
-interface AddressComponents {
-  streetAddress: string;
-  addressLine2: string;
-  city: string;
-  state: string;
-  zipCode: string;
-  country: string;
-  placeId: string;
-}
-
 interface AddressAutocompleteProps {
   onAddressSelect: (components: AddressComponents) => void;
+  value?: string;
+  onValueChange?: (value: string) => void;
   placeholder?: string;
   ariaLabel?: string;
   disabled?: boolean;
@@ -85,6 +78,8 @@ const loadGooglePlacesScript = (): Promise<void> => {
 
 export function AddressAutocomplete({
   onAddressSelect,
+  value,
+  onValueChange,
   placeholder = "Start typing an address...",
   ariaLabel = "Search for an address",
   disabled = false,
@@ -134,55 +129,8 @@ export function AddressAutocomplete({
 
         placeChangedListener = autocomplete.addListener("place_changed", () => {
           try {
-            const place = autocomplete.getPlace();
-            const addressComponents = place.address_components;
-            if (!addressComponents) return;
-
-            const components: AddressComponents = {
-              streetAddress: "",
-              addressLine2: "",
-              city: "",
-              state: "",
-              zipCode: "",
-              country: "",
-              placeId: place.place_id || ""
-            };
-
-            let streetNumber = "";
-            let route = "";
-            let subpremise = "";
-
-            addressComponents.forEach((component: any) => {
-              const types = component.types;
-
-              if (types.includes("street_number")) {
-                streetNumber = component.long_name;
-              }
-              if (types.includes("route")) {
-                route = component.long_name;
-              }
-              if (types.includes("subpremise")) {
-                subpremise = component.long_name;
-              }
-              if (types.includes("locality")) {
-                components.city = component.long_name;
-              }
-              if (types.includes("administrative_area_level_1")) {
-                components.state = component.short_name;
-              }
-              if (types.includes("postal_code")) {
-                components.zipCode = component.long_name;
-              }
-              if (types.includes("country")) {
-                components.country = component.long_name;
-              }
-            });
-
-            components.streetAddress = `${streetNumber} ${route}`.trim();
-            if (subpremise) {
-              components.addressLine2 = subpremise;
-            }
-
+            const components = addressComponentsFromPlace(autocomplete.getPlace());
+            if (!components) return;
             onAddressSelect(components);
           } catch (err) {
             console.error("Error processing place selection:", err);
@@ -209,6 +157,10 @@ export function AddressAutocomplete({
     };
   }, [isScriptLoaded, onAddressSelect, disabled]);
 
+  const handleInputChange = (event: ChangeEvent<HTMLInputElement>) => {
+    onValueChange?.(event.target.value);
+  };
+
   if (error) {
     return (
       <div className="relative">
@@ -218,6 +170,8 @@ export function AddressAutocomplete({
           aria-label={ariaLabel}
           disabled={disabled}
           data-testid={testId}
+          value={value}
+          onChange={handleInputChange}
           className="pr-10"
         />
         <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
@@ -238,6 +192,8 @@ export function AddressAutocomplete({
           disabled={disabled || !isScriptLoaded}
           data-testid={testId}
           autoComplete="new-password"
+          value={value}
+          onChange={handleInputChange}
           className="pr-10"
         />
         <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">

@@ -10,6 +10,7 @@ export type LeadAgentAssessmentInput = {
   gmailDraftId?: string | null;
   gmailMessageId?: string | null;
   gmailDraftUrl?: string | null;
+  draftEmailContent?: string | null;
   idempotencyKey: string;
 };
 
@@ -29,7 +30,8 @@ function isExactReplay(existing: LeadAgentAssessment, input: LeadAgentAssessment
     && existing.reason === input.reason.trim()
     && existing.gmailDraftId === nullable(input.gmailDraftId)
     && existing.gmailMessageId === nullable(input.gmailMessageId)
-    && existing.gmailDraftUrl === nullable(input.gmailDraftUrl);
+    && existing.gmailDraftUrl === nullable(input.gmailDraftUrl)
+    && existing.draftEmailContent === nullable(input.draftEmailContent);
 }
 
 export async function recordLeadAgentAssessment(input: LeadAgentAssessmentInput, database: typeof db = db) {
@@ -55,6 +57,7 @@ export async function recordLeadAgentAssessment(input: LeadAgentAssessmentInput,
       gmailDraftId: nullable(input.gmailDraftId),
       gmailMessageId: nullable(input.gmailMessageId),
       gmailDraftUrl: nullable(input.gmailDraftUrl),
+      draftEmailContent: nullable(input.draftEmailContent),
       idempotencyKeyHash,
       source: "jacob-codex",
     }).onConflictDoNothing().returning();

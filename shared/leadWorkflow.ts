@@ -53,6 +53,15 @@ export function effectiveGmailDraftUrl(input: {
   return input.manualGmailDraftUrl || input.assessmentGmailDraftUrl || null;
 }
 
+export function effectiveDraftEmailContent(input: {
+  manualDraftEmailContent?: string | null;
+  assessmentDraftEmailContent?: string | null;
+}): string | null {
+  return input.manualDraftEmailContent?.trim()
+    || input.assessmentDraftEmailContent?.trim()
+    || null;
+}
+
 export function gmailDraftHref(input: {
   gmailDraftUrl?: string | null;
   gmailMessageId?: string | null;

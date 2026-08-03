@@ -12,6 +12,9 @@ const host = "127.0.0.1";
 let authRecoverAttempts = 0;
 let fixtureQuoteVisuals = [];
 const fixtureLeadUpdates = new Map();
+const fixtureManualLeadBySubmissionId = new Map();
+let nextManualInquiryId = 9160;
+let nextManualAccountId = 9110;
 
 const adminUser = {
   id: 9001,
@@ -272,6 +275,57 @@ async function serveApi(request, response, pathname, scenario) {
     });
     return;
   }
+  if (pathname === "/api/leads/manual" && request.method === "POST") {
+    const body = await readJsonBody(request);
+    const replay = fixtureManualLeadBySubmissionId.get(body.idempotencyKey);
+    if (replay) {
+      json(response, 200, { success: true, ...replay, replayed: true, fixtureOnly: true });
+      return;
+    }
+    const created = {
+      id: nextManualAccountId++,
+      inquiryId: nextManualInquiryId++,
+      inquiryCount: 1,
+      submissionId: body.idempotencyKey,
+      name: [body.firstName, body.lastName].filter(Boolean).join(" "),
+      company: null,
+      email: body.email,
+      phone: body.phone || null,
+      billingAddress: body.location || null,
+      zipCode: null,
+      leadStatus: "new",
+      storedLeadStatus: "new",
+      leadSource: "manual",
+      leadProjectType: body.projectType || null,
+      leadMessage: body.message || null,
+      leadReceivedAt: new Date().toISOString(),
+      projectCount: 0,
+      convertedQuoteId: null,
+      convertedQuoteNumber: null,
+      assessmentOutcome: null,
+      assessmentReason: null,
+      gmailMessageId: null,
+      gmailDraftUrl: null,
+      manualDraftEmailContent: null,
+      assessmentDraftEmailContent: null,
+      archiveReason: null,
+      attachments: [],
+      leadAttachments: [],
+    };
+    fixtureManualLeadBySubmissionId.set(body.idempotencyKey, created);
+    json(response, 201, {
+      success: true,
+      leadId: created.id,
+      accountId: created.id,
+      inquiryId: created.inquiryId,
+      submissionId: created.submissionId,
+      leadStatus: "new",
+      createdQuote: false,
+      replayed: false,
+      fixtureOnly: true,
+    });
+    return;
+  }
   if (pathname === "/api/leads") {
     const inquiry = (overrides) => ({
       ...account,
@@ -288,6 +342,8 @@ async function serveApi(request, response, pathname, scenario) {
       assessmentReason: null,
       gmailMessageId: null,
       gmailDraftUrl: null,
+      manualDraftEmailContent: null,
+      assessmentDraftEmailContent: null,
       archiveReason: null,
       attachments: [],
       leadAttachments: [],
@@ -298,8 +354,9 @@ async function serveApi(request, response, pathname, scenario) {
       ...(fixtureLeadUpdates.get(overrides.inquiryId) || {}),
     });
     json(response, 200, scenario === "empty" ? [] : [
+      ...Array.from(fixtureManualLeadBySubmissionId.values()).reverse(),
       mutableInquiry({ inquiryId: 9154, leadStatus: "new", leadReceivedAt: "2026-07-31T15:00:00.000Z" }),
-      mutableInquiry({ inquiryId: 9153, leadStatus: "draft_ready", storedLeadStatus: "draft_ready", manualGmailDraftUrl: "https://mail.google.com/mail/u/0/#drafts/fixture-gmail-message" }),
+      mutableInquiry({ inquiryId: 9153, leadStatus: "draft_ready", storedLeadStatus: "draft_ready", manualGmailDraftUrl: "https://mail.google.com/mail/u/0/#drafts/fixture-gmail-message", manualDraftEmailContent: "Hi Jordan,\n\nThanks for reaching out about your motorized pergola project. We would be glad to learn more about the space and help with next steps.\n\nBest,\nEDG Patio & Shade" }),
       mutableInquiry({ inquiryId: 9152, leadStatus: "contacted", storedLeadStatus: "converted", convertedQuoteId: quote.id, convertedQuoteNumber: quote.quoteNumber }),
       mutableInquiry({ inquiryId: 9151, leadStatus: "archived", storedLeadStatus: "unresponsive", archiveReason: "no_response" }),
     ]);
@@ -312,6 +369,7 @@ async function serveApi(request, response, pathname, scenario) {
       leadStatus: body.status,
       storedLeadStatus: body.status,
       manualGmailDraftUrl: body.gmailDraftUrl || null,
+      manualDraftEmailContent: body.draftEmailContent || null,
       archiveReason: body.reason || null,
     });
     json(response, 200, { id: inquiryId, status: body.status });

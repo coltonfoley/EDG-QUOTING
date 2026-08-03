@@ -73,6 +73,13 @@ const cases = [
 ];
 const dialogCases = [
   {
+    name: "add lead",
+    scenario: "admin",
+    path: "/leads",
+    actions: ['[data-testid="button-new-lead"]'],
+    surface: '[role="dialog"]',
+  },
+  {
     name: "create client",
     scenario: "admin",
     path: "/accounts",

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { effectiveGmailDraftUrl, gmailDraftHref, projectLeadWorkflowStatus } from "@shared/leadWorkflow";
+import { effectiveDraftEmailContent, effectiveGmailDraftUrl, gmailDraftHref, projectLeadWorkflowStatus } from "@shared/leadWorkflow";
 
 describe("lead workflow projection", () => {
   it.each([
@@ -32,5 +32,17 @@ describe("lead workflow projection", () => {
     expect(gmailDraftHref({ gmailMessageId: "message/id" })).toBe("https://mail.google.com/mail/u/0/#drafts/message%2Fid");
     expect(gmailDraftHref({ gmailDraftUrl: "https://evil.example/draft", gmailMessageId: null })).toBeNull();
     expect(effectiveGmailDraftUrl({ manualGmailDraftUrl: "https://mail.google.com/manual", assessmentGmailDraftUrl: "https://mail.google.com/agent" })).toBe("https://mail.google.com/manual");
+  });
+
+  it("prefers the manual email snapshot and ignores empty content", () => {
+    expect(effectiveDraftEmailContent({
+      manualDraftEmailContent: "  Manual draft  ",
+      assessmentDraftEmailContent: "Agent draft",
+    })).toBe("Manual draft");
+    expect(effectiveDraftEmailContent({
+      manualDraftEmailContent: "  ",
+      assessmentDraftEmailContent: "  Agent draft  ",
+    })).toBe("Agent draft");
+    expect(effectiveDraftEmailContent({})).toBeNull();
   });
 });

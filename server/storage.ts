@@ -509,6 +509,7 @@ export class DatabaseStorage implements IStorage {
       convertedQuoteId: leadInquiries.convertedQuoteId,
       archiveReason: leadInquiries.archiveReason,
       manualGmailDraftUrl: leadInquiries.gmailDraftUrl,
+      manualDraftEmailContent: leadInquiries.draftEmailContent,
       assessmentOutcome: sql<string | null>`(
         SELECT assessment.outcome FROM lead_agent_assessments assessment
         WHERE assessment.inquiry_id = ${leadInquiries.id}
@@ -521,6 +522,11 @@ export class DatabaseStorage implements IStorage {
       )`,
       gmailMessageId: sql<string | null>`(
         SELECT assessment.gmail_message_id FROM lead_agent_assessments assessment
+        WHERE assessment.inquiry_id = ${leadInquiries.id}
+        ORDER BY assessment.created_at DESC, assessment.id DESC LIMIT 1
+      )`,
+      assessmentDraftEmailContent: sql<string | null>`(
+        SELECT assessment.draft_email_content FROM lead_agent_assessments assessment
         WHERE assessment.inquiry_id = ${leadInquiries.id}
         ORDER BY assessment.created_at DESC, assessment.id DESC LIMIT 1
       )`,

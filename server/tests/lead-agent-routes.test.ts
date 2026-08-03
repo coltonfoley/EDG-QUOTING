@@ -46,7 +46,7 @@ describe("lead agent assessment writeback", () => {
   });
 
   it("records an inquiry-specific assessment and reports exact replays", async () => {
-    const payload = { outcome: "fit", reason: "Good fit", gmailMessageId: "message-1", idempotencyKey: "key-1" };
+    const payload = { outcome: "fit", reason: "Good fit", gmailMessageId: "message-1", draftEmailContent: "Thanks for reaching out.", idempotencyKey: "key-1" };
     await request(makeApp()).put("/api/inquiries/42/agent-assessment").set("x-test-session", "valid").send(payload).expect(201);
     expect(mockRecordAssessment).toHaveBeenCalledWith({ inquiryId: 42, ...payload });
 

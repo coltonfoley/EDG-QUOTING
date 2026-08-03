@@ -129,6 +129,7 @@ export const leadInquiries = pgTable("lead_inquiries", {
   convertedBy: integer("converted_by").references(() => users.id, { onDelete: "set null" }),
   archiveReason: text("archive_reason"),
   gmailDraftUrl: text("gmail_draft_url"),
+  draftEmailContent: text("draft_email_content"),
   draftReadyAt: timestamp("draft_ready_at"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
@@ -140,8 +141,8 @@ export const leadInquiries = pgTable("lead_inquiries", {
 ]);
 
 // Append-only results written back by the external lead-intake agent. Rainmaker
-// stores only the decision, a short reason, and the Gmail draft pointer; email
-// content remains in Gmail.
+// stores the decision, a short reason, the Gmail draft pointer, and a plain-text
+// snapshot for review. Gmail remains the source of truth for editing and sending.
 export const leadAgentAssessments = pgTable("lead_agent_assessments", {
   id: serial("id").primaryKey(),
   inquiryId: integer("inquiry_id").notNull().references(() => leadInquiries.id, { onDelete: "cascade" }),
@@ -150,6 +151,7 @@ export const leadAgentAssessments = pgTable("lead_agent_assessments", {
   gmailDraftId: text("gmail_draft_id"),
   gmailMessageId: text("gmail_message_id"),
   gmailDraftUrl: text("gmail_draft_url"),
+  draftEmailContent: text("draft_email_content"),
   idempotencyKeyHash: text("idempotency_key_hash").notNull().unique(),
   source: text("source").notNull().default("jacob-codex"),
   createdAt: timestamp("created_at").notNull().defaultNow(),

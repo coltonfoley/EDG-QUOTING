@@ -44,7 +44,7 @@ function buildLeadName(lead: PersistableLeadIntake): string {
 
 function buildLeadNotes(lead: PersistableLeadIntake): string {
   const lines = [
-    "Website lead intake",
+    lead.source === "manual" ? "Manual lead entry" : "Website lead intake",
     `Source: ${lead.source || "website"}`,
     `Project type: ${lead.projectType || "Not provided"}`,
     `Customer type: ${lead.customerType || "Not provided"}`,
@@ -84,9 +84,9 @@ function mapLeadToAccount(lead: PersistableLeadIntake): InsertAccount {
 }
 
 /**
- * Preserve the durable customer account while appending every website inquiry.
- * The submission id is non-PII and is shared with website analytics so a
- * successful form event can be reconciled to the exact Rainmaker record.
+ * Preserve the durable customer account while appending every inquiry.
+ * Website submission ids are shared with analytics; manual ids provide the
+ * same duplicate-safe write boundary for staff-entered leads.
  */
 export async function preserveAccountAndCreateInquiry(
   lead: PersistableLeadIntake,

@@ -40,6 +40,19 @@ const leadIntakeSchema = z.object({
   idempotencyKey: z.string().trim().min(1).max(160).optional(),
 });
 
+const manualLeadSchema = leadIntakeSchema.pick({
+  email: true,
+  firstName: true,
+  lastName: true,
+  phone: true,
+  location: true,
+  projectType: true,
+  message: true,
+  customerType: true,
+}).extend({
+  idempotencyKey: z.string().trim().min(1).max(160),
+});
+
 type LeadIntakePayload = z.infer<typeof leadIntakeSchema>;
 
 type UploadedLeadAttachmentFile = {
@@ -61,6 +74,7 @@ const leadStatusSchema = z.enum([
 const leadStatusUpdateSchema = z.object({
   status: z.enum(["draft_ready", "contacted", "archived"]),
   reason: z.enum(["not_a_fit", "spam", "duplicate", "no_response", "other"]).optional().nullable(),
+  draftEmailContent: z.string().trim().max(20000).optional().nullable(),
   gmailDraftUrl: z.string().url().refine((value) => {
     try {
       const url = new URL(value);
@@ -84,12 +98,13 @@ const leadAgentAssessmentSchema = z.object({
   gmailDraftId: z.string().trim().min(1).max(255).optional().nullable(),
   gmailMessageId: z.string().trim().min(1).max(255).optional().nullable(),
   gmailDraftUrl: gmailDraftUrlSchema.optional().nullable(),
+  draftEmailContent: z.string().trim().max(20000).optional().nullable(),
   idempotencyKey: z.string().trim().min(1).max(200),
 }).superRefine((value, context) => {
   if (value.outcome === "fit" && !value.gmailMessageId) {
     context.addIssue({ code: z.ZodIssueCode.custom, path: ["gmailMessageId"], message: "A fit assessment needs a Gmail message ID." });
   }
-  if (value.outcome === "not_fit" && (value.gmailDraftId || value.gmailMessageId || value.gmailDraftUrl)) {
+  if (value.outcome === "not_fit" && (value.gmailDraftId || value.gmailMessageId || value.gmailDraftUrl || value.draftEmailContent)) {
     context.addIssue({ code: z.ZodIssueCode.custom, path: ["gmailDraftId"], message: "A not-a-fit assessment cannot include a Gmail draft." });
   }
 });
@@ -185,6 +200,50 @@ function isLeadAttachmentAuthenticated(req: any, res: any, next: any) {
 }
 
 export function registerLeadIntakeRoutes(app: Express) {
+  app.post("/api/leads/manual", isAuthenticated, async (req: any, res) => {
+    try {
+      const input = manualLeadSchema.parse(req.body);
+      const submissionId = resolveLeadIntakeSubmissionId({ bodyValue: input.idempotencyKey });
+      const lead = {
+        ...input,
+        source: "manual",
+        metadata: {
+          entryMethod: "rainmaker_manual",
+          actorUserId: (req.user as { id?: number } | undefined)?.id || null,
+        },
+      };
+      const { account, replayed } = await createIdempotentLead({
+        submissionId,
+        lead,
+        createLead: (database) => preserveAccountAndCreateInquiry(lead, submissionId!, database),
+      });
+
+      res.status(replayed ? 200 : 201).json({
+        success: true,
+        leadId: account.id,
+        accountId: account.id,
+        inquiryId: (account as { inquiryId?: number }).inquiryId || null,
+        submissionId,
+        leadStatus: account.leadStatus || "new",
+        createdQuote: false,
+        replayed,
+      });
+    } catch (error) {
+      if (error instanceof LeadIntakeIdempotencyError) {
+        return res.status(error.status).json({ success: false, message: error.message });
+      }
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid manual lead data",
+          errors: error.errors,
+        });
+      }
+      console.error("Manual lead creation failed", { errorType: redactedErrorType(error) });
+      res.status(500).json({ success: false, message: "Failed to create lead" });
+    }
+  });
+
   app.get("/api/lead-agent/inquiries/pending", isAuthenticated, async (req, res) => {
     try {
       const limit = Math.min(z.coerce.number().int().positive().default(50).parse(req.query.limit), 200);
@@ -273,6 +332,7 @@ export function registerLeadIntakeRoutes(app: Express) {
           storedLeadStatus: leadInquiries.status,
           archiveReason: leadInquiries.archiveReason,
           manualGmailDraftUrl: leadInquiries.gmailDraftUrl,
+          manualDraftEmailContent: leadInquiries.draftEmailContent,
           convertedQuoteId: leadInquiries.convertedQuoteId,
           convertedQuoteNumber: sql<string | null>`(
             SELECT quote.quote_number FROM quotes quote WHERE quote.id = ${leadInquiries.convertedQuoteId} LIMIT 1
@@ -299,6 +359,11 @@ export function registerLeadIntakeRoutes(app: Express) {
           )`,
           gmailDraftUrl: sql<string | null>`(
             SELECT assessment.gmail_draft_url FROM lead_agent_assessments assessment
+            WHERE assessment.inquiry_id = ${leadInquiries.id}
+            ORDER BY assessment.created_at DESC, assessment.id DESC LIMIT 1
+          )`,
+          assessmentDraftEmailContent: sql<string | null>`(
+            SELECT assessment.draft_email_content FROM lead_agent_assessments assessment
             WHERE assessment.inquiry_id = ${leadInquiries.id}
             ORDER BY assessment.created_at DESC, assessment.id DESC LIMIT 1
           )`,
@@ -386,7 +451,7 @@ export function registerLeadIntakeRoutes(app: Express) {
   app.patch("/api/inquiries/:id/status", isAuthenticated, async (req, res) => {
     try {
       const id = z.coerce.number().int().positive().parse(req.params.id);
-      const { status, reason, gmailDraftUrl } = leadStatusUpdateSchema.parse(req.body);
+      const { status, reason, gmailDraftUrl, draftEmailContent } = leadStatusUpdateSchema.parse(req.body);
       const now = new Date();
       const inquiry = await db.transaction(async (tx) => {
         const [existing] = await tx.select().from(leadInquiries).where(eq(leadInquiries.id, id)).for("update");
@@ -395,6 +460,7 @@ export function registerLeadIntakeRoutes(app: Express) {
           status,
           archiveReason: status === "archived" ? reason || null : null,
           gmailDraftUrl: status === "draft_ready" ? gmailDraftUrl || null : existing.gmailDraftUrl,
+          draftEmailContent: status === "draft_ready" ? draftEmailContent || null : existing.draftEmailContent,
           draftReadyAt: status === "draft_ready" ? now : existing.draftReadyAt,
           ...(status === "contacted" ? { lastContactedAt: now } : {}),
           updatedAt: now,
