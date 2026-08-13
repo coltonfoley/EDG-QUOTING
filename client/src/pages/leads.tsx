@@ -42,8 +42,16 @@ type ManualLeadForm = {
   placeId: string;
   projectType: string;
   customerType: "homeowner" | "commercial" | "trade";
+  source: "phone" | "email" | "walk_in" | "referral" | "website" | "google_business_profile" | "facebook_instagram" | "trade_partner" | "event_home_show" | "other";
+  sourceDetail: string;
+  receivedAt: string;
   message: string;
 };
+
+function localDateTimeValue(date = new Date()) {
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 16);
+}
 
 const emptyManualLeadForm: ManualLeadForm = {
   firstName: "",
@@ -61,6 +69,9 @@ const emptyManualLeadForm: ManualLeadForm = {
   placeId: "",
   projectType: "",
   customerType: "homeowner",
+  source: "phone",
+  sourceDetail: "",
+  receivedAt: localDateTimeValue(),
   message: "",
 };
 
@@ -77,6 +88,7 @@ type LeadInquiryRow = {
   leadStatus: LeadWorkflowStatus;
   storedLeadStatus: string;
   leadSource?: string | null;
+  leadSourceDetail?: string | null;
   leadProjectType?: string | null;
   leadMessage?: string | null;
   leadReceivedAt: string;
@@ -117,6 +129,20 @@ const archiveReasons: Array<{ value: ArchiveReason; label: string }> = [
   { value: "no_response", label: "No response" },
   { value: "other", label: "Other" },
 ];
+
+const leadSourceLabels: Record<string, string> = {
+  phone: "Phone call",
+  email: "Email",
+  walk_in: "Walk-in / showroom",
+  referral: "Referral",
+  website: "Website",
+  google_business_profile: "Google Business Profile",
+  facebook_instagram: "Facebook / Instagram",
+  trade_partner: "Contractor / trade partner",
+  event_home_show: "Event / home show",
+  other: "Other",
+  manual: "Manual entry",
+};
 
 function statusClass(status: LeadWorkflowStatus) {
   return {
@@ -185,6 +211,7 @@ export default function Leads() {
     mutationFn: async () => {
       const response = await apiRequest("POST", "/api/leads/manual", {
         ...manualLead,
+        receivedAt: new Date(manualLead.receivedAt).toISOString(),
         idempotencyKey: manualLeadSubmissionId,
       });
       return response.json();
@@ -206,7 +233,7 @@ export default function Leads() {
   });
 
   const openManualLeadDialog = () => {
-    setManualLead(emptyManualLeadForm);
+    setManualLead({ ...emptyManualLeadForm, receivedAt: localDateTimeValue() });
     setManualLeadSubmissionId(globalThis.crypto.randomUUID());
     setManualLeadOpen(true);
   };
@@ -245,7 +272,7 @@ export default function Leads() {
 
   const submitManualLead = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!manualLead.firstName.trim() || !manualLead.email.trim() || !manualLeadSubmissionId) return;
+    if (!manualLead.firstName.trim() || (!manualLead.email.trim() && !manualLead.phone.trim()) || !manualLeadSubmissionId) return;
     createManualLead.mutate();
   };
 
@@ -270,8 +297,8 @@ export default function Leads() {
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div>
-            <div className="flex items-center gap-3"><Inbox className="h-8 w-8 text-edg-teal" /><h1 className="text-3xl font-bold">Website Leads</h1></div>
-            <p className="mt-1 text-muted-foreground">One row for every website inquiry, from arrival through contact or archive.</p>
+            <div className="flex items-center gap-3"><Inbox className="h-8 w-8 text-edg-teal" /><h1 className="text-3xl font-bold">Leads</h1></div>
+            <p className="mt-1 text-muted-foreground">One row for every accepted inquiry, from arrival through contact or archive.</p>
           </div>
           <Button type="button" onClick={openManualLeadDialog} className="bg-edg-black text-edg-white hover:bg-edg-grey" data-testid="button-new-lead"><UserPlus className="mr-2 h-4 w-4" />New Lead</Button>
         </div>
@@ -305,16 +332,18 @@ export default function Leads() {
                     <div className="flex flex-wrap items-center gap-2">
                       <Link href={`/accounts/${lead.id}`} className="text-lg font-semibold hover:text-edg-teal">{lead.company || lead.name}</Link>
                       <Badge variant="outline" className={cn("border", statusClass(lead.leadStatus))}>{statusLabels[lead.leadStatus]}</Badge>
+                      {lead.leadSource && <Badge variant="secondary">{leadSourceLabels[lead.leadSource] || lead.leadSource}</Badge>}
                       <span className="text-sm text-muted-foreground">Received {formatDate(lead.leadReceivedAt)}</span>
                       {lead.inquiryCount > 1 && <Badge variant="secondary">Inquiry {lead.inquiryId} · {lead.inquiryCount} total</Badge>}
                     </div>
                     <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-muted-foreground">
-                      <a href={`mailto:${lead.email}`} className="flex items-center gap-1 hover:text-edg-teal"><Mail className="h-4 w-4" />{lead.email}</a>
+                      {lead.email && <a href={`mailto:${lead.email}`} className="flex items-center gap-1 hover:text-edg-teal"><Mail className="h-4 w-4" />{lead.email}</a>}
                       {lead.phone && <a href={`tel:${lead.phone}`} className="flex items-center gap-1 hover:text-edg-teal"><Phone className="h-4 w-4" />{lead.phone}</a>}
                       {(lead.billingAddress || lead.zipCode) && <span className="flex items-center gap-1"><MapPin className="h-4 w-4" />{lead.billingAddress || lead.zipCode}</span>}
                       {lead.leadProjectType && <span className="flex items-center gap-1"><MessageSquare className="h-4 w-4" />{lead.leadProjectType}</span>}
                     </div>
                     <p className="max-w-3xl text-sm leading-6">{extractMessage(lead.leadMessage)}</p>
+                    {lead.leadSourceDetail && <p className="max-w-3xl text-sm text-muted-foreground"><span className="font-semibold text-foreground">Attribution:</span> {lead.leadSourceDetail}</p>}
                     {lead.assessmentReason && <p className="max-w-3xl rounded-md bg-muted px-3 py-2 text-sm"><span className="font-semibold">Agent assessment:</span> {lead.assessmentReason}</p>}
                     {lead.leadStatus === "draft_ready" && <div className="max-w-3xl rounded-md border border-emerald-200 bg-emerald-50/60 px-4 py-3" data-testid={`draft-email-content-${lead.inquiryId}`}>
                       <p className="text-xs font-semibold uppercase tracking-wide text-emerald-800">Email draft</p>
@@ -356,12 +385,13 @@ export default function Leads() {
                 <Input id="manual-lead-last-name" maxLength={255} value={manualLead.lastName} onChange={(event) => updateManualLead("lastName", event.target.value)} data-testid="input-manual-lead-last-name" />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="manual-lead-email">Email *</Label>
-                <Input id="manual-lead-email" type="email" required maxLength={320} value={manualLead.email} onChange={(event) => updateManualLead("email", event.target.value)} data-testid="input-manual-lead-email" />
+                <Label htmlFor="manual-lead-email">Email</Label>
+                <Input id="manual-lead-email" type="email" maxLength={320} value={manualLead.email} onChange={(event) => updateManualLead("email", event.target.value)} data-testid="input-manual-lead-email" />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="manual-lead-phone">Phone</Label>
                 <Input id="manual-lead-phone" type="tel" maxLength={50} value={manualLead.phone} onChange={(event) => updateManualLead("phone", event.target.value)} data-testid="input-manual-lead-phone" />
+                <p className="text-xs text-muted-foreground">Email or phone is required.</p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="manual-lead-company">Company</Label>
@@ -379,6 +409,32 @@ export default function Leads() {
                     <SelectItem value="trade">Contractor / trade</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="manual-lead-source">Lead source *</Label>
+                <Select value={manualLead.source} onValueChange={(value) => updateManualLead("source", value)}>
+                  <SelectTrigger id="manual-lead-source" data-testid="select-manual-lead-source"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="phone">Phone call</SelectItem>
+                    <SelectItem value="email">Email</SelectItem>
+                    <SelectItem value="walk_in">Walk-in / showroom</SelectItem>
+                    <SelectItem value="referral">Referral</SelectItem>
+                    <SelectItem value="website">Website</SelectItem>
+                    <SelectItem value="google_business_profile">Google Business Profile</SelectItem>
+                    <SelectItem value="facebook_instagram">Facebook / Instagram</SelectItem>
+                    <SelectItem value="trade_partner">Contractor / trade partner</SelectItem>
+                    <SelectItem value="event_home_show">Event / home show</SelectItem>
+                    <SelectItem value="other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="manual-lead-received-at">Received date and time *</Label>
+                <Input id="manual-lead-received-at" type="datetime-local" required value={manualLead.receivedAt} onChange={(event) => updateManualLead("receivedAt", event.target.value)} data-testid="input-manual-lead-received-at" />
+              </div>
+              <div className="space-y-2 sm:col-span-2">
+                <Label htmlFor="manual-lead-source-detail">Attribution details</Label>
+                <Input id="manual-lead-source-detail" maxLength={500} placeholder="Who referred them, campaign, event, or other detail" value={manualLead.sourceDetail} onChange={(event) => updateManualLead("sourceDetail", event.target.value)} data-testid="input-manual-lead-source-detail" />
               </div>
               <div className="space-y-2 sm:col-span-2">
                 <Label htmlFor="manual-lead-location">Project address / ZIP</Label>
@@ -400,13 +456,14 @@ export default function Leads() {
                 <Input id="manual-lead-project-type" maxLength={255} placeholder="Pergola, shade, screen..." value={manualLead.projectType} onChange={(event) => updateManualLead("projectType", event.target.value)} data-testid="input-manual-lead-project-type" />
               </div>
               <div className="space-y-2 sm:col-span-2">
-                <Label htmlFor="manual-lead-message">Inquiry details</Label>
-                <Textarea id="manual-lead-message" rows={5} maxLength={5000} placeholder="What are they interested in?" value={manualLead.message} onChange={(event) => updateManualLead("message", event.target.value)} data-testid="input-manual-lead-message" />
+                <Label htmlFor="manual-lead-message">Notes</Label>
+                <Textarea id="manual-lead-message" rows={5} maxLength={5000} placeholder="What are they interested in? Add any useful context from the inquiry." value={manualLead.message} onChange={(event) => updateManualLead("message", event.target.value)} data-testid="input-manual-lead-message" />
               </div>
+              <div className="rounded-md bg-muted px-3 py-2 text-sm sm:col-span-2"><span className="font-medium">Status:</span> New. Rainmaker does not currently assign lead owners.</div>
             </div>
             <DialogFooter className="mt-6">
               <Button type="button" variant="outline" disabled={createManualLead.isPending} onClick={() => setManualLeadOpen(false)}>Cancel</Button>
-              <Button type="submit" disabled={!manualLead.firstName.trim() || !manualLead.email.trim() || createManualLead.isPending} data-testid="button-save-manual-lead">
+              <Button type="submit" disabled={!manualLead.firstName.trim() || (!manualLead.email.trim() && !manualLead.phone.trim()) || createManualLead.isPending} data-testid="button-save-manual-lead">
                 {createManualLead.isPending ? "Adding Lead..." : "Add Lead"}
               </Button>
             </DialogFooter>

@@ -55,6 +55,22 @@ describe("manual lead creation", () => {
     expect(mockCreateIdempotentLead).not.toHaveBeenCalled();
   });
 
+  it("accepts a phone-only inquiry without inventing a customer email", async () => {
+    await request(makeApp()).post("/api/leads/manual").set("x-test-session", "valid").send({
+      firstName: "Taylor",
+      email: "",
+      phone: "555-0177",
+      customerType: "homeowner",
+      source: "phone",
+      receivedAt: "2026-08-12T15:30:00.000Z",
+      idempotencyKey: "phone-only-f8209c5e",
+    }).expect(201);
+
+    expect(mockCreateIdempotentLead).toHaveBeenCalledWith(expect.objectContaining({
+      lead: expect.objectContaining({ email: "", phone: "555-0177", source: "phone" }),
+    }));
+  });
+
   it("creates a New inquiry without creating a quote or contacting the customer", async () => {
     const payload = {
       firstName: "Taylor",
@@ -72,6 +88,9 @@ describe("manual lead creation", () => {
       placeId: "fictional-place-id",
       projectType: "Motorized pergola",
       customerType: "homeowner",
+      source: "referral",
+      sourceDetail: "Referred by Sample Customer",
+      receivedAt: "2026-08-12T15:30:00.000Z",
       message: "Interested in shade for a west-facing patio.",
       idempotencyKey: "f8209c5e-2b25-4b4a-8ad4-e679fb6b72cd",
     };
@@ -103,8 +122,9 @@ describe("manual lead creation", () => {
         zipCode: "46530",
         country: "United States",
         placeId: "fictional-place-id",
-        source: "manual",
-        metadata: { entryMethod: "rainmaker_manual", actorUserId: 77 },
+        source: "referral",
+        receivedAt: new Date("2026-08-12T15:30:00.000Z"),
+        metadata: { entryMethod: "rainmaker_manual", actorUserId: 77, sourceDetail: "Referred by Sample Customer" },
       }),
       createLead: expect.any(Function),
     }));

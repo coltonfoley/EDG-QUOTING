@@ -45,8 +45,27 @@ export const manualLeadSchema = leadIntakeSchema.pick({
   projectType: true,
   message: true,
 }).extend({
+  email: z.union([z.string().trim().email(), z.literal("")]).transform((value) => value.toLowerCase()),
+  source: z.enum([
+    "phone",
+    "email",
+    "walk_in",
+    "referral",
+    "website",
+    "google_business_profile",
+    "facebook_instagram",
+    "trade_partner",
+    "event_home_show",
+    "other",
+  ]),
+  sourceDetail: optionalTrimmedText(500),
+  receivedAt: z.string().datetime({ offset: true }),
   customerType: z.enum(["homeowner", "commercial", "trade"]),
   idempotencyKey: z.string().trim().min(1).max(160),
+}).superRefine((lead, context) => {
+  if (!lead.email && !lead.phone) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["email"], message: "Email or phone is required" });
+  }
 });
 
 export type LeadIntakeInput = z.infer<typeof leadIntakeSchema>;

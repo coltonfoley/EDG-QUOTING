@@ -178,12 +178,15 @@ export function registerLeadIntakeRoutes(app: Express) {
     try {
       const input = manualLeadSchema.parse(req.body);
       const submissionId = resolveLeadIntakeSubmissionId({ bodyValue: input.idempotencyKey });
+      const { sourceDetail, receivedAt, ...leadInput } = input;
       const lead = {
-        ...input,
-        source: "manual",
+        ...leadInput,
+        source: input.source,
+        receivedAt: new Date(receivedAt),
         metadata: {
           entryMethod: "rainmaker_manual",
           actorUserId: (req.user as { id?: number } | undefined)?.id || null,
+          ...(sourceDetail ? { sourceDetail } : {}),
         },
       };
       const { account, replayed } = await createIdempotentLead({
@@ -298,6 +301,7 @@ export function registerLeadIntakeRoutes(app: Express) {
           secondaryContacts: accounts.secondaryContacts,
           leadStatus: leadInquiries.status,
           leadSource: leadInquiries.source,
+          leadSourceDetail: sql<string | null>`${leadInquiries.metadata}->>'sourceDetail'`,
           leadProjectType: leadInquiries.projectType,
           leadMessage: leadInquiries.message,
           leadReceivedAt: leadInquiries.receivedAt,

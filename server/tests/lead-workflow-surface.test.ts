@@ -42,7 +42,12 @@ describe("lead inquiry workflow surface", () => {
     expect(handler).toContain('leadIntakeSchema } from "@shared/leadIntake"');
     expect(contract).toContain("streetAddress: optionalTrimmedText(500)");
     expect(contract).toContain('customerType: z.enum(["homeowner", "commercial", "trade"])');
-    expect(routes).toContain('source: "manual"');
+    expect(contract).toContain('sourceDetail: optionalTrimmedText(500)');
+    expect(contract).toContain('receivedAt: z.string().datetime({ offset: true })');
+    expect(contract).toContain("Email or phone is required");
+    expect(routes).toContain('source: input.source');
+    expect(routes).toContain('entryMethod: "rainmaker_manual"');
+    expect(routes).toContain("leadSourceDetail:");
     expect(routes).toContain("preserveAccountAndCreateInquiry(lead, submissionId!");
     expect(routes).toContain("createdQuote: false");
   });
@@ -58,6 +63,13 @@ describe("lead inquiry workflow surface", () => {
     expect(leads).toContain("streetAddress: components.streetAddress");
     expect(leads).toContain('data-testid="input-manual-lead-company"');
     expect(leads).toContain('data-testid="input-manual-lead-address-line-2"');
+    expect(leads).toContain('data-testid="select-manual-lead-source"');
+    expect(leads).toContain('data-testid="input-manual-lead-received-at"');
+    expect(leads).toContain('data-testid="input-manual-lead-source-detail"');
+    expect(leads).toContain("Rainmaker does not currently assign lead owners");
+    expect(leads).toContain("leadSourceLabels[lead.leadSource]");
+    expect(leads).toContain("Attribution:");
+    expect(leads).toContain("Email or phone is required.");
     expect(autocomplete).toContain('onValueChange?.(event.target.value)');
     expect(autocomplete).toContain('onValueChangeRef.current?.(components.formattedAddress)');
     expect(addressComponents).toContain('formattedAddress: place.formatted_address || ""');

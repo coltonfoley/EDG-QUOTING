@@ -22,6 +22,7 @@ export type PersistableLeadIntake = {
   source?: string | null;
   customerType?: string | null;
   metadata?: Record<string, unknown> | null;
+  receivedAt?: Date | null;
 };
 
 export type PersistedLeadAccount = {
@@ -94,7 +95,7 @@ function mapLeadToAccount(lead: PersistableLeadIntake): InsertAccount {
     leadSource: lead.source || "website",
     leadProjectType: lead.projectType || undefined,
     leadMessage: buildLeadNotes(lead),
-    leadReceivedAt: new Date(),
+    leadReceivedAt: lead.receivedAt || new Date(),
   };
 }
 
@@ -109,11 +110,17 @@ export async function preserveAccountAndCreateInquiry(
   database: any = db
 ): Promise<PersistedLeadAccount> {
   const accountData = mapLeadToAccount(lead);
-  const [existingAccount] = await database
-    .select()
-    .from(accounts)
-    .where(sql`LOWER(${accounts.email}) = ${accountData.email.toLowerCase()}`)
-    .limit(1);
+  const normalizedEmail = accountData.email.trim().toLowerCase();
+  const normalizedPhone = (accountData.phone || "").trim();
+  const [existingAccount] = normalizedEmail || normalizedPhone
+    ? await database
+      .select()
+      .from(accounts)
+      .where(normalizedEmail
+        ? sql`LOWER(${accounts.email}) = ${normalizedEmail}`
+        : sql`${accounts.phone} = ${normalizedPhone}`)
+      .limit(1)
+    : [];
 
   if (existingAccount) {
     const shouldReplaceName =
@@ -178,7 +185,7 @@ export async function preserveAccountAndCreateInquiry(
         location: lead.location || undefined,
         customerType: lead.customerType || undefined,
         metadata: lead.metadata || undefined,
-        receivedAt: new Date(),
+        receivedAt: lead.receivedAt || new Date(),
       })
       .returning({ id: leadInquiries.id });
     return { ...account, inquiryId: inquiry.id };
@@ -201,7 +208,7 @@ export async function preserveAccountAndCreateInquiry(
       location: lead.location || undefined,
       customerType: lead.customerType || undefined,
       metadata: lead.metadata || undefined,
-      receivedAt: new Date(),
+      receivedAt: lead.receivedAt || new Date(),
     })
     .returning({ id: leadInquiries.id });
 
