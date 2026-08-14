@@ -45,26 +45,35 @@ const leadStatusSchema = z.enum([
   "archived",
 ]);
 
-const leadStatusUpdateSchema = z.object({
+function isGmailDraftUrl(value: string) {
+  try {
+    const url = new URL(value);
+    const isGmailPath = url.pathname === "/mail/" || /^\/mail\/u\/\d+\/$/.test(url.pathname);
+    const isDraftHash = url.hash === "#drafts" || url.hash.startsWith("#drafts/");
+
+    return url.protocol === "https:"
+      && url.hostname === "mail.google.com"
+      && isGmailPath
+      && isDraftHash;
+  } catch {
+    return false;
+  }
+}
+
+export const leadStatusUpdateSchema = z.object({
   status: z.enum(["draft_ready", "contacted", "archived"]),
   reason: z.enum(["not_a_fit", "spam", "duplicate", "no_response", "other"]).optional().nullable(),
   draftEmailContent: z.string().trim().max(20000).optional().nullable(),
-  gmailDraftUrl: z.string().url().refine((value) => {
-    try {
-      const url = new URL(value);
-      return url.protocol === "https:" && url.hostname === "mail.google.com"
-        && /^\/mail\/u\/\d+\//.test(url.pathname) && url.hash.startsWith("#drafts");
-    } catch { return false; }
-  }, "Draft link must use https://mail.google.com").optional().nullable(),
+  gmailDraftUrl: z.string().url().refine(
+    isGmailDraftUrl,
+    "Draft link must use https://mail.google.com",
+  ).optional().nullable(),
 });
 
-const gmailDraftUrlSchema = z.string().url().refine((value) => {
-  try {
-    const url = new URL(value);
-    return url.protocol === "https:" && url.hostname === "mail.google.com"
-      && /^\/mail\/u\/\d+\//.test(url.pathname) && url.hash.startsWith("#drafts");
-  } catch { return false; }
-}, "Gmail draft URL must use https://mail.google.com");
+export const gmailDraftUrlSchema = z.string().url().refine(
+  isGmailDraftUrl,
+  "Gmail draft URL must use https://mail.google.com",
+);
 
 const leadAgentAssessmentSchema = z.object({
   outcome: z.enum(["fit", "not_fit"]),
@@ -458,7 +467,7 @@ export function registerLeadIntakeRoutes(app: Express) {
       res.json(inquiry);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: "Invalid inquiry status", errors: error.errors });
+        return res.status(400).json({ message: "Invalid inquiry update", errors: error.errors });
       }
       console.error("Error updating inquiry status", { errorType: redactedErrorType(error) });
       res.status(500).json({ message: "Failed to update inquiry status" });
