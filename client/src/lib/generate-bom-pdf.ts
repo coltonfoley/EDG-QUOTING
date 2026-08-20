@@ -239,7 +239,10 @@ export async function generateBomPDF(options: GenerateBomPDFOptions): Promise<Bl
 
     const descMaxWidth = colWidths.description - 4;
     const descLines = pdf.splitTextToSize(descriptionWithColor, descMaxWidth);
-    const rowHeight = Math.max(5, descLines.length * 4 + 2);
+    const skuMaxWidth = colWidths.sku - 4;
+    const skuLines = pdf.splitTextToSize(sku, skuMaxWidth);
+    const rowLineCount = Math.max(descLines.length, skuLines.length);
+    const rowHeight = Math.max(5, rowLineCount * 4 + 2);
 
     if (y + rowHeight > pageH - footerReserve) {
       pdf.addPage();
@@ -257,7 +260,7 @@ export async function generateBomPDF(options: GenerateBomPDFOptions): Promise<Bl
     colX += colWidths.description;
     
     pdf.setTextColor(100, 100, 100);
-    pdf.text(sku, colX, y);
+    pdf.text(skuLines, colX, y);
     colX += colWidths.sku;
     
     pdf.setTextColor(33, 33, 33);
