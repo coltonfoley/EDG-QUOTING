@@ -4,6 +4,7 @@ import type { QuoteWithDetails, LineItem } from '@shared/schema';
 import { barlowRegularBase64, barlowSemiBoldBase64 } from './fonts';
 import { formatCurrency, calculateLineItemTotal } from './utils';
 import { getBrandLogoPNG } from './pdf-brand-assets';
+import { detectHighlightedMemberSize, type HighlightedMemberSize } from './bom-member-size';
 
 const JsPDF = jsPDFNamed || jsPDFDefault;
 
@@ -74,6 +75,8 @@ function drawTableHeader(pdf: JsPDFType, y: number, margin: number, colWidths: R
   let colX = margin + 2;
   pdf.text('Description', colX, y + 3);
   colX += colWidths.description;
+  pdf.text('Size', colX, y + 3);
+  colX += colWidths.size;
   pdf.text('SKU', colX, y + 3);
   colX += colWidths.sku;
   pdf.text('Qty', colX, y + 3);
@@ -83,6 +86,38 @@ function drawTableHeader(pdf: JsPDFType, y: number, margin: number, colWidths: R
   pdf.text('Total', colX, y + 3);
   
   return headerHeight;
+}
+
+function drawMemberSizeCell(
+  pdf: JsPDFType,
+  size: HighlightedMemberSize | null,
+  x: number,
+  y: number,
+  columnWidth: number,
+) {
+  if (!size) {
+    pdf.setFont('Barlow-Regular', 'normal');
+    pdf.setFontSize(9);
+    pdf.setTextColor(130, 130, 130);
+    pdf.text('-', x + (columnWidth / 2), y, { align: 'center' });
+    return;
+  }
+
+  const badgeWidth = 16;
+  const badgeHeight = 6;
+  const badgeX = x + ((columnWidth - badgeWidth) / 2);
+  const badgeY = y - 4.5;
+  const isFourByEight = size === '4x8';
+
+  pdf.setDrawColor(33, 33, 33);
+  pdf.setFillColor(isFourByEight ? 33 : 255, isFourByEight ? 33 : 255, isFourByEight ? 33 : 255);
+  pdf.setLineWidth(0.5);
+  pdf.roundedRect(badgeX, badgeY, badgeWidth, badgeHeight, 1, 1, 'FD');
+
+  pdf.setFont('Barlow-SemiBold', 'normal');
+  pdf.setFontSize(9);
+  pdf.setTextColor(isFourByEight ? 255 : 33, isFourByEight ? 255 : 33, isFourByEight ? 255 : 33);
+  pdf.text(size === '2x8' ? '2 x 8' : '4 x 8', badgeX + (badgeWidth / 2), y, { align: 'center' });
 }
 
 export async function generateBomPDF(options: GenerateBomPDFOptions): Promise<Blob> {
@@ -185,8 +220,9 @@ export async function generateBomPDF(options: GenerateBomPDFOptions): Promise<Bl
   });
 
   const colWidths = {
-    description: contentW - 30 - 15 - 28 - 28,
-    sku: 30,
+    description: contentW - 28 - 20 - 15 - 28 - 28,
+    size: 20,
+    sku: 28,
     qty: 15,
     unitPrice: 28,
     total: 28,
@@ -229,6 +265,7 @@ export async function generateBomPDF(options: GenerateBomPDFOptions): Promise<Bl
     
     const qty = parseFloat(item.quantity).toString();
     const sku = item.sku || '';
+    const memberSize = detectHighlightedMemberSize(item);
     const { unitSellPrice, lineTotal } = calculateSellPrice(item, quote.tariffRate || '0');
     grandTotal += lineTotal;
     
@@ -242,7 +279,7 @@ export async function generateBomPDF(options: GenerateBomPDFOptions): Promise<Bl
     const skuMaxWidth = colWidths.sku - 4;
     const skuLines = pdf.splitTextToSize(sku, skuMaxWidth);
     const rowLineCount = Math.max(descLines.length, skuLines.length);
-    const rowHeight = Math.max(5, rowLineCount * 4 + 2);
+    const rowHeight = Math.max(memberSize ? 8 : 6, rowLineCount * 4 + 2);
 
     if (y + rowHeight > pageH - footerReserve) {
       pdf.addPage();
@@ -258,7 +295,12 @@ export async function generateBomPDF(options: GenerateBomPDFOptions): Promise<Bl
     let colX = margin + 2;
     pdf.text(descLines, colX, y);
     colX += colWidths.description;
+
+    drawMemberSizeCell(pdf, memberSize, colX, y, colWidths.size);
+    colX += colWidths.size;
     
+    pdf.setFont('Barlow-Regular', 'normal');
+    pdf.setFontSize(9);
     pdf.setTextColor(100, 100, 100);
     pdf.text(skuLines, colX, y);
     colX += colWidths.sku;
