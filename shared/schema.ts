@@ -178,6 +178,17 @@ export const leadInquiryStatusEvents = pgTable("lead_inquiry_status_events", {
 export const customers = accounts; // Legacy alias for backward compatibility
 export const clients = accounts; // New unified client model alias
 
+// Stable dealer-portal identities keep automated B2B orders idempotent without
+// fuzzy matching a business by name, email, or phone.
+export const dealerPortalCompanyMappings = pgTable("dealer_portal_company_mappings", {
+  portalCompanyId: text("portal_company_id").primaryKey(),
+  accountId: integer("account_id").notNull().references(() => accounts.id, { onDelete: "restrict" }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("dealer_portal_company_mappings_account_key").on(table.accountId),
+]);
+
 export const quotes = pgTable("quotes", {
   id: serial("id").primaryKey(),
   quoteNumber: text("quote_number").notNull().unique(),
@@ -256,6 +267,24 @@ export const quoteVersionEvents = pgTable("quote_version_events", {
   index("idx_quote_version_events_family").on(table.quoteFamilyRootId),
   index("idx_quote_version_events_quote").on(table.quoteId),
   index("idx_quote_version_events_created").on(table.createdAt),
+]);
+
+export const dealerPortalOrderSubmissions = pgTable("dealer_portal_order_submissions", {
+  portalOrderId: text("portal_order_id").primaryKey(),
+  portalCompanyId: text("portal_company_id").notNull().references(
+    () => dealerPortalCompanyMappings.portalCompanyId,
+    { onDelete: "restrict" },
+  ),
+  requestHash: text("request_hash").notNull(),
+  snapshotHash: text("snapshot_hash").notNull(),
+  accountId: integer("account_id").notNull().references(() => accounts.id, { onDelete: "restrict" }),
+  quoteId: integer("quote_id").references(() => quotes.id, { onDelete: "restrict" }),
+  payload: jsonb("payload").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  completedAt: timestamp("completed_at"),
+}, (table) => [
+  uniqueIndex("dealer_portal_order_submissions_quote_key").on(table.quoteId),
+  index("dealer_portal_order_submissions_company_created_idx").on(table.portalCompanyId, table.createdAt),
 ]);
 
 export const planningAgreementStatusValues = [
