@@ -26,6 +26,12 @@ describe("authorization policy", () => {
     expect(next).not.toHaveBeenCalled();
   });
 
+  it("protects the dealer portal catalog with its dedicated integration key", () => {
+    const catalogRoutes = source("server/routes/dealerPortalCatalogRoutes.ts");
+    expect(catalogRoutes).toContain("DEALER_PORTAL_INTEGRATION_KEY");
+    expect(catalogRoutes).toContain('timingSafeEqual(configuredBuffer, suppliedBuffer)');
+  });
+
   it("permits only administrators through the admin guard", () => {
     const deniedResponse = responseDouble();
     const deniedNext = vi.fn();
