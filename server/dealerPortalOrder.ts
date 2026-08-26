@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, timingSafeEqual } from "node:crypto";
 
 import { calculateCustomerUnitPrice } from "@shared/pricing";
 import { z } from "zod";
@@ -79,6 +79,13 @@ export const dealerPortalOrderSchema = z.object({
 });
 
 export type DealerPortalOrder = z.infer<typeof dealerPortalOrderSchema>;
+
+export function isDealerPortalOrderKeyValid(supplied: string | undefined, configured: string | undefined) {
+  if (!supplied || !configured || configured.length < 32) return false;
+  const suppliedBuffer = Buffer.from(supplied);
+  const configuredBuffer = Buffer.from(configured);
+  return suppliedBuffer.length === configuredBuffer.length && timingSafeEqual(suppliedBuffer, configuredBuffer);
+}
 
 function canonicalize(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(canonicalize);

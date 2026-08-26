@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   dealerPortalOrderSchema,
   hashDealerPortalOrder,
+  isDealerPortalOrderKeyValid,
   validateDealerPortalCatalogMatch,
 } from "../dealerPortalOrder";
 
@@ -33,6 +34,12 @@ function fixture() {
 }
 
 describe("dealer portal paid-order contract", () => {
+  it("requires the exact configured integration key", () => {
+    const configured = "0123456789abcdefghijklmnopqrstuvwxyz";
+    expect(isDealerPortalOrderKeyValid(configured, configured)).toBe(true);
+    expect(isDealerPortalOrderKeyValid("wrong", configured)).toBe(false);
+    expect(isDealerPortalOrderKeyValid(configured, undefined)).toBe(false);
+  });
   it("accepts coherent 2 x 8 materials-only evidence and hashes it deterministically", () => {
     const first = dealerPortalOrderSchema.parse(fixture());
     const second = dealerPortalOrderSchema.parse({ ...fixture(), company: { ...fixture().company } });
