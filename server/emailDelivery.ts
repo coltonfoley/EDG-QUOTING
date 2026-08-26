@@ -43,6 +43,7 @@ type DeliveryLedger = {
 export type IdempotentEmailDeliveryResult = {
   outcome: "sent" | "replayed" | "in_progress" | "conflict" | "failed" | "pending_review";
   sentAt?: Date | null;
+  providerMessageId?: string | null;
   errorType?: string;
 };
 
@@ -63,7 +64,15 @@ export async function deliverIdempotentEmail(options: {
 
   if (claim.outcome === "conflict") return { outcome: "conflict" };
   if (claim.outcome === "in_progress") return { outcome: "in_progress" };
-  if (claim.outcome === "sent") return { outcome: "replayed", sentAt: claim.attempt?.sentAt ?? null };
+  if (claim.outcome === "sent") {
+    return {
+      outcome: "replayed",
+      sentAt: claim.attempt?.sentAt ?? null,
+      ...(claim.attempt?.providerMessageId
+        ? { providerMessageId: claim.attempt.providerMessageId }
+        : {}),
+    };
+  }
   if (!claim.attempt) return { outcome: "pending_review", errorType: "MissingDeliveryAttempt" };
 
   let providerResult: { id?: string | null } | undefined;
@@ -94,5 +103,9 @@ export async function deliverIdempotentEmail(options: {
     };
   }
 
-  return { outcome: "sent", sentAt };
+  return {
+    outcome: "sent",
+    sentAt,
+    ...(providerResult?.id ? { providerMessageId: providerResult.id } : {}),
+  };
 }

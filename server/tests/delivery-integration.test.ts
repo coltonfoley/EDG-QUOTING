@@ -6,6 +6,7 @@ vi.mock("../storage", () => ({ storage: {} }));
 import {
   buildDeliveryBomPayload,
   buildDeliverySearchResult,
+  buildShipmentReadyEmail,
   isDeliveryIntegrationKeyValid,
 } from "../routes/deliveryIntegrationRoutes";
 
@@ -102,5 +103,21 @@ describe("delivery BOM integration", () => {
     });
     expect(JSON.stringify(result)).not.toContain("email");
     expect(JSON.stringify(result)).not.toContain("price");
+  });
+
+  it("builds a shipment-ready notice with the 24-hour inspection terms", () => {
+    const message = buildShipmentReadyEmail({
+      customerName: "Lakeview Outdoor Living",
+      projectName: "Dealer pergola",
+      quoteNumber: "Q-42",
+      deliveryDate: "2026-08-29",
+    });
+
+    expect(message.subject).toContain("24-hour inspection required");
+    expect(message.textBody).toContain("within 24 hours");
+    expect(message.textBody).toContain("clear photographs");
+    expect(message.textBody).toContain("latent defects");
+    expect(message.replyTo).toBe("sales@edgpatioshade.com");
+    expect(message.htmlBody).toContain("mailto:sales@edgpatioshade.com");
   });
 });
