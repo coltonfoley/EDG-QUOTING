@@ -287,6 +287,23 @@ export const dealerPortalOrderSubmissions = pgTable("dealer_portal_order_submiss
   index("dealer_portal_order_submissions_company_created_idx").on(table.portalCompanyId, table.createdAt),
 ]);
 
+export const dealerPortalPricingRequests = pgTable("dealer_portal_pricing_requests", {
+  portalPricingRequestId: text("portal_pricing_request_id").primaryKey(),
+  portalCompanyId: text("portal_company_id").notNull().references(
+    () => dealerPortalCompanyMappings.portalCompanyId,
+    { onDelete: "restrict" },
+  ),
+  requestHash: text("request_hash").notNull(),
+  accountId: integer("account_id").notNull().references(() => accounts.id, { onDelete: "restrict" }),
+  quoteId: integer("quote_id").references(() => quotes.id, { onDelete: "restrict" }),
+  payload: jsonb("payload").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  completedAt: timestamp("completed_at"),
+}, (table) => [
+  uniqueIndex("dealer_portal_pricing_requests_quote_key").on(table.quoteId),
+  index("dealer_portal_pricing_requests_company_created_idx").on(table.portalCompanyId, table.createdAt),
+]);
+
 export const planningAgreementStatusValues = [
   "required",
   "sent",
