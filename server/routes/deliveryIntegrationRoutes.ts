@@ -3,6 +3,7 @@ import { timingSafeEqual } from "node:crypto";
 import { and, desc, eq, ilike, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../db";
+import { deliverIdempotentEmail, requireEmailIdempotencyKey } from "../emailDelivery";
 import { storage } from "../storage";
 import {
   accounts as accountsTable,
@@ -18,6 +19,15 @@ const deliveryBomQuerySchema = z.object({
 const deliverySearchQuerySchema = z.object({
   q: z.string().trim().min(2).max(120),
 });
+
+const shipmentReadySchema = z.object({
+  deliveryId: z.string().uuid(),
+  quoteId: z.number().int().positive(),
+  quoteVersion: z.number().int().positive(),
+  deliveryDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+});
+
+const SHIPMENT_REPLY_TO = "sales@edgpatioshade.com";
 
 export function isDeliveryIntegrationKeyValid(
   provided: string | undefined,
@@ -128,6 +138,60 @@ export function buildDeliveryBomPayload(quote: QuoteWithDetails) {
         position: item.position ?? 0,
       })),
   };
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+export function buildShipmentReadyEmail(input: {
+  customerName: string;
+  projectName: string;
+  quoteNumber: string;
+  deliveryDate: string;
+}) {
+  const deliveryDate = new Intl.DateTimeFormat("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(`${input.deliveryDate}T12:00:00Z`));
+  const subject = "Your Sundance materials are ready — 24-hour inspection required";
+  const textBody = [
+    `Hi ${input.customerName},`,
+    "",
+    `Your Sundance materials for ${input.projectName} (${input.quoteNumber}) are ready for the planned pickup or delivery on ${deliveryDate}.`,
+    "",
+    "Please inspect all materials promptly upon receipt. Any visible damage, scratches, missing quantities, incorrect items, or other visible problems must be reported to EDG in writing within 24 hours after you, your representative, or your carrier receives the materials.",
+    "",
+    "Reply to this email at sales@edgpatioshade.com with your project or order number, a description of the problem, the affected item and quantity, and clear photographs showing the issue.",
+    "",
+    "If timely written notice is not provided, the materials will be deemed received in good order and complete with respect to conditions reasonably discoverable upon inspection. This does not change coverage for latent defects or an applicable written manufacturer warranty.",
+    "",
+    "EDG Patio & Shade",
+  ].join("\n");
+
+  const htmlBody = `
+    <p>Hi ${escapeHtml(input.customerName)},</p>
+    <p>Your Sundance materials for <strong>${escapeHtml(input.projectName)}</strong> (${escapeHtml(input.quoteNumber)}) are ready for the planned pickup or delivery on <strong>${escapeHtml(deliveryDate)}</strong>.</p>
+    <p><strong>Please inspect all materials promptly upon receipt.</strong> Any visible damage, scratches, missing quantities, incorrect items, or other visible problems must be reported to EDG in writing within 24 hours after you, your representative, or your carrier receives the materials.</p>
+    <p>Reply to this email at <a href="mailto:${SHIPMENT_REPLY_TO}">${SHIPMENT_REPLY_TO}</a> with:</p>
+    <ul>
+      <li>Your project or order number</li>
+      <li>A description of the problem</li>
+      <li>The affected item and quantity</li>
+      <li>Clear photographs showing the issue</li>
+    </ul>
+    <p>If timely written notice is not provided, the materials will be deemed received in good order and complete with respect to conditions reasonably discoverable upon inspection. This does not change coverage for latent defects or an applicable written manufacturer warranty.</p>
+    <p>EDG Patio &amp; Shade</p>
+  `.trim();
+
+  return { subject, textBody, htmlBody, replyTo: SHIPMENT_REPLY_TO };
 }
 
 export function registerDeliveryIntegrationRoutes(app: Express) {
@@ -251,6 +315,95 @@ export function registerDeliveryIntegrationRoutes(app: Express) {
         errorType: error instanceof Error ? error.name : "UnknownError",
       });
       return res.status(500).json({ message: "Rainmaker BOM lookup failed." });
+    }
+  });
+
+  app.post("/api/integrations/delivery-shipment-ready", async (req, res) => {
+    if (
+      !isDeliveryIntegrationKeyValid(
+        req.get("x-edg-integration-key"),
+        process.env.DELIVERY_CHECK_INTEGRATION_KEY,
+      )
+    ) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const parsed = shipmentReadySchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "A valid shipment-ready request is required." });
+    }
+
+    let idempotencyKey: string;
+    try {
+      idempotencyKey = requireEmailIdempotencyKey(req.get("Idempotency-Key"));
+    } catch (error) {
+      const status = error && typeof error === "object" && "status" in error
+        ? Number(error.status)
+        : 400;
+      return res.status(status).json({ message: error instanceof Error ? error.message : "Invalid email request." });
+    }
+
+    const expectedKey = `delivery-shipment-ready:${parsed.data.deliveryId}`;
+    if (idempotencyKey !== expectedKey) {
+      return res.status(409).json({ message: "The shipment-ready request does not match this delivery." });
+    }
+
+    try {
+      const quote = await storage.getQuoteWithDetails(parsed.data.quoteId);
+      if (!quote || quote.versionNumber !== parsed.data.quoteVersion) {
+        return res.status(409).json({ message: "The Rainmaker quote version no longer matches this delivery." });
+      }
+
+      const account = quote.account || quote.customer;
+      const recipient = account?.email?.trim();
+      if (!recipient) {
+        return res.status(409).json({ message: "Add a customer email in Rainmaker before marking this shipment ready." });
+      }
+
+      const customerName = account?.company?.trim() || account?.name?.trim() || "Customer";
+      const projectName = quote.projectName?.trim() || customerName;
+      const message = buildShipmentReadyEmail({
+        customerName,
+        projectName,
+        quoteNumber: quote.quoteNumber,
+        deliveryDate: parsed.data.deliveryDate,
+      });
+      const { sendEmail } = await import("../email");
+      const result = await deliverIdempotentEmail({
+        ledger: storage,
+        idempotencyKey,
+        messageType: "delivery_shipment_ready",
+        quoteId: quote.id,
+        send: () => sendEmail({
+          to: recipient,
+          subject: message.subject,
+          htmlBody: message.htmlBody,
+          textBody: message.textBody,
+          replyTo: message.replyTo,
+        }),
+      });
+
+      if (result.outcome === "sent" || result.outcome === "replayed") {
+        return res.json({
+          status: "sent",
+          recipient,
+          sentAt: result.sentAt?.toISOString?.() || result.sentAt || null,
+          providerMessageId: result.providerMessageId || null,
+        });
+      }
+      if (result.outcome === "failed") {
+        return res.status(502).json({ message: "Gmail did not accept the shipment-ready email. Try again." });
+      }
+      return res.status(409).json({
+        message: result.outcome === "in_progress"
+          ? "This shipment-ready email is already being sent. Try again shortly."
+          : "The email send needs review before it can be retried.",
+      });
+    } catch (error) {
+      console.error("Shipment-ready email integration failed", {
+        errorType: error instanceof Error ? error.name : "UnknownError",
+      });
+      return res.status(500).json({ message: "The shipment-ready email could not be sent." });
     }
   });
 }

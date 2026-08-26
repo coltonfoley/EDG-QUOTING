@@ -50,7 +50,8 @@ export type EmailDeliveryMessageType =
   | "quote_signature_request"
   | "planning_signature_request"
   | "quote_signature_confirmation"
-  | "planning_signature_confirmation";
+  | "planning_signature_confirmation"
+  | "delivery_shipment_ready";
 export type EmailDeliveryClaim = {
   outcome: "claimed" | "sent" | "in_progress" | "conflict";
   attempt?: EmailDeliveryAttempt;
