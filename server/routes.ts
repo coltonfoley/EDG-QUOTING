@@ -25,6 +25,7 @@ import { registerBusinessEventRoutes } from "./routes/businessEventRoutes";
 import { registerDeliveryIntegrationRoutes } from "./routes/deliveryIntegrationRoutes";
 import { registerDealerPortalCatalogRoutes } from "./routes/dealerPortalCatalogRoutes";
 import { registerDealerPortalOrderRoutes } from "./routes/dealerPortalOrderRoutes";
+import { registerDealerPortalPricingRequestRoutes } from "./routes/dealerPortalPricingRequestRoutes";
 import { redactedErrorType, validationIssueSummary } from "./redactedLogging";
 import { productCatalogImportRequestSchema } from "./productCatalogImport";
 
@@ -232,6 +233,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerDeliveryIntegrationRoutes(app);
   registerDealerPortalCatalogRoutes(app);
   registerDealerPortalOrderRoutes(app);
+  registerDealerPortalPricingRequestRoutes(app);
 
   app.get('/api/admin/users', isAuthenticated, requireAdmin, async (req: any, res) => {
     try {

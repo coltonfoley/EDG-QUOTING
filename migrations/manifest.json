@@ -38,6 +38,7 @@
     "0034_add_lead_agent_assessments.sql",
     "0035_add_lead_inquiry_status_audit.sql",
     "0036_add_lead_draft_email_content.sql",
-    "0037_add_dealer_portal_order_submissions.sql"
+    "0037_add_dealer_portal_order_submissions.sql",
+    "0038_add_dealer_portal_pricing_requests.sql"
   ]
 }
