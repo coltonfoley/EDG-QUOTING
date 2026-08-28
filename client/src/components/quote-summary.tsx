@@ -627,7 +627,7 @@ export function QuoteSummary({ quote, onUpdateQuote, isReadOnly = false }: Quote
             {totals.discountAmount > 0 && (
               <div className="flex justify-between items-center text-sm">
                 <span className="text-muted-foreground">Discount:</span>
-                <span className="font-medium text-red-600">
+                <span className="font-medium text-red-700 dark:text-red-400">
                   -{formatCurrency(totals.discountAmount)}
                 </span>
               </div>
