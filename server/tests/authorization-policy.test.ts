@@ -476,7 +476,7 @@ describe("authorization policy", () => {
     expect(accounts).toContain("Current Quote Families");
     expect(home).toContain("quote.isLatestVersion !== false");
     expect(home).toContain("q.dealStageChangedAt");
-    expect(home).toContain("Gross Markup — Won");
+    expect(home).toContain("Est. Gross Profit — Won");
     expect(home).not.toContain("Profit This Month");
   });
 
