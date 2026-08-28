@@ -21,7 +21,7 @@ import { Link } from "wouter";
 import { AppHeader } from "@/components/app-header";
 import { PageLoadError } from "@/components/error-alert";
 import { useQuery } from "@tanstack/react-query";
-import { formatCurrency, cn, calculateQuoteTotals } from "@/lib/utils";
+import { formatCurrency, cn, calculateQuoteTotals, calculateGrossMargin } from "@/lib/utils";
 import { calculateLineItemsValue } from "@/lib/quote-value";
 import { format, startOfMonth, endOfMonth, isWithinInterval } from "date-fns";
 import type { Account, QuoteWithDetails } from "@shared/schema";
@@ -54,8 +54,8 @@ export default function Home() {
     return calculateLineItemsValue(quote.lineItems);
   }
 
-  // Gross markup is customer line revenue minus stored line cost. It is not net profit.
-  function calculateQuoteMarkup(quote: QuoteWithDetails): number {
+  // Estimated line gross profit after customer discounts; excludes tax and shipping.
+  function calculateQuoteProfit(quote: QuoteWithDetails): number {
     const totals = calculateQuoteTotals(
       quote.lineItems,
       quote.taxRate ? parseFloat(quote.taxRate.toString()) : 0,
@@ -64,7 +64,7 @@ export default function Home() {
       quote.isShippingTaxable === true,
       quote.tariffRate ? parseFloat(quote.tariffRate.toString()) : 0
     );
-    return totals.totalMarkup;
+    return totals.grossProfit;
   }
 
   const currentQuotes = quotes?.filter((quote) => quote.isLatestVersion !== false) || [];
@@ -96,13 +96,13 @@ export default function Home() {
       ? (currentQuotes.filter(q => isWonStage(q.dealStage || '')).length /
          currentQuotes.filter(q => isFinalStage(q.dealStage || '')).length) * 100 || 0
       : 0,
-    totalMarkup: currentQuotes.filter(q => isWonStage(q.dealStage || '')).reduce((sum, quote) => {
-      return sum + calculateQuoteMarkup(quote);
+    totalGrossProfit: currentQuotes.filter(q => isWonStage(q.dealStage || '')).reduce((sum, quote) => {
+      return sum + calculateQuoteProfit(quote);
     }, 0),
-    pipelineMarkup: currentQuotes.filter(q => isActiveStage(q.dealStage || 'new_lead')).reduce((sum, quote) => {
-      return sum + calculateQuoteMarkup(quote);
+    pipelineProfit: currentQuotes.filter(q => isActiveStage(q.dealStage || 'new_lead')).reduce((sum, quote) => {
+      return sum + calculateQuoteProfit(quote);
     }, 0),
-    markupThisMonth: currentQuotes.filter(q => {
+    profitThisMonth: currentQuotes.filter(q => {
       if (!isWonStage(q.dealStage || '')) return false;
       if (!q.dealStageChangedAt) return false;
       const wonAt = new Date(q.dealStageChangedAt);
@@ -110,43 +110,31 @@ export default function Home() {
       const end = endOfMonth(new Date());
       return isWithinInterval(wonAt, { start, end });
     }).reduce((sum, quote) => {
-      return sum + calculateQuoteMarkup(quote);
+      return sum + calculateQuoteProfit(quote);
     }, 0),
-    avgMarginPercent: currentQuotes.length > 0
-      ? (() => {
-          let totalMarkup = 0;
-          let totalBaseCost = 0;
-          currentQuotes.forEach(q => {
-            const totals = calculateQuoteTotals(
-              q.lineItems,
-              q.taxRate ? parseFloat(q.taxRate.toString()) : 0,
-              q.discount ? parseFloat(q.discount.toString()) : 0,
-              q.shipping ? parseFloat(q.shipping.toString()) : 0,
-              q.isShippingTaxable === true,
-              q.tariffRate ? parseFloat(q.tariffRate.toString()) : 0
-            );
-            totalMarkup += totals.totalMarkup;
-            // Calculate actual base cost (after manufacturer discounts)
-            // baseCost = subtotal - totalMarkup + totalManufacturerDiscount
-            // actualBaseCost = baseCost - totalManufacturerDiscount = subtotal - totalMarkup
-            const actualBaseCost = totals.subtotal - totals.totalMarkup;
-            totalBaseCost += actualBaseCost;
-          });
-          return totalBaseCost > 0 ? (totalMarkup / totalBaseCost) * 100 : 0;
-        })()
-      : 0
+    avgMarginPercent: (() => {
+      let profit = 0;
+      let revenue = 0;
+      currentQuotes.forEach(q => {
+        const totals = calculateQuoteTotals(q.lineItems, q.taxRate || 0, q.discount || 0,
+          q.shipping || 0, q.isShippingTaxable === true, q.tariffRate || 0);
+        profit += totals.grossProfit;
+        revenue += totals.netLineRevenue;
+      });
+      return calculateGrossMargin(profit, revenue);
+    })()
   };
 
   // Group quotes by stage
   const quotesByStage = DEAL_STAGES.map(stage => {
     const stageQuotes = currentQuotes.filter(q => (q.dealStage || 'new_lead') === stage.id);
     const stageValue = stageQuotes.reduce((sum, q) => sum + calculateQuoteTotal(q), 0);
-    const stageMarkup = stageQuotes.reduce((sum, q) => sum + calculateQuoteMarkup(q), 0);
+    const stageProfit = stageQuotes.reduce((sum, q) => sum + calculateQuoteProfit(q), 0);
     return {
       ...stage,
       count: stageQuotes.length,
       value: stageValue,
-      markup: stageMarkup,
+      profit: stageProfit,
       percentage: currentQuotes.length > 0
         ? (stageQuotes.length / currentQuotes.length) * 100
         : 0
@@ -363,23 +351,27 @@ export default function Home() {
           </Card>
         </div>
 
-        {/* Gross markup metrics (not net profit) */}
+        <p className="mb-3 text-sm text-edg-grey">
+          Profit estimates use entered line costs after supplier discounts and tariff, and sales after customer discounts.
+          Excludes sales tax, shipping/delivery and costs not entered on quotes.
+        </p>
+        {/* Estimated line gross profit metrics (not net profit) */}
         <div className="grid md:grid-cols-4 gap-4 mb-8">
           <Card className="border-l-4 border-l-emerald-500">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-sm font-medium text-edg-grey">
-                  Gross Markup — Won
+                  Est. Gross Profit — Won
                 </CardTitle>
                 <DollarSign className="h-4 w-4 text-emerald-500" />
               </div>
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-edg-black">
-                {isLoading ? "-" : formatCurrency(metrics.totalMarkup)}
+                {isLoading ? "-" : formatCurrency(metrics.totalGrossProfit)}
               </div>
               <p className="text-xs text-edg-grey mt-1">
-                selling price less stored line cost
+                after discounts; entered line costs only
               </p>
             </CardContent>
           </Card>
@@ -388,17 +380,17 @@ export default function Home() {
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-sm font-medium text-edg-grey">
-                  Gross Markup — Pipeline
+                  Est. Gross Profit — Pipeline
                 </CardTitle>
                 <TrendingUp className="h-4 w-4 text-amber-500" />
               </div>
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-edg-black">
-                {isLoading ? "-" : formatCurrency(metrics.pipelineMarkup)}
+                {isLoading ? "-" : formatCurrency(metrics.pipelineProfit)}
               </div>
               <p className="text-xs text-edg-grey mt-1">
-                potential markup in active quote families
+                estimated line profit in active quotes
               </p>
             </CardContent>
           </Card>
@@ -407,14 +399,14 @@ export default function Home() {
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-sm font-medium text-edg-grey">
-                  Gross Markup Won This Month
+                  Est. Gross Profit Won This Month
                 </CardTitle>
                 <Award className="h-4 w-4 text-lime-500" />
               </div>
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-edg-black">
-                {isLoading ? "-" : formatCurrency(metrics.markupThisMonth)}
+                {isLoading ? "-" : formatCurrency(metrics.profitThisMonth)}
               </div>
               <p className="text-xs text-edg-grey mt-1">
                 won in {format(new Date(), 'MMMM')}
@@ -426,17 +418,17 @@ export default function Home() {
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-sm font-medium text-edg-grey">
-                  Avg Margin %
+                  Overall Gross Margin
                 </CardTitle>
                 <BarChart3 className="h-4 w-4 text-cyan-500" />
               </div>
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-edg-black">
-                {isLoading ? "-" : `${metrics.avgMarginPercent.toFixed(1)}%`}
+                {isLoading ? "-" : metrics.avgMarginPercent === null ? "N/A" : `${metrics.avgMarginPercent.toFixed(1)}%`}
               </div>
               <p className="text-xs text-edg-grey mt-1">
-                markup divided by stored line cost
+                profit ÷ sales after discounts; all current quotes
               </p>
             </CardContent>
           </Card>
@@ -481,7 +473,7 @@ export default function Home() {
                           {formatCurrency(stage.value)}
                         </div>
                         <div className="text-xs text-emerald-700 dark:text-emerald-400">
-                          {formatCurrency(stage.markup)} gross markup
+                          {formatCurrency(stage.profit)} est. gross profit
                         </div>
                       </div>
                     </div>

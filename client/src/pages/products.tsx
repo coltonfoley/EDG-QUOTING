@@ -239,12 +239,12 @@ export default function Products() {
     onSuccess: (updatedPricingDefault: PricingDefaultResponse) => {
       queryClient.setQueryData(["/api/pricing-defaults/sundance"], updatedPricingDefault);
       setSundanceMarginValue(parseFloat(updatedPricingDefault.markupValue).toString());
-      toast({ title: "Sundance standard margin saved" });
+      toast({ title: "Sundance standard markup saved" });
     },
     onError: (error: any) => {
       toast({
         title: "Error",
-        description: error?.message || "Failed to save Sundance standard margin",
+        description: error?.message || "Failed to save Sundance standard markup",
         variant: "destructive",
       });
     },
@@ -403,7 +403,7 @@ export default function Products() {
     const numericValue = Number(sundanceMarginValue);
     if (!Number.isFinite(numericValue) || numericValue < 0 || numericValue > 1000) {
       toast({
-        title: "Invalid margin",
+        title: "Invalid markup",
         description: "Enter a percentage from 0 to 1000.",
         variant: "destructive",
       });
@@ -680,8 +680,8 @@ export default function Products() {
                     <div className="flex items-start gap-3">
                       <Percent className="mt-0.5 h-5 w-5 shrink-0 text-edg-teal" />
                       <div>
-                        <h3 className="text-sm font-semibold text-foreground">Standard Margin</h3>
-                        <p className="mt-1 text-sm text-edg-grey">Standard margin (markup on cost)</p>
+                        <h3 className="text-sm font-semibold text-foreground">Standard Markup</h3>
+                        <p className="mt-1 text-sm text-edg-grey">Percentage added to EDG cost</p>
                       </div>
                     </div>
                     {!isAdmin && <Badge variant="outline">View only</Badge>}

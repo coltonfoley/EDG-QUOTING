@@ -31,6 +31,7 @@ export interface Group {
 interface GroupHeaderProps {
   group: Group;
   lineItems: LineItem[];
+  tariffRate?: number | string;
   onToggleCollapse: (groupId: string) => void;
   onEditTitle: (groupId: string, title: string) => void;
   onDeleteGroup: (groupId: string) => void;
@@ -49,7 +50,8 @@ export function GroupHeader({
   isEditing,
   onStartEdit,
   onCancelEdit,
-  isDropTarget = false
+  isDropTarget = false,
+  tariffRate = 0
 }: GroupHeaderProps) {
   const [editTitle, setEditTitle] = useState(group.title);
 
@@ -62,8 +64,8 @@ export function GroupHeader({
     opacity: isDragging ? 0.6 : 1,
   };
 
-  const groupSubtotal = calculateGroupSubtotal(lineItems);
-  const groupMargin = calculateGroupMargin(lineItems);
+  const groupSubtotal = calculateGroupSubtotal(lineItems, tariffRate);
+  const groupMargin = calculateGroupMargin(lineItems, tariffRate);
   const itemCount = lineItems.length;
 
   const handleSaveTitle = () => {
@@ -148,8 +150,8 @@ export function GroupHeader({
 
         {/* Group totals and actions */}
         <div className="flex items-center space-x-4">
-          <div className="text-sm text-muted-foreground" data-testid={`text-group-margin-${group.id}`}>
-            Margin: {formatCurrency(groupMargin)}
+          <div className="text-sm text-muted-foreground" title="Gross profit before the quote-level customer discount" data-testid={`text-group-margin-${group.id}`}>
+            Markup: {formatCurrency(groupMargin)}
           </div>
           <div className="text-sm font-medium text-foreground" data-testid={`text-group-subtotal-${group.id}`}>
             Subtotal: {formatCurrency(groupSubtotal)}
@@ -196,10 +198,11 @@ export function GroupHeader({
 interface GroupFooterProps {
   group: Group;
   lineItems: LineItem[];
+  tariffRate?: number | string;
   onAddItem: () => void;
 }
 
-export function GroupFooter({ group, lineItems, onAddItem }: GroupFooterProps) {
+export function GroupFooter({ group, lineItems, onAddItem, tariffRate = 0 }: GroupFooterProps) {
   return (
     <tr className="bg-gray-50 border-b border-gray-300" data-testid={`group-footer-${group.id}`}>
       <td colSpan={9} className="px-4 py-2">
@@ -217,7 +220,7 @@ export function GroupFooter({ group, lineItems, onAddItem }: GroupFooterProps) {
         
         <div className="text-sm text-gray-600" data-testid={`text-group-summary-${group.id}`}>
           {lineItems.length} {lineItems.length === 1 ? 'item' : 'items'} • 
-          Total: {formatCurrency(calculateGroupSubtotal(lineItems))}
+          Total: {formatCurrency(calculateGroupSubtotal(lineItems, tariffRate))}
         </div>
         </div>
       </td>
@@ -227,17 +230,18 @@ export function GroupFooter({ group, lineItems, onAddItem }: GroupFooterProps) {
 
 interface UngroupedSectionProps {
   lineItems: LineItem[];
+  tariffRate?: number | string;
   onCreateGroup: () => void;
   isDropTarget?: boolean;
 }
 
-export function UngroupedSection({ lineItems, onCreateGroup, isDropTarget = false }: UngroupedSectionProps) {
+export function UngroupedSection({ lineItems, onCreateGroup, isDropTarget = false, tariffRate = 0 }: UngroupedSectionProps) {
   const { setNodeRef } = useDroppable({
     id: "ungrouped"
   });
 
-  const ungroupedSubtotal = calculateGroupSubtotal(lineItems);
-  const ungroupedMargin = calculateGroupMargin(lineItems);
+  const ungroupedSubtotal = calculateGroupSubtotal(lineItems, tariffRate);
+  const ungroupedMargin = calculateGroupMargin(lineItems, tariffRate);
 
   return (
     <tr ref={setNodeRef} className={`border-b border-gray-300 transition-all duration-200 ${isDropTarget ? 'bg-blue-100 ring-2 ring-blue-400 ring-inset' : 'bg-gray-50'}`} data-testid="ungrouped-section">
@@ -253,8 +257,8 @@ export function UngroupedSection({ lineItems, onCreateGroup, isDropTarget = fals
         </div>
 
         <div className="flex items-center space-x-4">
-          <div className="text-sm text-gray-600" data-testid="text-ungrouped-margin">
-            Margin: {formatCurrency(ungroupedMargin)}
+          <div className="text-sm text-gray-600" title="Gross profit before the quote-level customer discount" data-testid="text-ungrouped-margin">
+            Markup: {formatCurrency(ungroupedMargin)}
           </div>
           <div className="text-sm font-medium text-gray-900" data-testid="text-ungrouped-subtotal">
             Subtotal: {formatCurrency(ungroupedSubtotal)}

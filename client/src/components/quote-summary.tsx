@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { Archive, FileText, Plus, Eye, Send, Mail, CheckCircle, AlertCircle, Clock, Link2, Copy, Download, PenTool, Package, Settings2 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { formatCurrency, calculateQuoteTotals, type QuoteTotalsLineItem } from "@/lib/utils";
+import { cn, formatCurrency, calculateQuoteTotals, type QuoteTotalsLineItem } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import type { QuoteWithDetails, ContractTemplate } from "@shared/schema";
 import { getSnapshotBackedCustomerPackage } from "@/lib/customer-package";
@@ -521,7 +521,7 @@ export function QuoteSummary({ quote, onUpdateQuote, isReadOnly = false }: Quote
                   readOnly={isReadOnly}
                 />
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Applies only to rows with Tariff checked; treated as pass-through, not margin.
+                  Applies to checked rows as a cost before markup.
                 </p>
               </div>
               <div>
@@ -611,7 +611,7 @@ export function QuoteSummary({ quote, onUpdateQuote, isReadOnly = false }: Quote
               </span>
             </div>
             <div className="flex justify-between items-center text-sm">
-              <span className="text-muted-foreground">Total Markup:</span>
+              <span className="text-muted-foreground">Markup Before Discount:</span>
               <span className="font-medium text-success-green">
                 {formatCurrency(totals.totalMarkup)}
               </span>
@@ -677,10 +677,18 @@ export function QuoteSummary({ quote, onUpdateQuote, isReadOnly = false }: Quote
               </div>
             )}
             <div className="mt-3 p-3 bg-muted rounded-lg border">
-              <div className="text-xs text-muted-foreground">Profit Margin:</div>
-              <div className="text-lg font-semibold text-edg-teal">
-                {totals.margin}%
+              <div className="text-xs text-muted-foreground">Estimated Line Gross Profit:</div>
+              <div className={cn("text-lg font-semibold", totals.grossProfit < 0 ? "text-red-600" : "text-edg-teal")} data-testid="text-gross-profit">
+                {formatCurrency(totals.grossProfit)}
               </div>
+              <div className="mt-2 text-xs text-muted-foreground">Gross Margin:</div>
+              <div className={cn("text-lg font-semibold", totals.grossProfit < 0 ? "text-red-600" : "text-edg-teal")} data-testid="text-gross-margin">
+                {totals.margin === null ? "N/A (no sales revenue)" : `${totals.margin}%`}
+              </div>
+              <p className="mt-2 text-xs text-muted-foreground">
+                After customer discounts, supplier discounts and tariff. Based on entered line costs only;
+                excludes sales tax, shipping/delivery and costs not entered on the quote.
+              </p>
             </div>
           </CardContent>
         </Card>
