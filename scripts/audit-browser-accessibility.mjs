@@ -49,6 +49,7 @@ const cases = [
     name: scenario, scenario, path: "/quotes/9301/edit",
     readySelector: '[data-testid="text-gross-margin"]', expectedProfit, expectedMargin, widths: [390, 1024],
   })),
+  { name: "dark profit loss", scenario: "profit-loss", path: "/quotes/9301/edit", readySelector: '[data-testid="text-gross-margin"]', expectedProfit: "-$250.00", expectedMargin: "-33.3%", theme: "dark", expectedTheme: "dark", widths: [390, 1024] },
   { name: "dashboard profit after discount", scenario: "profit-discount", path: "/", readySelector: "h1", expectedText: "25.9%", widths: [390, 1024] },
   { name: "admin delivery health", scenario: "admin", path: "/admin", readySelector: "h1" },
   { name: "admin delivery error", scenario: "admin-data-error", path: "/admin", readySelector: "h1" },

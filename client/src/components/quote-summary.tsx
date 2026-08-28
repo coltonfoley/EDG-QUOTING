@@ -678,11 +678,11 @@ export function QuoteSummary({ quote, onUpdateQuote, isReadOnly = false }: Quote
             )}
             <div className="mt-3 p-3 bg-muted rounded-lg border">
               <div className="text-xs text-muted-foreground">Estimated Line Gross Profit:</div>
-              <div className={cn("text-lg font-semibold", totals.grossProfit < 0 ? "text-red-600" : "text-edg-teal")} data-testid="text-gross-profit">
+              <div className={cn("text-lg font-semibold", totals.grossProfit < 0 ? "text-red-700 dark:text-red-400" : "text-edg-teal")} data-testid="text-gross-profit">
                 {formatCurrency(totals.grossProfit)}
               </div>
               <div className="mt-2 text-xs text-muted-foreground">Gross Margin:</div>
-              <div className={cn("text-lg font-semibold", totals.grossProfit < 0 ? "text-red-600" : "text-edg-teal")} data-testid="text-gross-margin">
+              <div className={cn("text-lg font-semibold", totals.grossProfit < 0 ? "text-red-700 dark:text-red-400" : "text-edg-teal")} data-testid="text-gross-margin">
                 {totals.margin === null ? "N/A (no sales revenue)" : `${totals.margin}%`}
               </div>
               <p className="mt-2 text-xs text-muted-foreground">
