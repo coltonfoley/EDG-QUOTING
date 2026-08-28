@@ -40,6 +40,17 @@ const viewports = [
   { width: 1024, height: 900 },
 ];
 const cases = [
+  ...[
+    ["profit-basic", "$500.00", "33.3%"],
+    ["profit-discount", "$350.00", "25.9%"],
+    ["profit-loss", "-$250.00", "-33.3%"],
+    ["profit-free", "-$1,000.00", "N/A (no sales revenue)"],
+  ].map(([scenario, expectedProfit, expectedMargin]) => ({
+    name: scenario, scenario, path: "/quotes/9301/edit",
+    readySelector: '[data-testid="text-gross-margin"]', expectedProfit, expectedMargin, widths: [390, 1024],
+  })),
+  { name: "dark profit loss", scenario: "profit-loss", path: "/quotes/9301/edit", readySelector: '[data-testid="text-gross-margin"]', expectedProfit: "-$250.00", expectedMargin: "-33.3%", theme: "dark", expectedTheme: "dark", widths: [390, 1024] },
+  { name: "dashboard profit after discount", scenario: "profit-discount", path: "/", readySelector: "h1", expectedText: "25.9%", widths: [390, 1024] },
   { name: "admin delivery health", scenario: "admin", path: "/admin", readySelector: "h1" },
   { name: "admin delivery error", scenario: "admin-data-error", path: "/admin", readySelector: "h1" },
   { name: "lead inbox", scenario: "user", path: "/leads", readySelector: "h1" },
@@ -201,6 +212,13 @@ try {
         await page.waitForSelector(testCase.readySelector, { timeout: 10_000 });
       } catch (error) {
         throw new Error(`Browser audit case \"${testCase.name}\" did not reach ${testCase.readySelector}`, { cause: error });
+      }
+      if (testCase.expectedProfit) {
+        const profit = await page.$eval('[data-testid="text-gross-profit"]', node => node.textContent.trim());
+        const margin = await page.$eval('[data-testid="text-gross-margin"]', node => node.textContent.trim());
+        if (profit !== testCase.expectedProfit || margin !== testCase.expectedMargin) {
+          throw new Error(`${auditStage}: expected ${testCase.expectedProfit} / ${testCase.expectedMargin}, got ${profit} / ${margin}`);
+        }
       }
       if (testCase.setupTestId) {
         if (showProgress) process.stderr.write(`Opening ${auditStage}\n`);

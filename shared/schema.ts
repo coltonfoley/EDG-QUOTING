@@ -1033,7 +1033,7 @@ export type QuoteDetail = QuoteListItem & {
   taxAmount: number;
   discountAmount: number;
   shippingAmount: number;
-  margin: number;
+  margin: number | null;
   totalMarkup: number;
 };
 

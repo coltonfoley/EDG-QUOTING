@@ -159,26 +159,9 @@ export function calculateLineItemTotal(
 }
 
 /**
- * Calculates the margin (profit) for a line item.
- * 
- * Margin Calculation:
- * - Applies manufacturer discount to base cost first
- * - Calculates markup amount on the discounted cost (BEFORE tariff)
- * - Returns the markup amount as the margin
- * 
- * Note: Tariff is NOT included in margin calculation as it's a pass-through cost,
- * similar to sales tax. Tariff still applies to customer price (in calculateLineItemTotal),
- * but doesn't count as our profit margin.
- * 
- * @param quantity - Number of items
- * @param unitPrice - Price per item
- * @param markupType - "percentage" or "dollar"
- * @param markupValue - Markup amount
- * @param discountType - Manufacturer discount type
- * @param discountValue - Manufacturer discount amount
- * @param tariffRate - Tariff percentage (not used in margin calculation, kept for signature compatibility)
- * @param isTariffApplicable - Whether tariff applies (not used in margin calculation, kept for signature compatibility)
- * @returns Margin amount rounded to 2 decimal places
+ * Line gross profit before the quote-level customer discount.
+ * Cost includes supplier discounts and tariff. The tariff itself is a cost;
+ * any markup charged on it is profit. Customer-price math is unchanged.
  */
 export function calculateLineItemMargin(
   quantity: number | string,
@@ -190,53 +173,16 @@ export function calculateLineItemMargin(
   tariffRate: number | string = 0,
   isTariffApplicable: boolean = false
 ): number {
-  // Safely parse and validate inputs
-  const qty = typeof quantity === 'string' ? parseFloat(sanitizeNumberString(quantity)) : quantity;
-  const price = typeof unitPrice === 'string' ? parseFloat(sanitizeNumberString(unitPrice)) : unitPrice;
-  const markup = typeof markupValue === 'string' ? parseFloat(sanitizeNumberString(markupValue)) : markupValue;
-  const discount = typeof discountValue === 'string' ? parseFloat(sanitizeNumberString(discountValue)) : discountValue;
+  const markup = typeof markupValue === "string" ? parseFloat(sanitizeNumberString(markupValue)) : markupValue;
+  if (!isValidNumber(markup) || markup > 10000000) return 0;
+  const revenue = calculateLineItemTotal(quantity, unitPrice, markupType, markupValue, discountType, discountValue, tariffRate, isTariffApplicable);
+  const cost = calculateLineItemTotal(quantity, unitPrice, "percentage", 0, discountType, discountValue, tariffRate, isTariffApplicable);
+  return roundCurrency(revenue - cost);
+}
 
-  // Validate inputs
-  if (!isValidNumber(qty) || qty <= 0 || qty > 999999) return 0;
-  if (!isValidNumber(price) || price < 0 || price > 10000000) return 0;
-  // SAFETY: Reject negative markup values - markup must be >= 0
-  if (isNaN(markup) || !Number.isFinite(markup) || markup < 0 || markup > 10000000) return 0;
-  if (!isValidNumber(discount) || discount < 0) return 0;
-
-  // Clamp values to safe ranges
-  const safeQty = clampValue(qty, 0.01, 999999);
-  const safePrice = clampValue(price, 0, 10000000);
-  // SAFETY: Ensure markup is never negative - treat any negative as 0
-  const safeMarkup = Math.max(0, markup);
-  const safeDiscount = discountType === 'percentage' 
-    ? clampValue(discount, 0, 100)
-    : clampValue(discount, 0, 10000000);
-
-  // Calculate base total with overflow protection
-  const baseTotal = safeMultiply(safeQty, safePrice);
-  
-  // Apply manufacturer discount first
-  let afterDiscount = baseTotal;
-  if (safeDiscount > 0) {
-    if (discountType === 'percentage') {
-      const discountAmount = safeMultiply(baseTotal, safeDivide(safeDiscount, 100));
-      afterDiscount = Math.max(0, baseTotal - discountAmount);
-    } else {
-      afterDiscount = Math.max(0, baseTotal - safeDiscount);
-    }
-  }
-  
-  // Calculate markup on the DISCOUNTED cost (WITHOUT tariff)
-  // Tariff is a pass-through cost and should not count as profit margin
-  let marginAmount = 0;
-  if (markupType === 'percentage') {
-    marginAmount = safeMultiply(afterDiscount, safeDivide(safeMarkup, 100));
-  } else {
-    marginAmount = safeMarkup;
-  }
-
-  // Margin should never be negative since markup can't be negative
-  return roundCurrency(Math.max(0, marginAmount));
+/** A margin percentage is undefined when there is no sales revenue. */
+export function calculateGrossMargin(grossProfit: number, revenue: number): number | null {
+  return revenue > 0 ? Math.round((grossProfit / revenue) * 1000) / 10 : null;
 }
 
 /**
@@ -312,18 +258,14 @@ export function calculateQuoteTotals(lineItems: QuoteTotalsLineItem[], taxRate: 
     }
   }
 
-  // Calculate base cost
-  let baseCost = 0;
-  for (const item of lineItems) {
-    const qty = typeof item.quantity === 'string' ? parseFloat(sanitizeNumberString(item.quantity)) : item.quantity;
-    const price = typeof item.unitPrice === 'string' ? parseFloat(sanitizeNumberString(item.unitPrice)) : item.unitPrice;
-    
-    if (isValidNumber(qty) && isValidNumber(price)) {
-      const safeQty = clampValue(qty, 0, 999999);
-      const safePrice = clampValue(price, 0, 10000000);
-      baseCost = safeAdd(baseCost, safeMultiply(safeQty, safePrice));
-    }
-  }
+  // Stored line cost after supplier discounts and tariff, without markup.
+  const lineCost = roundCurrency(lineItems.reduce((sum, item) => safeAdd(sum,
+    calculateLineItemTotal(
+      item.quantity, item.unitPrice, "percentage", 0,
+      item.discountType || "percentage", item.discountValue || 0,
+      tariffRate, item.isTariffApplicable || false
+    )
+  ), 0));
 
   // Calculate total manufacturer discounts for display purposes
   let totalManufacturerDiscount = 0;
@@ -349,23 +291,9 @@ export function calculateQuoteTotals(lineItems: QuoteTotalsLineItem[], taxRate: 
     }
   }
 
-  // Calculate markup by summing individual line item margins (excludes tariff from profit)
-  let totalMarkup = 0;
-  for (const item of lineItems) {
-    const marginAmount = calculateLineItemMargin(
-      item.quantity,
-      item.unitPrice,
-      item.markupType,
-      item.markupValue,
-      item.discountType || "percentage",
-      item.discountValue || 0,
-      tariffRate,
-      item.isTariffApplicable || false
-    );
-    totalMarkup = safeAdd(totalMarkup, marginAmount);
-  }
-  totalMarkup = Math.max(0, totalMarkup);
-  
+  // Markup before the quote-level discount; kept separate from gross profit.
+  const totalMarkup = roundCurrency(subtotal - lineCost);
+
   // Calculate markup, discount, tax with proper order of operations
   const discountAmount = safeDiscount > 0 ? safeMultiply(subtotal, safeDivide(safeDiscount, 100)) : 0;
   const afterDiscount = Math.max(0, subtotal - discountAmount);
@@ -382,7 +310,10 @@ export function calculateQuoteTotals(lineItems: QuoteTotalsLineItem[], taxRate: 
   
   const beforeTax = safeAdd(afterDiscount, safeShipping);
   const total = safeAdd(beforeTax, taxAmount);
-  const margin = baseCost > 0 ? safeDivide(safeMultiply(totalMarkup, 100), baseCost) : 0;
+  // Shipping has no separate cost field, so exclude it and tax from line profit.
+  const netLineRevenue = roundCurrency(afterDiscount);
+  const grossProfit = roundCurrency(netLineRevenue - lineCost);
+  const margin = calculateGrossMargin(grossProfit, netLineRevenue);
 
   return {
     subtotal: roundCurrency(subtotal),
@@ -392,7 +323,10 @@ export function calculateQuoteTotals(lineItems: QuoteTotalsLineItem[], taxRate: 
     shippingAmount: roundCurrency(safeShipping),
     taxAmount: roundCurrency(taxAmount),
     total: roundCurrency(total),
-    margin: Math.round(margin * 10) / 10,
+    lineCost,
+    netLineRevenue,
+    grossProfit,
+    margin,
   };
 }
 
@@ -459,7 +393,7 @@ export function generateGroupId(): string {
  * @param lineItems - Array of line items in the group
  * @returns Group subtotal rounded to 2 decimal places
  */
-export function calculateGroupSubtotal(lineItems: any[]): number {
+export function calculateGroupSubtotal(lineItems: QuoteTotalsLineItem[], tariffRate: number | string = 0): number {
   if (!lineItems || lineItems.length === 0) return 0;
   
   const subtotal = lineItems.reduce((total, item) => {
@@ -468,8 +402,10 @@ export function calculateGroupSubtotal(lineItems: any[]): number {
       item.unitPrice,
       item.markupType,
       item.markupValue,
-      item.discountType,
-      item.discountValue
+      item.discountType || "percentage",
+      item.discountValue || 0,
+      tariffRate,
+      item.isTariffApplicable || false
     );
     return safeAdd(total, itemTotal);
   }, 0);
@@ -482,7 +418,7 @@ export function calculateGroupSubtotal(lineItems: any[]): number {
  * @param lineItems - Array of line items in the group
  * @returns Group margin total rounded to 2 decimal places
  */
-export function calculateGroupMargin(lineItems: any[]): number {
+export function calculateGroupMargin(lineItems: QuoteTotalsLineItem[], tariffRate: number | string = 0): number {
   if (!lineItems || lineItems.length === 0) return 0;
   
   const marginTotal = lineItems.reduce((total, item) => {
@@ -491,8 +427,10 @@ export function calculateGroupMargin(lineItems: any[]): number {
       item.unitPrice,
       item.markupType,
       item.markupValue,
-      item.discountType,
-      item.discountValue
+      item.discountType || "percentage",
+      item.discountValue || 0,
+      tariffRate,
+      item.isTariffApplicable || false
     );
     return safeAdd(total, itemMargin);
   }, 0);

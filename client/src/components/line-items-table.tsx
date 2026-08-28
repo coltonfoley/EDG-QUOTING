@@ -1192,8 +1192,8 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate, isReadOnly = fa
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: "Failed to update margins" }));
-        throw new Error(errorData.message || "Failed to update margins");
+        const errorData = await response.json().catch(() => ({ message: "Failed to update markups" }));
+        throw new Error(errorData.message || "Failed to update markups");
       }
 
       const result = await response.json();
@@ -1223,8 +1223,8 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate, isReadOnly = fa
       });
 
       toast({ 
-        title: "Margins updated", 
-        description: `Updated ${updatedCount} line item${updatedCount !== 1 ? 's' : ''} to ${roundedValue}${bulkMarginType === 'percentage' ? '%' : ' dollar'} margin` 
+        title: "Markups updated",
+        description: `Updated ${updatedCount} line item${updatedCount !== 1 ? 's' : ''} to ${roundedValue}${bulkMarginType === 'percentage' ? '%' : ' dollar'} markup`
       });
 
       // Close dialog and reset
@@ -1236,7 +1236,7 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate, isReadOnly = fa
       }
       toast({ 
         title: "Error", 
-        description: error?.message || "Failed to update margins", 
+        description: error?.message || "Failed to update markups",
         variant: "destructive" 
       });
     } finally {
@@ -1760,20 +1760,20 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate, isReadOnly = fa
                   data-testid="button-bulk-margin"
                 >
                   <Percent className="mr-2 h-4 w-4" />
-                  Bulk Margin
+                  Bulk Markup
                 </Button>
               </DialogTrigger>
               <DialogContent className="max-w-md">
                 <DialogHeader>
-                  <DialogTitle>Adjust Margins for All Line Items</DialogTitle>
+                  <DialogTitle>Adjust Markup for All Line Items</DialogTitle>
                   <DialogDescription>
-                    This will override the margin on all {lineItems.length} line item{lineItems.length !== 1 ? 's' : ''} in this quote.
+                    This will override the markup on all {lineItems.length} line item{lineItems.length !== 1 ? 's' : ''} in this quote.
                   </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 pt-4">
                   <div className="flex gap-3">
                     <div className="flex-1">
-                      <label className="text-sm font-medium mb-2 block">Margin Value</label>
+                      <label className="text-sm font-medium mb-2 block">Markup Value</label>
                       <Input
                         type="number"
                         step="0.01"
@@ -2034,7 +2034,7 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate, isReadOnly = fa
                     <span className="inline-flex items-center justify-center gap-1.5">
                       Markup
                       <HeaderHelp label="Explain markup column">
-                        Adds EDG margin to the customer unit price.
+                        Percentage added to EDG cost; this is not gross margin.
                       </HeaderHelp>
                     </span>
                   </th>
@@ -2048,9 +2048,9 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate, isReadOnly = fa
                   </th>
                   <th className="border-r border-border px-3 py-2 text-center text-sm font-medium text-foreground hidden md:table-cell">
                     <span className="inline-flex items-center justify-center gap-1.5">
-                      Margin$
-                      <HeaderHelp label="Explain margin column">
-                        Estimated EDG profit for this row. Tariff is treated as pass-through and not counted as margin.
+                      Profit$
+                      <HeaderHelp label="Explain profit column">
+                        Line gross profit before the quote discount. Cost includes supplier discounts and tariff; markup on tariff is profit.
                       </HeaderHelp>
                     </span>
                   </th>
@@ -2069,7 +2069,7 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate, isReadOnly = fa
                     <span className="inline-flex items-center justify-center gap-1.5">
                       Tariff
                       <HeaderHelp label="Explain tariff line checkbox">
-                        Checked rows receive the quote's tariff rate as a pass-through cost.
+                        Checked rows receive the quote's tariff rate as a cost before markup.
                       </HeaderHelp>
                     </span>
                   </th>
@@ -2084,6 +2084,7 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate, isReadOnly = fa
                   <>
                     <UngroupedSection 
                       lineItems={groupedLineItems.ungrouped}
+                      tariffRate={tariffRate}
                       onCreateGroup={() => setShowCreateGroupDialog(true)}
                       isDropTarget={overId === 'ungrouped' && activeId !== null && !activeId.startsWith('group-')}
                     />
@@ -2128,6 +2129,7 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate, isReadOnly = fa
                       <GroupHeader
                         group={group}
                         lineItems={groupItems}
+                        tariffRate={tariffRate}
                         onToggleCollapse={handleToggleGroupCollapse}
                         onEditTitle={handleEditGroupTitle}
                         onDeleteGroup={handleDeleteGroup}
@@ -2169,6 +2171,7 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate, isReadOnly = fa
                         <GroupFooter
                           group={group}
                           lineItems={groupItems}
+                        tariffRate={tariffRate}
                           onAddItem={() => openCustomItemForm(group.id)}
                         />
                       )}

@@ -207,13 +207,19 @@ async function readJsonBody(request) {
 }
 
 function fixtureUser(scenario) {
+  if (scenario.startsWith("profit-")) return normalUser;
   if (["admin", "admin-data-error"].includes(scenario)) return adminUser;
   if (["user", "signed", "empty", "not-found", "auth-recover", "quote-403", "quote-404", "quote-error", "data-error"].includes(scenario)) return normalUser;
   return null;
 }
 
 async function serveApi(request, response, pathname, scenario) {
-  const fixtureQuote = scenario === "signed" ? signedQuote : quote;
+  const profitDiscounts = { "profit-basic": "0", "profit-discount": "10", "profit-loss": "50", "profit-free": "100" };
+  const fixtureQuote = scenario in profitDiscounts ? {
+    ...quote,
+    lineItems: [{ ...lineItems[0], unitPrice: "1000", markupValue: "50" }],
+    taxRate: "0", discount: profitDiscounts[scenario],
+  } : scenario === "signed" ? signedQuote : quote;
   if (pathname === "/api/user") {
     if (scenario === "auth-error") {
       json(response, 503, { message: "Fictional authentication service error" });
