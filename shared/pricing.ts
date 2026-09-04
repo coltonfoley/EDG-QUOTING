@@ -3,6 +3,40 @@ export type PricingMarkupType = "percentage" | "dollar";
 
 const MONEY_MAX = 10000000;
 
+export type FrozenCatalogPriceEvidence = {
+  priceSource?: unknown;
+  sourceMetadata?: unknown;
+  retailPrice?: unknown;
+};
+
+/** Authenticated portal imports retain their accepted sale price and real cost separately. */
+export function getDealerPortalFrozenPrice(
+  evidence: FrozenCatalogPriceEvidence | undefined,
+  quantity: number | string,
+): { unitPrice: number; lineTotal: number } | null {
+  if (evidence?.priceSource !== "dealer_portal_frozen_catalog") return null;
+  const metadata = evidence.sourceMetadata;
+  const invalid = () => new Error("Dealer portal frozen price evidence is missing or inconsistent.");
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) throw invalid();
+  const record = metadata as Record<string, unknown>;
+  const unitCents = record.customerUnitPriceCents;
+  const totalCents = record.customerLineTotalCents;
+  const qty = typeof quantity === "string" && quantity.trim() !== "" ? Number(quantity) : quantity;
+  const retail = typeof evidence.retailPrice === "string" && evidence.retailPrice.trim() !== ""
+    ? Number(evidence.retailPrice) : evidence.retailPrice;
+  if (
+    typeof record.portalOrderId !== "string" || !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(record.portalOrderId) ||
+    typeof record.snapshotHash !== "string" || !/^[a-f0-9]{64}$/.test(record.snapshotHash) ||
+    typeof record.rulesVersion !== "string" || !record.rulesVersion ||
+    typeof unitCents !== "number" || !Number.isSafeInteger(unitCents) || unitCents <= 0 || unitCents > MONEY_MAX * 100 ||
+    typeof totalCents !== "number" || !Number.isSafeInteger(totalCents) || totalCents <= 0 ||
+    typeof qty !== "number" || !Number.isInteger(qty) || qty <= 0 || qty > 999999 ||
+    unitCents * qty !== totalCents ||
+    typeof retail !== "number" || !Number.isFinite(retail) || Math.abs(retail * 100 - unitCents) > 0.000001
+  ) throw invalid();
+  return { unitPrice: unitCents / 100, lineTotal: totalCents / 100 };
+}
+
 export function parsePricingNumber(value: unknown, fallback = 0): number {
   if (value === null || value === undefined || value === "") return fallback;
   const parsed = typeof value === "string"

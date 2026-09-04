@@ -2,6 +2,7 @@ import { defineConfig } from "vitest/config";
 import path from "path";
 
 export default defineConfig({
+  esbuild: { jsx: "automatic" },
   test: {
     globals: true,
     environment: "node",
@@ -18,6 +19,7 @@ export default defineConfig({
   resolve: {
     alias: {
       "@shared": path.resolve(import.meta.dirname, "shared"),
+      "@": path.resolve(import.meta.dirname, "client/src"),
     },
   },
 });

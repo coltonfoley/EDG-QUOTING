@@ -19,6 +19,7 @@ import { GripVertical, Info, Trash2 } from "lucide-react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { Color, LineItem, ProductColor } from "@shared/schema";
+import { getDealerPortalFrozenPrice } from "@shared/pricing";
 
 type CalculateLineItemMargin = typeof import("@/lib/utils").calculateLineItemMargin;
 type CalculateLineItemTotal = typeof import("@/lib/utils").calculateLineItemTotal;
@@ -111,6 +112,9 @@ export const SortableLineItemRow = memo(function SortableLineItemRow({
     price = currentCost + currentMarkupValue;
   }
 
+  const frozenPrice = getDealerPortalFrozenPrice(item, currentQuantity);
+  if (frozenPrice) price = frozenPrice.unitPrice;
+
   // Calculate margin (profit amount)
   const marginAmount = calculateLineItemMargin(
     currentQuantity,
@@ -120,7 +124,8 @@ export const SortableLineItemRow = memo(function SortableLineItemRow({
     item.discountType,
     item.discountValue,
     tariffRate,
-    item.isTariffApplicable || false
+    item.isTariffApplicable || false,
+    item
   );
 
   // Calculate total
@@ -132,7 +137,8 @@ export const SortableLineItemRow = memo(function SortableLineItemRow({
     item.discountType,
     item.discountValue,
     tariffRate,
-    item.isTariffApplicable || false
+    item.isTariffApplicable || false,
+    item
   );
 
   return (
@@ -289,6 +295,7 @@ export const SortableLineItemRow = memo(function SortableLineItemRow({
       <td className="border-r border-border px-3 py-1 w-20 text-center">
         <Input
           aria-label={`${item.description || "Line item"} quantity`}
+          readOnly={Boolean(frozenPrice)}
           value={getCurrentValue(item.id, 'quantity')}
           onChange={(e) => {
             handleFieldChange(item.id, "quantity", e.target.value);
@@ -337,8 +344,8 @@ export const SortableLineItemRow = memo(function SortableLineItemRow({
                 </TooltipTrigger>
                 <TooltipContent className="bg-popover text-popover-foreground p-2 text-xs max-w-xs">
                   <div className="font-semibold mb-1">Internal Price Breakdown:</div>
-                  <div>Manufacturer MSRP: {formatCurrency(parseFloat(item.retailPrice.toString()))}</div>
-                  <div>
+                  <div>{frozenPrice ? "Accepted portal price" : "Manufacturer MSRP"}: {formatCurrency(parseFloat(item.retailPrice.toString()))}</div>
+                  {frozenPrice ? <div>Unit gross profit: {formatCurrency(frozenPrice.unitPrice - currentCost)}</div> : <div>
                     Supplier Discount: {(() => {
                       const retail = parseFloat(item.retailPrice.toString());
                       const cost = parseFloat(getCurrentValue(item.id, 'unitPrice'));
@@ -348,7 +355,7 @@ export const SortableLineItemRow = memo(function SortableLineItemRow({
                         ? `${formatCurrency(discountAmount)} (${discountPercent}%)`
                         : 'No supplier discount';
                     })()}
-                  </div>
+                  </div>}
                   <div className="border-t border-border mt-1 pt-1">
                     EDG Cost: {formatCurrency(parseFloat(getCurrentValue(item.id, 'unitPrice')))}
                   </div>
@@ -364,7 +371,7 @@ export const SortableLineItemRow = memo(function SortableLineItemRow({
 
       {/* Markup - Hidden on small screens */}
       <td className="border-r border-border px-3 py-1 text-center hidden lg:table-cell">
-        <div className="flex items-center space-x-1">
+        {frozenPrice ? <span className="text-xs text-muted-foreground">Accepted price</span> : <div className="flex items-center space-x-1">
           <Input
             aria-label={`${item.description || "Line item"} markup value`}
             type="number"
@@ -411,7 +418,7 @@ export const SortableLineItemRow = memo(function SortableLineItemRow({
               <SelectItem value="dollar">$</SelectItem>
             </SelectContent>
           </Select>
-        </div>
+        </div>}
         {validationErrors[`${item.id}-markupValue`] && (
           <div className="text-xs text-red-500 mt-1">{validationErrors[`${item.id}-markupValue`]}</div>
         )}

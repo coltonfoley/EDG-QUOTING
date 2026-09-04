@@ -1,6 +1,5 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 
-import { calculateCustomerUnitPrice } from "@shared/pricing";
 import { z } from "zod";
 
 const addressSchema = z.object({
@@ -18,15 +17,18 @@ const materialLineSchema = z.object({
   description: z.string().trim().min(1).max(240),
   quantity: z.number().int().positive().max(999999),
   color: z.string().trim().max(80).nullable(),
-  customerUnitPriceCents: z.number().int().positive(),
-  customerLineTotalCents: z.number().int().positive(),
+  customerUnitPriceCents: z.number().int().positive().max(1_000_000_000),
+  customerLineTotalCents: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
 });
 
 export const dealerPortalOrderSchema = z.object({
   portalOrderId: z.string().uuid(),
   portalCompanyId: z.string().uuid(),
   snapshotHash: z.string().regex(/^[a-f0-9]{64}$/),
-  rulesVersion: z.literal("2026-08-25.3"),
+  // Both are released 2 x 8 packages. 26.1 added the continuous 8–14 ft
+  // width band; retain 25.3 for historical order retries. Working 3 x 10
+  // and admin settings versions remain outside the purchasing contract.
+  rulesVersion: z.enum(["2026-08-25.3", "2026-08-26.1"]),
   projectName: z.string().trim().min(1).max(200),
   purchaseOrderNumber: z.string().trim().max(100).nullable(),
   company: z.object({
@@ -46,11 +48,11 @@ export const dealerPortalOrderSchema = z.object({
     invoiceId: z.string().trim().min(1).max(120),
     invoiceNumber: z.string().trim().min(1).max(120),
     depositPaidAt: z.string().datetime(),
-    depositAmountCents: z.number().int().positive(),
+    depositAmountCents: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
   }),
   materials: z.object({
     currency: z.literal("USD"),
-    customerTotalCents: z.number().int().positive(),
+    customerTotalCents: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
     lines: z.array(materialLineSchema).min(1).max(250),
   }),
 }).superRefine((order, context) => {
@@ -104,7 +106,6 @@ export function hashDealerPortalOrder(order: DealerPortalOrder) {
 export function validateDealerPortalCatalogMatch(
   order: DealerPortalOrder,
   products: Array<{ id: number; sku: string | null; name: string; manufacturer: string | null; unit: string | null; costPrice: string }>,
-  pricing: { markupType: string; markupValue: string },
 ) {
   const bySku = new Map(products.filter((product) => product.sku).map((product) => [product.sku!, product]));
   return order.materials.lines.map((line) => {
@@ -113,13 +114,32 @@ export function validateDealerPortalCatalogMatch(
       throw new Error(`Rainmaker product ${line.sku} is missing or not Sundance.`);
     }
     const cost = Number(product.costPrice);
-    if (!Number.isFinite(cost) || cost <= 0) throw new Error(`Rainmaker product ${line.sku} has no valid cost.`);
-    const customerUnitPriceCents = Math.round(
-      calculateCustomerUnitPrice(cost, pricing.markupType, pricing.markupValue) * 100,
-    );
-    if (customerUnitPriceCents !== line.customerUnitPriceCents) {
-      throw new Error(`Rainmaker price for ${line.sku} does not match the frozen portal price.`);
-    }
+    if (!Number.isFinite(cost) || cost <= 0 || cost > 10_000_000) throw new Error(`Rainmaker product ${line.sku} has no valid cost.`);
     return { line, product, cost };
   });
+}
+
+export function dealerPortalFrozenPricingFields(
+  order: DealerPortalOrder,
+  line: DealerPortalOrder["materials"]["lines"][number],
+  cost: number,
+) {
+  return {
+    priceSource: "dealer_portal_frozen_catalog",
+    sourceMetadata: {
+      portalOrderId: order.portalOrderId,
+      snapshotHash: order.snapshotHash,
+      rulesVersion: order.rulesVersion,
+      customerUnitPriceCents: line.customerUnitPriceCents,
+      customerLineTotalCents: line.customerLineTotalCents,
+    },
+    retailPrice: (line.customerUnitPriceCents / 100).toFixed(2),
+    unitPrice: cost.toFixed(2),
+    // Frozen sale revenue is read from its evidence, never recalculated from
+    // today's markup. Keep the real cost for gross-profit reporting.
+    markupType: "percentage",
+    markupValue: "0",
+    discountType: "percentage",
+    discountValue: "0",
+  };
 }

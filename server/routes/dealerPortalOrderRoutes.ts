@@ -7,7 +7,6 @@ import {
   dealerPortalCompanyMappings,
   dealerPortalOrderSubmissions,
   lineItems,
-  pricingDefaults,
   products,
   quotes,
 } from "@shared/schema";
@@ -17,6 +16,7 @@ import {
   hashDealerPortalOrder,
   isDealerPortalOrderKeyValid,
   validateDealerPortalCatalogMatch,
+  dealerPortalFrozenPricingFields,
 } from "../dealerPortalOrder";
 import { redactedErrorType, validationIssueSummary } from "../redactedLogging";
 
@@ -106,22 +106,15 @@ export function registerDealerPortalOrderRoutes(app: Express) {
         }
 
         const skus = [...new Set(order.materials.lines.map((line) => line.sku))];
-        const [productRows, pricingRows] = await Promise.all([
-          transaction.select({
+        const productRows = await transaction.select({
             id: products.id,
             sku: products.sku,
             name: products.name,
             manufacturer: products.manufacturer,
             unit: products.unit,
             costPrice: products.costPrice,
-          }).from(products).where(inArray(products.sku, skus)),
-          transaction.select({
-            markupType: pricingDefaults.markupType,
-            markupValue: pricingDefaults.markupValue,
-          }).from(pricingDefaults).where(eq(pricingDefaults.scope, "sundance")).limit(1),
-        ]);
-        const pricing = pricingRows[0] ?? { markupType: "percentage", markupValue: "100" };
-        const matchedLines = validateDealerPortalCatalogMatch(order, productRows, pricing);
+          }).from(products).where(inArray(products.sku, skus));
+        const matchedLines = validateDealerPortalCatalogMatch(order, productRows);
         const now = new Date();
         const quoteNumber = `DP-${order.portalOrderId}`;
         const [quote] = await transaction.insert(quotes).values({
@@ -147,22 +140,9 @@ export function registerDealerPortalOrderRoutes(app: Express) {
           sku: product.sku,
           manufacturer: product.manufacturer,
           unit: product.unit ?? "each",
-          priceSource: "dealer_portal_frozen_catalog",
-          sourceMetadata: {
-            portalOrderId: order.portalOrderId,
-            snapshotHash: order.snapshotHash,
-            rulesVersion: order.rulesVersion,
-            customerUnitPriceCents: line.customerUnitPriceCents,
-            customerLineTotalCents: line.customerLineTotalCents,
-          },
+          ...dealerPortalFrozenPricingFields(order, line, cost),
           description: line.description,
           quantity: line.quantity.toString(),
-          retailPrice: (line.customerUnitPriceCents / 100).toFixed(2),
-          unitPrice: cost.toFixed(2),
-          markupType: pricing.markupType,
-          markupValue: pricing.markupValue,
-          discountType: "percentage",
-          discountValue: "0",
           configData: { role: line.role, color: line.color },
           isAccessory: false,
           isTaxable: true,

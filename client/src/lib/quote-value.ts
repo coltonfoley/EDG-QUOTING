@@ -1,4 +1,6 @@
-export type QuoteValueLineItem = {
+import { getDealerPortalFrozenPrice, type FrozenCatalogPriceEvidence } from "@shared/pricing";
+
+export type QuoteValueLineItem = FrozenCatalogPriceEvidence & {
   quantity: number | string;
   unitPrice: number | string;
   markupType: string;
@@ -7,6 +9,8 @@ export type QuoteValueLineItem = {
 
 export function calculateLineItemsValue(lineItems: QuoteValueLineItem[]): number {
   return lineItems.reduce((sum: number, item: QuoteValueLineItem) => {
+    const frozenPrice = getDealerPortalFrozenPrice(item, item.quantity);
+    if (frozenPrice) return sum + frozenPrice.lineTotal;
     const qty = parseFloat(item.quantity.toString());
     const price = parseFloat(item.unitPrice.toString());
     const markup = parseFloat(item.markupValue.toString());

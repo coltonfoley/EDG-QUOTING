@@ -47,6 +47,15 @@ describe("dealer portal pricing request contract", () => {
     })).toThrow();
   });
 
+  it("preserves fractional inches while keeping the same finite measurement bounds", () => {
+    const request = { ...fixture(), product: { ...fixture().product, requestedLengthInches: 198.125, requestedWidthInches: 150.375 } };
+    expect(dealerPortalPricingRequestSchema.parse(request).product).toMatchObject({ requestedLengthInches: 198.125, requestedWidthInches: 150.375 });
+    for (const value of [NaN, Infinity, -Infinity, 11.999, 600.001]) {
+      expect(() => dealerPortalPricingRequestSchema.parse({ ...request, product: { ...request.product, requestedLengthInches: value } })).toThrow();
+      expect(() => dealerPortalPricingRequestSchema.parse({ ...request, product: { ...request.product, requestedWidthInches: value } })).toThrow();
+    }
+  });
+
   it("does not accept an impossible manual rain-sensor request", () => {
     expect(() => dealerPortalPricingRequestSchema.parse({
       ...fixture(),

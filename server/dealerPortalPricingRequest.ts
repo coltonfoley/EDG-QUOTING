@@ -25,8 +25,8 @@ export const dealerPortalPricingRequestSchema = z.object({
   }),
   product: z.object({
     key: z.literal("sundance-freestanding"),
-    requestedLengthInches: z.number().int().min(12).max(600),
-    requestedWidthInches: z.number().int().min(12).max(600),
+    requestedLengthInches: z.number().finite().min(12).max(600),
+    requestedWidthInches: z.number().finite().min(12).max(600),
     frameColor: z.enum(["White", "Adobe", "Bronze", "Black", "Other", "Not sure"]),
     louverColor: z.enum(["White", "Adobe", "Bronze", "Black", "Other", "Not sure"]),
     operation: z.enum(["Manual", "Motorized", "Not sure"]),

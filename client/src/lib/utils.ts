@@ -1,5 +1,6 @@
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
+import { getDealerPortalFrozenPrice, type FrozenCatalogPriceEvidence } from "@shared/pricing";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -95,8 +96,11 @@ export function calculateLineItemTotal(
   discountType: string = "percentage",
   discountValue: number | string = 0,
   tariffRate: number | string = 0,
-  isTariffApplicable: boolean = false
+  isTariffApplicable: boolean = false,
+  priceEvidence?: FrozenCatalogPriceEvidence,
 ): number {
+  const frozenPrice = getDealerPortalFrozenPrice(priceEvidence, quantity);
+  if (frozenPrice) return frozenPrice.lineTotal;
   // Safely parse and validate inputs
   const qty = typeof quantity === 'string' ? parseFloat(sanitizeNumberString(quantity)) : quantity;
   const price = typeof unitPrice === 'string' ? parseFloat(sanitizeNumberString(unitPrice)) : unitPrice;
@@ -171,11 +175,13 @@ export function calculateLineItemMargin(
   discountType: string = "percentage",
   discountValue: number | string = 0,
   tariffRate: number | string = 0,
-  isTariffApplicable: boolean = false
+  isTariffApplicable: boolean = false,
+  priceEvidence?: FrozenCatalogPriceEvidence,
 ): number {
+  const frozenPrice = getDealerPortalFrozenPrice(priceEvidence, quantity);
   const markup = typeof markupValue === "string" ? parseFloat(sanitizeNumberString(markupValue)) : markupValue;
-  if (!isValidNumber(markup) || markup > 10000000) return 0;
-  const revenue = calculateLineItemTotal(quantity, unitPrice, markupType, markupValue, discountType, discountValue, tariffRate, isTariffApplicable);
+  if (!frozenPrice && (!isValidNumber(markup) || markup > 10000000)) return 0;
+  const revenue = frozenPrice?.lineTotal ?? calculateLineItemTotal(quantity, unitPrice, markupType, markupValue, discountType, discountValue, tariffRate, isTariffApplicable);
   const cost = calculateLineItemTotal(quantity, unitPrice, "percentage", 0, discountType, discountValue, tariffRate, isTariffApplicable);
   return roundCurrency(revenue - cost);
 }
@@ -214,7 +220,7 @@ export function calculateGrossMargin(grossProfit: number, revenue: number): numb
  * @param tariffRate - Tariff percentage to increase cost (0-100)
  * @returns Object with subtotal, discounts, tax, total, and margin
  */
-export type QuoteTotalsLineItem = {
+export type QuoteTotalsLineItem = FrozenCatalogPriceEvidence & {
   quantity: number | string;
   unitPrice: number | string;
   markupType: string;
@@ -248,7 +254,8 @@ export function calculateQuoteTotals(lineItems: QuoteTotalsLineItem[], taxRate: 
       item.discountType || "percentage",
       item.discountValue || 0,
       tariffRate,
-      item.isTariffApplicable || false
+      item.isTariffApplicable || false,
+      item
     );
     subtotal = safeAdd(subtotal, lineTotal);
     
@@ -405,7 +412,8 @@ export function calculateGroupSubtotal(lineItems: QuoteTotalsLineItem[], tariffR
       item.discountType || "percentage",
       item.discountValue || 0,
       tariffRate,
-      item.isTariffApplicable || false
+      item.isTariffApplicable || false,
+      item
     );
     return safeAdd(total, itemTotal);
   }, 0);
@@ -430,7 +438,8 @@ export function calculateGroupMargin(lineItems: QuoteTotalsLineItem[], tariffRat
       item.discountType || "percentage",
       item.discountValue || 0,
       tariffRate,
-      item.isTariffApplicable || false
+      item.isTariffApplicable || false,
+      item
     );
     return safeAdd(total, itemMargin);
   }, 0);

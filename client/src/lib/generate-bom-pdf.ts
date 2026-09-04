@@ -45,7 +45,7 @@ function parseConfigData(configData: any): { colors?: string } {
   return {};
 }
 
-function calculateSellPrice(item: BomLineItem, quoteTariffRate: string | number): { unitSellPrice: number; lineTotal: number } {
+export function calculateSellPrice(item: BomLineItem, quoteTariffRate: string | number): { unitSellPrice: number; lineTotal: number } {
   const qty = parseFloat(item.quantity) || 0;
   const lineTotal = calculateLineItemTotal(
     qty,
@@ -55,7 +55,8 @@ function calculateSellPrice(item: BomLineItem, quoteTariffRate: string | number)
     item.discountType || 'percentage',
     item.discountValue || '0',
     quoteTariffRate || '0',
-    item.isTariffApplicable || false
+    item.isTariffApplicable || false,
+    item
   );
   const unitSellPrice = qty > 0 ? lineTotal / qty : 0;
   return { unitSellPrice, lineTotal };
