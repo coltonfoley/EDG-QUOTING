@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { Archive, FileText, Plus, Eye, Send, Mail, CheckCircle, AlertCircle, Clock, Link2, Copy, Download, PenTool, Package, Settings2 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { cn, formatCurrency, calculateQuoteTotals, type QuoteTotalsLineItem } from "@/lib/utils";
+import { cn, formatCurrency, calculateQuoteTotals } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import type { QuoteWithDetails, ContractTemplate } from "@shared/schema";
 import { getSnapshotBackedCustomerPackage } from "@/lib/customer-package";
@@ -318,16 +318,7 @@ export function QuoteSummary({ quote, onUpdateQuote, isReadOnly = false }: Quote
     : `${taxableLineCount} of ${quote.lineItems.length} line${quote.lineItems.length === 1 ? "" : "s"} taxable; shipping ${isShippingTaxable ? "included" : "excluded"}.`;
 
   const totals = calculateQuoteTotals(
-    quote.lineItems.map((item: QuoteTotalsLineItem) => ({
-      quantity: item.quantity,
-      unitPrice: item.unitPrice,
-      markupType: item.markupType,
-      markupValue: item.markupValue,
-      discountType: item.discountType,
-      discountValue: item.discountValue,
-      isTaxable: item.isTaxable,
-      isTariffApplicable: item.isTariffApplicable,
-    })),
+    quote.lineItems,
     quote.taxRate ?? 0,
     quote.discount ?? 0,
     quote.shipping ?? 0,

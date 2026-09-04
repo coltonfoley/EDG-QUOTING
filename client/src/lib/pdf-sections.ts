@@ -867,7 +867,8 @@ export function drawLineItemsSection(pdf: jsPDF, opts: DrawLineItemsSectionOpts)
       item.discountType || 'percentage',
       item.discountValue || 0,
       quote.tariffRate || 0,
-      item.isTariffApplicable || false
+      item.isTariffApplicable || false,
+      item
     );
 
     displayItems.push({
@@ -897,7 +898,8 @@ export function drawLineItemsSection(pdf: jsPDF, opts: DrawLineItemsSectionOpts)
         item.discountType || 'percentage',
         item.discountValue || 0,
         quote.tariffRate || 0,
-        item.isTariffApplicable || false
+        item.isTariffApplicable || false,
+        item
       );
       aggregatedTotal += itemTotal;
       aggregatedQty += parseFloat(item.quantity || '0');
