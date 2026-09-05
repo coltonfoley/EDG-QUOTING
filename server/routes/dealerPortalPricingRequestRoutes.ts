@@ -10,6 +10,7 @@ import {
 import { db } from "../db";
 import {
   dealerPortalPricingRequestSchema,
+  dealerPortalPricingRequestNotes,
   hashDealerPortalPricingRequest,
 } from "../dealerPortalPricingRequest";
 import { isDealerPortalOrderKeyValid } from "../dealerPortalOrder";
@@ -79,6 +80,7 @@ export function registerDealerPortalPricingRequestRoutes(app: Express) {
         }
 
         const product = request.product;
+        const requestNotes = dealerPortalPricingRequestNotes(product);
         const requestedSize = `${product.requestedLengthInches / 12}' × ${product.requestedWidthInches / 12}' outside-to-outside`;
         const shipTo = request.shippingAddress ? formattedAddress(request.shippingAddress) : "Not supplied";
         const now = new Date();
@@ -86,7 +88,7 @@ export function registerDealerPortalPricingRequestRoutes(app: Express) {
           quoteNumber: `DPR-${request.portalPricingRequestId}`,
           accountId: mapping.accountId,
           projectName: request.projectName,
-          notes: "Dealer pricing request for a Sundance materials package. No BOM, price, engineering, installation, footings, permits, or site work has been approved by this request.",
+          notes: requestNotes.publicNotes,
           internalNotes: [
             `Dealer Portal pricing request ${request.portalPricingRequestId}`,
             `Requested size: ${requestedSize}`,
@@ -94,6 +96,7 @@ export function registerDealerPortalPricingRequestRoutes(app: Express) {
             `Operation: ${product.operation}; rain sensor: ${product.rainSensor}`,
             `Fulfillment: ${product.fulfillment}; ship-to: ${shipTo}`,
             `Reason: ${product.requestReason}`,
+            ...requestNotes.internalOptionNotes,
           ].join("\n"),
           taxRate: "0",
           tariffRate: "0",

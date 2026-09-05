@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 
 import { z } from "zod";
+import { sundancePortalOptionsSchema, summarizeSundancePortalOptions } from "./sundancePortalOptions";
 
 const addressSchema = z.object({
   line1: z.string().trim().min(3).max(160),
@@ -33,6 +34,7 @@ export const dealerPortalPricingRequestSchema = z.object({
     rainSensor: z.enum(["Yes", "No", "Not sure"]),
     fulfillment: z.enum(["Pickup", "Delivery", "Not sure"]),
     requestReason: z.string().trim().min(10).max(2000),
+    options: sundancePortalOptionsSchema.optional(),
   }),
   shippingAddress: addressSchema.nullable(),
 }).superRefine((request, context) => {
@@ -48,6 +50,16 @@ export const dealerPortalPricingRequestSchema = z.object({
 });
 
 export type DealerPortalPricingRequest = z.infer<typeof dealerPortalPricingRequestSchema>;
+
+export function dealerPortalPricingRequestNotes(product: DealerPortalPricingRequest["product"]) {
+  const requestedOptions = summarizeSundancePortalOptions(product.options);
+  return {
+    publicNotes: product.options?.service
+      ? "Dealer pricing request for a Sundance materials package and the requested drawing or engineering service. Service scope and delivery require EDG confirmation. This request does not approve a BOM, final price, completed drawings or engineering, installation, footings, permits, or site work."
+      : "Dealer pricing request for a Sundance materials package. No BOM, price, engineering, installation, footings, permits, or site work has been approved by this request.",
+    internalOptionNotes: requestedOptions.length ? ["Requested options:", ...requestedOptions] : [],
+  };
+}
 
 function canonicalize(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(canonicalize);
