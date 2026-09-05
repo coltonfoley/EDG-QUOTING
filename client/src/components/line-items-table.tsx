@@ -11,6 +11,7 @@ import { apiRequest, NavigationAbortError } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { LineItem, Product, Color, ProductColor } from "@shared/schema";
 import { getProductPricingBreakdown } from "@shared/pricing";
+import { isPortalOnlySundanceService, SUNDANCE_SERVICE_QUOTE_REVIEW_MESSAGE } from "@shared/sundanceServiceQuotePolicy";
 import { 
   DndContext, 
   DragEndEvent, 
@@ -1316,6 +1317,10 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate, isReadOnly = fa
   };
 
   const handleProductSelect = (product: Product) => {
+    if (isPortalOnlySundanceService(product.sku)) {
+      toast({ title: "Service review required", description: SUNDANCE_SERVICE_QUOTE_REVIEW_MESSAGE, variant: "destructive" });
+      return;
+    }
     const isSundanceProduct = product.manufacturer?.trim().toLowerCase() === "sundance";
     const defaultMarkupValue = isSundanceProduct
       ? (sundancePricingDefault?.markupValue ? parseFloat(sundancePricingDefault.markupValue).toString() : "100")
@@ -1695,6 +1700,7 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate, isReadOnly = fa
     if (!products) return [];
     
     return products.filter(product => {
+      if (isPortalOnlySundanceService(product.sku)) return false;
       const matchesSearch = searchTerm === "" || 
         product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (product.sku || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -1905,6 +1911,7 @@ export function LineItemsTable({ quoteId, lineItems, tariffRate, isReadOnly = fa
                   </div>
 
                   {/* Products Grid */}
+                  {products?.some(product => isPortalOnlySundanceService(product.sku)) ? <p className="text-sm text-muted-foreground" role="note">{SUNDANCE_SERVICE_QUOTE_REVIEW_MESSAGE}</p> : null}
                   <div className="flex-1 overflow-y-auto border rounded-lg">
                     {Object.keys(groupedProducts).length === 0 ? (
                       <div className="p-8 text-center text-muted-foreground">

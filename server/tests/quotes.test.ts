@@ -4,6 +4,7 @@ import { businessEvents, emailDeliveryAttempts, groups, leadInquiries, lineItems
 import { and, eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { randomUUID } from "node:crypto";
+import { SUNDANCE_SERVICE_CATALOG_ROWS } from "../sundanceServices";
 
 const testDatabaseUrl = process.env.TEST_DATABASE_URL;
 const databaseWritesEnabled = process.env.ALLOW_DATABASE_TEST_WRITES === "true";
@@ -1443,6 +1444,34 @@ describe.skipIf(!shouldRunDatabaseTests)("Quote Storage Layer", () => {
       expect((await storage.getAdoptionSummary()).metrics.find(
         (metric) => metric.key === "sundance_configuration_inserted",
       )?.count).toBeGreaterThanOrEqual(1);
+    });
+
+    it("keeps portal services out of native quote lines and atomic configured packages", async () => {
+      const quote = await storage.createQuote({ projectName: `Service review guard ${randomUUID()}` });
+      const services = await database.insert(products).values(SUNDANCE_SERVICE_CATALOG_ROWS).returning();
+      const material = await storage.createLineItem({ quoteId: quote.id, description: "Existing material", quantity: "2", unitPrice: "80", markupType: "percentage", markupValue: "100" });
+      const before = await storage.getLineItemsByQuoteId(quote.id);
+
+      for (const service of services) {
+        await expect(storage.createLineItem({ quoteId: quote.id, productId: service.id, description: service.name, quantity: "1", unitPrice: "0", markupType: "percentage", markupValue: "100" })).rejects.toThrow("Internal costs and service fulfillment need review");
+        await expect(storage.updateLineItem(material.id, { productId: service.id })).rejects.toThrow("Internal costs and service fulfillment need review");
+        await expect(storage.bulkUpdateLineItems([material.id], { productId: service.id })).rejects.toThrow("Internal costs and service fulfillment need review");
+
+        const requestId = randomUUID();
+        await expect(storage.insertConfiguredProduct(quote.id, {
+          requestId,
+          items: [
+            { productId: null, quantity: 2, productSnapshot: { name: "Valid material", manufacturer: "Sundance", retailPrice: "200", costPrice: "80", defaultDiscountType: "percentage", defaultDiscountValue: "0" } },
+            { productId: service.id, quantity: 1, productSnapshot: { ...service, sku: "stale-client-sku", costPrice: "500" } },
+          ],
+        }, null)).rejects.toThrow("Internal costs and service fulfillment need review");
+        expect(await database.select().from(groups).where(eq(groups.id, `config-${requestId}`))).toHaveLength(0);
+        expect(await database.select().from(businessEvents).where(eq(businessEvents.eventKey, `sundance_configuration_inserted:${quote.id}:${requestId}`))).toHaveLength(0);
+      }
+      await expect(storage.createLineItem({ quoteId: quote.id, sku: "EDG-SD-DRAWINGS", description: "Manual service bypass", quantity: "1", unitPrice: "500", markupType: "percentage", markupValue: "0" })).rejects.toThrow("Internal costs and service fulfillment need review");
+      await expect(storage.insertConfiguredProduct(quote.id, { requestId: randomUUID(), items: [{ productId: null, quantity: 1, productSnapshot: { ...services[0], sku: "edg-sd-drawings" } }] }, null)).rejects.toThrow("Internal costs and service fulfillment need review");
+      expect(await storage.getLineItemsByQuoteId(quote.id)).toEqual(before);
+      expect((await database.select().from(products).where(eq(products.id, services[0].id)))[0].costPrice).toBe("0.00");
     });
   });
 

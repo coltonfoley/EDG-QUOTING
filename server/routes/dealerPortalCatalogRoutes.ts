@@ -33,6 +33,9 @@ export function registerDealerPortalCatalogRoutes(app: Express) {
           category: products.category,
           unit: products.unit,
           costPrice: products.costPrice,
+          retailPrice: products.retailPrice,
+          manufacturer: products.manufacturer,
+          productType: products.productType,
         }).from(products).where(eq(products.manufacturer, "Sundance")).orderBy(asc(products.sku), asc(products.id)),
         db.select({
           markupType: pricingDefaults.markupType,

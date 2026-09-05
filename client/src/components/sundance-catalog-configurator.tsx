@@ -10,6 +10,7 @@ import { useToast } from '@/hooks/use-toast';
 import { formatCurrency } from '@/lib/utils';
 import type { Product, Color, ProductColor } from '@shared/schema';
 import { calculateCustomerLineTotal, calculateCustomerUnitPrice, getProductPricingBreakdown } from '@shared/pricing';
+import { isPortalOnlySundanceService, SUNDANCE_SERVICE_QUOTE_REVIEW_MESSAGE } from '@shared/sundanceServiceQuotePolicy';
 
 interface SundanceCatalogConfiguratorProps {
   quoteId: number;
@@ -116,7 +117,7 @@ export function SundanceCatalogConfigurator({
   });
 
   const sundanceProducts = useMemo<Product[]>(() => {
-    return products || [];
+    return (products || []).filter(product => !isPortalOnlySundanceService(product.sku));
   }, [products]);
 
   const { data: sundancePricingDefault } = useQuery<PricingDefaultResponse>({
@@ -350,6 +351,11 @@ export function SundanceCatalogConfigurator({
   };
 
   const handleInsert = () => {
+    if (Object.entries(quantities).some(([id, quantity]) => quantity > 0 &&
+      isPortalOnlySundanceService(products?.find(product => product.id === Number(id))?.sku))) {
+      toast({ title: 'Service review required', description: SUNDANCE_SERVICE_QUOTE_REVIEW_MESSAGE, variant: 'destructive' });
+      return;
+    }
     const items = Object.entries(quantities)
       .filter(([_, qty]) => qty > 0)
       .map(([productId, quantity]) => {
@@ -411,6 +417,7 @@ export function SundanceCatalogConfigurator({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4" style={{ height: 'min(72vh, 760px)' }}>
+      {products?.some(product => isPortalOnlySundanceService(product.sku)) ? <p className="text-sm text-muted-foreground" role="note">{SUNDANCE_SERVICE_QUOTE_REVIEW_MESSAGE}</p> : null}
       <div className="grid gap-4 rounded-lg border bg-slate-950 p-4 text-white shadow-sm md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
         <div>
           <div className="flex flex-wrap items-center gap-2">
