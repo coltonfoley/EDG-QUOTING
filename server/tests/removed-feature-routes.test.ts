@@ -61,6 +61,7 @@ import { registerProductRoutes } from "../routes/productRoutes";
 import { QuoteSignedLockedError } from "../quoteLock";
 import { buildPublicSigningQuote } from "../quotePublicSigning";
 import { PricingBandValidationError, PricingManualReviewError } from "../pricingBands";
+import { SUNDANCE_SERVICE_CATALOG_ROWS } from "../sundanceServices";
 
 const makeApp = () => {
   const app = express();
@@ -107,6 +108,28 @@ describe("removed quote feature routes", () => {
     mockStorage.deleteQuoteCoverPhoto.mockReset();
     mockStorage.deleteQuoteProductRendering.mockReset();
     mockSendEmail.mockReset();
+  });
+
+  it.each(SUNDANCE_SERVICE_CATALOG_ROWS)("rejects portal-only service $sku before creating a native quote line", async (service) => {
+    mockStorage.getLineItemsByQuoteId.mockResolvedValue([]);
+    mockStorage.getProduct.mockResolvedValue({ ...service, id: 71 });
+    const response = await request(makeApp()).post("/api/quotes/123/line-items").send({
+      productId: 71, description: "Stale client material", quantity: "1", unitPrice: "0", markupType: "percentage", markupValue: "100", discountType: "percentage", discountValue: "0",
+    });
+    expect(response.status).toBe(400);
+    expect(response.body).toMatchObject({ code: "SUNDANCE_SERVICE_REVIEW_REQUIRED" });
+    expect(mockStorage.createLineItem).not.toHaveBeenCalled();
+    expect(mockSendEmail).not.toHaveBeenCalled();
+  });
+
+  it("does not allow a reserved service SKU to bypass review as a manual line", async () => {
+    mockStorage.getLineItemsByQuoteId.mockResolvedValue([]);
+    const response = await request(makeApp()).post("/api/quotes/123/line-items").send({
+      sku: " edg-sd-drawings ", description: "Drawings", quantity: "1", unitPrice: "500", markupType: "percentage", markupValue: "0", discountType: "percentage", discountValue: "0",
+    });
+    expect(response.status).toBe(400);
+    expect(response.body.code).toBe("SUNDANCE_SERVICE_REVIEW_REQUIRED");
+    expect(mockStorage.createLineItem).not.toHaveBeenCalled();
   });
 
   it("requires an idempotency key and delegates configured package insertion atomically", async () => {

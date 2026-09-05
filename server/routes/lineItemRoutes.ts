@@ -16,6 +16,7 @@ import {
 import { sendQuoteSignedLockResponse } from "../quoteLock";
 import { redactedErrorType, validationIssueSummary } from "../redactedLogging";
 import { ConfiguredProductInsertionError, configuredProductInsertionSchema } from "../configuredProductInsertion";
+import { assertNativeQuoteSkuSupported, SundanceServiceQuoteReviewError } from "@shared/sundanceServiceQuotePolicy";
 
 /**
  * Server-side calculation verification utility
@@ -184,12 +185,14 @@ export function registerLineItemRoutes(app: Express) {
         quoteId: params.data.quoteId,
         position: maxPosition + 1
       });
+      assertNativeQuoteSkuSupported(lineItemData.sku);
 
       if (lineItemData.productId) {
         const product = await storage.getProduct(lineItemData.productId);
         if (!product) {
           return res.status(400).json({ message: "The selected catalog product no longer exists. Refresh the catalog and choose it again." });
         }
+        assertNativeQuoteSkuSupported(product.sku);
         const requestedPriceSource = req.body.priceSource === "dimensional_catalog"
           ? "dimensional_catalog"
           : "catalog_cost";
@@ -254,6 +257,7 @@ export function registerLineItemRoutes(app: Express) {
       const lineItem = await storage.createLineItem(lineItemData);
       res.status(201).json(lineItem);
     } catch (error) {
+      if (error instanceof SundanceServiceQuoteReviewError) return res.status(400).json({ message: error.message, code: error.code });
       if (sendQuoteSignedLockResponse(res, error)) return;
       if (error instanceof z.ZodError) {
         console.error("Line item validation failed", validationIssueSummary(error));
@@ -318,6 +322,7 @@ export function registerLineItemRoutes(app: Express) {
       const updatedCount = await storage.bulkUpdateLineItems(validatedData.data.ids, validatedData.data.updates);
       res.json({ updatedCount });
     } catch (error) {
+      if (error instanceof SundanceServiceQuoteReviewError) return res.status(400).json({ message: error.message, code: error.code });
       if (sendQuoteSignedLockResponse(res, error)) return;
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: "Invalid update data", errors: error.errors });
@@ -387,6 +392,7 @@ export function registerLineItemRoutes(app: Express) {
       }
       res.json(lineItem);
     } catch (error) {
+      if (error instanceof SundanceServiceQuoteReviewError) return res.status(400).json({ message: error.message, code: error.code });
       if (sendQuoteSignedLockResponse(res, error)) return;
       if (error instanceof z.ZodError) {
         console.error("Line item update validation failed", validationIssueSummary(error));

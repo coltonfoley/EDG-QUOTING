@@ -2,6 +2,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import { businessEvents, groups, lineItems, pricingDefaults, products, quoteApprovalDrawings, quotes } from "@shared/schema";
 import { calculateCustomerLineTotal, resolveProductCost } from "@shared/pricing";
+import { isPortalOnlySundanceService, SUNDANCE_SERVICE_QUOTE_REVIEW_MESSAGE } from "@shared/sundanceServiceQuotePolicy";
 import { appendQuoteApprovalDrawingInternalNoteSql } from "./approvalDrawingSql";
 import { appendBusinessEvent } from "./businessEvents";
 import { db, ensurePricingDefaultsTable, ensureProductCatalogColumns, ensureQuoteApprovalDrawingTables } from "./db";
@@ -119,6 +120,10 @@ export async function executeConfiguredProductInsertion(
         },
       };
     });
+
+    if (resolvedItems.some(item => isPortalOnlySundanceService(item.productSnapshot.sku))) {
+      throw new ConfiguredProductInsertionError("SUNDANCE_SERVICE_REVIEW_REQUIRED", SUNDANCE_SERVICE_QUOTE_REVIEW_MESSAGE, 400);
+    }
 
     const manufacturer = resolvedItems[0].productSnapshot.manufacturer;
     const isSundance = manufacturer.trim().toLowerCase() === "sundance";

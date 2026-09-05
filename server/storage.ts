@@ -83,6 +83,18 @@ import { assertQuoteMutationAllowed, assertQuoteSignatureRevision, isCustomerApp
 import { selectPricingBand, validatePricingBands } from "./pricingBands";
 import { executeProductCatalogImport, type ProductCatalogImportRequest, type ProductCatalogImportResult } from "./productCatalogImport";
 import { executeConfiguredProductInsertion, type ConfiguredProductInsertionRequest, type ConfiguredProductInsertionResult } from "./configuredProductInsertion";
+import { assertNativeQuoteSkuSupported } from "@shared/sundanceServiceQuotePolicy";
+
+async function assertNativeQuoteProductsSupported(
+  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  items: Array<{ sku?: string | null; productId?: number | null }>,
+) {
+  for (const item of items) assertNativeQuoteSkuSupported(item.sku);
+  const ids = [...new Set(items.flatMap(item => item.productId ? [item.productId] : []))];
+  if (!ids.length) return;
+  const catalogRows = await tx.select({ sku: products.sku }).from(products).where(inArray(products.id, ids));
+  for (const product of catalogRows) assertNativeQuoteSkuSupported(product.sku);
+}
 
 export type { IStorage } from "./storageContract";
 
@@ -2397,6 +2409,8 @@ export class DatabaseStorage implements IStorage {
       if (!quote) throw new Error("Quote not found");
       assertQuoteMutationAllowed(quote);
 
+      await assertNativeQuoteProductsSupported(tx, [insertLineItem]);
+
       const [created] = await tx
         .insert(lineItems)
         .values(insertLineItem)
@@ -2423,6 +2437,8 @@ export class DatabaseStorage implements IStorage {
         .for("update");
       if (!quote) throw new Error("Quote not found");
       assertQuoteMutationAllowed(quote);
+
+      await assertNativeQuoteProductsSupported(tx, [{ ...existing, ...lineItemData }]);
 
       const [updated] = await tx
         .update(lineItems)
@@ -2507,6 +2523,7 @@ export class DatabaseStorage implements IStorage {
         if (!quote) throw new Error("Quote not found");
         assertQuoteMutationAllowed(quote);
       }
+      await assertNativeQuoteProductsSupported(tx, existingRows.map(item => ({ ...item, ...updates })));
       const result = await tx
         .update(lineItems)
         .set(updates)
